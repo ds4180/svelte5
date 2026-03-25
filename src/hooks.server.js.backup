@@ -1,0 +1,82 @@
+import { redirect } from '@sveltejs/kit';
+
+// Trigger Vite to re-evaluate file for cache busting
+export async function handle({ event, resolve }) {
+    // 1. 페이지 단위 강제 리다이렉트 로직 제거 (리다이렉트 루프 방지)
+    // 2. 인증이 필요한 API 호출은 handleFetch에서 401 감지 시 리다이렉트 처리함
+    return await resolve(event);
+}
+
+// 경쟁 상태 방지를 위한 락(Lock) 변수
+let isRefreshing = false;
+// 모든 내부 통신은 도커 서비스명인 'backend'를 사용합니다.
+const API_URL = process.env.PUBLIC_API_ENDPOINT || 'http://backend:8000';
+
+export async function handleFetch({ event, request, fetch }) {
+    // 1. 리프레시 API 호출 자체는 가드에서 제외 (무한 루프 방지)
+    if (request.url.includes('/users/refresh')) {
+        return await fetch(request);
+    }
+
+    // 2. [중요]: SSR 시 브라우저에서 넘어온 쿠키를 백엔드로 보낼 때 헤더에 명시적으로 주입
+    const accessToken = event.cookies.get('accessToken');
+    if (accessToken) {
+        request.headers.set('Authorization', `Bearer ${accessToken}`);
+    }
+
+    // 3. 도메인 통신 또는 내부망 통신인지 확인하여 URL 변환
+    // SvelteKit의 내부 fetch 요청이 상대 경로(/api)로 들어오면 내부망 주소로 변환
+    let internalUrl = request.url;
+    if (request.url.includes('/api')) {
+        // request.url이 전체 URL일 수 있으므로 URL 객체로 파싱하여 처리 (상대 경로일 경우 http://localhost를 베이스로 사용)
+        const urlObj = new URL(request.url, 'http://localhost');
+        // pathname에서 /api 제거 (예: /api/users/me -> /users/me)
+        const newPathname = urlObj.pathname.replace(/^\/api/, '');
+        // 내부망 백엔드 주소로 교체
+        internalUrl = `${API_URL}${newPathname}${urlObj.search}`;
+    }
+
+    // 4. fetch 실행
+    let response = await fetch(new Request(internalUrl, request));
+
+    // 5. 401 발생 시 토큰 리프레시 시도
+    if (response.status === 401 && !isRefreshing) {
+        isRefreshing = true;
+
+        const refreshToken = event.cookies.get('refreshToken');
+        if (refreshToken) {
+            const refreshResponse = await fetch(`${API_URL}/users/refresh`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ refresh_token: refreshToken })
+            });
+
+            if (refreshResponse.ok) {
+                const data = await refreshResponse.json();
+
+                // 새 토큰 쿠키 반영 (액세스 5분, 리프레시 3일)
+                event.cookies.set('accessToken', data.access_token, { 
+                    path: '/', 
+                    httpOnly: true, 
+                    sameSite: 'lax',
+                    maxAge: 60 * 5 
+                });
+                event.cookies.set('refreshToken', data.refresh_token, { 
+                    path: '/', 
+                    httpOnly: true, 
+                    sameSite: 'lax',
+                    maxAge: 60 * 60 * 24 * 3 
+                });
+
+                // 원본 요청 헤더 갱신 후 재시도
+                request.headers.set('Authorization', `Bearer ${data.access_token}`);
+                response = await fetch(new Request(internalUrl, request));
+            } else {
+                throw redirect(302, '/login');
+            }
+        }
+        isRefreshing = false;
+    }
+
+    return response;
+}

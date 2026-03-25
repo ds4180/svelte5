@@ -1,0 +1,14 @@
+@import "tailwindcss";
+@plugin "daisyui";
+@plugin "@tailwindcss/typography";
+
+/* 📌 프로젝트 전역 커스텀 스타일 */
+:root {
+    --primary-color: #2563eb;
+}
+
+body {
+    background-color: #f8fafc;
+    color: #0f172a;
+    -webkit-font-smoothing: antialiased;
+}
