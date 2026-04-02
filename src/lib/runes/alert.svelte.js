@@ -1,32 +1,25 @@
 import { browser } from '$app/environment';
 
 /**
- * 프로젝트 전역 알림 상태를 관리하는 Rune 클래스 (에러 방어 강화 버전)
+ * @file alert.svelte.js (런타임 방어 및 스토리지 연동 버전)
  */
 class AlertState {
     all = $state([]);
-    // 📌 [하이드레이션 방어] 서버와 클라이언트의 초기 상태를 동일하게 빈 객체로 설정
-    dismissedIds = $state({}); 
+    dismissedIds = $state({});
     sessionHiddenIds = $state(new Set());
     isQuietMode = $state(false);
 
-    constructor() {
-        // ⚠️ 생성자에서는 더 이상 localStorage에 접근하지 않습니다. (서버 정합성 확보)
-    }
+    constructor() { }
 
-    /**
-     * @function init
-     * @description 하이드레이션 완료 후 클라이언트 사이드에서 상태를 복구합니다.
-     */
+    // ✅ [복구] 최상위 레이아웃에서 호출하는 초기화 함수
     init() {
         if (browser) {
             try {
                 const stored = localStorage.getItem("dismissed_alerts");
                 this.dismissedIds = stored ? JSON.parse(stored) : {};
                 this.isQuietMode = localStorage.getItem("is_quiet_mode") === "true";
-                console.log("🔔 [AlertState] Storage Sync Completed (Client-side)");
+                console.log("🔔 [AlertState] Runtime Initialized.");
             } catch (e) {
-                console.warn("⚠️ [AlertState] Storage Recovery Failed, resetting...", e.message);
                 this.dismissedIds = {};
             }
         }
@@ -35,13 +28,11 @@ class AlertState {
     send(msg, options = {}) {
         const id = options.id || Math.random().toString(36).substring(2, 9);
         const newAlert = {
-            id,
-            message: msg,
+            id, message: msg,
             level: options.level || 1,
             style: options.style || 'info',
             route: options.route || null,
             redirect_url: options.redirect_url || null,
-            reset_sec: options.reset_sec || 0,
             confirm_text: options.confirm_text || '확인하였습니다',
             createdAt: Date.now(),
             timerStarted: false
@@ -55,7 +46,6 @@ class AlertState {
     }
 
     neverShowAgain(id) {
-        if (!this.dismissedIds) this.dismissedIds = {};
         this.dismissedIds[id] = true;
         if (browser) {
             localStorage.setItem("dismissed_alerts", JSON.stringify(this.dismissedIds));

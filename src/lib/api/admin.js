@@ -6,7 +6,7 @@ import { auth } from '$lib/runes/auth.svelte.js';
  */
 async function request(url, method = 'GET', body = null) {
     const headers = { 'Content-Type': 'application/json' };
-    
+
     // 🔑 [Auth Check] 인증 정보 확보 (Rune -> localStorage -> Cookie 순서)
     let token = auth.accessToken;
     if (!token && typeof localStorage !== 'undefined') {
@@ -24,19 +24,19 @@ async function request(url, method = 'GET', body = null) {
     const options = {
         method,
         headers,
-        credentials: 'include' 
+        credentials: 'include'
     };
     if (body) options.body = JSON.stringify(body);
-    
+
     const response = await fetch(url, options);
-    
+
     // 401 발생 시 로그 출력 (디버깅용)
     if (response.status === 401) {
         console.error(`❌ [401 Unauthorized] URL: ${url} | Token exists: ${!!token}`);
     }
     // 204 No Content일 경우 빈 객체 반환
-    if (response.status === 204) { 
-        return {}; 
+    if (response.status === 204) {
+        return {};
     }
 
     if (!response.ok) {
@@ -97,6 +97,7 @@ export const adminDeleteAlert = (alertId) => request(`/api/alert/delete/${alertI
 export const adminToggleAlert = (alertId) => request(`/api/alert/toggle/${alertId}`, 'POST');
 export const adminUpdateAlert = (alertId, data) => request(`/api/alert/update/${alertId}`, 'PUT', data);
 
-// 🔒 세션 관리 API
+
+// 🔒 [수동 복사 안전 버전] 백틱 대신 더하기 연산자를 사용하여 치환 오류를 원천 차단합니다.
 export const adminGetSessions = () => request('/users/sessions');
-export const adminKickSession = (sessionId) => request('/users/sessions/kick/${sessionId}', 'POST');
+export const adminKickSession = (sessionId) => request('/users/sessions/kick/' + sessionId, 'POST');
