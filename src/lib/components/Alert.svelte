@@ -9,6 +9,7 @@
     import { goto } from "$app/navigation";
     import { fly, fade, slide } from "svelte/transition";
     import { onMount, onDestroy, untrack } from "svelte";
+    import Icon from '@iconify/svelte'; // Icon 컴포넌트 추가
 
     /** @type {{ positionFilter: 'top' | 'bottom' | 'modal' }} */
     let { positionFilter } = $props();
@@ -19,14 +20,20 @@
      * 주기적으로 백엔드에 활성화된 시스템 공지사항이 있는지 체크합니다.
      */
     async function fetchActiveAlerts() {
+        console.log("[Alert] fetchActiveAlerts 호출 시도...");
         try {
             const response = await fetch("/api/alert/active");
+            console.log("[Alert] API 응답 상태:", response.status, response.ok);
             if (response.ok) {
                 const json = await response.json();
+                console.log("[Alert] API 응답 데이터:", json);
                 // Rune 상태 직접 업데이트 (untrack을 통해 불필요한 반응성 루프 방지)
                 untrack(() => {
                     alertState.all = json;
                 });
+                console.log("[Alert] alertState.all 업데이트됨:", $state.snapshot(alertState.all));
+            } else {
+                console.warn("[Alert] 활성 알림 API 호출 실패 (상태:", response.status, ")");
             }
         } catch (e) {
             console.warn("[Alert] 실시간 갱신 실패", e);
@@ -34,13 +41,18 @@
     }
 
     onMount(() => {
+        console.log("[Alert] onMount 실행됨. positionFilter:", positionFilter);
         if (positionFilter === "modal") {
+            console.log("[Alert] positionFilter === 'modal' 조건 충족. fetchActiveAlerts 호출.");
             fetchActiveAlerts();
             interval = setInterval(fetchActiveAlerts, 30000); // 30초 주기
+        } else {
+            console.log("[Alert] positionFilter !== 'modal'. fetchActiveAlerts 호출 안 함.");
         }
     });
 
     onDestroy(() => {
+        console.log("[Alert] onDestroy 실행됨. 인터벌 정리.");
         if (interval) clearInterval(interval);
     });
 
@@ -49,13 +61,17 @@
      * ⚠️ [하이드레이션 방어] 서버와 클라이언트의 시간 차이를 극복하기 위해 now를 외부에서 제어하거나 안정화합니다.
      */
     let displayAlerts = $derived.by(() => {
+        console.log("[Alert] displayAlerts 계산 시작. alertState.all:", $state.snapshot(alertState.all));
         const alerts = alertState?.all || [];
-        if (alerts.length === 0) return [];
+        if (alerts.length === 0) {
+            console.log("[Alert] 필터링 후 displayAlerts (초기/빈 배열):", []);
+            return [];
+        }
 
         // 서버 사이드 렌더링 시에는 시간 필터링을 최소화하거나 고정된 시간을 사용합니다.
         const now = new Date();
 
-        return alerts.filter((a) => {
+        const filteredAlerts = alerts.filter((a) => {
             if (!a) return false;
             
             // 1. 기간 체크 (서버/클라이언트 정합성을 위해 유효성 검사 강화)
@@ -80,6 +96,9 @@
             const pos = a.position || "top";
             return a.level < 3 && pos === positionFilter;
         });
+
+        console.log("[Alert] 필터링 후 displayAlerts:", $state.snapshot(filteredAlerts));
+        return filteredAlerts;
     });
 
     // Lv.1 알림 자동 소멸 로직 (안전한 체킹)
@@ -113,10 +132,25 @@
 </script>
 
 {#if isMounted} <!-- 🛡️ 브라우저 탑재 완료 후에만 렌더링 (하이드레이션 불일치 방지) -->
-    <!-- daisyUI Toast (Lv.1, Lv.2) : 상단/하단 부유형 알림 -->
-    {#if positionFilter !== 'modal' && displayAlerts.length > 0}
+    <!-- Lv.2 배너 (상단 레이아웃 아래 고정) -->
+    {#each displayAlerts.filter(a => a.level === 2 && a.position === 'top') as alert (alert.id)}
+        <div 
+            class="w-full bg-blue-600 text-white p-3 md:p-4 text-center text-sm md:text-base font-bold shadow-lg z-[999] relative"
+            transition:slide={{ y: -100, duration: 300 }}
+        >
+            <div class="flex items-center justify-between max-w-7xl mx-auto">
+                <span><Icon icon="mdi:information-variant" class="inline-block align-text-bottom mr-2" />{alert.message}</span>
+                <button onclick={() => alertState.dismiss(alert.id)} class="btn btn-ghost btn-circle btn-sm text-white hover:bg-white hover:text-blue-600">
+                    <Icon icon="mdi:close" class="w-5 h-5" />
+                </button>
+            </div>
+        </div>
+    {/each}
+
+    <!-- daisyUI Toast (Lv.1) : 상단/하단 부유형 알림 -->
+    {#if positionFilter !== 'modal' && displayAlerts.filter(a => a.level === 1).length > 0}
         <div class="toast toast-{positionFilter} toast-center z-[1000] p-4 gap-2">
-            {#each displayAlerts as alert (alert.id)}
+            {#each displayAlerts.filter(a => a.level === 1) as alert (alert.id)}
                 <div 
                     class="alert alert-{alert.style === 'danger' ? 'error' : alert.style} shadow-xl py-3 px-5 rounded-3xl border-none min-w-[280px]"
                     transition:fly={{ y: positionFilter === 'top' ? -50 : 50, duration: 600 }}
@@ -134,7 +168,7 @@
 
     <!-- daisyUI Modal (Lv.3, Lv.4, Lv.5) : 전체화면 및 중앙 팝업 -->
     {#if positionFilter === 'modal'}
-        {#each displayAlerts as alert (alert.id)}
+        {#each displayAlerts.filter(a => a.level >= 3) as alert (alert.id)} <!-- Level 3, 4, 5만 Modal 처리 -->
             <dialog class="modal modal-open backdrop-blur-md" transition:fade>
                 <div class="modal-box max-w-lg p-12 rounded-[2rem] border border-white/20 shadow-2xl {alert.level === 5 ? 'bg-gradient-to-br from-red-600 via-red-800 to-black text-white' : 'bg-base-100'}">
                     <div class="text-center">

@@ -20,7 +20,7 @@ export const actions = {
     default: async ({ request, cookies, fetch }) => {
         const formData = await request.formData();
         
-        // 백엔드 로그인 API 호출 (환경 변수 또는 기본값 사용)
+        // 백엔드 로그인 API 호출
         const apiEndpoint = env.PUBLIC_API_ENDPOINT || 'http://fastapi:8000';
         const response = await fetch(`${apiEndpoint}/users/login`, {
             method: 'POST',
@@ -31,14 +31,27 @@ export const actions = {
             return { success: false, error: '아이디 혹은 비밀번호가 일치하지 않습니다.' };
         }
 
-        const data = await response.json();
-        
-        // 인증 토큰 쿠키 설정 (로컬 환경 최적화)
-        const opts = { path: '/', httpOnly: true, sameSite: 'lax', secure: false, maxAge: 60 * 60 * 24 };
-        cookies.set('accessToken', data.access_token, opts);
-        cookies.set('refreshToken', data.refresh_token, { ...opts, maxAge: 60 * 60 * 24 * 3 });
+        // 📌 백엔드 응답에서 session_id 쿠키 추출 및 설정 (JTI-Redis 조합 핵심)
+        const setCookie = response.headers.get('set-cookie');
+        if (setCookie) {
+            // "session_id=xxx; ..." 형태에서 session_id 값을 추출
+            const sessionIdMatch = setCookie.match(/session_id=([^;]+)/);
+            if (sessionIdMatch) {
+                const sessionId = sessionIdMatch[1];
+                
+                // 백엔드가 설정한 쿠키 사양과 동일하게 브라우저에 구워줍니다.
+                cookies.set('session_id', sessionId, {
+                    path: '/',
+                    httpOnly: true,
+                    sameSite: 'lax',
+                    secure: false, // 로컬 개발 대응 (Production 환경에서는 배포 서버 환경에 맞춰야 함)
+                    maxAge: 60 * 60 * 24 * 3 // 3일 (백엔드와 동일하게 맞춤)
+                });
+                console.log("✅ [Login] JTI Session established:", sessionId.substring(0, 8) + "...");
+            }
+        }
 
-        // 🚀 성공 시 루트를 거치지 않고 대시보드(/v1)로 즉시 투입해 루프 최소화
+        // 🚀 로그인 성공 시 대시보드로 이동
         throw redirect(302, '/v1');
     }
 };

@@ -1,4 +1,6 @@
 <script>
+    console.log('Menu page script initiated!'); // 추가된 로그
+
     /**
      * @file (app)/v1/admin/menu/+page.svelte
      * @description 시스템 메뉴 아키텍처 실시간 편집기 (한글화 세션)
@@ -7,6 +9,8 @@
     import { fade, fly } from "svelte/transition";
     import * as api from "$lib/api/admin.js";
     import { alertState } from "$lib/runes/alert.svelte.js";
+    import { browser } from '$app/environment'; // browser import 추가
+
 
     let menus = $state([]);
     let apps = $state([]);
@@ -65,6 +69,7 @@
     let predictedUrl = $derived(getRecursiveUrl(editingMenu) || '(타입 선택 필요)');
 
     async function loadData() {
+        console.log('loadData called, attempting API calls...');
         loading = true;
         try {
             const [m, a, b] = await Promise.all([
@@ -75,20 +80,37 @@
             menus = m;
             apps = a;
             boards = b;
-        } catch (e) {
-            alertState.send(e.message, { level: 3, style: 'error' });
+            } catch (e) {
+            let errorMessage = "알 수 없는 오류가 발생했습니다.";
+            if (typeof e === 'object' && e !== null) {
+                if (Array.isArray(e.detail) && e.detail.every(item => typeof item === 'object' && item.msg)) {
+                    errorMessage = "유효성 검사 오류: " + e.detail.map(item => item.msg).join('; ');
+                } else if (typeof e.detail === 'string') {
+                    errorMessage = e.detail;
+                } else if (e.message) { // Standard Error object
+                    errorMessage = e.message;
+                }
+            } else { // Fallback for non-object errors
+                errorMessage = String(e);
+            }
+            alertState.send(errorMessage, { level: 3, style: 'error' });
         } finally {
             loading = false;
         }
     }
 
-    onMount(loadData);
+    onMount(() => {
+        if (browser) { // 브라우저 환경에서만 실행되도록 보호 (하이드레이션 문제 방지)
+            console.log('Menu page onMount is running!');
+            loadData();
+        }
+    });
 
     function startEdit(m) {
         editingMenu = { ...m, 
             parent_id: m.parent_id || "", 
             app_id: m.app_id || "", 
-            app_instance_id: m.app_instance_id || "" 
+            app_instance_id: m.app_instance_id || ""
         };
         document.getElementById("form-anchor")?.scrollIntoView({ behavior: 'smooth' });
     }
@@ -104,35 +126,75 @@
     }
 
     async function handleSave() {
+        console.log('handleSave called!');
         try {
             const data = { ...editingMenu };
+            for (const key in data) {
+                if (data[key] === "") {
+                    data[key] = null;
+                }
+            }
+            console.log('handleSave - Data prepared:', $state.snapshot(data)); // Log 1
             if (!data.id) {
                 delete data.id;
+                console.log('handleSave - Calling adminCreateMenu with:', $state.snapshot(data)); // Log 2
                 await api.adminCreateMenu(data);
+                console.log('handleSave - adminCreateMenu succeeded!'); // Log 3
                 alertState.send("새 메뉴가 등록되었습니다.", { level: 1, style: 'success' });
             } else {
+                console.log('handleSave - Calling adminUpdateMenu with:', data.id, $state.snapshot(data)); // Log 4
                 await api.adminUpdateMenu(data.id, data);
+                console.log('handleSave - adminUpdateMenu succeeded!'); // Log 5
                 alertState.send("메뉴 정보가 업데이트되었습니다.", { level: 1, style: 'success' });
             }
             resetForm();
+            console.log('handleSave - Form reset, calling loadData...'); // Log 6
             await loadData();
+            console.log('handleSave - loadData completed!'); // Log 7
         } catch (e) {
-            alertState.send(e.message, { level: 3, style: 'error' });
+            console.error('handleSave - Error caught:', e); // Log 8
+            let errorMessage = "알 수 없는 오류가 발생했습니다.";
+            if (typeof e === 'object' && e !== null) {
+                if (Array.isArray(e.detail) && e.detail.every(item => typeof item === 'object' && item.msg)) {
+                    errorMessage = "유효성 검사 오류: " + e.detail.map(item => item.msg).join('; ');
+                } else if (typeof e.detail === 'string') {
+                    errorMessage = e.detail;
+                } else if (e.message) { // Standard Error object
+                    errorMessage = e.message;
+                }
+            } else { // Fallback for non-object errors
+                errorMessage = String(e);
+            }
+            alertState.send(errorMessage, { level: 3, style: 'error' });
         }
     }
 
-    async function handleDelete(id) {
-        if (!confirm("정말 이 메뉴를 삭제하시겠습니까? 하위 메뉴도 함께 삭제될 수 있습니다.")) return;
+    async function handleDelete(menuId) {
+        if (!confirm("정말로 이 메뉴를 삭제하시겠습니까? 관련 하위 메뉴도 모두 삭제됩니다.")) {
+            return;
+        }
         try {
-            await api.adminDeleteMenu(id);
-            alertState.send("삭제 완료", { level: 2, style: 'info' });
-            await loadData();
+            await api.adminDeleteMenu(menuId);
+            alertState.send("메뉴가 성공적으로 삭제되었습니다.", { level: 1, style: 'success' });
+            await loadData(); // 메뉴 목록 새로고침
         } catch (e) {
-            alertState.send(e.message, { level: 3, style: 'error' });
+            console.error('handleDelete - Error caught:', e);
+            let errorMessage = "메뉴 삭제 중 오류가 발생했습니다.";
+            if (typeof e === 'object' && e !== null && e.detail) {
+                if (Array.isArray(e.detail) && e.detail.every(item => typeof item === 'object' && item.msg)) {
+                    errorMessage = "유효성 검사 오류: " + e.detail.map(item => item.msg).join('; ');
+                } else if (typeof e.detail === 'string') {
+                    errorMessage = e.detail;
+                } else if (e.message) { // Standard Error object
+                    errorMessage = e.message;
+                }
+            } else { // Fallback for non-object errors
+                errorMessage = String(e);
+            }
+            alertState.send(errorMessage, { level: 3, style: 'error' });
         }
     }
 </script>
-
 <div class="space-y-10 animate-fade-in text-black font-['Noto_Sans_KR','Outfit'] pb-40 px-4 max-w-7xl mx-auto">
     
     <!-- 📄 상단 헤더 -->
@@ -302,9 +364,14 @@
                                 </select>
                             </div>
                         </div>
-                        <div class="space-y-2">
-                            <label class="text-[10px] font-black uppercase tracking-widest opacity-30">외부 또는 정적 주소</label>
-                            <input type="text" bind:value={editingMenu.external_url} class="w-full h-14 border border-black px-5 font-bold bg-white focus:outline-none placeholder:italic" placeholder="/v1/my-page" />
+
+                    {/if}
+
+                    {#if editingMenu.link_type === 'URL'}
+                        <div class="space-y-2 pt-6" in:fade> <!-- pt-6 for spacing -->
+                            <label class="text-[10px] font-black uppercase tracking-widest text-black">고정 주소 (외부 또는 정적)</label>
+                            <input type="text" bind:value={editingMenu.external_url} class="w-full h-14 border border-black px-5 font-bold bg-white text-black focus:outline-none placeholder:italic" placeholder="예: /v1/my-page 또는 https://example.com" />
+                            <p class="text-[9px] font-bold opacity-40 italic">메뉴 클릭 시 연결될 정확한 URL을 입력하세요.</p>
                         </div>
                     {/if}
 
@@ -314,19 +381,21 @@
                         <code class="text-sm font-black text-blue-600 break-all">{predictedUrl}</code>
                     </div>
 
-                    <div class="grid grid-cols-3 gap-8 pt-6">
+                    <div class="grid grid-cols-2 gap-8 pt-6">
                          <div class="space-y-2">
-                            <label class="text-[10px] font-black uppercase tracking-widest opacity-30">정렬 순서</label>
-                            <input type="number" bind:value={editingMenu.order} class="w-full h-12 border border-black px-4 font-black" />
+                            <label class="text-[10px] font-black uppercase tracking-widest text-black">정렬 순서</label>
+                            <input type="number" bind:value={editingMenu.order} class="w-full h-12 border border-black px-4 font-black bg-white text-black" />
                         </div>
                         <div class="space-y-2">
-                            <label class="text-[10px] font-black uppercase tracking-widest opacity-30">아이콘 (Emoji)</label>
-                            <input type="text" bind:value={editingMenu.icon_name} class="w-full h-12 border border-black px-4 font-black text-center text-xl bg-white" placeholder="Emoji" />
+                            <label class="text-[10px] font-black uppercase tracking-widest text-black">아이콘 (Emoji)</label>
+                            <input type="text" bind:value={editingMenu.icon_name} class="w-full h-12 border border-black px-4 font-black text-center text-xl bg-white text-black" placeholder="Emoji" />
                         </div>
-                         <div class="flex items-end h-full">
-                            <label class="flex items-center gap-4 cursor-pointer w-full h-12 border border-black px-6 bg-white font-black text-[10px] uppercase transition-colors hover:bg-slate-50">
-                                <input type="checkbox" bind:checked={editingMenu.is_visible} class="checkbox checkbox-xs rounded-none" />
-                                메뉴 노출 여부
+                    </div>
+                    <div class="pt-6"> <!-- Separate div for Menu Exposure -->
+                         <div class="form-control w-full"> <!-- Using form-control for consistency -->
+                            <label class="label cursor-pointer justify-start gap-3">
+                                <span class="label-text font-bold text-black">메뉴 노출 여부</span>
+                                <input type="checkbox" bind:checked={editingMenu.is_visible} class="toggle toggle-primary" />
                             </label>
                         </div>
                     </div>

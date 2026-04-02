@@ -34,10 +34,14 @@ async function request(url, method = 'GET', body = null) {
     if (response.status === 401) {
         console.error(`❌ [401 Unauthorized] URL: ${url} | Token exists: ${!!token}`);
     }
+    // 204 No Content일 경우 빈 객체 반환
+    if (response.status === 204) { 
+        return {}; 
+    }
 
     if (!response.ok) {
         const err = await response.json().catch(() => ({}));
-        throw new Error(err.detail || `API 요청 실패 (${response.status})`);
+        throw new Error(Array.isArray(err.detail) ? err.detail.map(item => item.msg || JSON.stringify(item)).join('; ') : err.detail || `API 요청 실패 (${response.status})`);
     }
     return response.json();
 }
@@ -86,6 +90,13 @@ export const adminDeleteServiceBinding = (id) => request(`${BASE_URL}/service-bi
 export const adminGetAllDayoffs = () => request(`${BASE_URL}/dayoffs`);
 export const adminUpdateDayoffStatus = (dayoffId, status) => request(`${BASE_URL}/dayoffs/${dayoffId}/status`, 'PUT', { status });
 
+// 🔔 알림 관리 API (새로 추가)
+export const adminGetAlerts = () => request('/api/alert/list'); // 모든 알림 목록
+export const adminCreateAlert = (data) => request('/api/alert/create', 'POST', data);
+export const adminDeleteAlert = (alertId) => request(`/api/alert/delete/${alertId}`, 'DELETE');
+export const adminToggleAlert = (alertId) => request(`/api/alert/toggle/${alertId}`, 'POST');
+export const adminUpdateAlert = (alertId, data) => request(`/api/alert/update/${alertId}`, 'PUT', data);
+
 // 🔒 세션 관리 API
-export const adminGetSessions = () => request(`/users/sessions`);
-export const adminKickSession = (sessionId) => request(`/users/sessions/kick/${sessionId}`, 'POST');
+export const adminGetSessions = () => request('/users/sessions');
+export const adminKickSession = (sessionId) => request('/users/sessions/kick/${sessionId}', 'POST');

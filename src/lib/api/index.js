@@ -34,6 +34,7 @@ export const fastApi = async (method, url, params = {}, success_callback, failur
         method: method,
         headers: headers,
         body: body,
+        credentials: 'include' // 📌 중요: Cross-Origin 요청 시 쿠키 전송을 위함
     };
 
     try {

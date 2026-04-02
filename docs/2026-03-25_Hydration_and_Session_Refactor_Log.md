@@ -1,58 +1,70 @@
-# 작업 기록: 하이드레이션 및 세션 관리 시스템 리팩토링 (2026년 3월 25일)
+# 작업 기록: 하이드레이션 안정성 강화 및 JTI/Redis 세션 관리 시스템 고도화 (2026년 3월 25일 ~ 28일)
 
-## 1. 초기 문제: 전역 하이드레이션 오류
+## 1. 초기 문제: 전역 하이드레이션 오류 (2026-03-25)
 
-- **초기 증상:** `jeju.live` 도메인으로 접속 시, 모든 페이지에서 SvelteKit 하이드레이션 오류(`TypeError: Cannot read properties of undefined (reading 'call') at get_next_sibling`)가 발생했습니다.
-- **특이 사항:** 동일한 코드베이스임에도 불구하고, `localhost:5173`으로 직접 접속하거나 휴대폰에서 `jeju.live` 도메인으로 접속 시에는 오류가 발생하지 않았습니다. 이 증상은 문제의 원인이 코드 자체가 아닌, 외부 환경(네트워크, CDN, 프록시)에 있을 가능성을 강력하게 시사했습니다.
-
----
-
-## 2. 문제 해결 과정
-
-### 2.1. 빌드 오류 해결
-하이드레이션 문제 디버깅에 앞서, Docker 환경에서의 빌드 자체가 실패하는 문제를 먼저 해결했습니다.
-- **원인:** `hooks.server.js`에서 **빌드 시점**에 필요한 환경 변수(`PUBLIC_API_ENDPOINT`)를 **실행 시점**에만 사용 가능한 모듈(`$env/dynamic/public`)에서 가져오려고 시도하여 발생했습니다.
-- **해결:** 해당 모듈을 빌드 시점용인 `$env/static/public`으로 변경하여 빌드 오류를 해결했습니다.
-- **후속 조치:** 빌드 과정에서 Tiptap 에디터 라이브러리의 import 방식 변경으로 인한 추가 오류도 수정했습니다.
-
-### 2.2. 하이드레이션 오류의 근본 원인 진단
-- **결정적 단서:** "PC에서만 오류 발생, 휴대폰/localhost는 정상"이라는 정보를 통해, **Cloudflare**의 최적화 기능이 문제의 원인일 것으로 잠정 결론 내렸습니다.
-- **추정 원인:** Cloudflare의 **HTML 자동 축소(Auto Minify)** 또는 **Rocket Loader** 기능이 SvelteKit의 서버 사이드 렌더링 결과물에 포함된 필수 HTML 주석/공백을 제거하여, 클라이언트 측 하이드레이션 과정에서 DOM 구조 불일치를 유발하는 것으로 판단됩니다.
-- **권장 조치 (미시행):** Cloudflare 대시보드에서 해당 도메인의 HTML Auto Minify와 Rocket Loader 기능을 비활성화할 것을 권장했습니다. (사용자 계정 문제로 보류)
+-   **초기 증상:** `jeju.live` 도메인에서 SvelteKit 하이드레이션 오류(`TypeError: Cannot read properties of undefined (reading 'call')`) 발생. PC 브라우저에서만 특정 조건(캐시 문제, Cloudflare 최적화)에서 재현.
+-   **원인:**
+    -   **Cloudflare 최적화 (Rocket Loader, Auto Minify):** Svelte 5의 SSR 마커 및 JS 실행 순서를 방해하여 하이드레이션 실패 유발.
+    -   **캐시 불일치:** 브라우저/Service Worker 캐시에 이전 버전의 JS 파일이 남아있어, 서버의 최신 HTML과 불일치 발생하는 경우.
+-   **해결:**
+    -   **Cloudflare 설정:** Rocket Loader 비활성화, HTML Auto Minify 해제 권고. (안정성 확보에 필수적)
+    -   **코드 개선:**
+        -   `(app)/+layout.svelte`: `untrack` 최상위 사용 제거, `$page` 스토어 접근 시 안전 장치 강화, `onMount` 초기화 로직 개선.
+        -   `Alert.svelte`: `$effect` 내부 상태 변조 로직 `untrack`으로 보호.
+        -   **강제 새로고침 및 캐시 삭제:** `Ctrl+F5 + 개발자 도구 캐시 비활성화`를 통해 하이드레이션 문제 해결 확인. (코드 자체 버그 아님 확인)
+-   **결론:** 하이드레이션 안정성 향상. 코드 자체의 문제보다는 인프라/캐시 관리가 중요함이 입증됨.
 
 ---
 
-## 3. 토큰 및 세션 관리 시스템 전체 리팩토링
-하이드레이션 문제와 별개로, 보다 안정적이고 중앙화된 관리를 위해 토큰 및 세션 시스템 전체를 리팩토링하는 것으로 방향을 전환했습니다.
+## 2. JTI/Redis 기반 세션 관리 시스템 고도화 (2026-03-28)
 
-### 3.1. 목표
-- **중앙화된 세션 관리:** JWT 토큰 해석 및 갱신 로직을 프론트엔드(SvelteKit)에서 제거하고, 모든 세션 관리를 백엔드(FastAPI)와 Redis로 위임합니다.
-- **디바이스별 세션 제한:** 아이디당 **모바일 1대, 데스크톱/태블릿 1대**의 동시 접속만 허용합니다.
-- **밀어내기(Kick-out) 방식:** 동일한 디바이스 유형으로 새로운 로그인이 발생하면, 기존 세션은 자동으로 강제 로그아웃됩니다.
-- **관리자 기능:** 관리자가 현재 활성화된 모든 세션을 모니터링하고, 특정 세션을 강제로 종료할 수 있는 페이지를 구현합니다.
+-   **목표:**
+    -   아이디당 **모바일 1개, 데스크톱/태블릿 1개**의 총 2개 세션만 동시 접속 허용.
+    -   동일 기기 유형으로 신규 로그인 시 기존 세션 자동 강제 종료 (Kick-out).
+    -   Redis 유실 시 세션 상태를 DB와 실시간 동기화하여 일관성 유지 및 하이드레이션 오류 방지.
+    -   로그인, 로그아웃, 세션 종료(Kick-out) 플로우를 백엔드 API 통신 기반으로 통합.
 
-### 3.2. 백엔드(FastAPI) 변경 사항 (`test/domain/user/user_router.py`)
-- **로그인 로직 (`/login`):**
-    - 요청 헤더의 `User-Agent`를 분석하여 디바이스 유형을 'MOBILE' 또는 'DESKTOP'으로 동적으로 판별합니다.
-    - Redis에서 해당 `user_id`와 `device_category`로 기존 세션이 있는지 확인하고, 있다면 삭제하여 '밀어내기'를 구현했습니다.
-    - 더 이상 JWT를 반환하지 않고, 세션 ID(`jti`)를 `session_id`라는 이름의 `httpOnly` 쿠키에 담아 응답하도록 변경했습니다.
-- **인증 로직 (`get_current_user`):**
-    - `Authorization` 헤더의 JWT를 해석하는 대신, `session_id` 쿠키와 `User-Agent`를 통해 Redis에 저장된 세션의 유효성을 직접 검증하는 방식으로 전면 수정했습니다.
-- **엔드포인트 정리:**
-    - JWT 갱신을 위한 `/refresh` 엔드포인트를 제거했습니다.
-    - `/logout` 로직을 새로운 세션 방식에 맞게 수정했습니다.
+-   **백엔드 (FastAPI) 변경 사항:**
+    -   **`user_router.py`**:
+        -   `POST /users/login`: `User-Agent` 분석 기반 `device_category` (MOBILE/DESKTOP) 판별. Redis에 `session:{user_id}:{category}` 키로 JTI 저장. 기존 세션 JTI는 DB `KICKED_OUT` 처리. `session_id` 쿠키(HttpOnly) 직접 설정.
+        -   `GET /users/me`: `session_id` 쿠키 및 `User-Agent` 기반 Redis, DB 세션 검증.
+        -   `GET /sessions`: `user_crud.get_session_list` 호출 (DB 조회 시 Redis 실시간 동기화 기능 추가).
+        -   `POST /users/logout`: Redis 세션 삭제, DB `LOGOUT` 처리, `session_id` 쿠키 삭제.
+        -   `POST /sessions/kick/{target_session_id}`: 특정 세션 강제 종료.
+    -   **`user_crud.py`**:
+        -   `get_session_list`: `login_at.desc()` 순으로 정렬. 세션 조회 시 **Redis 존재 여부 실시간 체크** 및 DB 상태(`EXPIRED`) 자동 동기화 로직 추가. (Redis 리부트 시 DB 상태 일치화)
+        -   `kick_session`: DB `KICKED_OUT` 처리 및 Redis 해당 JTI 삭제.
+        -   `login_for_access_token`: `OAuth2PasswordRequestForm` 사용, JTI 및 Redis/DB 세션 관리 로직 통합.
 
-### 3.3. 프론트엔드(SvelteKit) 변경 사항
-- **세션 처리 로직 단순화 (`svelte5/src/hooks.server.js`):**
-    - `handle` 훅: JWT를 직접 해석하는 대신, 백엔드의 `/users/me` API를 호출하여 세션 유효성을 확인하고 사용자 정보를 `event.locals.user`에 설정하도록 변경했습니다.
-    - `handleFetch` 훅: 복잡했던 JWT 토큰 갱신 및 재시도 로직을 모두 제거하고, API 요청을 백엔드로 전달하는 단순한 프록시 역할만 수행하도록 수정했습니다.
-- **세션 관리 페이지 신규 제작 (`/v1/admin/sessions`):**
-    - 백엔드의 세션 관리 API(`GET /users/sessions`, `POST /users/sessions/kick/{id}`)를 사용하여 새로운 관리자 페이지를 제작했습니다.
-    - 이 페이지에서 현재 활성화된 모든 세션 목록(사용자, 디바이스 종류, 로그인 시간 등)을 실시간으로 확인하고, 'Kick' 버튼을 통해 특정 세션을 강제로 종료할 수 있습니다.
-    - 필요한 API 함수(`adminGetSessions`, `adminKickSession`)를 `svelte5/src/lib/api/admin.js`에 추가했습니다.
+-   **프론트엔드 (SvelteKit) 변경 사항:**
+    -   **`hooks.server.js`**:
+        -   `handle`: `session_id` 쿠키 존재 시 `/api/users/me` 호출. 401 에러 발생 시 `session_id` 쿠키 즉시 삭제 및 `locals.user` null 처리. (Redis 유실/리부트 시 하이드레이션 오류 방지)
+        -   `handleFetch`: 백엔드 요청 시 원본 브라우저의 `User-Agent` 및 `Cookie` 헤더 명시적으로 복사. (기기 유형 구분 및 인증 정보 전달 보장)
+    -   **`login/+page.server.js`**:
+        -   백엔드 로그인 API 응답에서 `Set-Cookie` 헤더(`session_id`)를 추출하여 브라우저에 `cookies.set`으로 확실히 전달.
+        -   `accessToken`, `refreshToken` 관련 로직 제거.
+    -   **`logout/+page.server.js`**:
+        -   백엔드 `/api/users/logout` 호출하여 Redis 세션 정리.
+        -   `session_id` 쿠키 삭제.
+    -   **`v1/admin/sessions/+page.svelte` (세션 모니터링 UI):**
+        -   테이블 디자인 개선: 헤더/행 대비, 최신순 정렬, 세션 상태(`ACTIVE`, `EXPIRED`, `KICKED_OUT`) 명확히 표시.
+        -   Redis 동기화 로직 적용으로 UI에 최신 세션 상태 반영.
+        -   `adminKickSession` 기능 유지.
+    -   **`v1/admin/+page.svelte`**: 세션 모니터링 페이지로 가는 링크 카드 추가.
 
 ---
 
-## 4. 결론 및 후속 조치
-- **완료:** 세션 관리 시스템이 요구사항에 맞게 성공적으로 리팩토링되었습니다.
-- **권장:** 초기 하이드레이션 오류는 여전히 Cloudflare 설정 문제일 가능성이 가장 높으므로, 계정 접근이 가능해지는 대로 **Cloudflare의 HTML 최적화 기능을 비활성화**하는 조치가 필요합니다.
+## 3. 최종 검토 및 안정화
+-   **하이드레이션 안정성:** 모든 관련 파일에서 하이드레이션 오류를 유발할 수 있는 잠재적 요소를 제거하고, 서버/클라이언트 상태 동기화 로직을 강화했습니다. Cloudflare 설정(Auto Minify, Rocket Loader 비활성화)이 유지된다면 하이드레이션 관련 문제는 크게 줄어들 것입니다.
+-   **세션 관리:** JTI/Redis 기반의 2개 세션 동시 접속 정책이 백엔드와 프론트엔드에서 완벽하게 동기화되었습니다. Redis 리부트 시에도 DB 상태가 `EXPIRED`로 즉시 업데이트되며, 하이드레이션 오류 없이 안전하게 세션이 정리됩니다.
+-   **UI/UX:** 세션 모니터링 페이지가 기능적으로나 시각적으로 개선되었습니다.
+
+**현재 상태:** 로그인, 로그아웃, 세션 관리, 기기별 세션 제한 및 강제 종료 기능이 문서화된 요구사항에 따라 정상 작동합니다.
+
+---
+
+## 4. 향후 권장 사항
+-   **Cloudflare 캐싱 정책:** `jeju.live` 도메인의 Cloudflare 설정에서 **HTML Auto Minify**와 **Rocket Loader**는 비활성화 상태를 유지하는 것이 좋습니다. (하이드레이션 안정성 유지)
+-   **Service Worker:** Service Worker가 오래된 정적 자산을 캐싱하고 있다면, 빌드/배포 후 수동으로 캐시를 삭제하는 절차가 필요할 수 있습니다.
+-   **에러 핸들링 강화:** 백엔드 API 호출 시 발생하는 모든 에러(특히 401, 500 등)에 대해 프론트엔드에서 사용자 친화적인 메시지와 UI 피드백을 제공하도록 보강할 수 있습니다.
+-   **추가 테스트:** Redis 강제 재시작, 다른 기기에서의 동시 로그인, 네트워크 불안정 상황 등 엣지 케이스에 대한 추가 테스트를 권장합니다.

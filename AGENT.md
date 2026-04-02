@@ -1,0 +1,3 @@
+- 라이브러리 데이지UI, tiptap, chart.js, iconify 설치되고 적극 사용한다. 
+- 도커 환경으로 svelte5 이름으로 작업한다. 
+- 

@@ -1,4 +1,4 @@
-import { fastApi } from '$lib/api';
+import { fastApi } from './index';
 
 /**
  * @file comment.api.js

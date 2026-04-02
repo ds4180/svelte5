@@ -1,4 +1,4 @@
-import { fastApi } from './api';
+import { fastApi } from './index';
 
 /**
  * 게시판 관련 API 호출 모듈 (표준 v2.0 반영)

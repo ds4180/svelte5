@@ -10,7 +10,7 @@
     import { onMount, untrack } from "svelte";
     import { fade, fly } from "svelte/transition";
     import Icon from "@iconify/svelte";
-    import * as api from "$lib/board.api";
+    import * as api from "$lib/api/board";
     import * as engines from "$lib/index";
     import TiptapEditor from "$lib/components/TiptapEditor.svelte";
     import { browser } from "$app/environment";
