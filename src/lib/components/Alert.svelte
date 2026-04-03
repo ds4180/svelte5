@@ -96,16 +96,19 @@
 			return a.level < 3 && pos === positionFilter;
 		});
 
-		console.log('[Alert] 필터링 후 displayAlerts:', $state.snapshot(filteredAlerts));
-		return filteredAlerts;
+		console.log('[Alert] 필터링 후 displayAlerts (Max 5):', $state.snapshot(filteredAlerts.slice(-5)));
+		return filteredAlerts.slice(-5);
 	});
 
-	// Lv.1 알림 자동 소멸 로직 (안전한 체킹)
+	// Lv.1 알림 자동 소멸 로직 (untrack을 통해 무한 루프 방지)
 	$effect(() => {
 		if (!displayAlerts) return;
 		displayAlerts.forEach((alert) => {
 			if (alert && alert.level === 1 && !alert.timerStarted) {
-				alert.timerStarted = true;
+				// 🛡️ [무한 루프 방어] 객체 속성 수정 시 반응성 전이를 차단합니다.
+				untrack(() => {
+					alert.timerStarted = true;
+				});
 				setTimeout(() => alertState.dismiss(alert.id), 10000);
 			}
 		});

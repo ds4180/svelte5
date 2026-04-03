@@ -52,7 +52,7 @@
         </a>
 
         <!-- Card 2: Day-Off -->
-        <a href="/v1/app/day-off" class="group border border-black p-8 bg-white hover:bg-black hover:text-white transition-all">
+        <a href="/v1/app/dayoff" class="group border border-black p-8 bg-white hover:bg-black hover:text-white transition-all">
             <div class="flex flex-col h-full justify-between gap-10">
                 <div class="flex justify-between items-start">
                     <span class="text-4xl">📑</span>

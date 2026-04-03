@@ -46,7 +46,7 @@ async function request(url, method = 'GET', body = null) {
     return response.json();
 }
 
-const BASE_URL = '/v1/admin';
+const BASE_URL = '/api/v1/admin';
 
 // 📊 대시보드 요약 API
 export const adminGetDashboard = () => request(`${BASE_URL}/dashboard`);
@@ -59,8 +59,9 @@ export const adminDeleteMenu = (id) => request(`${BASE_URL}/menu/${id}`, 'DELETE
 
 // 📦 앱 레지스트리 API
 export const adminGetApps = () => request(`${BASE_URL}/apps`);
-export const adminUpdateApp = (id, data) => request(`${BASE_URL}/apps/${id}`, 'PUT', data);
-
+export const adminGetAppDetail = (id) => request(`${BASE_URL}/apps/${id}`);
+export const adminCreateApp = (data) => request(`${BASE_URL}/apps`, 'POST', data);
+export const adminUpdateApp = (id, data) => request(`${BASE_URL}/apps/${id}`, 'PATCH', data);
 // 📑 게시판 관리 API
 export const adminGetBoards = () => request(`${BASE_URL}/boards`);
 export const adminCreateBoard = (data) => request(`${BASE_URL}/boards`, 'POST', data);
@@ -68,8 +69,6 @@ export const adminUpdateBoard = (id, data) => request(`${BASE_URL}/boards/${id}`
 export const adminDeleteBoard = (id) => request(`${BASE_URL}/boards/${id}`, 'DELETE');
 
 // 📦 앱 레지스트리 전체 CRUD (기존에 GET/PUT 만 있었으므로 나머지 추가)
-export const adminCreateApp = (data) => request(`${BASE_URL}/apps`, 'POST', data);
-export const adminDeleteApp = (id) => request(`${BASE_URL}/apps/${id}`, 'DELETE');
 
 // 🔧 서비스 레지스트리 API (서비스 종류 등록)
 export const adminGetServiceRegistries = () => request(`${BASE_URL}/service-registries`);
@@ -99,5 +98,5 @@ export const adminUpdateAlert = (alertId, data) => request(`/api/alert/update/${
 
 
 // 🔒 [수동 복사 안전 버전] 백틱 대신 더하기 연산자를 사용하여 치환 오류를 원천 차단합니다.
-export const adminGetSessions = () => request('/users/sessions');
-export const adminKickSession = (sessionId) => request('/users/sessions/kick/' + sessionId, 'POST');
+export const adminGetSessions = () => request('/api/users/sessions');
+export const adminKickSession = (sessionId) => request('/api/users/sessions/kick/' + sessionId, 'POST');

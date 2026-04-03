@@ -4,61 +4,54 @@ import { playwright } from '@vitest/browser-playwright';
 import { sveltekit } from '@sveltejs/kit/vite';
 
 export default defineConfig({
-	plugins: [tailwindcss(), sveltekit()],
-	server: {
-		host: true,
-		allowedHosts:['jeju.live','localhost'],
-		proxy: {
-			// 📌 [v1.0] Legacy API Proxy
-			'/api': { target: 'http://fastapi:8000', changeOrigin: true, rewrite: (path) => path.replace(/^\/api/, '') },
-			'/users': { target: 'http://fastapi:8000', changeOrigin: true },
-			'/fileupload': { target: 'http://fastapi:8000', changeOrigin: true },
-			'/ws': { target: 'http://fastapi:8000', changeOrigin: true, ws: true },
-			
-			// 📌 [v2.0] Modern Architecture Proxy (UI 경로와 API 경로의 평화로운 공존)
-			'/v1/admin': { 
-				target: 'http://fastapi:8000', 
-				changeOrigin: true,
-				bypass: (req) => {
-					// 🚀 브라우저가 화면을 그리려고(HTML/Accept 기반) 호출하는 경우 프록시를 타지 않습니다.
-					if (req.headers.accept?.indexOf('text/html') !== -1) return req.url;
-				}
-			},
-			'/v1/board': { target: 'http://fastapi:8000', changeOrigin: true },
-			'/v1/pages': { target: 'http://fastapi:8000', changeOrigin: true },
-			'/v1/alert': { target: 'http://fastapi:8000', changeOrigin: true },
-			'/v1/dayoff': { target: 'http://fastapi:8000', changeOrigin: true }
-		}
-	},
+plugins: [tailwindcss(), sveltekit()],
+server: {
+host: true,
+allowedHosts:['jeju.live','localhost'],
+proxy: {
+// 📌 [v1.1 표준] 모든 백엔드 API 통신은 /api로 단일화 (Nginx와 동일 규격)
+'/api': { 
+target: 'http://fastapi:8000', 
+changeOrigin: true, 
+rewrite: (path) => path.replace(/^\/api/, '') 
+},
+// 📌 [v1.1 표준] 실시간 웹소켓 통로
+'/ws': { 
+target: 'http://fastapi:8000', 
+changeOrigin: true, 
+ws: true 
+}
+// 🚀 [v2.0 정석] UI 경로(/v1/admin, /v1/board 등)와 충돌하던 프록시를 모두 제거하여
+// SvelteKit의 표준 라우팅 및 데이터 페칭(__data.json) 주권을 완벽히 회복합니다.
+}
+},
 
+test: {
+expect: { requireAssertions: true },
+projects: [
+{
+extends: './vite.config.js',
+test: {
+name: 'client',
+browser: {
+enabled: true,
+provider: playwright(),
+instances: [{ browser: 'chromium', headless: true }]
+},
+include: ['src/**/*.svelte.{test,spec}.{js,ts}'],
+exclude: ['src/lib/server/**']
+}
+},
 
-
-	test: {
-		expect: { requireAssertions: true },
-		projects: [
-			{
-				extends: './vite.config.js',
-				test: {
-					name: 'client',
-					browser: {
-						enabled: true,
-						provider: playwright(),
-						instances: [{ browser: 'chromium', headless: true }]
-					},
-					include: ['src/**/*.svelte.{test,spec}.{js,ts}'],
-					exclude: ['src/lib/server/**']
-				}
-			},
-
-			{
-				extends: './vite.config.js',
-				test: {
-					name: 'server',
-					environment: 'node',
-					include: ['src/**/*.{test,spec}.{js,ts}'],
-					exclude: ['src/**/*.svelte.{test,spec}.{js,ts}']
-				}
-			}
-		]
-	}
+{
+extends: './vite.config.js',
+test: {
+name: 'server',
+environment: 'node',
+include: ['src/**/*.{test,spec}.{js,ts}'],
+exclude: ['src/**/*.svelte.{test,spec}.{js,ts}']
+}
+}
+]
+}
 });

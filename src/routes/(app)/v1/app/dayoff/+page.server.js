@@ -3,10 +3,10 @@ import { env } from '$env/dynamic/private';
 
 /** @type {import('./$types').PageServerLoad} */
 export async function load({ fetch, cookies }) {
-    const accessToken = cookies.get('accessToken');
+    const sessionId = cookies.get('session_id');
 
     // 토큰 없으면 로그인 페이지로 리다이렉트 (표준 주소 v1 기반)
-    if (!accessToken) {
+    if (!sessionId) {
         throw redirect(303, '/login');
     }
 
