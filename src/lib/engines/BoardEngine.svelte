@@ -25,15 +25,20 @@
 	let keyword = $state('');
 
 	// --- [데이터 상태] ---
+	// ✅ SSR initialData 구조에 따라 목록/상세 모드 분기 초기화
+	// · 목록 모드:  initialData = { posts, board, total }
+	// · 상세 모드:  initialData = { post, board, bindings }
 	let posts = $state(initialData?.posts || []);
 	let board = $state(initialData?.board || null);
 	let post = $state(initialData?.post || null);
 	let bindings = $state(initialData?.bindings || []);
 	let total = $state(initialData?.total || 0);
-	let isLoading = $state(!initialData);
+	let isLoading = $state(false); // initialData 유무와 무관하게 false 로 시작 (loadData 내부에서 제어)
 	let errorMessage = $state('');
 
 	// --- [폼 상태] ---
+	// ⚠️ $state 초기화 시 다른 $state(post)를 直접 참조하면 state_referenced_locally 에러 발생
+	//    → 리터럴 기본값으로 선언 후 loadData/parsePath 에서 채움
 	let editForm = $state({
 		title: '',
 		content: '',
@@ -64,32 +69,66 @@
 	// 초기 파싱
 	parsePath();
 
+	// 🔄 슬러그 변경 감지 (Svelte 5 클라이언트 라우팅 대응)
+	let currentSlug = $state(slug);
+	$effect(() => {
+		if (slug !== currentSlug) {
+			untrack(() => {
+				currentSlug = slug;
+				parsePath();
+
+				// [하이드레이션] 클라이언트 네비게이션 시 새로운 initialData가 프로퍼티로 내려오면
+				// 기존에 할당된 $state 들을 갱신해 주어야 합니다.
+				if (initialData) {
+					posts = initialData.posts || [];
+					post = initialData.post || null;
+					board = initialData.board || null;
+					bindings = initialData.bindings || [];
+					total = initialData.total || 0;
+				}
+
+				loadData();
+			});
+		}
+	});
+
+	// 컴포넌트 초기화 시 데이터 로드
+	loadData();
+
 	// --- [데이터 로드] ---
 	async function loadData() {
+		// [방어 코드] 이미 로딩 중이면 중복 실행 방지
+		if (isLoading) return;
+
 		if (!boardSlug) {
 			errorMessage = '잘못된 접근입니다. 게시판 주소(Slug)를 입력해 주세요.';
-			isLoading = false;
 			return;
 		}
+
+		// ✅ [핵심] SSR 데이터가 이미 있으면 API 재호출 없이 종료
+		//    목록 모드: posts 배열 존재 여부로 판단
+		//    상세 모드: post 객체 존재 여부로 판단
+		const hasSSRData =
+			initialData && (mode === 'list' ? posts.length > 0 : post !== null);
+
+		if (hasSSRData) {
+			console.log('🚀 [BoardEngine] SSR data hydrated — skipping API fetch');
+			// SSR edit 모드: editForm은 빈 기본값으로 선언되었으므로 여기서 채움
+			if (mode === 'edit' && post) {
+				editForm = {
+					title: post.title || '',
+					content: post.content || '',
+					content_json: post.content_json ?? null,
+					extra_data: post.extra_data || {},
+					status: post.status || 'published'
+				};
+			}
+			return;
+		}
+
 		isLoading = true;
 		errorMessage = '';
 		try {
-			// [하이드레이션] 서버에서 가져온 초기 데이터가 있으면 사용
-			if (initialData && (mode === 'list' ? posts.length > 0 : post)) {
-				console.log('🚀 [BoardEngine] SSR Initial Data Hydrated');
-				if (mode === 'edit' && post) {
-					editForm = {
-						title: post.title,
-						content: post.content,
-						content_json: post.content_json,
-						extra_data: post.extra_data || {},
-						status: post.status || 'published'
-					};
-				}
-				isLoading = false;
-				return;
-			}
-
 			if (mode === 'list') {
 				const data = await api.getBoardPosts(boardSlug, currentPage, pageSize, keyword);
 				posts = data.posts || [];
@@ -97,8 +136,9 @@
 				total = data.total || 0;
 			} else if (mode === 'view' || mode === 'edit') {
 				const data = await api.getPostDetail(postId);
-				post = data.post;
-				board = data.board;
+				// 백엔드가 단일 Post 객체를 그냥 반환하므로 분기 처리
+				post = data.post || data;
+				board = data.board || data.board || null;
 				bindings = data.bindings || [];
 
 				if (mode === 'edit' && post) {
@@ -112,7 +152,10 @@
 				}
 			}
 		} catch (e) {
-			alert('데이터 로딩 실패: ' + e.message);
+			console.error('[BoardEngine] 데이터 로딩 실패:', e);
+			// fastApi는 에러 시 객체({ detail: '...' })를 reject하므로 문자열로 추출
+			const msg = e?.detail || e?.message || (typeof e === 'string' ? e : JSON.stringify(e));
+			errorMessage = `데이터를 불러오지 못했습니다: ${msg}`;
 		} finally {
 			isLoading = false;
 		}
@@ -120,6 +163,23 @@
 
 	// --- [액션 핸들러] ---
 	async function handleSave() {
+		// --- [프론트엔드 유효성 검증] ---
+		if (!editForm.title || !editForm.title.trim()) {
+			alert('제목을 입력해주세요.');
+			return;
+		}
+		
+		// Tiptap 빈 태그(<p></p>)나 공백 문자 필터링
+		const tempDiv = document.createElement('div');
+		tempDiv.innerHTML = editForm.content;
+		const textContent = tempDiv.textContent || tempDiv.innerText || '';
+		
+		if (!textContent.trim() && !editForm.content.includes('<img')) {
+			alert('내용을 입력해주세요.');
+			return;
+		}
+		// -----------------------------
+
 		try {
 			isLoading = true;
 			if (mode === 'write') {
@@ -129,7 +189,8 @@
 			}
 			goto(`/v1/app/${appId}/${boardSlug}`, { invalidateAll: true });
 		} catch (e) {
-			alert('저장 실패: ' + e.message);
+			const msg = e?.detail || e?.message || (typeof e === 'string' ? e : JSON.stringify(e));
+			alert('저장 실패: ' + msg);
 		} finally {
 			isLoading = false;
 		}
@@ -143,7 +204,8 @@
 			window.alert('게시물이 삭제되었습니다.');
 			goto(`/v1/app/${appId}/${boardSlug}`, { invalidateAll: true });
 		} catch (e) {
-			alert('삭제 실패: ' + e.message);
+			const msg = e?.detail || e?.message || (typeof e === 'string' ? e : JSON.stringify(e));
+			alert('삭제 실패: ' + msg);
 		} finally {
 			isLoading = false;
 		}
@@ -163,18 +225,6 @@
 		loadData();
 	}
 
-	// 🔄 슬러그 변경 감지 (Svelte 5 Effect)
-	let currentSlug = $state(slug);
-	$effect(() => {
-		if (slug !== currentSlug) {
-			untrack(() => {
-				currentSlug = slug;
-				parsePath();
-				loadData();
-			});
-		}
-	});
-
 	/** 날짜 포맷팅 */
 	function formatDate(dateStr) {
 		if (!dateStr) return '-';
@@ -187,7 +237,7 @@
 <div
 	class="board-engine-container min-h-screen w-full bg-[#fafafa] p-4 font-['Outfit'] text-black md:p-8"
 >
-	{#if isLoading && !initialData}
+	{#if isLoading}
 		<div
 			class="fixed inset-0 z-50 flex flex-col items-center justify-center gap-6 bg-white/80 backdrop-blur-sm"
 		>
@@ -364,94 +414,167 @@
 							{/if}
 						{/if}
 					</div>
-				{:else if mode === 'view' && post}
-					<article class="mx-auto max-w-4xl">
-						<div class="mb-12 space-y-6">
-							<div class="flex items-center gap-4">
-								<a
-									href="/v1/app/{appId}/{boardSlug}"
-									class="flex items-center gap-1 text-[10px] font-black tracking-widest text-blue-600 uppercase hover:underline"
-								>
-									<Icon icon="ph:caret-left-bold" /> Back
-								</a>
-							</div>
-							<h1
-								class="mb-6 border-l-8 border-black pl-8 text-6xl leading-[0.9] font-black tracking-tighter uppercase"
-							>
-								{post.title}
-							</h1>
-							<div
-								class="flex flex-wrap items-center gap-x-8 gap-y-4 pt-4 text-xs font-bold italic opacity-40"
-							>
-								<div class="flex items-center gap-2">
-									<Icon icon="ph:user-bold" />
-									<span class="NOT-ITALIC bg-black px-2 py-0.5 text-white">AUTHOR</span>
-									{post.author_name || 'ANONYMOUS'}
-								</div>
-								<div class="flex items-center gap-2">
-									<Icon icon="ph:calendar-blank-bold" />
-									{formatDate(post.created_at)}
-								</div>
-								<div class="flex items-center gap-2">
-									<Icon icon="ph:eye-bold" />
-									{post.view_count || 0} VIEWS
-								</div>
-							</div>
-						</div>
-
+				{:else if mode === 'view'}
+					{#if !post && !isLoading}
+						<!-- 게시물 없음 상태 -->
 						<div
-							class="mb-12 border-4 border-black bg-white p-10 shadow-[20px_20px_0_rgba(0,0,0,0.05)] md:p-16"
+							class="flex h-80 flex-col items-center justify-center gap-6 border-4 border-dashed border-black opacity-30"
 						>
-							<div
-								class="prose prose-xl max-w-none font-['Noto_Sans_KR'] leading-relaxed font-medium"
-							>
-								{@html post.content}
-							</div>
-						</div>
-
-						<footer
-							class="flex items-center justify-between border-4 border-black bg-slate-100 p-8"
-						>
-							<div class="flex gap-4">
-								<button
-									class="flex h-14 items-center gap-2 border-2 border-black px-8 text-xs font-black uppercase transition-all hover:bg-black hover:text-white"
-									onclick={goToEdit}
-								>
-									<Icon icon="ph:pencil-simple-bold" /> Modify
-								</button>
-								<button
-									class="flex h-14 items-center gap-2 border-2 border-red-600 px-8 text-xs font-black text-red-600 uppercase transition-all hover:bg-red-600 hover:text-white"
-									onclick={handleDelete}
-								>
-									<Icon icon="ph:trash-bold" /> Destroy
-								</button>
-							</div>
+							<Icon icon="ph:file-dashed-bold" class="h-20 w-20" />
+							<p class="font-black tracking-widest uppercase italic">Post Not Found</p>
 							<a
 								href="/v1/app/{appId}/{boardSlug}"
-								class="flex h-14 items-center gap-2 bg-black px-8 text-xs font-black text-white uppercase transition-all hover:bg-slate-800"
+								class="border-2 border-black px-6 py-2 text-xs font-black uppercase hover:bg-black hover:text-white"
 							>
-								Return to Archive
+								← Back to List
 							</a>
-						</footer>
+						</div>
+					{:else if post}
+						<article class="mx-auto max-w-4xl" in:fade={{ duration: 300 }}>
+							<!-- 🔙 상단 브레드크럼 네비게이션 -->
+							<nav class="mb-10 flex items-center gap-3 text-[10px] font-black tracking-widest uppercase">
+								<a
+									href="/v1/app/{appId}/{boardSlug}"
+									class="flex items-center gap-1 text-blue-600 opacity-70 transition-opacity hover:opacity-100"
+								>
+									<Icon icon="ph:caret-left-bold" class="h-3 w-3" />
+									{board?.name || boardSlug}
+								</a>
+								<span class="opacity-20">/</span>
+								<span class="opacity-40">NO.{post.id}</span>
+							</nav>
 
-						<!-- 💬 Dynamic Binding Area (Comments etc) -->
-						{#if bindings && bindings.length > 0}
-							<div class="mt-20 space-y-12 pb-20">
-								{#each bindings as binding}
-									{#if engines[binding.service_component]}
-										<div class="animate-slide-up">
-											<svelte:component
-												this={engines[binding.service_component]}
-												{appId}
-												instanceId={postId}
-												config={binding.config}
-											/>
+							<!-- 📋 게시물 헤더 블록 -->
+							<header class="mb-10 space-y-6 border-b-4 border-black pb-10">
+								<!-- 상태 뱃지 -->
+								{#if post.status && post.status !== 'published'}
+									<span
+										class="inline-block bg-yellow-400 px-3 py-1 text-[9px] font-black tracking-widest uppercase"
+									>
+										{post.status}
+									</span>
+								{/if}
+
+								<!-- 제목 -->
+								<h1
+									class="border-l-8 border-black pl-8 text-5xl leading-tight font-black tracking-tighter md:text-6xl"
+								>
+									{post.title}
+								</h1>
+
+								<!-- 메타 정보 행 -->
+								<div class="flex flex-wrap items-center gap-x-8 gap-y-3 text-xs font-bold">
+									<div class="flex items-center gap-2 opacity-50">
+										<Icon icon="ph:user-circle-bold" class="h-4 w-4" />
+										<span class="bg-black px-2 py-0.5 text-[9px] text-white uppercase">AUTHOR</span>
+										<span>{post.author_name || 'ANONYMOUS'}</span>
+									</div>
+									<div class="flex items-center gap-2 opacity-40">
+										<Icon icon="ph:calendar-blank-bold" class="h-4 w-4" />
+										<span>{formatDate(post.created_at)}</span>
+									</div>
+									{#if post.updated_at && post.updated_at !== post.created_at}
+										<div class="flex items-center gap-2 opacity-30">
+											<Icon icon="ph:pencil-line-bold" class="h-4 w-4" />
+											<span>수정됨 {formatDate(post.updated_at)}</span>
 										</div>
 									{/if}
-								{/each}
-							</div>
-						{/if}
-					</article>
+									<div class="ml-auto flex items-center gap-2 opacity-40">
+										<Icon icon="ph:eye-bold" class="h-4 w-4" />
+										<span>{post.view_count || 0} VIEWS</span>
+									</div>
+								</div>
+							</header>
+
+							<!-- 📄 본문 콘텐츠 -->
+							<section
+								class="mb-12 border-4 border-black bg-white p-8 shadow-[16px_16px_0_rgba(0,0,0,0.04)] md:p-14"
+							>
+								<div
+									class="prose prose-lg max-w-none font-['Noto_Sans_KR'] leading-relaxed"
+								>
+									{@html post.content}
+								</div>
+							</section>
+
+							<!-- 🗂 extra_data 필드 표시 (있는 경우) -->
+							{#if post.extra_data && Object.keys(post.extra_data).length > 0}
+								<section class="mb-10 border-4 border-black bg-slate-50 p-8">
+									<h3
+										class="mb-6 border-b-2 border-black pb-3 text-xs font-black tracking-[0.3em] uppercase"
+									>
+										<Icon icon="ph:list-dashes-bold" class="inline h-4 w-4" /> Additional
+										Fields
+									</h3>
+									<dl class="grid grid-cols-1 gap-4 md:grid-cols-2">
+										{#each Object.entries(post.extra_data) as [key, val]}
+											<div class="border-2 border-black bg-white p-4">
+												<dt
+													class="mb-1 text-[9px] font-black tracking-widest uppercase opacity-40"
+												>
+													{key}
+												</dt>
+												<dd class="text-sm font-bold">{val}</dd>
+											</div>
+										{/each}
+									</dl>
+								</section>
+							{/if}
+
+							<!-- 🔧 액션 푸터 -->
+							<footer
+								class="flex flex-wrap items-center justify-between gap-4 border-4 border-black bg-slate-100 p-6 md:p-8"
+							>
+								<div class="flex flex-wrap gap-3">
+									<button
+										class="flex h-12 items-center gap-2 border-2 border-black bg-white px-6 text-xs font-black uppercase transition-all hover:bg-black hover:text-white"
+										onclick={goToEdit}
+									>
+										<Icon icon="ph:pencil-simple-bold" class="h-4 w-4" /> Modify
+									</button>
+									<button
+										class="flex h-12 items-center gap-2 border-2 border-red-500 bg-white px-6 text-xs font-black text-red-600 uppercase transition-all hover:bg-red-600 hover:text-white"
+										onclick={handleDelete}
+									>
+										<Icon icon="ph:trash-bold" class="h-4 w-4" /> Delete
+									</button>
+								</div>
+								<a
+									href="/v1/app/{appId}/{boardSlug}"
+									class="flex h-12 items-center gap-2 bg-black px-8 text-xs font-black text-white uppercase transition-all hover:bg-slate-800"
+								>
+									<Icon icon="ph:list-bold" class="h-4 w-4" /> Return to List
+								</a>
+							</footer>
+
+							<!-- 💬 Dynamic Service Bindings (댓글 등) -->
+							{#if bindings && bindings.length > 0}
+								<div class="mt-16 space-y-10 pb-24">
+									{#each bindings as binding (binding.service_component)}
+										{#if engines[binding.service_component]}
+											{@const DynComp = engines[binding.service_component]}
+											<div
+												class="border-t-4 border-black pt-10"
+												in:fly={{ y: 20, duration: 400 }}
+											>
+												<p
+													class="mb-6 text-[9px] font-black tracking-[0.4em] uppercase opacity-30"
+												>
+													{binding.service_component}
+												</p>
+												<DynComp
+													{post}
+													{appId}
+													instanceId={postId}
+													config={binding.config}
+												/>
+											</div>
+										{/if}
+									{/each}
+								</div>
+							{/if}
+						</article>
+					{/if}
 				{:else if mode === 'write' || mode === 'edit'}
 					<div class="mx-auto max-w-5xl">
 						<div class="border-8 border-black bg-white p-10 md:p-16">
@@ -479,6 +602,35 @@
 									/>
 								</div>
 
+								<!-- --- [동적 커스텀 필드 영역] --- -->
+								{#if board?.fields_def && board.fields_def.length > 0}
+									<div class="grid grid-cols-1 gap-8 border-y-2 border-black/5 py-10 md:grid-cols-2">
+										{#each board.fields_def as field}
+											<div class="space-y-3">
+												<label class="flex items-center gap-2 text-[10px] font-black tracking-[0.2em] uppercase opacity-30">
+													<Icon icon="ph:tag-bold" class="h-4 w-4" /> {field.label}
+												</label>
+												{#if field.type === 'number'}
+													<input type="number" bind:value={editForm.extra_data[field.key]} class="h-14 w-full border-2 border-black bg-white px-5 font-bold focus:outline-none focus:ring-4 focus:ring-blue-50" />
+												{:else if field.type === 'date'}
+													<input type="date" bind:value={editForm.extra_data[field.key]} class="h-14 w-full border-2 border-black bg-white px-5 font-bold focus:outline-none focus:ring-4 focus:ring-blue-50" />
+												{:else if field.type === 'select'}
+													<select bind:value={editForm.extra_data[field.key]} class="h-14 w-full border-2 border-black bg-white px-5 font-black focus:outline-none focus:ring-4 focus:ring-blue-50">
+														<option value="">-- 선택하세요 --</option>
+														{#each (field.options_text || '').split(',').map(s => s.trim()) as opt}
+															{#if opt}
+																<option value={opt}>{opt}</option>
+															{/if}
+														{/each}
+													</select>
+												{:else}
+													<input type="text" bind:value={editForm.extra_data[field.key]} placeholder={field.placeholder || ''} class="h-14 w-full border-2 border-black bg-white px-5 font-bold focus:outline-none focus:ring-4 focus:ring-blue-50" />
+												{/if}
+											</div>
+										{/each}
+									</div>
+								{/if}
+
 								<div class="space-y-3">
 									<label
 										class="flex items-center gap-2 text-[10px] font-black tracking-[0.2em] uppercase opacity-30"
@@ -486,7 +638,7 @@
 										<Icon icon="ph:article-bold" class="h-4 w-4" /> Entry Content
 									</label>
 									<div class="min-h-[500px] border-4 border-black">
-										<TiptapEditor bind:content={editForm.content} />
+										<TiptapEditor bind:content={editForm.content} bind:content_json={editForm.content_json} />
 									</div>
 								</div>
 

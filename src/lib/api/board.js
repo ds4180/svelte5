@@ -10,8 +10,8 @@ export const getBoardPosts = (slug, page, size, keyword) =>
 export const getBoardConfig = (slug) => fastApi('GET', `/api/v1/board/${slug}`);
 export const getPostDetail = (postId) => fastApi('GET', `/api/v1/board/post/${postId}`);
 export const createPost = (slug, data) => fastApi('POST', `/api/v1/board/create/${slug}`, data);
-export const updatePost = (postId, data) => fastApi('PUT', `/api/v1/board/post/${postId}`, data);
-export const deletePost = (postId) => fastApi('DELETE', `/api/v1/board/post/${postId}`);
+export const updatePost = (postId, data) => fastApi('PUT', `/api/v1/board/update/${postId}`, data);
+export const deletePost = (postId) => fastApi('DELETE', `/api/v1/board/delete/${postId}`);
 
 // --- Comment (Lego Service) ---
 export const getComments = (postId) => fastApi('GET', `/api/v1/comment/${postId}`);

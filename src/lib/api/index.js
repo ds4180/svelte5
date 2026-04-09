@@ -1,5 +1,6 @@
 import { env } from '$env/dynamic/public';
 import { auth } from '$lib/runes/auth.svelte.js';
+import { browser } from '$app/environment';
 
 /**
  * FastAPI 백엔드와 통신하는 중앙 집중형 통신 함수 (표준 v1.1 준수)
@@ -12,7 +13,11 @@ import { auth } from '$lib/runes/auth.svelte.js';
  */
 export const fastApi = async (method, url, params = {}, success_callback, failure_callback) => {
 	const PUBLIC_SERVER_URL = env.PUBLIC_SERVER_URL || '';
-	let _url = PUBLIC_SERVER_URL + url;
+	
+	// 브라우저에서는 상대 경로를 사용하여 SvelteKit / Nginx 프록시 라우팅을 타게 함
+	// 서버 렌더링 시에만 PUBLIC_SERVER_URL(예: http://fastapi:8000) 사용 허용
+	let _url = browser ? url : (PUBLIC_SERVER_URL + url);
+	
 	let body = params;
 
 	// 1. 헤더 설정 (세션 기반이므로 토큰 주입 제거)

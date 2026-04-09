@@ -21,9 +21,19 @@
 			// 1. 앱 정보 로드
 			appInfo = await api.adminGetAppDetail(appId);
 
-			// 2. 인스턴스 목록 로드 (게시판 엔진인 경우)
+			// 2. 인스턴스 목록 로드
 			if (appId === 'board') {
 				instances = await api.adminGetBoards();
+			} else if (appId === 'page') {
+				// 페이지 엔진의 경우 '페이지' 목록을 인스턴스처럼 취급하여 로드
+				// admin.js 에 adminGetPages 가 없다면 대비하여 api 객체 확인 필요
+				if (api.adminGetPages) {
+					instances = await api.adminGetPages();
+				} else {
+					// page.js 에서 가져오는 로직 (추후 admin.js 통합 권장)
+					const pageApi = await import('$lib/api/page.js');
+					instances = await pageApi.adminGetPages();
+				}
 			} else {
 				instances = [];
 			}
@@ -102,13 +112,16 @@
 							/{ins.slug}
 						</div>
 						<div class="flex gap-2 opacity-0 transition-opacity group-hover:opacity-100">
-							<button class="p-1 text-black hover:text-blue-600"
-								><Icon icon="ph:pencil-simple-bold" class="h-4 w-4" /></button
+							<a 
+								href="/v1/admin/apps/{appId}/instances/{ins.slug}/edit"
+								class="p-1 text-black hover:text-blue-600"
 							>
+								<Icon icon="ph:pencil-simple-bold" class="h-4 w-4" />
+							</a>
 						</div>
 					</div>
 
-					<h4 class="mb-2 text-2xl font-black tracking-tight uppercase">{ins.name || ins.slug}</h4>
+					<h4 class="mb-2 text-2xl font-black tracking-tight uppercase">{ins.title || ins.name || ins.slug}</h4>
 					<p
 						class="mb-6 line-clamp-2 h-10 overflow-hidden text-xs leading-relaxed font-bold italic opacity-40"
 					>
@@ -123,15 +136,15 @@
 									>{ins.layout_type}</span
 								>
 							{/if}
-							{#if ins.items_per_page}
+							{#if ins.status}
 								<span
-									class="badge h-5 rounded-none badge-outline border-black/20 px-2 text-[8px] font-black uppercase"
-									>LIMIT {ins.items_per_page}</span
+									class="badge h-5 rounded-none border-black px-2 text-[8px] font-black uppercase {ins.status === 'PUBLISHED' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}"
+									>{ins.status}</span
 								>
 							{/if}
 						</div>
 						<a
-							href="/v1/app/{appId}/{ins.slug}"
+							href={(appInfo?.frontend_route || '/v1/app/[appId]/[slug]').replace('[appId]', appId).replace('[slug]', ins.slug)}
 							target="_blank"
 							class="flex items-center gap-1 text-[9px] font-black text-black uppercase hover:underline"
 						>

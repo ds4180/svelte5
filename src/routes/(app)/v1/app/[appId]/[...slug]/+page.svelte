@@ -2,7 +2,7 @@
 	/**
 	 * /v1/app/[appId]/[...slug]/+page.svelte
 	 * @description 앱 엔진 동적 마운트 페이지
-	 *   - AppRegistry의 main_component 문자열로 실제 엔진 컴포넌트를 런타임에 결정
+	 *   - AppRegistry의 main_component 문자열로 실제 엔진 컴포넌트를 결정
 	 */
 	import * as Engines from '$lib'; // $lib/index.js에 등록된 엔진 컴포넌트 맵
 	import { fade } from 'svelte/transition';
@@ -10,9 +10,9 @@
 	/** @type {import('./$types').PageData} */
 	let { data } = $props();
 
-	// 🚀 [v2.0 최종 해결] 반응성($derived) 주입:
-	// URL이 바뀔 때(data가 바뀔 때) 컴포넌트를 즉시 재계산하여 리로드 없이 화면 전환
-	let TargetComponent = $derived(Engines[data.appInfo.main_component]);
+	// 🚀 [v2.2.4 해결] $derived 대신 상수로 선언하여 마운트 루프 방지
+	// 페이지 로드 시 엔진을 한 번만 결정하여 불필요한 재마운트(리마운트 루프)를 막습니다.
+	const TargetComponent = Engines[data.appInfo.main_component];
 </script>
 
 <div class="app-viewport min-h-[70vh]" in:fade>
@@ -31,7 +31,7 @@
 						지도(<code>$lib/index.js</code>)에 존재하는지 확인하세요.
 					</p>
 				</div>
-				<a href="/v1/admin/apps" class="btn btn-sm btn-primary"> App 설정 확인하러 가기 </a>
+				<a href="/v1/admin/app" class="btn btn-sm btn-primary"> App 설정 확인하러 가기 </a>
 			</div>
 		</div>
 	{/if}

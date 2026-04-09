@@ -288,13 +288,10 @@
 	// - 0분 = 00:00 (자정)
 	// - 720분 = 12:00 (정오)
 	// - 1440분 = 24:00 (다음날 자정)
-	// ⚠️ [하이드레이션 방어] 초기값을 null로 설정하여 서버/클라이언트 정합성 유지
-	let currentTime = $state(null);
+	let currentTime = $state(new Date().getHours() * 60 + new Date().getMinutes());
 
 	onMount(() => {
-		if (currentTime === null) {
-			currentTime = new Date().getHours() * 60 + new Date().getMinutes();
-		}
+		// 초기화 완료 후 필요한 경우 추가 로직 수행
 	});
 
 	// 애니메이션 재생 상태 (true: 재생 중, false: 정지)
