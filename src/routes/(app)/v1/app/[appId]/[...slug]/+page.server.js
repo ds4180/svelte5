@@ -15,40 +15,40 @@ import { env } from '$env/dynamic/private';
 
 /** @type {import('./$types').PageServerLoad} */
 export async function load({ params, fetch }) {
-    const { appId, slug } = params;
+	const { appId, slug } = params;
 
-    // 1. AppRegistry 에서 앱 정보 조회
-    const appRes = await fetch(`${env.SERVER_URL}/api/v1/admin/apps/${appId}`);
-    if (!appRes.ok) {
-        throw error(appRes.status, '앱 정보를 불러오는데 실패했습니다.');
-    }
-    const appInfo = await appRes.json();
+	// 1. AppRegistry 에서 앱 정보 조회
+	const appRes = await fetch(`${env.SERVER_URL}/api/v1/admin/apps/${appId}`);
+	if (!appRes.ok) {
+		throw error(appRes.status, '앱 정보를 불러오는데 실패했습니다.');
+	}
+	const appInfo = await appRes.json();
 
-    // 2. [하이드레이션 해결] 엔진 데이터 프리로딩 (Pre-loading)
-    let initialData = null;
-    if (appInfo.main_component === 'BoardEngine' && slug) {
-        try {
-            const parts = slug.split("/");
-            const boardSlug = parts[0];
-            
-            if (parts.length === 1) {
-                // 목록 모드 데이터 로드
-                const res = await fetch(`${env.SERVER_URL}/api/v1/board/${boardSlug}/posts?page=0&size=10`);
-                if (res.ok) initialData = await res.json();
-            } else if (parts[1] && !isNaN(parts[1])) {
-                // 상세/수정 모드 데이터 로드
-                const postId = parts[1];
-                const res = await fetch(`${env.SERVER_URL}/api/v1/board/post/${postId}`);
-                if (res.ok) initialData = await res.json();
-            }
-        } catch (e) {
-            console.warn("⚠️ [SSR Preload] Failed to fetch board data:", e.message);
-        }
-    }
+	// 2. [하이드레이션 해결] 엔진 데이터 프리로딩 (Pre-loading)
+	let initialData = null;
+	if (appInfo.main_component === 'BoardEngine' && slug) {
+		try {
+			const parts = slug.split('/');
+			const boardSlug = parts[0];
 
-    return {
-        appInfo,
-        slug: slug || '',
-        initialData // 👈 서버에서 가져온 "정답" 데이터
-    };
+			if (parts.length === 1) {
+				// 목록 모드 데이터 로드
+				const res = await fetch(`${env.SERVER_URL}/api/v1/board/${boardSlug}/posts?page=0&size=10`);
+				if (res.ok) initialData = await res.json();
+			} else if (parts[1] && !isNaN(parts[1])) {
+				// 상세/수정 모드 데이터 로드
+				const postId = parts[1];
+				const res = await fetch(`${env.SERVER_URL}/api/v1/board/post/${postId}`);
+				if (res.ok) initialData = await res.json();
+			}
+		} catch (e) {
+			console.warn('⚠️ [SSR Preload] Failed to fetch board data:', e.message);
+		}
+	}
+
+	return {
+		appInfo,
+		slug: slug || '',
+		initialData // 👈 서버에서 가져온 "정답" 데이터
+	};
 }

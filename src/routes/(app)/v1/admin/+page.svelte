@@ -25,13 +25,14 @@
 		} catch (e) {
 			alertState.send(e.message, { level: 3, style: 'error' });
 		} finally {
-		loading = false;
+			loading = false;
 		}
-		}
+	}
 
-		onMount(loadStats);
+	onMount(loadStats);
 
-		const adminModules = [		{
+	const adminModules = [
+		{
 			title: '메뉴 마스터',
 			desc: '시스템 전체 내비게이션 및 권한 구조 편집',
 			link: '/v1/admin/menu',
@@ -74,13 +75,14 @@
 			color: 'bg-orange-600'
 		},
 		{
-		title: '시스템 설정',
-		desc: '글로벌 환경 변수 및 공통 코드 동적 수정',
-		link: '/v1/admin/config',
-		icon: 'mdi:cog-outline',
-		color: 'bg-slate-700'
+			title: '시스템 설정',
+			desc: '글로벌 환경 변수 및 공통 코드 동적 수정',
+			link: '/v1/admin/config',
+			icon: 'mdi:cog-outline',
+			color: 'bg-slate-700'
 		}
-		];</script>
+	];
+</script>
 
 <div
 	class="animate-fade-in mx-auto max-w-7xl space-y-6 px-4 pb-20 font-['Outfit','Noto_Sans_KR'] md:space-y-12 md:pb-40"
@@ -170,74 +172,79 @@
 		>
 			시스템 관리 모듈
 		</h3>
-			<div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-				{#each adminModules as mod}
-					{#if mod.action === 'sendPushToAll'}
-						<button
-							onclick={handlePushToAll}
-							class="group relative overflow-hidden rounded-xl border border-slate-200 bg-white p-6 shadow-md transition-all duration-300 hover:bg-slate-50 md:rounded-2xl md:p-8 md:shadow-lg"
-						>
-							<div class="relative z-10 flex items-start justify-between">
-								<div
-									class="h-12 w-12 md:h-14 md:w-14 {mod.color} flex items-center justify-center rounded-lg text-xl text-white shadow-md transition-transform group-hover:scale-110 md:rounded-xl md:text-2xl"
-								>
-									<Icon icon={mod.icon} />
-								</div>
-								<div
-									class="flex items-center gap-1 text-[8px] font-black tracking-widest text-slate-500 uppercase opacity-0 transition-opacity group-hover:opacity-100 md:gap-2 md:text-[9px]"
-								>
-									발송 <span
-										class="translate-x-0 transition-transform group-hover:translate-x-1 md:group-hover:translate-x-2"
-										>→</span
-									>
-								</div>
+		<div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+			{#each adminModules as mod}
+				{#if mod.action === 'sendPushToAll'}
+					<button
+						onclick={handlePushToAll}
+						class="group relative overflow-hidden rounded-xl border border-slate-200 bg-white p-6 shadow-md transition-all duration-300 hover:bg-slate-50 md:rounded-2xl md:p-8 md:shadow-lg"
+					>
+						<div class="relative z-10 flex items-start justify-between">
+							<div
+								class="h-12 w-12 md:h-14 md:w-14 {mod.color} flex items-center justify-center rounded-lg text-xl text-white shadow-md transition-transform group-hover:scale-110 md:rounded-xl md:text-2xl"
+							>
+								<Icon icon={mod.icon} />
 							</div>
-							<div class="relative z-10 mt-6 md:mt-8">
-								<h4 class="mb-1 text-xl font-black tracking-tighter text-slate-900 md:mb-2 md:text-2xl">
-									{mod.title}
-								</h4>
-								<p
-									class="text-xs leading-relaxed font-bold text-slate-500 opacity-70 group-hover:opacity-90"
+							<div
+								class="flex items-center gap-1 text-[8px] font-black tracking-widest text-slate-500 uppercase opacity-0 transition-opacity group-hover:opacity-100 md:gap-2 md:text-[9px]"
+							>
+								발송 <span
+									class="translate-x-0 transition-transform group-hover:translate-x-1 md:group-hover:translate-x-2"
+									>→</span
 								>
-									{mod.desc}
-								</p>
 							</div>
-						</button>
-					{:else}
-						<a
-							href={mod.link}
-							class="group relative overflow-hidden rounded-xl border border-slate-200 bg-white p-6 shadow-md transition-all duration-300 hover:bg-slate-50 md:rounded-2xl md:p-8 md:shadow-lg"
-						>
-							<div class="relative z-10 flex items-start justify-between">
-								<div
-									class="h-12 w-12 md:h-14 md:w-14 {mod.color} flex items-center justify-center rounded-lg text-xl text-white shadow-md transition-transform group-hover:scale-110 md:rounded-xl md:text-2xl"
-								>
-									<Icon icon={mod.icon} />
-								</div>
-								<div
-									class="flex items-center gap-1 text-[8px] font-black tracking-widest text-slate-500 uppercase opacity-0 transition-opacity group-hover:opacity-100 md:gap-2 md:text-[9px]"
-								>
-									모듈 진입 <span
-										class="translate-x-0 transition-transform group-hover:translate-x-1 md:group-hover:translate-x-2"
-										>→</span
-									>
-								</div>
+						</div>
+						<div class="relative z-10 mt-6 md:mt-8">
+							<h4
+								class="mb-1 text-xl font-black tracking-tighter text-slate-900 md:mb-2 md:text-2xl"
+							>
+								{mod.title}
+							</h4>
+							<p
+								class="text-xs leading-relaxed font-bold text-slate-500 opacity-70 group-hover:opacity-90"
+							>
+								{mod.desc}
+							</p>
+						</div>
+					</button>
+				{:else}
+					<a
+						href={mod.link}
+						class="group relative overflow-hidden rounded-xl border border-slate-200 bg-white p-6 shadow-md transition-all duration-300 hover:bg-slate-50 md:rounded-2xl md:p-8 md:shadow-lg"
+					>
+						<div class="relative z-10 flex items-start justify-between">
+							<div
+								class="h-12 w-12 md:h-14 md:w-14 {mod.color} flex items-center justify-center rounded-lg text-xl text-white shadow-md transition-transform group-hover:scale-110 md:rounded-xl md:text-2xl"
+							>
+								<Icon icon={mod.icon} />
 							</div>
-							<div class="relative z-10 mt-6 md:mt-8">
-								<h4 class="mb-1 text-xl font-black tracking-tighter text-slate-900 md:mb-2 md:text-2xl">
-									{mod.title}
-								</h4>
-								<p
-									class="text-xs leading-relaxed font-bold text-slate-500 opacity-70 group-hover:opacity-90"
+							<div
+								class="flex items-center gap-1 text-[8px] font-black tracking-widest text-slate-500 uppercase opacity-0 transition-opacity group-hover:opacity-100 md:gap-2 md:text-[9px]"
+							>
+								모듈 진입 <span
+									class="translate-x-0 transition-transform group-hover:translate-x-1 md:group-hover:translate-x-2"
+									>→</span
 								>
-									{mod.desc}
-								</p>
 							</div>
-						</a>
-					{/if}
-				{/each}
-			</div>
-		</div>	<!-- ⚙️ 퀵 링크: 메뉴 마스터 -->
+						</div>
+						<div class="relative z-10 mt-6 md:mt-8">
+							<h4
+								class="mb-1 text-xl font-black tracking-tighter text-slate-900 md:mb-2 md:text-2xl"
+							>
+								{mod.title}
+							</h4>
+							<p
+								class="text-xs leading-relaxed font-bold text-slate-500 opacity-70 group-hover:opacity-90"
+							>
+								{mod.desc}
+							</p>
+						</div>
+					</a>
+				{/if}
+			{/each}
+		</div>
+	</div>
+	<!-- ⚙️ 퀵 링크: 메뉴 마스터 -->
 	<div
 		class="flex flex-col items-center justify-between gap-6 rounded-xl border border-slate-200 bg-white p-8 shadow-xl md:flex-row md:gap-8 md:rounded-2xl md:p-10"
 	>

@@ -96,7 +96,10 @@
 			return a.level < 3 && pos === positionFilter;
 		});
 
-		console.log('[Alert] 필터링 후 displayAlerts (Max 5):', $state.snapshot(filteredAlerts.slice(-5)));
+		console.log(
+			'[Alert] 필터링 후 displayAlerts (Max 5):',
+			$state.snapshot(filteredAlerts.slice(-5))
+		);
 		return filteredAlerts.slice(-5);
 	});
 

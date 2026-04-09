@@ -22,7 +22,7 @@
 				method: 'POST',
 				headers: {
 					// API에서 Bearer 토큰을 기대하므로 Authorization 헤더에 포함
-					...(accessToken && { 'Authorization': `Bearer ${accessToken}` }),
+					...(accessToken && { Authorization: `Bearer ${accessToken}` }),
 					'Content-Type': 'application/json'
 				}
 			});
@@ -42,14 +42,13 @@
 			} else {
 				console.log('Logout successful from API');
 			}
-
 		} catch (error) {
 			console.error('Logout network error:', error);
 			errorMessage = '로그아웃 처리 중 네트워크 오류가 발생했습니다.';
 		} finally {
 			// API 호출 결과와 관계없이 로컬에서 세션 정보 제거 및 store 초기화
 			clearTokens(); // authStore 및 localStorage에서 토큰 제거
-			
+
 			// 로그아웃 처리 후 로그인 페이지로 이동
 			goto('/login');
 		}

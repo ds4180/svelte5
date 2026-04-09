@@ -1,26 +1,25 @@
 /**
- * @file (app)/+layout.server.js (DB 메뉴 복합 로더)
- * @description hooks.server.js에서 복원된 locals.user를 모든 페이지 레이아웃에 전파
+ * @file (app)/+layout.server.js (Optimized Menu Loader)
  */
 export async function load({ fetch, locals }) {
-    let menus = [];
-    
-    try {
-        // 📌 1. DB 동적 메뉴 데이터를 실시간 로드
-        const response = await fetch('http://fastapi:8000/v1/admin/menu/public');
-        if (response.ok) {
-            menus = await response.json();
-            console.log("🟢 [Layout SSR] Dynamic Menus Fetched:", menus.length);
-        } else {
-            console.warn("⚠️ [Layout SSR] Failed to fetch menus (Status:", response.status, ")");
-        }
-    } catch (err) {
-        console.error("❌ [Layout SSR] Backend Fatal Error:", err.message);
-        menus = []; // 에러 시 빈 레이아웃으로 최소한의 서비스 유지
-    }
+	let menus = [];
 
-    return {
-        menus,
-        user: locals.user // hooks.server.js에서 이미 채워진 세션 정보
-    };
+	// 📌 이미 locals.user가 있다면 유저 정보는 hooks에서 가져왔으므로
+	// 메뉴 정보만 가져오면 됩니다.
+	// fetch 함수는 SvelteKit의 fetch를 사용하여 handleFetch 프록시를 타게 합니다.
+	try {
+		const response = await fetch('/api/v1/admin/menu/public');
+		if (response.ok) {
+			menus = await response.json();
+		} else {
+			console.warn('⚠️ [Layout SSR] Failed to fetch menus:', response.status);
+		}
+	} catch (err) {
+		console.error('❌ [Layout SSR] Backend Fatal Error:', err.message);
+	}
+
+	return {
+		menus,
+		user: locals.user // hooks.server.js에서 이미 채워진 정보 사용
+	};
 }

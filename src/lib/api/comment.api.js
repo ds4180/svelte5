@@ -18,7 +18,8 @@ export const getComments = (postId) => fastApi('GET', `/api/v1/posts/${postId}/c
  * @param {{ content: string }} data
  * @returns {Promise<any>}
  */
-export const createComment = (postId, data) => fastApi('POST', `/api/v1/posts/${postId}/comments`, data);
+export const createComment = (postId, data) =>
+	fastApi('POST', `/api/v1/posts/${postId}/comments`, data);
 
 /**
  * 댓글 수정
@@ -26,7 +27,8 @@ export const createComment = (postId, data) => fastApi('POST', `/api/v1/posts/${
  * @param {{ content: string }} data
  * @returns {Promise<any>}
  */
-export const updateComment = (commentId, data) => fastApi('PUT', `/api/v1/comments/${commentId}`, data);
+export const updateComment = (commentId, data) =>
+	fastApi('PUT', `/api/v1/comments/${commentId}`, data);
 
 /**
  * 댓글 삭제
