@@ -71,47 +71,67 @@
 	} = $props();
 
 	let element;
-	let editor = $state(null);
+	// 🛡️ [Svelte 5] 복잡한 외부 인스턴스는 $state.raw를 사용하여 Proxy 오버헤드와 충돌을 방지합니다.
+	let editor = $state.raw(null);
 	let isMounted = $state(false);
 
 	onMount(async () => {
 		if (!browser) return;
+		
+		console.log('[Tiptap] 초기화 시작...');
 		isMounted = true;
-		await tick();
-		if (!element) return;
-
-		editor = new Editor({
-			element: element,
-			extensions: [
-				StarterKit,
-				Underline,
-				Highlight.configure({ multicolor: true }),
-				TextStyle,
-				FontSize,
-				Color,
-				Placeholder.configure({ placeholder: '여기에 내용을 입력하세요...' }),
-				TextAlign.configure({ types: ['heading', 'paragraph'] }),
-				Link.configure({
-					openOnClick: false,
-					HTMLAttributes: { target: '_blank', class: 'link link-primary' }
-				}),
-				Image.configure({
-					HTMLAttributes: { class: 'max-w-full h-auto rounded-lg shadow-md my-4 transition-all hover:scale-[1.02]' }
-				})
-			],
-			content: content,
-			onUpdate: ({ editor: e }) => {
-				content = e.getHTML();
-				content_json = e.getJSON();
-			},
-			onCreate: ({ editor: e }) => {
-				editorInstance = e;
+		
+		try {
+			await tick();
+			if (!element) {
+				console.error('[Tiptap] 에디터 엘리먼트를 찾을 수 없습니다.');
+				return;
 			}
-		});
+
+			editor = new Editor({
+				element: element,
+				extensions: [
+					StarterKit,
+					Underline,
+					Highlight.configure({ multicolor: true }),
+					TextStyle,
+					FontSize,
+					Color,
+					Placeholder.configure({ placeholder: '여기에 내용을 입력하세요...' }),
+					TextAlign.configure({ 
+						types: ['heading', 'paragraph'],
+						alignments: ['left', 'center', 'right', 'justify'] 
+					}),
+					Link.configure({
+						openOnClick: false,
+						HTMLAttributes: { target: '_blank', class: 'link link-primary' }
+					}),
+					Image.configure({
+						HTMLAttributes: { class: 'max-w-full h-auto rounded-lg shadow-md my-4 transition-all hover:scale-[1.02]' }
+					})
+				],
+				content: content,
+				onUpdate: ({ editor: e }) => {
+					content = e.getHTML();
+					content_json = e.getJSON();
+				},
+				onCreate: ({ editor: e }) => {
+					console.log('[Tiptap] 에디터 생성 완료');
+					editorInstance = e;
+				}
+			});
+		} catch (error) {
+			console.error('[Tiptap] 에디터 로딩 중 치명적 오류 발생:', error);
+		}
 	});
 
 	onDestroy(() => {
-		if (editor) editor.destroy();
+		if (browser) {
+			console.log('[Tiptap] onDestroy 실행: 에디터 인스턴스 정리');
+		}
+		if (editor) {
+			editor.destroy();
+		}
 	});
 
 	// 툴바 명령들
@@ -131,6 +151,7 @@
 	const setColor = (color) => editor?.chain().focus().setColor(color).run();
 	const undo = () => editor?.chain().focus().undo().run();
 	const redo = () => editor?.chain().focus().redo().run();
+	const clearFormat = () => editor?.chain().focus().unsetAllMarks().clearNodes().run();
 
 	const addLink = () => {
 		const url = window.prompt('URL을 입력하세요:');
@@ -154,31 +175,23 @@
 		<div
 			class="toolbar sticky top-0 z-20 flex flex-wrap items-center gap-1 border-b-4 border-black bg-[#fafafa] p-2"
 		>
-			<!-- Size & Type -->
+			<!-- 1. Typography -->
 			<div class="flex items-center border-r-2 border-black/10 pr-2 mr-1 gap-1">
 				<select 
 					onchange={(e) => setFontSize(e.target.value)}
-					class="h-10 border-2 border-black bg-white px-2 text-xs font-black uppercase italic outline-none focus:bg-yellow-400"
+					class="h-9 border-2 border-black bg-white px-1 text-[10px] font-black uppercase outline-none focus:bg-yellow-400"
 				>
 					<option value="">Size</option>
-					<option value="12px">12</option>
-					<option value="14px">14</option>
-					<option value="16px">16</option>
-					<option value="18px">18</option>
-					<option value="20px">20</option>
-					<option value="24px">24</option>
-					<option value="30px">30</option>
-					<option value="36px">36</option>
-					<option value="48px">48</option>
-					<option value="60px">60</option>
-					<option value="72px">72</option>
+					{#each ['12px', '14px', '16px', '18px', '20px', '24px', '32px', '48px'] as size}
+						<option value={size}>{size.replace('px','')}</option>
+					{/each}
 				</select>
 				<button type="button" onclick={() => toggleHeading(1)} class="tool-btn {editor.isActive('heading', { level: 1 }) ? 'active' : ''}">H1</button>
 				<button type="button" onclick={() => toggleHeading(2)} class="tool-btn {editor.isActive('heading', { level: 2 }) ? 'active' : ''}">H2</button>
 				<button type="button" onclick={() => toggleHeading(3)} class="tool-btn {editor.isActive('heading', { level: 3 }) ? 'active' : ''}">H3</button>
 			</div>
 
-			<!-- Core Formatting -->
+			<!-- 2. Core Formatting -->
 			<div class="flex border-r-2 border-black/10 pr-1 mr-1">
 				<button type="button" onclick={toggleBold} class="tool-btn {editor.isActive('bold') ? 'active' : ''}"><Icon icon="ph:text-b-bold" /></button>
 				<button type="button" onclick={toggleItalic} class="tool-btn {editor.isActive('italic') ? 'active' : ''}"><Icon icon="ph:text-italic-bold" /></button>
@@ -186,47 +199,45 @@
 				<button type="button" onclick={toggleStrike} class="tool-btn {editor.isActive('strike') ? 'active' : ''}"><Icon icon="ph:text-strikethrough-bold" /></button>
 			</div>
 
-			<!-- Text Colors -->
+			<!-- 3. Colors -->
 			<div class="flex border-r-2 border-black/10 pr-1 mr-1 gap-1 items-center px-1">
-				<button type="button" onclick={() => setColor('#000000')} class="h-6 w-6 rounded-full border border-black/20 bg-black hover:scale-125 transition-transform" title="Black Text"></button>
-				<button type="button" onclick={() => setColor('#fa5252')} class="h-6 w-6 rounded-full border border-black/20 bg-[#fa5252] hover:scale-125 transition-transform" title="Red Text"></button>
-				<button type="button" onclick={() => setColor('#228be6')} class="h-6 w-6 rounded-full border border-black/20 bg-[#228be6] hover:scale-125 transition-transform" title="Blue Text"></button>
-				<button type="button" onclick={() => setColor('#40c057')} class="h-6 w-6 rounded-full border border-black/20 bg-[#40c057] hover:scale-125 transition-transform" title="Green Text"></button>
+				{#each ['#000000', '#ff0000', '#0000ff', '#008000', '#ffa500', '#800080'] as c}
+					<button type="button" onclick={() => setColor(c)} class="h-5 w-5 rounded-full border border-black/20 hover:scale-125 transition-transform" style="background-color: {c}"></button>
+				{/each}
 			</div>
 
-			<!-- Colors (Highlight hack) -->
-			<div class="flex border-r-2 border-black/10 pr-1 mr-1 gap-1">
-				<button type="button" onclick={() => toggleHighlight('#ffec99')} class="h-8 w-6 border border-black/20 bg-[#ffec99] hover:scale-110 transition-transform" title="Yellow Highlight"></button>
-				<button type="button" onclick={() => toggleHighlight('#b2f2bb')} class="h-8 w-6 border border-black/20 bg-[#b2f2bb] hover:scale-110 transition-transform" title="Green Highlight"></button>
-				<button type="button" onclick={() => toggleHighlight('#a5d8ff')} class="h-8 w-6 border border-black/20 bg-[#a5d8ff] hover:scale-110 transition-transform" title="Blue Highlight"></button>
-				<button type="button" onclick={() => toggleHighlight('#ffc9c9')} class="h-8 w-6 border border-black/20 bg-[#ffc9c9] hover:scale-110 transition-transform" title="Pink Highlight"></button>
-				<button type="button" onclick={() => { editor?.chain().focus().unsetHighlight().run(); editor?.chain().focus().unsetColor().run(); }} class="tool-btn text-[10px] font-black underline">CLR</button>
+			<!-- 4. Highlights -->
+			<div class="flex border-r-2 border-black/10 pr-1 mr-1 gap-0.5">
+				{#each ['#ffec99', '#b2f2bb', '#a5d8ff', '#ffc9c9'] as h}
+					<button type="button" onclick={() => toggleHighlight(h)} class="h-8 w-4 border border-black/10 hover:brightness-90" style="background-color: {h}"></button>
+				{/each}
+				<button type="button" onclick={clearFormat} class="tool-btn !w-auto px-2 text-[10px] font-black underline" title="Clear All Formatting">CLEAR</button>
 			</div>
 
-			<!-- Code & Lists -->
-			<div class="flex border-r-2 border-black/10 pr-1 mr-1">
-				<button type="button" onclick={toggleCode} class="tool-btn {editor.isActive('code') ? 'active' : ''}"><Icon icon="ph:code-bold" /></button>
-				<button type="button" onclick={toggleCodeBlock} class="tool-btn {editor.isActive('codeBlock') ? 'active' : ''}"><Icon icon="ph:terminal-window-bold" /></button>
-				<button type="button" onclick={toggleBulletList} class="tool-btn {editor.isActive('bulletList') ? 'active' : ''}"><Icon icon="ph:list-bullets-bold" /></button>
-				<button type="button" onclick={toggleOrderedList} class="tool-btn {editor.isActive('orderedList') ? 'active' : ''}"><Icon icon="ph:list-numbers-bold" /></button>
-				<button type="button" onclick={toggleBlockquote} class="tool-btn {editor.isActive('blockquote') ? 'active' : ''}"><Icon icon="ph:quotes-bold" /></button>
-			</div>
-
-			<!-- Alignment -->
+			<!-- 5. Alignment -->
 			<div class="flex border-r-2 border-black/10 pr-1 mr-1">
 				<button type="button" onclick={() => setTextAlign('left')} class="tool-btn {editor.isActive({ textAlign: 'left' }) ? 'active' : ''}"><Icon icon="ph:text-align-left-bold" /></button>
 				<button type="button" onclick={() => setTextAlign('center')} class="tool-btn {editor.isActive({ textAlign: 'center' }) ? 'active' : ''}"><Icon icon="ph:text-align-center-bold" /></button>
 				<button type="button" onclick={() => setTextAlign('right')} class="tool-btn {editor.isActive({ textAlign: 'right' }) ? 'active' : ''}"><Icon icon="ph:text-align-right-bold" /></button>
+				<button type="button" onclick={() => setTextAlign('justify')} class="tool-btn {editor.isActive({ textAlign: 'justify' }) ? 'active' : ''}"><Icon icon="ph:text-align-justify-bold" /></button>
 			</div>
 
-			<!-- Media -->
+			<!-- 6. Lists & Blocks -->
+			<div class="flex border-r-2 border-black/10 pr-1 mr-1">
+				<button type="button" onclick={toggleBulletList} class="tool-btn {editor.isActive('bulletList') ? 'active' : ''}"><Icon icon="ph:list-bullets-bold" /></button>
+				<button type="button" onclick={toggleOrderedList} class="tool-btn {editor.isActive('orderedList') ? 'active' : ''}"><Icon icon="ph:list-numbers-bold" /></button>
+				<button type="button" onclick={toggleBlockquote} class="tool-btn {editor.isActive('blockquote') ? 'active' : ''}"><Icon icon="ph:quotes-bold" /></button>
+				<button type="button" onclick={toggleCodeBlock} class="tool-btn {editor.isActive('codeBlock') ? 'active' : ''}"><Icon icon="ph:terminal-window-bold" /></button>
+			</div>
+
+			<!-- 7. Media -->
 			<div class="flex border-r-2 border-black/10 pr-1 mr-1">
 				<button type="button" onclick={addLink} class="tool-btn {editor.isActive('link') ? 'active' : ''}"><Icon icon="ph:link-bold" /></button>
 				<button type="button" onclick={addImage} class="tool-btn"><Icon icon="ph:image-square-bold" /></button>
 				<button type="button" onclick={() => editor.chain().focus().setHorizontalRule().run()} class="tool-btn" title="Divider"><Icon icon="ph:minus-bold" /></button>
 			</div>
 
-			<!-- Actions -->
+			<!-- 8. History -->
 			<div class="flex ml-auto">
 				<button type="button" onclick={undo} class="tool-btn opacity-50 hover:opacity-100"><Icon icon="ph:arrow-counter-clockwise-bold" /></button>
 				<button type="button" onclick={redo} class="tool-btn opacity-50 hover:opacity-100"><Icon icon="ph:arrow-clockwise-bold" /></button>
@@ -236,7 +247,7 @@
 
 	<!-- 🖋️ Editor Body -->
 	<div 
-		class="editor-body prose prose-xl max-w-none min-h-[500px] p-12 outline-none transition-all focus:bg-slate-50/30 {isMounted ? '' : 'invisible'}" 
+		class="editor-body prose max-w-none min-h-[500px] p-8 outline-none transition-all focus:bg-slate-50/30 {isMounted ? '' : 'invisible'}" 
 		bind:this={element}>
 	</div>
 
@@ -250,14 +261,14 @@
 
 <style>
 	.tool-btn {
-		height: 2.5rem;
-		width: 2.5rem;
+		height: 2.25rem;
+		width: 2.25rem;
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		font-size: 1.125rem;
+		font-size: 1rem;
 		font-weight: 900;
-		transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+		transition: all 0.1s;
 		cursor: pointer;
 		background: transparent;
 		border: none;
@@ -276,6 +287,22 @@
 		min-height: 400px;
 		outline: none;
 		color: #000;
+		line-height: 1.5; /* 줄 간격 최적화 */
+		letter-spacing: -0.01em; /* 글자 간격 최적화 */
+	}
+	/* 🛡️ [색상 고정] Tailwind prose가 헤더 색상을 흰색이나 다른 색으로 바꾸는 것을 방지 */
+	:global(.ProseMirror h1, .ProseMirror h2, .ProseMirror h3, .ProseMirror h4) {
+		color: #000 !important;
+		margin-top: 1.2em;
+		margin-bottom: 0.6em;
+	}
+	:global(.ProseMirror p) {
+		margin-top: 0.5em;
+		margin-bottom: 0.5em;
+		color: #000;
+	}
+	:global(.ProseMirror span[style*='color']) {
+		color: inherit;
 	}
 	:global(.ProseMirror p.is-editor-empty:first-child::before) {
 		color: #adb5bd;

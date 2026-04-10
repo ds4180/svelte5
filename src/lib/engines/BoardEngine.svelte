@@ -9,6 +9,7 @@
 	import { fade, fly } from 'svelte/transition';
 	import Icon from '@iconify/svelte';
 	import * as api from '$lib/api/board';
+	import { adminGetAppData } from '$lib/api/admin';
 	import * as engines from '$lib/index';
 	import { goto } from '$app/navigation';
 	import TiptapEditor from '$lib/components/TiptapEditor.svelte';
@@ -129,16 +130,22 @@
 		isLoading = true;
 		errorMessage = '';
 		try {
+			// ✅ [Hardcoding Zero] 게시판 전용 API 대신 범용 데이터 API 호출
+			const data = await adminGetAppData(appId, slug, { 
+				page: currentPage - 1, 
+				size: pageSize, 
+				keyword: keyword 
+			});
+
 			if (mode === 'list') {
-				const data = await api.getBoardPosts(boardSlug, currentPage, pageSize, keyword);
-				posts = data.posts || [];
-				board = data.board || null;
-				total = data.total || 0;
+				const instance = data.instance || {};
+				posts = instance.posts || [];
+				board = data.parent_config || null;
+				total = instance.total || 0;
+				bindings = data.bindings || [];
 			} else if (mode === 'view' || mode === 'edit') {
-				const data = await api.getPostDetail(postId);
-				// 백엔드가 단일 Post 객체를 그냥 반환하므로 분기 처리
-				post = data.post || data;
-				board = data.board || data.board || null;
+				post = data.instance || null;
+				board = data.parent_config || null;
 				bindings = data.bindings || [];
 
 				if (mode === 'edit' && post) {

@@ -62,42 +62,34 @@ export async function load({ params, fetch }) {
 		}
 	}
 
-	// 2. BoardEngine SSR 프리로딩
-	//    목록/상세 구분: slug 파트 수로 판단
-	//    · parts.length === 1         → 목록 (notice)
-	//    · parts.length >= 2, [1]이 숫자 → 상세/수정 (notice/42 or notice/42/edit)
+	// 2. [Data-Driven] 범용 데이터 로딩 (Hardcoding Zero 기반)
 	let initialData = null;
-	if (appInfo.main_component === 'BoardEngine' && slug) {
+	if (slug) {
 		try {
-			const parts = slug.split('/').filter(Boolean);
-			const boardSlug = parts[0];
-
-			if (parts.length === 1) {
-				// 📋 목록 모드: GET /api/v1/board/list/{slug}?page=0&size=10
-				const res = await fetch(`/api/v1/board/list/${boardSlug}?page=0&size=10`);
-				if (res.ok) {
-					initialData = await res.json();
-				} else {
-					console.warn(`⚠️ [SSR] Board list fetch failed: ${res.status}`);
-				}
-			} else if (parts[1] && !isNaN(parts[1])) {
-				// 📄 상세/수정 모드: GET /api/v1/board/post/{postId}
-				const postId = parts[1];
-				const res = await fetch(`/api/v1/board/post/${postId}`);
-				if (res.ok) {
-					const rawPost = await res.json();
-					// 백엔드가 단일 Post 객체를 반환하므로 BoardEngine 구조에 맞게 래핑
-					initialData = { 
-						post: rawPost, 
-						board: rawPost.board || null, 
-						bindings: [] // 서비스 바인딩 정보가 post 객체 내부에 없으면 기본값
+			// ✅ 특정 엔진을 체크하는 if 문 없이, 범용 엔드포인트 호출
+			const res = await fetch(`/api/v1/app/data/${appId}/${slug}`); 
+			if (res.ok) {
+				const data = await res.json();
+				// [Data-Driven] 엔진의 기대 규격에 맞게 맵핑
+				if (data.instance && data.instance.posts) {
+					// 📋 목록 모드인 경우 (posts 리스트가 포함됨)
+					initialData = {
+						posts: data.instance.posts,
+						total: data.instance.total || 0,
+						board: data.parent_config,
+						bindings: data.bindings || []
 					};
 				} else {
-					console.warn(`⚠️ [SSR] Board post fetch failed: ${res.status} (postId: ${postId})`);
+					// 📄 상세 모드인 경우
+					initialData = {
+						post: data.instance,
+						board: data.parent_config,
+						bindings: data.bindings || []
+					};
 				}
 			}
 		} catch (e) {
-			console.warn('⚠️ [SSR Preload] BoardEngine data fetch failed:', e.message);
+			console.warn('⚠️ [SSR Preload] Generic data fetch failed:', e.message);
 		}
 	}
 

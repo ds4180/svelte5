@@ -63,14 +63,14 @@
 		{
 			title: '사용자 관리',
 			desc: '회원 등급 조정 및 시스템 승인 프로토콜',
-			link: '#',
+			link: '/v1/admin/user-manage',
 			icon: 'mdi:account-group-outline',
 			color: 'bg-emerald-600'
 		},
 		{
 			title: '게시판 관리',
 			desc: '개별 게시판 슬러그 및 레이아웃 정책 설정',
-			link: '#',
+			link: '/v1/admin/boards',
 			icon: 'mdi:clipboard-text-outline',
 			color: 'bg-orange-600'
 		},
@@ -80,6 +80,13 @@
 			link: '/v1/admin/config',
 			icon: 'mdi:cog-outline',
 			color: 'bg-slate-700'
+		},
+		{
+			title: '서비스 마스터',
+			desc: '레고형 서비스(댓글, 업로드 등) 엔진 및 앱 관리',
+			link: '/v1/admin/services',
+			icon: 'mdi:toy-brick-outline',
+			color: 'bg-rose-600'
 		}
 	];
 </script>

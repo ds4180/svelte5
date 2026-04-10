@@ -88,18 +88,35 @@ export const adminCreateServiceEngine = (data) =>
 export const adminDeleteServiceEngine = (id) =>
 	request(`${BASE_URL}/service-engines/${id}`, 'DELETE');
 
-// 🔗 서비스 바인딩 API (앱 ↔ 서비스 연결)
-export const adminGetServiceBindings = (appId, instanceId) =>
-	request(`${BASE_URL}/service-bindings/${appId}/${instanceId}`);
-export const adminCreateServiceBinding = (data) =>
-	request(`${BASE_URL}/service-bindings`, 'POST', data);
-export const adminDeleteServiceBinding = (id) =>
-	request(`${BASE_URL}/service-bindings/${id}`, 'DELETE');
+// 🧩 서비스 앱 API (원자적 기능 단위 인스턴스)
+export const adminGetServiceApps = () => request(`${BASE_URL}/service-apps`);
+export const adminCreateServiceApp = (data) =>
+	request(`${BASE_URL}/service-apps`, 'POST', data);
+export const adminUpdateServiceApp = (id, data) =>
+	request(`${BASE_URL}/service-apps/${id}`, 'PUT', data);
+
+// 🔗 서비스 인스턴스 API (서비스 덩어리/번들)
+export const adminGetServiceInstances = () => request(`${BASE_URL}/service-instances`);
+export const adminCreateServiceInstance = (data) =>
+	request(`${BASE_URL}/service-instances`, 'POST', data);
+export const adminUpdateServiceInstance = (id, data) =>
+	request(`${BASE_URL}/service-instances/${id}`, 'PUT', data);
+export const adminDeleteServiceInstance = (id) =>
+	request(`${BASE_URL}/service-instances/${id}`, 'DELETE');
+
+// 🚀 범용 앱 데이터 프로바이더 (Hardcoding Zero의 핵심)
+export const adminGetAppData = (appId, slug) => request(`${BASE_URL}/app/data/${appId}/${slug}`);
 
 // 🏖️ 휴무 관리 API
 export const adminGetAllDayoffs = () => request(`${BASE_URL}/dayoffs`);
 export const adminUpdateDayoffStatus = (dayoffId, status) =>
 	request(`${BASE_URL}/dayoffs/${dayoffId}/status`, 'PUT', { status });
+
+// 👤 유저 관리 API
+export const adminGetUsers = () => request(`${BASE_URL}/users`);
+export const adminGetUserDetail = (userId) => request(`${BASE_URL}/users/${userId}`);
+export const adminUpdateUserRank = (userId, rankLevel) =>
+	request(`${BASE_URL}/users/${userId}/rank`, 'PUT', { rank_level: rankLevel });
 
 // 🔔 알림 관리 API (새로 추가)
 export const adminGetAlerts = () => request('/api/alert/list'); // 모든 알림 목록
@@ -108,6 +125,18 @@ export const adminDeleteAlert = (alertId) => request(`/api/alert/delete/${alertI
 export const adminToggleAlert = (alertId) => request(`/api/alert/toggle/${alertId}`, 'POST');
 export const adminUpdateAlert = (alertId, data) =>
 	request(`/api/alert/update/${alertId}`, 'PUT', data);
+
+// 📱 푸시 알림 관리 API (v2.0 리팩토링 버전)
+export const adminGetPushSubscriptions = () => request(`${BASE_URL}/push/subscriptions`);
+export const adminSendPush = (data) => request(`${BASE_URL}/push/send`, 'POST', data);
+export const adminDeletePushSubscription = (id) => request(`${BASE_URL}/push/subscriptions/${id}`, 'DELETE');
+
+// 👥 그룹 관리 API (Redis 기반)
+export const adminGetGroups = () => request('/api/v1/admin/groups');
+export const adminCreateManualGroup = (data) => request('/api/v1/admin/groups/manual', 'POST', data);
+export const adminRefreshDynamicGroups = () => request('/api/v1/admin/groups/dynamic/refresh', 'POST');
+export const adminCombineGroups = (data) => request('/api/v1/admin/groups/combine', 'POST', data);
+export const adminDeleteGroup = (name) => request('/api/v1/admin/groups/' + name, 'DELETE');
 
 // 🔒 [수동 복사 안전 버전] 백틱 대신 더하기 연산자를 사용하여 치환 오류를 원천 차단합니다.
 export const adminGetSessions = () => request('/api/users/sessions');

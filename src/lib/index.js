@@ -10,3 +10,4 @@ export { default as BoardEngine } from '$lib/engines/BoardEngine.svelte';
 
 // 🥨 서비스 바인딩 (게시물 하단에 바인딩되어 호출됨)
 export { default as CommentEngine } from '$lib/engines/CommentEngine.svelte';
+export { default as UploadEngine } from '$lib/engines/UploadEngine.svelte';

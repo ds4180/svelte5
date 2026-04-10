@@ -230,9 +230,16 @@
 								</span>
 							</td>
 							<td>
-								<div class="flex flex-col">
-									<span class="text-sm font-black text-slate-900 md:text-base">{alert.message}</span
+								<div class="flex items-center gap-2">
+									<span class="max-w-[200px] truncate text-sm font-black text-slate-900 md:max-w-[400px] md:text-base">
+										{alert.message}
+									</span>
+									<button
+										class="btn btn-ghost btn-xs text-[9px] uppercase font-black"
+										onclick={() => alertState.send(alert.message, { level: alert.level, style: alert.style, confirm_text: alert.confirm_text, redirect_url: alert.redirect_url })}
 									>
+										[미리보기]
+									</button>
 								</div>
 							</td>
 							<td>

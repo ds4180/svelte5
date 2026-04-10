@@ -196,6 +196,9 @@
 							</td>
 							<td class="p-6 text-right">
 								<div class="flex justify-end gap-3 transition-transform group-hover:scale-105">
+									<a href="/v1/custom/page/{p.slug}" target="_blank" class="btn btn-square btn-outline btn-sm rounded-none border-black hover:bg-emerald-500 hover:text-white" title="Live Preview">
+										<Icon icon="ph:eye-bold" class="h-4 w-4" />
+									</a>
 									<a href="/v1/custom/page/{p.slug}?edit=true" class="btn btn-square btn-outline btn-sm rounded-none border-black hover:bg-black" title="Edit Content">
 										<Icon icon="ph:pencil-line-bold" class="h-4 w-4" />
 									</a>
