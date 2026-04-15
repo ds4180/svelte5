@@ -157,6 +157,16 @@
 							</div>
 						{/if}
 					{/each}
+					<!-- Media Dashboard 추가 -->
+					<a
+						href="/v1/admin/media"
+						class="group flex h-16 w-full items-center rounded-2xl bg-indigo-50 p-4 px-6 text-[11px] font-black tracking-tighter text-indigo-600 uppercase italic shadow-sm transition-all hover:bg-indigo-600 hover:text-white"
+					>
+						<span class="flex items-center gap-3">
+							<Icon icon="ph:database-fill" class="h-5 w-5 opacity-40 group-hover:text-white" />
+							Media Dashboard
+						</span>
+					</a>
 				</div>
 			{/if}
 		</section>

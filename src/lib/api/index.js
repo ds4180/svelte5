@@ -18,61 +18,71 @@ export const fastApi = async (method, url, params = {}, success_callback, failur
 	// 서버 렌더링 시에만 PUBLIC_SERVER_URL(예: http://fastapi:8000) 사용 허용
 	let _url = browser ? url : (PUBLIC_SERVER_URL + url);
 	
-	let body = params;
-
-	// 1. 헤더 설정 (세션 기반이므로 토큰 주입 제거)
+	let body = undefined;
 	const headers = {};
-	if (!(params instanceof FormData)) {
+
+	// 1. 요청 타입에 따른 본문 및 헤더 처리
+	if (method.toLowerCase() === 'get') {
+		// GET 요청: 본문 없음, 파라미터를 쿼리 스트링으로 변환
+		if (params && Object.keys(params).length > 0 && !(params instanceof FormData)) {
+			const query = new URLSearchParams(params).toString();
+			if (query) {
+				const separator = _url.includes('?') ? '&' : '?';
+				_url = `${_url}${separator}${query}`;
+			}
+		}
+	} else if (params instanceof FormData) {
+		// 파일 업로드: 브라우저가 자동으로 Boundary와 Content-Type을 설정하도록 함
+		body = params;
+	} else {
+		// 일반 POST/PUT 등: JSON 처리
 		headers['Content-Type'] = 'application/json';
 		body = JSON.stringify(params);
-	}
-
-	// 2. 메서드 처리
-	if (method.toLowerCase() === 'get') {
-		const query = new URLSearchParams(params).toString();
-		if (query) _url += (url.includes('?') ? '&' : '?') + query;
-		body = undefined;
 	}
 
 	const options = {
 		method: method,
 		headers: headers,
 		body: body,
-		credentials: 'include' // 📌 세션 쿠키 전송 보장
+		credentials: 'include'
 	};
 
 	try {
+		console.log(`[API Request] ${method} ${_url}`);
 		const response = await fetch(_url, options);
+		console.log(`[API Response] ${response.status} ${_url}`);
 
-		// 401 Unauthorized 처리 (세션 만료 시 로그아웃 처리)
+		// 401 Unauthorized 처리
 		if (response.status === 401) {
-			console.warn('[API] 401 Unauthorized: 세션이 만료되었거나 권한이 없습니다.');
-			if (browser) {
-				// 클라이언트 사이드에서 필요한 후속 조치 (예: 로그인 페이지 이동 등)
-			}
+			console.warn('[API] 401 Unauthorized: 세션 만료');
 		}
 
-		const text = await response.text();
-		let json = {};
-		if (text) {
-			try {
-				json = JSON.parse(text);
-			} catch (e) {
-				// JSON 파싱 실패 시 원문 반환
-				json = { detail: text };
+		// 응답 본문 파싱 (표준 json() 사용)
+		let data = {};
+		const contentType = response.headers.get('content-type');
+		
+		try {
+			if (contentType && contentType.includes('application/json')) {
+				data = await response.json();
+			} else {
+				const text = await response.text();
+				data = text ? { detail: text } : {};
 			}
+		} catch (parseError) {
+			console.warn('[API] Response parsing failed:', parseError);
+			data = { detail: '파싱 실패' };
 		}
 
 		if (response.ok) {
-			if (success_callback) success_callback(json);
-			return json;
+			if (success_callback) success_callback(data);
+			return data;
 		} else {
-			console.error(`[API Error] ${response.status}:`, json);
-			if (failure_callback) failure_callback(json);
-			return Promise.reject(json);
+			if (failure_callback) failure_callback(data);
+			return Promise.reject(data);
 		}
 	} catch (error) {
-		const errorData = { detail: '서버 연결에 실패했습니다.' };
+		console.error('[API Network Error]:', error);
+		const errorData = { detail: '연결 실패' };
 		if (failure_callback) failure_callback(errorData);
 		return Promise.reject(errorData);
 	}

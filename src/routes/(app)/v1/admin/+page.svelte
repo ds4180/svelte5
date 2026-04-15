@@ -87,6 +87,13 @@
 			link: '/v1/admin/services',
 			icon: 'mdi:toy-brick-outline',
 			color: 'bg-rose-600'
+		},
+		{
+			title: '미디어 관제탑',
+			desc: '전체 파일 자산 모니터링 및 Tier별 관리',
+			link: '/v1/admin/media',
+			icon: 'mdi:database-cog-outline',
+			color: 'bg-indigo-600'
 		}
 	];
 </script>
