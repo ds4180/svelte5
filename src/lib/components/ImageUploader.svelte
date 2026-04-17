@@ -16,7 +16,8 @@
 		multiple = true,
 		app_id = 'general',      
 		target_id = null,         
-		access_level = 'PUBLIC',  // 👈 추가: 보안 계층 선택
+		access_level = 'PUBLIC',  
+		sub_path = '',            // 👈 추가: 업로드 대상 상세 경로 (File Master 연동용)
 		onUpload = undefined,     
 		uploadedAssets = $bindable([]) 
 	} = $props();
@@ -62,8 +63,8 @@
 			const formData = new FormData();
 			files.forEach((file) => formData.append('files', file));
 			
-			// ⚠️ access_level 파라미터 주입
-			let url = `/api/media/upload?app_id=${app_id}&access_level=${access_level}`;
+			// ⚠️ access_level 및 sub_path 파라미터 주입 (쿼리 스트링 방식)
+			let url = `/api/media/upload?app_id=${app_id}&access_level=${access_level}&sub_path=${encodeURIComponent(sub_path)}`;
 			if (target_id) url += `&target_id=${target_id}`;
 
 			// 1. API 호출
