@@ -176,10 +176,19 @@
 			<h3
 				class="mb-2 flex items-center gap-3 text-[11px] font-black tracking-widest text-slate-400 uppercase italic underline underline-offset-8"
 			>
-				<Icon icon="ph:power-fill" class="h-5 w-5" /> [03] Logout Console
+				<Icon icon="ph:power-fill" class="h-5 w-5" /> [03] System Console
 			</h3>
-			<div class="grid grid-cols-1 gap-4">
+			<div class="grid grid-cols-2 gap-4">
 				{#if auth.user}
+					<div class="block w-full">
+						<a
+							href="/v1/pages/profile"
+							class="group flex w-full flex-col items-center gap-4 rounded-[3rem] border border-slate-200 bg-white p-6 text-center shadow-sm transition-all hover:bg-slate-900 hover:text-white"
+						>
+							<Icon icon="ph:user-focus-bold" class="h-8 w-8 text-slate-300 group-hover:text-white" />
+							<span class="text-[9px] font-black tracking-tight uppercase">My Profile</span>
+						</a>
+					</div>
 					<div class="block w-full">
 						<a
 							href="/logout"

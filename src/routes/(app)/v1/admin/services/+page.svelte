@@ -123,17 +123,17 @@
 	</header>
 
 	<!-- Tabs -->
-	<nav class="flex gap-2 border-b-2 border-slate-100">
-		<button onclick={() => activeTab = 'instances'} class="px-6 py-4 text-sm font-black uppercase tracking-widest transition-all {activeTab === 'instances' ? 'border-b-4 border-rose-600 text-rose-600' : 'text-slate-400 opacity-50 hover:opacity-100'}">
-			Service Bundles (Instances)
+	<nav class="sticky top-0 z-20 -mx-4 mb-8 flex gap-2 border-b-2 border-slate-100 bg-white/80 px-4 backdrop-blur-md overflow-x-auto no-scrollbar md:mx-0 md:px-0">
+		<button onclick={() => activeTab = 'instances'} class="whitespace-nowrap px-6 py-4 text-[11px] font-black uppercase tracking-widest transition-all md:text-sm {activeTab === 'instances' ? 'border-b-4 border-rose-600 text-rose-600' : 'text-slate-400 opacity-50 hover:opacity-100'}">
+			Service Bundles
 		</button>
-		<button onclick={() => activeTab = 'apps'} class="px-6 py-4 text-sm font-black uppercase tracking-widest transition-all {activeTab === 'apps' ? 'border-b-4 border-rose-600 text-rose-600' : 'text-slate-400 opacity-50 hover:opacity-100'}">
+		<button onclick={() => activeTab = 'apps'} class="whitespace-nowrap px-6 py-4 text-[11px] font-black uppercase tracking-widest transition-all md:text-sm {activeTab === 'apps' ? 'border-b-4 border-rose-600 text-rose-600' : 'text-slate-400 opacity-50 hover:opacity-100'}">
 			Service Apps
 		</button>
-		<button onclick={() => activeTab = 'engines'} class="px-6 py-4 text-sm font-black uppercase tracking-widest transition-all {activeTab === 'engines' ? 'border-b-4 border-rose-600 text-rose-600' : 'text-slate-400 opacity-50 hover:opacity-100'}">
+		<button onclick={() => activeTab = 'engines'} class="whitespace-nowrap px-6 py-4 text-[11px] font-black uppercase tracking-widest transition-all md:text-sm {activeTab === 'engines' ? 'border-b-4 border-rose-600 text-rose-600' : 'text-slate-400 opacity-50 hover:opacity-100'}">
 			Engines
 		</button>
-		<button onclick={() => activeTab = 'registries'} class="px-6 py-4 text-sm font-black uppercase tracking-widest transition-all {activeTab === 'registries' ? 'border-b-4 border-rose-600 text-rose-600' : 'text-slate-400 opacity-50 hover:opacity-100'}">
+		<button onclick={() => activeTab = 'registries'} class="whitespace-nowrap px-6 py-4 text-[11px] font-black uppercase tracking-widest transition-all md:text-sm {activeTab === 'registries' ? 'border-b-4 border-rose-600 text-rose-600' : 'text-slate-400 opacity-50 hover:opacity-100'}">
 			Registries
 		</button>
 	</nav>
@@ -372,4 +372,6 @@
 
 <style>
 	:global(body) { background-color: #fcfcfc; }
+	.no-scrollbar::-webkit-scrollbar { display: none; }
+	.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 </style>
