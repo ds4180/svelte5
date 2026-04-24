@@ -7,7 +7,7 @@ import { env } from '$env/dynamic/private';
  */
 export async function load({ locals }) {
 	if (locals.user) {
-		throw redirect(302, '/v1');
+		throw redirect(302, '/');
 	}
 	return {};
 }
@@ -15,7 +15,7 @@ export async function load({ locals }) {
 export const actions = {
 	default: async ({ request, cookies, fetch }) => {
 		const formData = await request.formData();
-		const apiEndpoint = env.PUBLIC_API_ENDPOINT || 'http://fastapi:8000';
+		const apiEndpoint = env.PUBLIC_API_ENDPOINT || 'http://backend:8000';
 
 		const response = await fetch(`${apiEndpoint}/users/login`, {
 			method: 'POST',
@@ -44,6 +44,6 @@ export const actions = {
 			}
 		}
 
-		throw redirect(302, '/v1');
+		throw redirect(302, '/');
 	}
 };

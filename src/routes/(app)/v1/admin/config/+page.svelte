@@ -5,6 +5,7 @@
 
 	let topTitle = $state('My Application');
 	let darkMode = $state(false);
+	let redirectRank1 = $state(false);
 	let landingPage = $state('/');
 	console.log('Config page script is running!');
 	// State to hold original values from backend for comparison or reset
@@ -12,8 +13,12 @@
 	// Function to load settings from backend
 	async function loadSettings() {
 		try {
-			// Assuming GET /v1/admin/config returns a dict like {key: value}
-			const configList = await fastApi('GET', '/v1/admin/config'); // This returns a list of {key, value} objects
+			// Assuming GET /v1/admin/config returns a list of {key, value} objects OR a dictionary {key: value}
+			const response = await fastApi('GET', '/api/v1/admin/config');
+			const configList = Array.isArray(response)
+				? response
+				: Object.entries(response).map(([key, value]) => ({ key, value }));
+
 			if (configList) {
 				// Map backend keys to frontend state
 				const configMap = {};
@@ -32,12 +37,14 @@
 
 				topTitle = getStringValue(configMap.site_title, 'My Application');
 				darkMode = configMap.theme_mode === 'dark'; // Boolean conversion is fine
+				redirectRank1 = configMap.redirect_rank1_to_profile === true;
 				landingPage = getStringValue(configMap.landing_page, '/');
 
 				// Store original for comparison
 				originalSettings = {
 					site_title: topTitle,
 					theme_mode: darkMode ? 'dark' : 'light',
+					redirect_rank1_to_profile: redirectRank1,
 					landing_page: landingPage
 				};
 			}
@@ -55,19 +62,31 @@
 			// Backend expects PUT /v1/admin/config/{key} with {value: ...}
 
 			if (topTitle !== originalSettings.site_title) {
-				await fastApi('PUT', '/v1/admin/config/site_title', { value: topTitle });
+				await fastApi('PUT', '/api/v1/admin/config/site_title', { value: topTitle });
 				originalSettings.site_title = topTitle;
 			}
+			/* 다크모드 임시 사용 중지
 			if ((darkMode ? 'dark' : 'light') !== originalSettings.theme_mode) {
-				await fastApi('PUT', '/v1/admin/config/theme_mode', { value: darkMode ? 'dark' : 'light' });
+				await fastApi('PUT', '/api/v1/admin/config/theme_mode', {
+					value: darkMode ? 'dark' : 'light'
+				});
 				originalSettings.theme_mode = darkMode ? 'dark' : 'light';
 			}
+			*/
 			if (landingPage !== originalSettings.landing_page) {
-				await fastApi('PUT', '/v1/admin/config/landing_page', { value: landingPage });
+				await fastApi('PUT', '/api/v1/admin/config/landing_page', { value: landingPage });
 				originalSettings.landing_page = landingPage;
 			}
+			/* 랭킹별 리다이렉트 임시 삭제
+			if (redirectRank1 !== originalSettings.redirect_rank1_to_profile) {
+				await fastApi('PUT', '/api/v1/admin/config/redirect_rank1_to_profile', { value: redirectRank1 });
+				originalSettings.redirect_rank1_to_profile = redirectRank1;
+			}
+			*/
 
 			alert('설정이 저장되었습니다.');
+			// Reload the page to ensure all UI elements reflect the updated configuration
+			window.location.reload();
 		} catch (e) {
 			console.error('Failed to save settings:', e);
 			// Optionally, show an alert
@@ -91,6 +110,10 @@
 		loadSettings();
 	});
 </script>
+
+<svelte:head>
+	<title>{topTitle}</title>
+</svelte:head>
 
 <div
 	class="animate-fade-in mx-auto max-w-7xl space-y-6 px-4 pb-20 font-['Noto_Sans_KR','Outfit'] md:space-y-10 md:px-6 md:pb-40 lg:px-8"
@@ -157,12 +180,14 @@
 				/>
 			</div>
 
+			<!-- 다크모드 임시 사용 중지 
 			<div class="form-control w-full">
 				<label class="label cursor-pointer justify-start gap-3">
 					<span class="label-text font-bold text-base-content">다크 모드 활성화</span>
 					<input type="checkbox" class="toggle toggle-primary" bind:checked={darkMode} />
 				</label>
 			</div>
+			-->
 
 			<div class="form-control w-full">
 				<label class="label" for="landingPageInput"
@@ -176,6 +201,16 @@
 					placeholder="로그인 후 이동할 기본 페이지 경로"
 				/>
 			</div>
+
+			<!-- 랭킹별 리다이렉트 임시 삭제
+			<div class="form-control w-full">
+				<label class="label cursor-pointer justify-start gap-3">
+					<span class="label-text font-bold text-base-content">최소 권한 유저(Rank 1) 프로필 리다이렉트</span>
+					<input type="checkbox" class="toggle toggle-warning" bind:checked={redirectRank1} />
+				</label>
+				<span class="px-1 text-[10px] text-slate-500">활성화 시 Rank 1 유저는 접속 시 프로필 페이지로 강제 이동합니다.</span>
+			</div>
+			-->
 		</div>
 	</div>
 </div>

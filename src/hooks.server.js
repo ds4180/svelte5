@@ -41,7 +41,7 @@ export async function handle({ event, resolve }) {
 }
 
 export async function handleFetch({ request, fetch, event }) {
-	const apiEndpoint = PUBLIC_API_ENDPOINT || 'http://fastapi:8000';
+	const apiEndpoint = PUBLIC_API_ENDPOINT || 'http://backend:8000';
 	let internalUrl = request.url;
 
 	if (
