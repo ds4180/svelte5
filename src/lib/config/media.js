@@ -1,13 +1,9 @@
 /**
  * ==============================================================================
- * [Media System Global Configuration v3.2]
- * ==============================================================================
- * ⚠️ 중요: 이 설정 값들은 백엔드 `test/domain/media/media_config.py`와
- * 반드시 1:1로 일치해야 합니다. 한 쪽을 변경하면 반드시 다른 쪽도 동기화하십시오.
+ * [Media System Global Configuration v3.1]
  * ==============================================================================
  */
 
-// 1. 접근 계층(Tier) 정의: 백엔드의 저장 폴더명과 동일 (v3.1 대문자 강제)
 export const MEDIA_TIERS = {
 	PUBLIC: 'PUBLIC',
 	PROTECTED: 'PROTECTED',
@@ -15,68 +11,64 @@ export const MEDIA_TIERS = {
 	SYSTEM: 'SYSTEM'
 };
 
-// 2. 미디어 카테고리 정의
 export const MEDIA_CATEGORIES = {
 	IMAGE: 'image',
 	DOCUMENT: 'document',
 	ARCHIVE: 'archive'
 };
 
-/**
- * [URL 생성 로직]
- * PUBLIC 미디어 자산의 전체 URL을 생성합니다.
- */
 export const getMediaUrl = (serverUrl, relativePath) => {
 	if (!relativePath) return '';
 	if (relativePath.startsWith('http')) return relativePath;
-
-	// [v3.2] /api/uploads/ 경로를 통해 Nginx 직접 서빙 (api 프리픽스 유지)
 	const baseUrl = serverUrl.replace(/\/+$/, '');
 	const cleanPath = relativePath.startsWith('uploads/') ? relativePath : `uploads/${relativePath}`;
-	
 	return `${baseUrl}/${cleanPath}`.replace(/([^:]\/)\/+/g, '$1');
 };
 
 /**
- * [썸네일 매핑 로직] v3.1
- * MediaAsset 모델에 담긴 썸네일 경로를 사이즈별로 추출합니다.
+ * [v3.1 Strict Thumbnail Logic]
+ * 썸네일이 없는 경우 원본을 보여주지 않고 무조건 기본 이미지를 반환합니다.
  */
 export const getThumbnailUrl = (serverUrl, asset, size = 'MD') => {
-	const DEFAULT_THUMB = '/assets/default-thumbnail.webp';
+	const DEFAULT_THUMB = '/default-thumbnail.png';
 	if (!asset) return DEFAULT_THUMB;
 	
-	// 소문자로 변환하여 meta_info.thumbs에서 조회
 	const targetSize = size.toLowerCase();
 	
 	if (asset.meta_info?.thumbs && asset.meta_info.thumbs[targetSize]) {
 		return getMediaUrl(serverUrl, asset.meta_info.thumbs[targetSize]);
 	}
 	
-	if (asset.thumbnail_path) {
-		return getMediaUrl(serverUrl, asset.thumbnail_path);
+	// [DB 불일치 대응] DB에 정보가 없더라도 디스크 규칙에 따라 존재할 가능성이 높으므로 예측 경로 반환
+	if (asset.category === 'image' && asset.file_path) {
+		const filePath = asset.file_path;
+		const lastSlash = filePath.lastIndexOf('/');
+		const dirName = filePath.substring(0, lastSlash);
+		const fileName = filePath.substring(lastSlash + 1);
+		const uuid = fileName.replace('IMG_', '').split('.')[0];
+		const predicted = `${dirName}/THUMB/TMB_${uuid}_${size.toUpperCase()}.WEBP`;
+		return getMediaUrl(serverUrl, predicted);
 	}
-	
+
+	// 특정 사이즈가 없으면 sm 재활용 없이 즉시 기본 이미지 반환
 	return DEFAULT_THUMB;
 };
 
 /**
- * [v3.2] Tier 인식 보안 URL 생성
- * PUBLIC → Nginx 직접 서빙 (/api/uploads/PUBLIC/...)
- * PROTECTED/PRIVATE/SYSTEM → FastAPI 보안 서빙 (/api/media/serve/{id})
+ * [v3.2 Secure Media Helper]
  */
 export const getSecureMediaUrl = (serverUrl, asset, size = null) => {
 	if (!asset) return '';
-	
 	const tier = (asset.access_level || 'PUBLIC').toUpperCase();
+
+	// PUBLIC 계층은 썸네일 유틸리티 직접 활용
 	if (tier === 'PUBLIC') {
-		return size
-			? getThumbnailUrl(serverUrl, asset, size)
-			: getMediaUrl(serverUrl, asset.file_path);
+		return size ? getThumbnailUrl(serverUrl, asset, size) : getMediaUrl(serverUrl, asset.file_path);
 	}
-	
-	// PROTECTED/PRIVATE/SYSTEM → 백엔드 보안 서빙
+
+	// 보안 계층은 백엔드 서빙 API 활용
 	const baseUrl = serverUrl.replace(/\/+$/, '');
 	let url = `${baseUrl}/media/serve/${asset.id}`;
-	if (size) url += `?size=${size}`;
+	if (size) url += `?size=${size.toLowerCase()}`;
 	return url;
 };

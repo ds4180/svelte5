@@ -45,10 +45,16 @@
 	let currentSubPath = $state(''); 
 	let searchQuery = $state('');
 	let viewMode = $state('grid'); 
+	let isRecursive = $state(true); // [v3.2] 하위 파일 포함 여부 토글
 	
 	// 선택 관리 (Set Reassignment for Svelte 5 Reactivity)
 	let selectedIds = $state(new Set());
 	let selectedFolders = $state(new Set());
+
+	// [v3.2] GC 예약 모달 상태
+	let gcModalOpen = $state(false);
+	let gcRunMode = $state('now'); // 'now' or 'later'
+	let gcScheduledAt = $state(''); // 'YYYY-MM-DDTHH:mm' 형식
 
 	const currentTab = $derived(tabConfigs.find(t => t.id === activeTabId) || tabConfigs[0]);
 
@@ -76,7 +82,7 @@
 		selectedIds = new Set();
 		selectedFolders = new Set();
 		try {
-			const res = await fastApi('GET', `/api/media/admin/list?tier=${currentTab.tier}&sub_path=${currentSubPath}`);
+			const res = await fastApi('GET', `/api/media/admin/list?tier=${currentTab.tier}&sub_path=${currentSubPath}&recursive=${isRecursive}`);
 			folders = res.folders || [];
 			recursiveFiles = res.files || [];
 		} catch (err) {
@@ -128,20 +134,23 @@
 		} catch (err) { alert('생성 실패: ' + (err.detail || '오류')); }
 	}
 
-	async function handleBackup(ids = null) {
-		const targetIds = ids || Array.from(selectedIds);
-		const targetFolders = ids ? [] : Array.from(selectedFolders);
-		if (targetIds.length === 0 && targetFolders.length === 0) return;
-		if (!confirm('선택한 항목을 관리자 영역으로 백업하시겠습니까?')) return;
+	async function handleBackup() {
+		if (selectedIds.size === 0 && selectedFolders.size === 0) return;
 		
+		if (selectedFolders.size > 0) {
+			alert('폴더 백업은 현재 지원되지 않습니다. 파일만 선택하여 백업해 주세요.');
+			return;
+		}
+
 		try {
 			const res = await fastApi('POST', '/api/media/admin/backup', {
-				asset_ids: targetIds,
-				folder_paths: targetFolders,
+				asset_ids: Array.from(selectedIds),
+				folder_paths: [],
 				tier: currentTab.tier
 			});
-			alert(`✅ 백업 완료!\n위치: ${res.backup_location}`);
-			if (!ids) { selectedIds = new Set(); selectedFolders = new Set(); }
+			alert(res.message || '✅ 백업 작업이 시작되었습니다.');
+			selectedIds = new Set(); selectedFolders = new Set();
+			loadMedia();
 		} catch (err) { alert('백업 실패: ' + (err.detail || '오류')); }
 	}
 
@@ -158,6 +167,22 @@
 			selectedIds = new Set(); selectedFolders = new Set();
 			loadMedia(); loadStats();
 		} catch (err) { alert('삭제 실패: ' + (err.detail || '오류')); }
+	}
+
+	async function handleRunGC() {
+		try {
+			const res = await fastApi('POST', '/api/media/admin/gc', { 
+				indices: [1, 2, 3, 4, 5],
+				scheduled_at: (gcRunMode === 'later' && gcScheduledAt) ? new Date(gcScheduledAt).toISOString() : null
+			});
+			alert(res.message);
+			gcModalOpen = false;
+			gcScheduledAt = '';
+			gcRunMode = 'now';
+		} catch (err) { 
+			const msg = err.detail ? (typeof err.detail === 'object' ? JSON.stringify(err.detail) : err.detail) : '오류';
+			alert('GC 예약 실패: ' + msg); 
+		}
 	}
 
 	async function handleZipDownload() {
@@ -287,6 +312,18 @@
 				</div>
 			{/if}
 		{/each}
+
+		<!-- GC Trigger Button -->
+		{#if userRank >= 4}
+			<button 
+				onclick={() => gcModalOpen = true}
+				class="bg-slate-900 rounded-2xl p-6 shadow-sm flex flex-col items-center justify-center text-center group hover:bg-rose-600 transition-all border-2 border-slate-900 hover:border-rose-600"
+			>
+				<Icon icon="mdi:broom" class="text-3xl text-white mb-2 group-hover:scale-110 transition-transform" />
+				<div class="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 group-hover:text-white/80">Optimize</div>
+				<div class="text-sm font-black text-white leading-none mt-1">시스템 정리</div>
+			</button>
+		{/if}
 	</div>
 
 	<!-- Tabs -->
@@ -349,6 +386,17 @@
 						<span class="text-[10px] font-black uppercase tracking-widest text-slate-500 group-hover:text-rose-600">Select All</span>
 					</button>
 
+					<!-- [v3.2] 하위 전체 보기 토글 -->
+					<button 
+						class="flex items-center gap-2 px-3 py-2 bg-white border-2 border-slate-200 rounded-full transition-all shadow-sm hover:border-indigo-300" 
+						onclick={() => { isRecursive = !isRecursive; loadMedia(); }}
+					>
+						<Icon icon={isRecursive ? "mdi:file-tree" : "mdi:file-document"} class="text-sm {isRecursive ? 'text-indigo-600' : 'text-slate-400'}" />
+						<span class="text-[10px] font-black uppercase tracking-widest {isRecursive ? 'text-indigo-600' : 'text-slate-500'}">
+							{isRecursive ? '하위 전체 보기' : '폴더내 파일만'}
+						</span>
+					</button>
+
 					{#if selectedIds.size > 0 || selectedFolders.size > 0}
 						<div class="flex items-center gap-2 bg-rose-600 text-white px-4 py-2 rounded-full shadow-lg" in:fly={{ x: 20 }}>
 							<span class="text-[10px] font-black uppercase tracking-tighter">{selectedIds.size + selectedFolders.size} Items</span>
@@ -404,7 +452,7 @@
 								{#each recursiveFiles as asset}
 									<div in:fade class="group relative flex flex-col items-center">
 										<div class="relative aspect-square w-full overflow-hidden rounded-[2rem] border-2 border-slate-100 bg-white p-2 transition-all hover:border-rose-600 hover:shadow-2xl hover:-translate-y-2 cursor-pointer" onclick={() => selectedAsset = asset} role="button" tabindex="0">
-											{#if asset.category === 'image'}<img src={getSecureMediaUrl(PUBLIC_SERVER_URL, asset, 'md')} alt="" class="h-full w-full rounded-[1.5rem] object-cover transition-transform duration-500 group-hover:scale-110" />{:else}<div class="flex h-full w-full flex-col items-center justify-center rounded-[1.5rem] bg-slate-50 text-slate-300"><Icon icon="ph:file-bold" class="text-4xl" /><span class="mt-1 text-[8px] font-black uppercase">{asset.file_path.split('.').pop()}</span></div>{/if}
+											{#if asset.category === 'image'}<img src={getSecureMediaUrl(PUBLIC_SERVER_URL, asset, 'sm')} alt="" class="h-full w-full rounded-[1.5rem] object-cover transition-transform duration-500 group-hover:scale-110" />{:else}<div class="flex h-full w-full flex-col items-center justify-center rounded-[1.5rem] bg-slate-50 text-slate-300"><Icon icon="ph:file-bold" class="text-4xl" /><span class="mt-1 text-[8px] font-black uppercase">{asset.file_path.split('.').pop()}</span></div>{/if}
 										</div>
 										<button class="absolute right-4 top-4 h-6 w-6 z-10 rounded-full border-2 border-white flex items-center justify-center transition-all {selectedIds.has(asset.id) ? 'bg-rose-600 scale-110 shadow-lg' : 'bg-black/20 opacity-0 group-hover:opacity-100 hover:bg-black/40'}" onclick={(e) => { e.stopPropagation(); toggleSelect(asset.id); }}>{#if selectedIds.has(asset.id)}<Icon icon="ph:check-bold" class="text-white text-xs" />{/if}</button>
 										<div class="mt-3 w-full px-2 text-center"><p class="truncate text-[10px] font-black tracking-tighter text-slate-900">{asset.original_name}</p><p class="truncate text-[8px] font-bold text-slate-300 uppercase tracking-tighter italic">{getFileRelativePath(asset.file_path)}</p></div>
@@ -421,30 +469,137 @@
 	</div>
 </div>
 
+<!-- [v3.2] GC 예약 모달 -->
+{#if gcModalOpen}
+	<div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" transition:fade>
+		<div class="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden border border-slate-100" in:fly={{ y: 20 }}>
+			<div class="p-8">
+				<div class="flex items-center gap-3 mb-6">
+					<div class="p-3 bg-indigo-100 rounded-2xl text-indigo-600">
+						<Icon icon="mdi:broom" class="text-2xl" />
+					</div>
+					<div>
+						<h3 class="text-xl font-black text-slate-900 uppercase italic">System Optimize</h3>
+						<p class="text-xs font-bold text-slate-400">시스템 가비지 컬렉션 예약</p>
+					</div>
+				</div>
+
+				<div class="space-y-4">
+					<div class="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+						<p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">정리 대상 항목</p>
+						<ul class="text-xs font-bold text-slate-600 space-y-1">
+							<li>• 고립 파일 및 유령 레코드 정리</li>
+							<li>• 원본 없는 썸네일 파일 삭제</li>
+							<li>• 만료된 삭제 폴더 영구 제거</li>
+							<li>• 시스템 내 모든 빈 폴더 청소</li>
+						</ul>
+					</div>
+
+					<!-- [v3.2] 실행 모드 선택 (라디오 버튼) -->
+					<div class="space-y-3">
+						<p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">실행 모드 선택</p>
+						<div class="grid grid-cols-2 gap-3">
+							<button 
+								onclick={() => gcRunMode = 'now'}
+								class="flex items-center justify-center gap-2 p-4 rounded-2xl border-2 transition-all {gcRunMode === 'now' ? 'border-indigo-600 bg-indigo-50 text-indigo-600' : 'border-slate-100 bg-white text-slate-400 hover:border-slate-200'}"
+							>
+								<Icon icon="mdi:flash" class="text-lg" />
+								<span class="text-xs font-black uppercase">즉시 실행</span>
+							</button>
+							<button 
+								onclick={() => gcRunMode = 'later'}
+								class="flex items-center justify-center gap-2 p-4 rounded-2xl border-2 transition-all {gcRunMode === 'later' ? 'border-indigo-600 bg-indigo-50 text-indigo-600' : 'border-slate-100 bg-white text-slate-400 hover:border-slate-200'}"
+							>
+								<Icon icon="mdi:calendar-clock" class="text-lg" />
+								<span class="text-xs font-black uppercase">예약 실행</span>
+							</button>
+						</div>
+					</div>
+
+					{#if gcRunMode === 'later'}
+						<div in:slide>
+							<label for="gc-time" class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">예약 시간 설정</label>
+							<input 
+								id="gc-time"
+								type="datetime-local" 
+								bind:value={gcScheduledAt}
+								class="w-full px-4 py-3 bg-white border-2 border-slate-200 rounded-2xl focus:border-indigo-500 outline-none transition-all font-bold text-slate-700"
+							/>
+						</div>
+					{/if}
+				</div>
+
+				<div class="flex gap-3 mt-8">
+					<button 
+						onclick={() => gcModalOpen = false}
+						class="flex-1 py-4 rounded-2xl border-2 border-slate-100 font-black text-slate-400 hover:bg-slate-50 transition-all uppercase text-xs tracking-widest"
+					>
+						Cancel
+					</button>
+					<button 
+						onclick={handleRunGC}
+						class="flex-1 py-4 rounded-2xl bg-indigo-600 text-white font-black hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200 uppercase text-xs tracking-widest"
+					>
+						Schedule
+					</button>
+				</div>
+			</div>
+		</div>
+	</div>
+{/if}
+
 <!-- 상세 정보 모달 -->
 {#if selectedAsset}
 	<div transition:fade class="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4 backdrop-blur-md">
-		<div transition:fly={{ y: 100 }} class="relative w-full max-w-4xl overflow-hidden rounded-[3rem] bg-white shadow-2xl flex flex-col md:flex-row">
-			<button class="absolute top-8 right-8 z-10 btn btn-circle btn-ghost text-slate-400 hover:text-black hover:bg-slate-100" onclick={() => selectedAsset = null}><Icon icon="ph:x-bold" class="text-2xl" /></button>
-			<div class="md:w-3/5 bg-slate-950 flex items-center justify-center p-12 min-h-[400px]">
-				{#if selectedAsset.category === 'image'}<img src={getSecureMediaUrl(PUBLIC_SERVER_URL, selectedAsset, 'lg')} alt="" class="max-w-full max-h-[70vh] rounded-2xl shadow-2xl object-contain shadow-black/50" />{:else}<div class="flex flex-col items-center text-slate-700"><Icon icon="ph:file-bold" class="text-9xl mb-4" /><span class="text-2xl font-black uppercase">{selectedAsset.file_path.split('.').pop()} FILE</span></div>{/if}
+		<div transition:fly={{ y: 100 }} class="relative w-full max-w-6xl overflow-hidden rounded-[3rem] bg-white shadow-2xl flex flex-col md:flex-row">
+			<button class="absolute top-6 right-6 z-10 btn btn-circle btn-ghost text-slate-400 hover:text-black hover:bg-slate-100" onclick={() => selectedAsset = null}><Icon icon="ph:x-bold" class="text-2xl" /></button>
+			<!-- 이미지 영역 (2/3 비중, LG 고해상도 썸네일 표시) -->
+			<div class="md:w-2/3 bg-slate-950 flex items-center justify-center p-2 min-h-[500px]">
+				{#if selectedAsset.category === 'image'}
+					<img src={getSecureMediaUrl(PUBLIC_SERVER_URL, selectedAsset, 'lg')} alt="" class="w-full h-full max-h-[85vh] rounded-2xl object-contain shadow-2xl shadow-black/50" />
+				{:else}
+					<div class="flex flex-col items-center text-slate-700">
+						<Icon icon="ph:file-bold" class="text-9xl mb-4" />
+						<span class="text-2xl font-black uppercase">{selectedAsset.file_path.split('.').pop()} FILE</span>
+					</div>
+				{/if}
 			</div>
-			<div class="md:w-2/5 p-12 flex flex-col justify-between bg-white border-l border-slate-100">
-				<div class="space-y-8">
-					<header><span class="text-[10px] font-black tracking-[0.4em] text-rose-600 uppercase mb-2 block">Asset Details</span><h2 class="text-3xl font-black tracking-tighter text-slate-900 leading-tight break-all">{selectedAsset.original_name}</h2></header>
-					<div class="grid grid-cols-2 gap-6 border-y border-slate-100 py-8"><div class="space-y-1"><span class="text-[9px] font-black text-slate-300 uppercase tracking-widest block">Access Tier</span><div class="flex items-center gap-2"><span class="h-2 w-2 rounded-full {selectedAsset.access_level === 'PUBLIC' ? 'bg-emerald-500' : 'bg-rose-500'}"></span><span class="text-xs font-black text-slate-600 uppercase tracking-tighter">{selectedAsset.access_level}</span></div></div><div class="space-y-1"><span class="text-[9px] font-black text-slate-300 uppercase tracking-widest block">File Weight</span><span class="text-xs font-black text-slate-600 font-mono tracking-tighter">{formatBytes(selectedAsset.file_size)}</span></div><div class="space-y-1"><span class="text-[9px] font-black text-slate-300 uppercase tracking-widest block">Format</span><span class="text-xs font-black text-slate-600 uppercase tracking-tighter">{selectedAsset.category} / {selectedAsset.file_path.split('.').pop()}</span></div><div class="space-y-1"><span class="text-[9px] font-black text-slate-300 uppercase tracking-widest block">Reg. ID</span><span class="text-xs font-black text-slate-600 font-mono tracking-tighter">#{selectedAsset.id}</span></div></div>
-					<div class="space-y-2"><span class="text-[9px] font-black text-slate-300 uppercase tracking-widest block">Physical Path</span><code class="block bg-slate-50 p-4 rounded-2xl text-[10px] font-bold text-slate-400 break-all border border-slate-100">{selectedAsset.file_path}</code></div>
+			<div class="md:w-1/3 p-8 flex flex-col justify-between bg-white border-l border-slate-100">
+				<div class="space-y-6">
+					<header>
+						<span class="text-[10px] font-black tracking-[0.4em] text-rose-600 uppercase mb-2 block">Asset Details</span>
+						<h2 class="text-2xl font-black tracking-tighter text-slate-900 leading-tight break-all">{selectedAsset.original_name}</h2>
+					</header>
+					<div class="grid grid-cols-2 gap-4 border-y border-slate-100 py-6">
+						<div class="space-y-1">
+							<span class="text-[9px] font-black text-slate-300 uppercase tracking-widest block">Access Tier</span>
+							<div class="flex items-center gap-2">
+								<span class="h-2 w-2 rounded-full {selectedAsset.access_level === 'PUBLIC' ? 'bg-emerald-500' : 'bg-rose-500'}"></span>
+								<span class="text-xs font-black text-slate-600 uppercase tracking-tighter">{selectedAsset.access_level}</span>
+							</div>
+						</div>
+						<div class="space-y-1">
+							<span class="text-[9px] font-black text-slate-300 uppercase tracking-widest block">File Weight</span>
+							<span class="text-xs font-black text-slate-600 font-mono tracking-tighter">{formatBytes(selectedAsset.file_size)}</span>
+						</div>
+					</div>
+					<div class="space-y-2">
+						<span class="text-[9px] font-black text-slate-300 uppercase tracking-widest block">Physical Path</span>
+						<code class="block bg-slate-50 p-4 rounded-2xl text-[10px] font-bold text-slate-400 break-all border border-slate-100">{selectedAsset.file_path}</code>
+					</div>
 				</div>
-				<div class="pt-12 flex gap-3">
-					<button onclick={() => downloadSingleFile(selectedAsset)} class="flex-1 btn h-14 rounded-2xl bg-black text-white font-black uppercase tracking-widest hover:bg-rose-600 transition-all border-none">
+				<div class="pt-8 flex flex-col gap-3">
+					<button onclick={() => downloadSingleFile(selectedAsset)} class="btn h-14 rounded-2xl bg-black text-white font-black uppercase tracking-widest hover:bg-rose-600 transition-all border-none">
 						<Icon icon="ph:download-simple-bold" class="text-xl mr-2" /> Download
 					</button>
-					<button onclick={() => handleBackup([selectedAsset.id])} class="btn h-14 w-14 rounded-2xl border-2 border-slate-200 bg-white text-slate-900 hover:border-rose-600 hover:text-rose-600 transition-all">
-						<Icon icon="ph:copy-bold" class="text-xl" />
-					</button>
-					<button onclick={() => deleteAsset(selectedAsset.id)} class="btn h-14 w-14 rounded-2xl border-2 border-slate-200 bg-white text-rose-300 hover:bg-rose-50 hover:border-rose-600 hover:text-rose-600 transition-all">
-						<Icon icon="ph:trash-bold" class="text-xl" />
-					</button>
+					<div class="flex gap-2">
+						<button onclick={() => handleBackup([selectedAsset.id])} class="flex-1 btn h-12 rounded-xl border-2 border-slate-200 bg-white text-slate-900 hover:border-rose-600 hover:text-rose-600 transition-all">
+							<Icon icon="ph:copy-bold" class="text-lg" />
+						</button>
+						<button onclick={() => deleteAsset(selectedAsset.id)} class="flex-1 btn h-12 rounded-xl border-2 border-slate-200 bg-white text-rose-300 hover:bg-rose-50 hover:border-rose-600 hover:text-rose-600 transition-all">
+							<Icon icon="ph:trash-bold" class="text-lg" />
+						</button>
+					</div>
 				</div>
 			</div>
 		</div>
