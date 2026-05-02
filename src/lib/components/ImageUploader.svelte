@@ -6,7 +6,7 @@
 	import { onDestroy, tick } from 'svelte';
 	import { fastApi } from '$lib/api';
 	import { env } from '$env/dynamic/public';
-	import { getThumbnailUrl } from '$lib/config/media';
+	import { getSecureMediaUrl } from '$lib/config/media';
 	import { slide } from 'svelte/transition';
 
 	const PUBLIC_SERVER_URL = env.PUBLIC_SERVER_URL || '';
@@ -105,7 +105,7 @@
 			{#each uploadedAssets as asset (asset.id)}
 				<div class="group relative aspect-square bg-base-200 rounded-lg border border-base-300 overflow-hidden shadow-sm">
 					{#if asset.category === 'image'}
-						<img src={getThumbnailUrl(PUBLIC_SERVER_URL, asset, 'sm')} alt={asset.original_name} class="w-full h-full object-cover" />
+						<img src={getSecureMediaUrl(PUBLIC_SERVER_URL, asset, 'sm')} alt={asset.original_name} class="w-full h-full object-cover" />
 					{:else}
 						<div class="w-full h-full flex items-center justify-center text-3xl">📄</div>
 					{/if}

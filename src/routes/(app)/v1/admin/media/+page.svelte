@@ -6,7 +6,7 @@
 	import { onMount } from 'svelte';
 	import { fastApi } from '$lib/api';
 	import { env } from '$env/dynamic/public';
-	import { getMediaUrl, getThumbnailUrl } from '$lib/config/media';
+	import { getMediaUrl, getSecureMediaUrl } from '$lib/config/media';
 	import { fade, slide, fly } from 'svelte/transition';
 	import ImageUploader from '$lib/components/ImageUploader.svelte';
 	import Icon from '@iconify/svelte';
@@ -19,8 +19,8 @@
 	const userId = $derived($page.data.user?.id ?? 0);
 
 	const tabConfigs = $derived([
-		{ id: 'SHARED', label: '공용폴더', tier: 'SYSTEM', basePath: 'global/office' },
-		{ id: 'PERSONAL', label: '개인폴더', tier: 'PRIVATE', basePath: `users/${userId}` },
+		{ id: 'SHARED', label: '공용폴더', tier: 'SYSTEM', basePath: 'GLOBAL/OFFICE' },
+		{ id: 'PERSONAL', label: '개인폴더', tier: 'PRIVATE', basePath: `USERS/${userId}` },
 		{ id: 'SYSTEM', label: 'SYSTEM', tier: 'SYSTEM', basePath: '' },
 		{ id: 'PROTECTED', label: 'PROTECTED', tier: 'PROTECTED', basePath: '' },
 		{ id: 'PUBLIC', label: 'PUBLIC', tier: 'PUBLIC', basePath: '' },
@@ -188,7 +188,7 @@
 
 	async function downloadSingleFile(asset) {
 		try {
-			const response = await fetch(getMediaUrl(PUBLIC_SERVER_URL, asset.file_path), {
+			const response = await fetch(getSecureMediaUrl(PUBLIC_SERVER_URL, asset), {
 				credentials: 'include'
 			});
 			if (!response.ok) throw new Error('Download fail');
@@ -241,7 +241,7 @@
 	}
 
 	function getFileRelativePath(filePath) {
-		const prefix = `${currentTab.tier.toLowerCase()}/${currentSubPath}`.replace(/\/$/, '') + '/';
+		const prefix = `${currentTab.tier}/${currentSubPath}`.replace(/\/$/, '') + '/';
 		if (filePath.startsWith(prefix)) {
 			const relative = filePath.substring(prefix.length);
 			const parts = relative.split('/');
@@ -309,7 +309,7 @@
 				</div>
 				<div class="p-4 bg-slate-50 rounded-2xl mb-6 border border-slate-100">
 					<p class="text-[9px] font-black text-slate-300 uppercase tracking-widest mb-1">Target Path</p>
-					<p class="text-[10px] font-bold text-slate-900 font-mono truncate leading-none italic">
+					<p class="text-[10px] font-bold text-slate-900 font-mono truncate leading-none italic uppercase">
 						/{currentTab?.tier}/{currentSubPath}
 					</p>
 				</div>
@@ -404,7 +404,7 @@
 								{#each recursiveFiles as asset}
 									<div in:fade class="group relative flex flex-col items-center">
 										<div class="relative aspect-square w-full overflow-hidden rounded-[2rem] border-2 border-slate-100 bg-white p-2 transition-all hover:border-rose-600 hover:shadow-2xl hover:-translate-y-2 cursor-pointer" onclick={() => selectedAsset = asset} role="button" tabindex="0">
-											{#if asset.category === 'image'}<img src={getThumbnailUrl(PUBLIC_SERVER_URL, asset, 'md')} alt="" class="h-full w-full rounded-[1.5rem] object-cover transition-transform duration-500 group-hover:scale-110" />{:else}<div class="flex h-full w-full flex-col items-center justify-center rounded-[1.5rem] bg-slate-50 text-slate-300"><Icon icon="ph:file-bold" class="text-4xl" /><span class="mt-1 text-[8px] font-black uppercase">{asset.file_path.split('.').pop()}</span></div>{/if}
+											{#if asset.category === 'image'}<img src={getSecureMediaUrl(PUBLIC_SERVER_URL, asset, 'md')} alt="" class="h-full w-full rounded-[1.5rem] object-cover transition-transform duration-500 group-hover:scale-110" />{:else}<div class="flex h-full w-full flex-col items-center justify-center rounded-[1.5rem] bg-slate-50 text-slate-300"><Icon icon="ph:file-bold" class="text-4xl" /><span class="mt-1 text-[8px] font-black uppercase">{asset.file_path.split('.').pop()}</span></div>{/if}
 										</div>
 										<button class="absolute right-4 top-4 h-6 w-6 z-10 rounded-full border-2 border-white flex items-center justify-center transition-all {selectedIds.has(asset.id) ? 'bg-rose-600 scale-110 shadow-lg' : 'bg-black/20 opacity-0 group-hover:opacity-100 hover:bg-black/40'}" onclick={(e) => { e.stopPropagation(); toggleSelect(asset.id); }}>{#if selectedIds.has(asset.id)}<Icon icon="ph:check-bold" class="text-white text-xs" />{/if}</button>
 										<div class="mt-3 w-full px-2 text-center"><p class="truncate text-[10px] font-black tracking-tighter text-slate-900">{asset.original_name}</p><p class="truncate text-[8px] font-bold text-slate-300 uppercase tracking-tighter italic">{getFileRelativePath(asset.file_path)}</p></div>
@@ -412,7 +412,7 @@
 								{/each}
 							</div>
 						{:else}
-							<div class="overflow-hidden rounded-[2rem] border-2 border-slate-100 bg-white"><table class="w-full text-left"><thead class="bg-slate-50 text-[10px] font-black uppercase tracking-widest text-slate-400"><tr><th class="px-8 py-4 w-12"></th><th class="px-8 py-4">Name & Path</th><th class="px-8 py-4">Size</th><th class="px-8 py-4">Created</th><th class="px-8 py-4 text-right">Actions</th></tr></thead><tbody class="divide-y divide-slate-100 font-bold">{#each recursiveFiles as asset}<tr class="group hover:bg-slate-50/50 transition-colors cursor-pointer" onclick={() => selectedAsset = asset}><td class="px-8 py-6"><button class="h-6 w-6 rounded-lg border-2 flex items-center justify-center transition-all {selectedIds.has(asset.id) ? 'bg-rose-600 border-rose-600 shadow-lg' : 'border-slate-200'}" onclick={(e) => { e.stopPropagation(); toggleSelect(asset.id); }}>{#if selectedIds.has(asset.id)}<Icon icon="ph:check-bold" class="text-white text-xs" />{/if}</button></td><td class="px-8 py-6"><div class="flex items-center gap-4"><div class="h-10 w-10 overflow-hidden rounded-xl border border-slate-200 bg-slate-50">{#if asset.category === 'image'}<img src={getThumbnailUrl(PUBLIC_SERVER_URL, asset, 'sm')} alt="" class="h-full w-full object-cover" />{:else}<div class="flex h-full w-full items-center justify-center text-slate-300"><Icon icon="ph:file-bold" /></div>{/if}</div><div class="min-w-0"><div class="text-sm font-black text-slate-900 truncate max-w-xs">{asset.original_name}</div><div class="text-[9px] font-bold text-slate-300 uppercase truncate">{asset.file_path}</div></div></div></td><td class="px-8 py-6 text-xs text-slate-400 font-mono">{formatBytes(asset.file_size)}</td><td class="px-8 py-6 text-[10px] text-slate-400 font-mono">{new Date(asset.created_at).toLocaleDateString()}</td><td class="px-8 py-6 text-right opacity-0 group-hover:opacity-100 transition-opacity"><button class="btn btn-square btn-ghost btn-sm text-slate-400 hover:text-rose-600" onclick={(e) => { e.stopPropagation(); downloadSingleFile(asset); }}><Icon icon="ph:download-simple-bold" /></button></td></tr>{/each}</tbody></table></div>
+							<div class="overflow-hidden rounded-[2rem] border-2 border-slate-100 bg-white"><table class="w-full text-left"><thead class="bg-slate-50 text-[10px] font-black uppercase tracking-widest text-slate-400"><tr><th class="px-8 py-4 w-12"></th><th class="px-8 py-4">Name & Path</th><th class="px-8 py-4">Size</th><th class="px-8 py-4">Created</th><th class="px-8 py-4 text-right">Actions</th></tr></thead><tbody class="divide-y divide-slate-100 font-bold">{#each recursiveFiles as asset}<tr class="group hover:bg-slate-50/50 transition-colors cursor-pointer" onclick={() => selectedAsset = asset}><td class="px-8 py-6"><button class="h-6 w-6 rounded-lg border-2 flex items-center justify-center transition-all {selectedIds.has(asset.id) ? 'bg-rose-600 border-rose-600 shadow-lg' : 'border-slate-200'}" onclick={(e) => { e.stopPropagation(); toggleSelect(asset.id); }}>{#if selectedIds.has(asset.id)}<Icon icon="ph:check-bold" class="text-white text-xs" />{/if}</button></td><td class="px-8 py-6"><div class="flex items-center gap-4"><div class="h-10 w-10 overflow-hidden rounded-xl border border-slate-200 bg-slate-50">{#if asset.category === 'image'}<img src={getSecureMediaUrl(PUBLIC_SERVER_URL, asset, 'sm')} alt="" class="h-full w-full object-cover" />{:else}<div class="flex h-full w-full items-center justify-center text-slate-300"><Icon icon="ph:file-bold" /></div>{/if}</div><div class="min-w-0"><div class="text-sm font-black text-slate-900 truncate max-w-xs">{asset.original_name}</div><div class="text-[9px] font-bold text-slate-300 uppercase truncate">{asset.file_path}</div></div></div></td><td class="px-8 py-6 text-xs text-slate-400 font-mono">{formatBytes(asset.file_size)}</td><td class="px-8 py-6 text-[10px] text-slate-400 font-mono">{new Date(asset.created_at).toLocaleDateString()}</td><td class="px-8 py-6 text-right opacity-0 group-hover:opacity-100 transition-opacity"><button class="btn btn-square btn-ghost btn-sm text-slate-400 hover:text-rose-600" onclick={(e) => { e.stopPropagation(); downloadSingleFile(asset); }}><Icon icon="ph:download-simple-bold" /></button></td></tr>{/each}</tbody></table></div>
 						{/if}
 					{/if}
 				</section>
@@ -427,7 +427,7 @@
 		<div transition:fly={{ y: 100 }} class="relative w-full max-w-4xl overflow-hidden rounded-[3rem] bg-white shadow-2xl flex flex-col md:flex-row">
 			<button class="absolute top-8 right-8 z-10 btn btn-circle btn-ghost text-slate-400 hover:text-black hover:bg-slate-100" onclick={() => selectedAsset = null}><Icon icon="ph:x-bold" class="text-2xl" /></button>
 			<div class="md:w-3/5 bg-slate-950 flex items-center justify-center p-12 min-h-[400px]">
-				{#if selectedAsset.category === 'image'}<img src={getMediaUrl(PUBLIC_SERVER_URL, selectedAsset.file_path)} alt="" class="max-w-full max-h-[70vh] rounded-2xl shadow-2xl object-contain shadow-black/50" />{:else}<div class="flex flex-col items-center text-slate-700"><Icon icon="ph:file-bold" class="text-9xl mb-4" /><span class="text-2xl font-black uppercase">{selectedAsset.file_path.split('.').pop()} FILE</span></div>{/if}
+				{#if selectedAsset.category === 'image'}<img src={getSecureMediaUrl(PUBLIC_SERVER_URL, selectedAsset, 'lg')} alt="" class="max-w-full max-h-[70vh] rounded-2xl shadow-2xl object-contain shadow-black/50" />{:else}<div class="flex flex-col items-center text-slate-700"><Icon icon="ph:file-bold" class="text-9xl mb-4" /><span class="text-2xl font-black uppercase">{selectedAsset.file_path.split('.').pop()} FILE</span></div>{/if}
 			</div>
 			<div class="md:w-2/5 p-12 flex flex-col justify-between bg-white border-l border-slate-100">
 				<div class="space-y-8">

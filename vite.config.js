@@ -7,7 +7,7 @@ export default defineConfig({
 	plugins: [tailwindcss(), sveltekit()],
 	server: {
 		host: true,
-		allowedHosts: ['jeju.live', 'localhost'],
+		allowedHosts: ['.jeju.live', 'localhost'],
 		proxy: {
 			// 📌 [v1.1 표준] 모든 백엔드 API 통신은 /api로 단일화 (Nginx와 동일 규격)
 			'/api': {

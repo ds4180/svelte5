@@ -94,6 +94,13 @@
 			link: '/v1/admin/media',
 			icon: 'mdi:database-cog-outline',
 			color: 'bg-indigo-600'
+		},
+		{
+			title: '시스템 태스크 관제탑',
+			desc: '비동기 작업 큐 상태 모니터링 및 태스크 제어',
+			link: '/v1/admin/tasks',
+			icon: 'mdi:cogs',
+			color: 'bg-violet-600'
 		}
 	];
 </script>

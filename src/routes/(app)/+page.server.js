@@ -13,12 +13,23 @@ export async function load({ fetch }) {
 			const config = await res.json();
 			
 			// 기본 랜딩 페이지 설정 적용
-			if (config.landing_page) {
-				landingPage = config.landing_page;
+			let rawValue = config.landing_page;
+			if (rawValue) {
+				if (typeof rawValue === 'object' && rawValue !== null) {
+					// JSONB 형태인 경우 내부의 value, text, name 등을 시도
+					landingPage = rawValue.value || rawValue.text || rawValue.name || String(rawValue);
+				} else {
+					landingPage = String(rawValue);
+				}
 			}
 		}
 	} catch (e) {
 		console.error('❌ [Landing Redirect] Failed to fetch config:', e.message);
+	}
+
+	// [Safety] 혹시라도 [object Object] 문자열이 생성되는 것을 방지
+	if (typeof landingPage !== 'string' || landingPage.includes('[object')) {
+		landingPage = '/v1';
 	}
 
 	throw redirect(302, landingPage);

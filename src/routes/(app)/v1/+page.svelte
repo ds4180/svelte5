@@ -95,8 +95,8 @@
 				Jeju.Live <span class="NOT-ITALIC tracking-normal text-primary">v5</span>
 			</h1>
 			<p class="max-w-lg text-sm leading-relaxed font-bold opacity-60">
-				제주 라이브 관리 시스템에 오신 것을 환영합니다. 왼쪽 메뉴를 통해 실시간 버스 관제, 근태
-				관리, 스케줄링 통합 서비스를 이용하실 수 있습니다.
+				LOCAL- 제주 라이브 관리 시스템에 오신 것을 환영합니다. 왼쪽 메뉴를 통해 실시간 버스 관제,
+				근태 관리, 스케줄링 통합 서비스를 이용하실 수 있습니다.
 			</p>
 		</div>
 		<div class="flex flex-col items-end text-right">
