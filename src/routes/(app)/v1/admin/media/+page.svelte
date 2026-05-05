@@ -232,7 +232,7 @@
 	async function deleteAsset(id) {
 		if (!confirm('정말로 이 파일을 삭제하시겠습니까?')) return;
 		try {
-			await fastApi('DELETE', `/api/media/delete/${id}`);
+			await fastApi('POST', `/api/media/delete/${id}`);
 			selectedAsset = null;
 			loadStats(); loadRecent(); loadMedia();
 		} catch (err) { alert('삭제 실패: ' + (err.detail || '오류')); }
@@ -451,7 +451,7 @@
 							<div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6">
 								{#each recursiveFiles as asset}
 									<div in:fade class="group relative flex flex-col items-center">
-										<div class="relative aspect-square w-full overflow-hidden rounded-[2rem] border-2 border-slate-100 bg-white p-2 transition-all hover:border-rose-600 hover:shadow-2xl hover:-translate-y-2 cursor-pointer" onclick={() => selectedAsset = asset} role="button" tabindex="0">
+                                        <div class="relative aspect-square w-full overflow-hidden rounded-[2rem] border-2 border-slate-100 bg-white p-2 transition-all hover:border-rose-600 hover:shadow-2xl hover:-translate-y-2 cursor-pointer" onclick={() => selectedAsset = asset} role="button" tabindex="0">
 											{#if asset.category === 'image'}<img src={getSecureMediaUrl(PUBLIC_SERVER_URL, asset, 'sm')} alt="" class="h-full w-full rounded-[1.5rem] object-cover transition-transform duration-500 group-hover:scale-110" />{:else}<div class="flex h-full w-full flex-col items-center justify-center rounded-[1.5rem] bg-slate-50 text-slate-300"><Icon icon="ph:file-bold" class="text-4xl" /><span class="mt-1 text-[8px] font-black uppercase">{asset.file_path.split('.').pop()}</span></div>{/if}
 										</div>
 										<button class="absolute right-4 top-4 h-6 w-6 z-10 rounded-full border-2 border-white flex items-center justify-center transition-all {selectedIds.has(asset.id) ? 'bg-rose-600 scale-110 shadow-lg' : 'bg-black/20 opacity-0 group-hover:opacity-100 hover:bg-black/40'}" onclick={(e) => { e.stopPropagation(); toggleSelect(asset.id); }}>{#if selectedIds.has(asset.id)}<Icon icon="ph:check-bold" class="text-white text-xs" />{/if}</button>

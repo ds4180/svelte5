@@ -4,7 +4,7 @@
 	 * - 새로운 MediaAsset 엔진(/api/media/upload)과 100% 호환됩니다.
 	 */
 	import { onDestroy, tick } from 'svelte';
-	import { fastApi } from '$lib/api';
+	import { uploadFiles } from '$lib/services/mediaService';
 	import { env } from '$env/dynamic/public';
 	import { getSecureMediaUrl } from '$lib/config/media';
 	import { slide } from 'svelte/transition';
@@ -17,7 +17,7 @@
 		app_id = 'general',      
 		target_id = null,         
 		access_level = 'PUBLIC',  
-		sub_path = '',            // 👈 추가: 업로드 대상 상세 경로 (File Master 연동용)
+		sub_path = '',
 		onUpload = undefined,     
 		uploadedAssets = $bindable([]) 
 	} = $props();
@@ -51,7 +51,7 @@
 	}
 
 	/**
-	 * [핵심] 서버로 미디어 업로드 실행
+	 * [핵심] 서버로 미디어 업로드 실행 (엔진 호출)
 	 */
 	async function uploadToMediaEngine() {
 		if (files.length === 0 || isLoading) return;
@@ -60,15 +60,8 @@
 		errorMessage = '';
 
 		try {
-			const formData = new FormData();
-			files.forEach((file) => formData.append('files', file));
-			
-			// ⚠️ access_level 및 sub_path 파라미터 주입 (쿼리 스트링 방식)
-			let url = `/api/media/upload?app_id=${app_id}&access_level=${access_level}&sub_path=${encodeURIComponent(sub_path)}`;
-			if (target_id) url += `&target_id=${target_id}`;
-
-			// 1. API 호출
-			const newAssets = await fastApi('POST', url, formData);
+			// 1. 서비스 엔진 호출
+			const newAssets = await uploadFiles(files, { app_id, access_level, sub_path, target_id });
 
 			// 2. 상태 초기화
 			isLoading = false; 

@@ -108,7 +108,16 @@
 
 	<!-- 🔄 Section 1: Dynamic Workspace (가운데 동적 공간) -->
 	<main class="min-h-[500px] py-6">
-		{#if activeSubId === 'SUMMARY'}
+		{#if activeSubId === 'EXPLORER'}
+			<div class="animate-slide-up">
+				<FileManager 
+					app_id="profile" 
+					access_level="PRIVATE" 
+					sub_path="USERS/{auth.user?.id}" 
+				/>
+			</div>
+
+		{:else if activeSubId === 'SUMMARY'}
 			<!-- 개요 - 요약 -->
 			<div class="grid grid-cols-1 gap-8 md:grid-cols-12 animate-slide-up">
 				<div class="col-span-1 border-2 border-black bg-white p-10 md:col-span-8 shadow-[12px_12px_0_0_#000]">
