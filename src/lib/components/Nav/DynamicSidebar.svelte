@@ -6,6 +6,8 @@
 	import Icon from '@iconify/svelte';
 	import { navState } from '$lib/runes/nav.svelte.js';
 	import { auth } from '$lib/runes/auth.svelte.js';
+	import { miniappStore } from '$lib/runes/miniapps.svelte.js';
+	import { goto } from '$app/navigation';
 
 	/**
 	 * @typedef {Object} Props
@@ -14,6 +16,11 @@
 	 * @property {import('svelte/elements').MouseEventHandler<HTMLElement>} [onClose] - 닫기 이벤트 핸들러
 	 */
 	let { isMobile = false, isOpen = false, onClose = () => {} } = $props();
+
+	function navigateTo(hash) {
+		goto(`/v1/pages/miniapps#${hash}`);
+		onClose();
+	}
 
 	/** @type {Record<string|number, boolean>} */
 	let openMenus = $state({});
@@ -112,63 +119,92 @@
 			{/if}
 		</section>
 
-		<!-- [2] 중단 구역: Admin Navigation (레이아웃 네비게이션) -->
+		<!-- [2] 중단 구역: Workspace (알림, 알람, 지시사항, 메모, 메세지) -->
 		<section class="flex flex-col gap-4 p-10">
 			<div class="mb-4 flex items-center justify-between">
 				<h3
 					class="flex items-center gap-3 text-[11px] font-black tracking-widest text-blue-600 uppercase italic underline underline-offset-8"
 				>
-					<Icon icon="ph:grid-four-fill" class="h-5 w-5" /> [02] Navigation Suite
+					<Icon icon="ph:briefcase-fill" class="h-5 w-5" /> [02] Workspace Apps
 				</h3>
 			</div>
-			{#if navState.menus && navState.menus.length > 0}
-				<div class="flex flex-col gap-2">
-					{#each navState.menus as m, i (m.id || i)}
-						<button
-							class="group flex h-16 w-full items-center justify-between rounded-2xl bg-slate-50 p-4 px-6 text-[11px] font-black tracking-tighter text-slate-500 uppercase italic shadow-sm transition-all hover:bg-slate-900 hover:text-white"
-							onclick={() => toggleMenu(m.id)}
-						>
-							<span class="flex items-center gap-3">
-								<Icon
-									icon={m.icon_name || 'ph:folder-fill'}
-									class="h-5 w-5 {openMenus[m.id]
-										? 'text-blue-500'
-										: 'opacity-40'} group-hover:text-white"
-								/>
-								{m.title}
-							</span>
-							<Icon
-								icon="ph:caret-down-bold"
-								class="text-[8px] {openMenus[m.id] ? 'rotate-180 text-blue-500' : ''}"
-							/>
-						</button>
-						{#if openMenus[m.id]}
-							<div
-								class="mx-2 mb-4 flex flex-col rounded-2xl border-l-4 border-slate-300 bg-slate-100/50 p-2 transition-all"
-							>
-								{#each m.sub_menus || [] as sub, si (sub.external_url || si)}
-									<a
-										href={sub.external_url}
-										class="border-b border-white p-4 px-8 text-[10px] font-black tracking-tighter text-slate-500 uppercase italic transition-all last:border-none hover:text-blue-600"
-									>
-										{sub.title}
-									</a>
-								{/each}
-							</div>
+			
+			<div class="flex flex-col gap-2">
+				<button 
+					onclick={() => navigateTo('notifications')}
+					class="group flex h-16 w-full items-center justify-between rounded-2xl bg-slate-50 p-4 px-6 text-[12px] font-black tracking-tighter text-slate-500 shadow-sm transition-all hover:-translate-y-1 hover:bg-blue-600 hover:text-white hover:shadow-md"
+				>
+					<span class="flex items-center gap-3">
+						<Icon icon="ph:bell-ringing-fill" class="h-6 w-6 opacity-40 group-hover:text-white transition-opacity" />
+						알림
+					</span>
+					<div class="flex items-center gap-2">
+						{#if miniappStore.counts.NOTIFICATION > 0}
+							<span class="badge badge-error badge-sm font-black text-white">{miniappStore.counts.NOTIFICATION}</span>
 						{/if}
-					{/each}
-					<!-- Media Dashboard 추가 -->
-					<a
-						href="/v1/admin/media"
-						class="group flex h-16 w-full items-center rounded-2xl bg-indigo-50 p-4 px-6 text-[11px] font-black tracking-tighter text-indigo-600 uppercase italic shadow-sm transition-all hover:bg-indigo-600 hover:text-white"
-					>
-						<span class="flex items-center gap-3">
-							<Icon icon="ph:database-fill" class="h-5 w-5 opacity-40 group-hover:text-white" />
-							Media Dashboard
-						</span>
-					</a>
-				</div>
-			{/if}
+						<Icon icon="ph:caret-right-bold" class="text-[10px]" />
+					</div>
+				</button>
+				
+				<button 
+					onclick={() => navigateTo('notifications')}
+					class="group flex h-16 w-full items-center justify-between rounded-2xl bg-slate-50 p-4 px-6 text-[12px] font-black tracking-tighter text-slate-500 shadow-sm transition-all hover:-translate-y-1 hover:bg-rose-500 hover:text-white hover:shadow-md"
+				>
+					<span class="flex items-center gap-3">
+						<Icon icon="ph:alarm-fill" class="h-6 w-6 opacity-40 group-hover:text-white transition-opacity" />
+						알람
+					</span>
+					<Icon icon="ph:caret-right-bold" class="text-[10px]" />
+				</button>
+
+				<button 
+					onclick={() => navigateTo('instructions')}
+					class="group flex h-16 w-full items-center justify-between rounded-2xl bg-slate-50 p-4 px-6 text-[12px] font-black tracking-tighter text-slate-500 shadow-sm transition-all hover:-translate-y-1 hover:bg-emerald-600 hover:text-white hover:shadow-md"
+				>
+					<span class="flex items-center gap-3">
+						<Icon icon="ph:clipboard-text-fill" class="h-6 w-6 opacity-40 group-hover:text-white transition-opacity" />
+						지시사항
+					</span>
+					<div class="flex items-center gap-2">
+						{#if miniappStore.counts.INSTRUCTION > 0}
+							<span class="badge badge-error badge-sm font-black text-white">{miniappStore.counts.INSTRUCTION}</span>
+						{/if}
+						<Icon icon="ph:caret-right-bold" class="text-[10px]" />
+					</div>
+				</button>
+
+				<button 
+					onclick={() => navigateTo('memo')}
+					class="group flex h-16 w-full items-center justify-between rounded-2xl bg-slate-50 p-4 px-6 text-[12px] font-black tracking-tighter text-slate-500 shadow-sm transition-all hover:-translate-y-1 hover:bg-amber-500 hover:text-white hover:shadow-md"
+				>
+					<span class="flex items-center gap-3">
+						<Icon icon="ph:notepad-fill" class="h-6 w-6 opacity-40 group-hover:text-white transition-opacity" />
+						메모
+					</span>
+					<div class="flex items-center gap-2">
+						{#if miniappStore.counts.MEMO > 0}
+							<span class="badge bg-slate-900 text-white border-none badge-sm font-black">{miniappStore.counts.MEMO}</span>
+						{/if}
+						<Icon icon="ph:caret-right-bold" class="text-[10px]" />
+					</div>
+				</button>
+
+				<button 
+					onclick={() => navigateTo('messaging')}
+					class="group flex h-16 w-full items-center justify-between rounded-2xl bg-slate-50 p-4 px-6 text-[12px] font-black tracking-tighter text-slate-500 shadow-sm transition-all hover:-translate-y-1 hover:bg-indigo-600 hover:text-white hover:shadow-md"
+				>
+					<span class="flex items-center gap-3">
+						<Icon icon="ph:paper-plane-tilt-fill" class="h-6 w-6 opacity-40 group-hover:text-white transition-opacity" />
+						메세지 보내기
+					</span>
+					<div class="flex items-center gap-2">
+						{#if miniappStore.counts.MESSAGE > 0}
+							<span class="badge badge-info badge-sm font-black text-white">{miniappStore.counts.MESSAGE}</span>
+						{/if}
+						<Icon icon="ph:caret-right-bold" class="text-[10px]" />
+					</div>
+				</button>
+			</div>
 		</section>
 
 		<!-- [3] 하단 구역: System Core (로그아웃 통합) -->

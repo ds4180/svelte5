@@ -118,7 +118,7 @@
 	<div class="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3">
 		<!-- Card 1: Schedule -->
 		<a
-			href="/v1/app/calendar"
+			href="/v1/pages/schedule"
 			class="group border border-black bg-white p-8 transition-all hover:bg-black hover:text-white"
 		>
 			<div class="flex h-full flex-col justify-between gap-10">

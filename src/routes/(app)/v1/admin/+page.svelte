@@ -101,6 +101,13 @@
 			link: '/v1/admin/tasks',
 			icon: 'mdi:cogs',
 			color: 'bg-violet-600'
+		},
+		{
+			title: '통합 미니앱 허브',
+			desc: '알림, 메모, 작업 등 사용자 통합 위젯 관리',
+			link: '/v1/pages/miniapps',
+			icon: 'mdi:widgets-outline',
+			color: 'bg-emerald-700'
 		}
 	];
 </script>

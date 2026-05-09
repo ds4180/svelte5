@@ -69,6 +69,6 @@ export const getSecureMediaUrl = (serverUrl, asset, size = null) => {
 	// 보안 계층은 백엔드 서빙 API 활용
 	const baseUrl = serverUrl.replace(/\/+$/, '');
 	let url = `${baseUrl}/media/serve/${asset.id}`;
-	if (size) url += `?size=${size.toLowerCase()}`;
+	if (size) url += `?size=${size.toUpperCase()}`;
 	return url;
 };
