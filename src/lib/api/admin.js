@@ -138,7 +138,19 @@ export const adminRefreshDynamicGroups = () => request('/api/v1/admin/groups/dyn
 export const adminCombineGroups = (data) => request('/api/v1/admin/groups/combine', 'POST', data);
 export const adminDeleteGroup = (name) => request('/api/v1/admin/groups/' + name, 'DELETE');
 
-// 🔒 [수동 복사 안전 버전] 백틱 대신 더하기 연산자를 사용하여 치환 오류를 원천 차단합니다.
 export const adminGetSessions = () => request('/api/users/sessions');
 export const adminKickSession = (sessionId) =>
 	request('/api/users/sessions/kick/' + sessionId, 'POST');
+
+// 🚐 [v3.0.0] 노선 마스터 및 시간표 연동 API (Route Master & Timetables)
+export const adminGetRouteMasters = () => request(BASE_URL + '/route-masters');
+export const adminCreateRouteMaster = (data) => request(BASE_URL + '/route-masters', 'POST', data);
+export const adminUpdateRouteMaster = (id, data) => request(BASE_URL + '/route-masters/' + id, 'PUT', data);
+export const adminDeleteRouteMaster = (id) => request(BASE_URL + '/route-masters/' + id, 'DELETE');
+
+// 🚐 [v3.0.0] 일일 배차 관리 API (Dispatch Management)
+export const adminGetActiveRouteMasters = (date) => request(BASE_URL + '/dispatch/active-routes?target_date=' + date);
+export const adminGetDailyDispatch = (date, routeMasterId) => request(BASE_URL + '/dispatch?target_date=' + date + '&route_master_id=' + routeMasterId);
+export const adminSaveDailyDispatch = (payload) => request(BASE_URL + '/dispatch', 'POST', payload);
+
+

@@ -33,6 +33,20 @@
 
 	const adminModules = [
 		{
+			title: '노선 마스터 관리',
+			desc: '정규 및 임시 노선의 기준 버전 정보 및 회차 시간표 통합 관리',
+			link: '/v1/admin/route_master',
+			icon: 'mdi:bus-clock',
+			color: 'bg-indigo-700'
+		},
+		{
+			title: '차량 배차 관리',
+			desc: '실시간 노선별 차량 투입, 실제 기사 배정 및 일일 운행 시간표 조율',
+			link: '/v1/admin/dispatch',
+			icon: 'mdi:bus-multiple',
+			color: 'bg-blue-700'
+		},
+		{
 			title: '메뉴 마스터',
 			desc: '시스템 전체 내비게이션 및 권한 구조 편집',
 			link: '/v1/admin/menu',

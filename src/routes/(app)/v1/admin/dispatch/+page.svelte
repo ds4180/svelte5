@@ -1,22 +1,28 @@
 <script>
     /**
      * @file src/routes/(app)/v1/admin/dispatch/+page.svelte
-     * @description [Phase 1] 관리 레이아웃 + 쌩 엑셀 표(2열) 통합 버전
+     * @description [Phase 1] 관리 레이아웃 + 쌩 엑셀 표(2열) 통합 버전 (API 연동, 기사 목록 리소스 보드 완비)
      */
+    import { untrack } from 'svelte';
     import Icon from '@iconify/svelte';
-    import { onMount } from 'svelte';
     import { fade } from 'svelte/transition';
+    import {
+        adminGetActiveRouteMasters,
+        adminGetDailyDispatch,
+        adminSaveDailyDispatch
+    } from '$lib/api/admin.js';
+    import fleetData from '$lib/data/vehicles.json';
+    import driverData from '$lib/data/drivers.json';
 
-    let routes = $state([
-        { id: 'R-100', name: '100번 노선', vehicleCount: 10 },
-        { id: 'R-200', name: '200번 노선', vehicleCount: 5 },
-        { id: 'R-300', name: '300번 통근', vehicleCount: 4 },
-    ]);
+    let routes = $state([]);
+    let selectedRoute = $state(null);
+    let dispatchRows = $state([]);
+    let isAutoFilled = $state(false);
+    let originalDispatchRows = $state([]);
+    let isHideRecommendations = $state(false);
 
-    let selectedRoute = $state(routes[0]);
     let isLocked = $state(false);
     let lockedBy = $state('');
-    let isTomorrowAnnounced = $state(false);
 
     // --- 날짜 관리 로직 ---
     const getToday = () => {
@@ -52,11 +58,18 @@
 
     let selectedDateKey = $derived(formatDateISO(selectedDate));
     let selectedFullDate = $derived(formatFullDate(selectedDate));
+    let activeRoutesForRender = $derived(
+        selectedRoute?.id === 'ALL'
+            ? routes
+            : selectedRoute
+                ? [selectedRoute]
+                : []
+    );
 
     function setDate(date) {
         selectedDate = new Date(date);
         selectedDate.setHours(0, 0, 0, 0);
-        selectedDriverName = ''; // 날짜 변경 시 선택 초기화
+        selectedDriver = null; // 날짜 변경 시 선택 초기화
     }
 
     function moveDate(offset) {
@@ -88,96 +101,410 @@
         return d;
     });
 
-    // --- 데이터 구조: { 'YYYY-MM-DD': { 'R-100': [...], 'R-200': [...] } } ---
-    let dispatchData = $state({
-        '2026-05-07': {
-            'R-100': [
-                { id: 1, vehicle: '3100', turnNo: 1, time: '05:00', driver: '김철수', memo: '' },
-                { id: 2, vehicle: '3101', turnNo: 2, time: '05:20', driver: '이영희', memo: '' },
-                { id: 3, vehicle: '3102', turnNo: 3, time: '05:40', driver: '', memo: '' },
-                { id: 4, vehicle: '3103', turnNo: 4, time: '06:00', driver: '', memo: '' },
-                { id: 5, vehicle: '3104', turnNo: 5, time: '06:20', driver: '', memo: '' },
-                { id: 6, vehicle: '3105', turnNo: 6, time: '06:40', driver: '', memo: '' },
-                { id: 7, vehicle: '3106', turnNo: 7, time: '07:00', driver: '', memo: '' },
-                { id: 8, vehicle: '3107', turnNo: 8, time: '07:20', driver: '', memo: '' },
-                { id: 9, vehicle: '3108', turnNo: 9, time: '07:40', driver: '', memo: '' },
-                { id: 10, vehicle: '3109', turnNo: 10, time: '08:00', driver: '', memo: '' },
-            ],
-            'R-200': [
-                { id: 11, vehicle: '2201', turnNo: 1, time: '05:30', driver: '박명수', memo: '' },
-                { id: 12, vehicle: '2202', turnNo: 2, time: '05:50', driver: '', memo: '' },
-            ]
-        },
-        '2026-05-08': {
-            'R-100': [
-                { id: 101, vehicle: '3100', turnNo: 1, time: '05:00', driver: '유재석', memo: '' },
-            ]
+    // --- API 연동 로직 ---
+    let fetchToken = 0;
+    let lastLoadedRoutesDate = '';
+
+    async function syncData(dateKey, forceRouteId = null) {
+        const token = ++fetchToken;
+        try {
+            // 1. 만약 날짜가 변경되었다면 노선 목록을 새로 로드합니다.
+            if (dateKey !== lastLoadedRoutesDate) {
+                const activeRoutes = await adminGetActiveRouteMasters(dateKey);
+                if (token !== fetchToken) return; // Stale request, ignore!
+                
+                routes = activeRoutes;
+                lastLoadedRoutesDate = dateKey;
+                
+                if (activeRoutes.length > 0) {
+                    // forceRouteId가 제공되었다면 해당 노선, 아니라면 이전 선택과 이름/ID가 맞는 노선, 없으면 'ALL' 전체 선택
+                    const targetId = forceRouteId || selectedRoute?.id;
+                    if (targetId === 'ALL') {
+                        selectedRoute = { id: 'ALL', route_name: '전체 노선' };
+                    } else {
+                        const found = activeRoutes.find(r => r.id === targetId || r.route_name === selectedRoute?.route_name);
+                        if (found) {
+                            selectedRoute = found;
+                        } else {
+                            selectedRoute = { id: 'ALL', route_name: '전체 노선' }; // Default to 'ALL' for premium experience
+                        }
+                    }
+                } else {
+                    selectedRoute = null;
+                }
+            } else if (forceRouteId !== null) {
+                // 날짜는 같고 노선만 사용자가 직접 바꾼 경우
+                if (forceRouteId === 'ALL') {
+                    selectedRoute = { id: 'ALL', route_name: '전체 노선' };
+                } else {
+                    const found = routes.find(r => r.id === forceRouteId);
+                    if (found) {
+                        selectedRoute = found;
+                    }
+                }
+            }
+
+            // 2. 선택된 노선이 존재한다면 해당 노선에 맞게 배차 데이터를 불러옵니다.
+            if (selectedRoute) {
+                if (selectedRoute.id === 'ALL') {
+                    // 🌟 [전체 노선] 모든 활성 노선의 배차 데이터를 병렬 비동기 수집
+                    const fetchPromises = routes.map(async (r) => {
+                        try {
+                            const data = await adminGetDailyDispatch(dateKey, r.id);
+                            
+                            // 전담 차량 목록을 노선명 기준으로 직접 가져옵니다.
+                            const routeName = r.route_name || '';
+                            let targetFleet = [];
+                            if (routeName.includes('121') || routeName.includes('122')) {
+                                targetFleet = fleetData.vehicles['121/122'] || [];
+                            } else if (routeName.includes('291') || routeName.includes('292') || routeName.includes('293')) {
+                                targetFleet = fleetData.vehicles['291/292/293'] || [];
+                            } else {
+                                targetFleet = [
+                                    ...(fleetData.vehicles['121/122'] || []),
+                                    ...(fleetData.vehicles['291/292/293'] || [])
+                                ];
+                            }
+
+                            return data.map((row, index) => {
+                                const updatedRow = { ...row, route_id: r.id, route_name: r.route_name };
+                                if (!updatedRow.vehicle_no && targetFleet[index]) {
+                                    updatedRow.vehicle_no = targetFleet[index];
+                                }
+                                return updatedRow;
+                            });
+                        } catch (e) {
+                            console.error(`❌ [${r.route_name}] 개별 노선 로드 실패:`, e);
+                            return [];
+                        }
+                    });
+
+                    const results = await Promise.all(fetchPromises);
+                    if (token !== fetchToken) return;
+
+                    dispatchRows = results.flat();
+                    originalDispatchRows = JSON.parse(JSON.stringify(dispatchRows));
+                    isAutoFilled = false;
+                } else {
+                    const routeId = selectedRoute.id;
+                    const data = await adminGetDailyDispatch(dateKey, routeId);
+                    if (token !== fetchToken) return; // Stale request, ignore!
+                    
+                    // 전담 차량 목록을 노선명 기준으로 직접 가져옵니다.
+                    const routeName = selectedRoute.route_name || '';
+                    let targetFleet = [];
+                    
+                    if (routeName.includes('121') || routeName.includes('122')) {
+                        targetFleet = fleetData.vehicles['121/122'] || [];
+                    } else if (routeName.includes('291') || routeName.includes('292') || routeName.includes('293')) {
+                        targetFleet = fleetData.vehicles['291/292/293'] || [];
+                    } else {
+                        targetFleet = [
+                            ...(fleetData.vehicles['121/122'] || []),
+                            ...(fleetData.vehicles['291/292/293'] || [])
+                        ];
+                    }
+
+                    dispatchRows = data.map((row, index) => {
+                        const updatedRow = { ...row, route_id: routeId, route_name: routeName };
+                        if (!updatedRow.vehicle_no && targetFleet[index]) {
+                            updatedRow.vehicle_no = targetFleet[index];
+                        }
+                        return updatedRow;
+                    });
+                    originalDispatchRows = JSON.parse(JSON.stringify(dispatchRows));
+                    isAutoFilled = false;
+                }
+            } else {
+                dispatchRows = [];
+            }
+        } catch (err) {
+            console.error("❌ Failed to sync dispatch data:", err);
+            if (token === fetchToken) {
+                dispatchRows = [];
+            }
+        }
+    }
+
+    // 날짜가 변경될 때에만 자동으로 동기화 트리거
+    $effect(() => {
+        const date = selectedDateKey;
+        if (date) {
+            untrack(() => {
+                syncData(date);
+            });
         }
     });
 
-    // 현재 선택된 날짜의 데이터 (없으면 빈 객체 반환, 원본 수정 안함)
-    let currentDayData = $derived(dispatchData[selectedDateKey] || {});
+    // --- 자원 배정 로직 (기사) ---
+    let selectedDriver = $state(null);
 
-    // 현재 선택된 날짜+노선의 데이터 (없으면 빈 배열 반환)
-    let currentRouteData = $derived(currentDayData[selectedRoute.id] || []);
-
-    let selectedDriverName = $state('');
-    
-    // 전체 기사 마스터 리스트
-    const ALL_DRIVERS = ['김철수', '이영희', '박명수', '정준하', '노홍철', '하하', '유재석', '지석진', '송지효', '김종국', '개리', '양세찬'];
-
-    // 현재 선택된 날짜의 모든 노선에 배정된 기사 목록
+    // 현재 선택된 노선의 기배정 기사 목록
     let assignedDrivers = $derived(
-        Object.values(currentDayData)
-            .flat()
-            .map(d => d.driver)
+        dispatchRows
+            .map(d => d.driver_name)
             .filter(name => name && name !== '')
     );
 
-    // 투입 가능한 기사만 필터링 (현재 날짜 기준)
+    // 투입 가능한 기사 필터링 (기선택된 기사 제외)
     let availableDrivers = $derived(
-        ALL_DRIVERS.filter(name => !assignedDrivers.includes(name))
+        driverData.filter(driver => !assignedDrivers.includes(driver.name))
     );
 
-    // 데이터 안전하게 초기화 및 기사 배정
-    function assignDriver(row) {
-        // 데이터가 없는 날짜/노선인 경우 초기화 우선 실행
-        if (!dispatchData[selectedDateKey]) {
-            dispatchData[selectedDateKey] = {};
-        }
-        if (!dispatchData[selectedDateKey][selectedRoute.id]) {
-            // 기존 데이터를 복사하거나 새로 생성 (여기서는 예시 데이터를 유지하거나 빈 데이터로 시작)
-            dispatchData[selectedDateKey][selectedRoute.id] = [];
-        }
-
-        if (selectedDriverName) {
-            row.driver = selectedDriverName;
-            selectedDriverName = ''; 
+    // 기사 선택 및 토글
+    function selectDriver(driver) {
+        if (selectedDriver?.name === driver.name) {
+            selectedDriver = null;
         } else {
-            row.driver = '';
+            selectedDriver = driver;
         }
     }
 
-    function rotateTurns() {
-        const items = currentRouteData;
-        if (!items || items.length === 0) return;
-        const max = items.length;
-        
-        items.forEach(item => {
-            const nextTurn = (item.turnNo % max) + 1;
-            item.turnNo = nextTurn;
-            const startMinutes = 5 * 60;
-            const totalMinutes = startMinutes + (nextTurn - 1) * 20;
-            const hours = Math.floor(totalMinutes / 60);
-            const mins = totalMinutes % 60;
-            item.time = `${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}`;
+    // 기사 파트너 조회 (교대 복구용)
+    function getAlternatePartner(driver) {
+        if (!driver || !driver.vehicle_no) return null;
+        if (driver.role === 'MAIN') {
+            return driverData.find(d => d.vehicle_no === driver.vehicle_no && d.role === 'SUB');
+        } else if (driver.role === 'SUB') {
+            return driverData.find(d => d.vehicle_no === driver.vehicle_no && d.role === 'MAIN');
+        }
+        return null;
+    }
+
+    // 내일 자 예측 컬럼의 기사명을 전반적으로 재계산/동기화해줍니다 (당연근무 회전 및 동일차량 로테이션 반영)
+    function updateTomorrowPredictions() {
+        const N = dispatchRows.length;
+        if (N === 0) return;
+
+        dispatchRows = dispatchRows.map(row => {
+            const updatedRow = { ...row };
+
+            // 사용자가 수동으로 내일 기사를 직접 고정한 경우(자동 추천 상태가 아님), 재계산에서 건너뜁니다.
+            if (updatedRow.tomorrow_driver_name && !updatedRow.is_tomorrow_inherited) {
+                return updatedRow;
+            }
+
+            // 오늘 당연근무인 경우: 오늘과 내일 연속 근무이므로 교대 로테이션 없이 오늘 기사를 내일 기사로 그대로 유지
+            if (updatedRow.is_regular_duty) {
+                if (updatedRow.driver_name && updatedRow.driver_name.trim()) {
+                    updatedRow.tomorrow_driver_name = updatedRow.driver_name.trim();
+                    updatedRow.is_tomorrow_inherited = true;
+                } else {
+                    updatedRow.tomorrow_driver_name = '';
+                    updatedRow.is_tomorrow_inherited = false;
+                }
+            } else {
+                // 내일 당연근무가 아닌 경우 (오늘 당연근무이거나 둘 다 아닌 경우): 오늘 기사의 파트너 기사로 정상 교대(로테이션)
+                if (updatedRow.driver_name && updatedRow.driver_name.trim()) {
+                    const todayDriverObj = driverData.find(d => d.name === updatedRow.driver_name.trim());
+                    if (todayDriverObj && (todayDriverObj.role === 'MAIN' || todayDriverObj.role === 'SUB')) {
+                        const partner = getAlternatePartner(todayDriverObj);
+                        if (partner) {
+                            updatedRow.tomorrow_driver_name = partner.name;
+                            updatedRow.is_tomorrow_inherited = true;
+                        } else {
+                            updatedRow.tomorrow_driver_name = updatedRow.driver_name;
+                            updatedRow.is_tomorrow_inherited = true;
+                        }
+                    } else {
+                        // 예비기사나 기타 기사인 경우 다음날은 예측할 수 없으므로 빈 칸
+                        updatedRow.tomorrow_driver_name = '';
+                        updatedRow.is_tomorrow_inherited = false;
+                    }
+                } else {
+                    updatedRow.tomorrow_driver_name = '';
+                    updatedRow.is_tomorrow_inherited = false;
+                }
+            }
+            return updatedRow;
         });
     }
 
+    // 오늘 기사 배정 및 해제
+    function assignTodayDriver(row) {
+        if (selectedDriver) {
+            row.driver_name = selectedDriver.name;
+            // 주기사/보조기사이면서 매핑된 차량 번호가 있는 경우, 해당 행의 차량 번호도 자동 기입해 줍니다.
+            if (selectedDriver.vehicle_no) {
+                row.vehicle_no = selectedDriver.vehicle_no;
+            }
+            selectedDriver = null; 
+        } else {
+            row.driver_name = '';
+        }
+        row.is_inherited = false; // 수동 조작 시 상속 플래그 해제
+
+        // 내일 예측 컬럼을 전체적으로 즉시 재계산 및 갱신해줍니다.
+        updateTomorrowPredictions();
+    }
+
+    // 다음 날 기사 배정 및 해제
+    function assignTomorrowDriver(row) {
+        if (selectedDriver) {
+            row.tomorrow_driver_name = selectedDriver.name;
+            row.is_tomorrow_inherited = false; // 사용자가 명시적으로 선택한 경우, 자동 입력 표시 제거
+            selectedDriver = null;
+        } else {
+            row.tomorrow_driver_name = '';
+            row.is_tomorrow_inherited = false;
+        }
+        row.is_inherited = false; // 수동 조작 시 상속 플래그 해제
+    }
+
+    // 전체 자동 채우기 기능 및 취소 복원
+    function autoFillDrivers() {
+        if (!dispatchRows || dispatchRows.length === 0) return;
+        
+        if (isAutoFilled) {
+            // 이미 자동 채우기가 적용된 상태라면 취소하고 복원
+            dispatchRows = dispatchRows.map((row, index) => {
+                const orig = originalDispatchRows[index];
+                const updatedRow = { ...row };
+                
+                // 원래 승계(연보라색)였던 기사 칸은 취소 시 완벽한 빈 칸("")으로 깨끗이 클리어
+                if (orig.is_inherited) {
+                    updatedRow.driver_name = '';
+                    updatedRow.is_inherited = false;
+                } else {
+                    updatedRow.driver_name = orig.driver_name;
+                    updatedRow.is_inherited = orig.is_inherited;
+                }
+                
+                // 원래 자동(연보라색)이었던 기사 칸 또한 취소 시 완벽한 빈 칸("")으로 깨끗이 클리어
+                if (orig.is_tomorrow_inherited) {
+                    updatedRow.tomorrow_driver_name = '';
+                    updatedRow.is_tomorrow_inherited = false;
+                } else {
+                    updatedRow.tomorrow_driver_name = orig.tomorrow_driver_name;
+                    updatedRow.is_tomorrow_inherited = orig.is_tomorrow_inherited;
+                }
+                
+                updatedRow.vehicle_no = orig.vehicle_no;
+                updatedRow.start_time = orig.start_time;
+                updatedRow.memo = orig.memo;
+                
+                return updatedRow;
+            });
+            isAutoFilled = false;
+        } else {
+            // 원본 백업
+            originalDispatchRows = JSON.parse(JSON.stringify(dispatchRows));
+            
+            // 1단계: 오늘 기사 자동 채우기 (현재 칸이 빈 칸인 경우만 작동)
+            dispatchRows = dispatchRows.map(row => {
+                const updatedRow = { ...row };
+                const isTodayBlank = !updatedRow.driver_name || !updatedRow.driver_name.trim();
+                
+                if (isTodayBlank) {
+                    const yesterdayName = updatedRow.yesterday_driver_name || '';
+                    if (yesterdayName) {
+                        if (updatedRow.is_yesterday_regular_duty) {
+                            // 어제 당연근무를 수행한 경우: 교대 로테이션 없이 어제 기사가 그대로 오늘 당연근무로 투입 (연속 근무)
+                            updatedRow.driver_name = yesterdayName;
+                        } else {
+                            // 일반근무인 경우: 어제 동일 차량의 근무자가 정규 기사(MAIN/SUB)라면 파트너 교대
+                            const ydDriverObj = driverData.find(d => d.name === yesterdayName);
+                            if (ydDriverObj && (ydDriverObj.role === 'MAIN' || ydDriverObj.role === 'SUB')) {
+                                const mainDriver = driverData.find(d => d.vehicle_no === updatedRow.vehicle_no && d.role === 'MAIN');
+                                const subDriver = driverData.find(d => d.vehicle_no === updatedRow.vehicle_no && d.role === 'SUB');
+                                
+                                if (ydDriverObj.role === 'MAIN') {
+                                    updatedRow.driver_name = subDriver ? subDriver.name : '';
+                                } else if (ydDriverObj.role === 'SUB') {
+                                    updatedRow.driver_name = mainDriver ? mainDriver.name : '';
+                                }
+                            } else {
+                                updatedRow.driver_name = '';
+                            }
+                        }
+                    } else {
+                        updatedRow.driver_name = '';
+                    }
+                }
+                
+                // 자동 채우기 적용 시 임시/승계 상태를 해제하여 확정(녹색) 상태로 렌더링
+                updatedRow.is_inherited = false;
+                return updatedRow;
+            });
+
+            // 2단계: 오늘 기사 확정에 따라 내일 기사 전체 예측/동기화 실행
+            updateTomorrowPredictions();
+            
+            // 자동 채우기로 예측된 내일 기사 또한 확정(녹색/자동 뱃지 없음) 상태로 저장될 수 있도록 플래그 해제
+            dispatchRows = dispatchRows.map(row => {
+                const updatedRow = { ...row };
+                updatedRow.is_tomorrow_inherited = false;
+                return updatedRow;
+            });
+            
+            isAutoFilled = true;
+        }
+    }
+
+
+
     function selectRoute(route) {
         selectedRoute = route;
-        selectedDriverName = '';
+        selectedDriver = null;
+        syncData(selectedDateKey, route.id);
     }
+
+    // 배차 일괄 저장 (DRAFT or CONFIRMED)
+    async function saveDispatch(status) {
+        if (!selectedRoute) {
+            alert('선택된 노선이 없습니다.');
+            return;
+        }
+        try {
+            if (selectedRoute.id === 'ALL') {
+                const groupedPayloads = routes.map(r => {
+                    const rRows = dispatchRows.filter(row => row.route_id === r.id);
+                    if (rRows.length === 0) return null;
+                    return {
+                        target_date: selectedDateKey,
+                        route_master_id: r.id,
+                        status: status,
+                        rows: rRows.map(row => ({
+                            timetable_id: row.timetable_id,
+                            driver_name: row.driver_name || null,
+                            tomorrow_driver_name: row.tomorrow_driver_name || null,
+                            vehicle_no: row.vehicle_no || null,
+                            start_time: row.start_time || null,
+                            memo: row.memo || null
+                        }))
+                    };
+                }).filter(p => p !== null);
+                
+                await Promise.all(groupedPayloads.map(payload => adminSaveDailyDispatch(payload)));
+            } else {
+                const payload = {
+                    target_date: selectedDateKey,
+                    route_master_id: selectedRoute.id,
+                    status: status,
+                    rows: dispatchRows.map(row => ({
+                        timetable_id: row.timetable_id,
+                        driver_name: row.driver_name || null,
+                        tomorrow_driver_name: row.tomorrow_driver_name || null,
+                        vehicle_no: row.vehicle_no || null,
+                        start_time: row.start_time || null,
+                        memo: row.memo || null
+                    }))
+                };
+                await adminSaveDailyDispatch(payload);
+            }
+            alert(status === 'CONFIRMED' ? '배차 정보가 17시 확정 공지되었습니다.' : '배차 정보가 성공적으로 임시저장되었습니다.');
+            
+            // 데이터 재로딩
+            await syncData(selectedDateKey, selectedRoute.id);
+        } catch (err) {
+            alert('배차 저장 실패: ' + err.message);
+        }
+    }
+
+    // 내일 확정 공지 상태 (모든 행이 CONFIRMED 인지 여부 판단)
+    let isTomorrowAnnounced = $derived(
+        dispatchRows.length > 0 && dispatchRows.every(row => row.status === 'CONFIRMED')
+    );
 </script>
 
 <style>
@@ -187,24 +514,32 @@
         table-layout: fixed;
     }
     .excel-table th, .excel-table td {
+        box-sizing: border-box;
         border: 1px solid #ddd;
         padding: 0;
-        height: 30px;
-        font-size: 13px;
+        height: 25px;
+        font-size: 11px;
+        letter-spacing: -0.05em;
+        line-height: 25px;
     }
     .excel-table th {
         background-color: #f8fafc;
         font-weight: 800;
         color: #64748b;
         text-transform: uppercase;
-        font-size: 11px;
+        font-size: 10px;
+        letter-spacing: -0.05em;
     }
     .excel-input {
+        box-sizing: border-box;
         width: 100%;
         height: 100%;
         border: none;
-        padding: 0 8px;
-        font-size: 13px;
+        padding: 0 !important;
+        margin: 0 !important;
+        font-size: 11px;
+        letter-spacing: -0.05em;
+        line-height: 25px;
         outline: none;
         background: transparent;
         font-weight: 600;
@@ -217,15 +552,17 @@
         background-color: #fffbeb;
         font-weight: 900;
         text-align: center;
+        letter-spacing: -0.05em;
+        line-height: 25px;
     }
 </style>
 
-<div class="min-h-screen bg-slate-50 p-6 md:p-8 font-sans pb-40">
+<div class="min-h-screen bg-slate-50 p-2 md:p-4 font-sans pb-12">
     <!-- 헤더 영역 -->
-    <header class="mb-8 border-b-2 border-slate-900 pb-6">
+    <header class="mb-4 border-b-2 border-slate-900 pb-3">
         <div class="flex justify-between items-end">
             <div>
-                <div class="flex items-center gap-3 mb-2">
+                <div class="flex items-center gap-3 mb-1.5">
                     <span class="badge bg-slate-900 text-white font-black uppercase text-[10px] px-3 py-1">Admin</span>
                     {#if isLocked}
                         <span class="badge badge-error text-white font-black uppercase text-[10px] animate-pulse">Lock by {lockedBy}</span>
@@ -233,23 +570,25 @@
                         <span class="badge bg-emerald-100 text-emerald-700 font-black uppercase text-[10px]">Editing Mode</span>
                     {/if}
                 </div>
-                <h1 class="text-4xl font-black uppercase italic tracking-tighter text-slate-900 mb-1">Dispatch Canvas</h1>
+                <h1 class="text-2xl md:text-3xl font-black uppercase italic tracking-tighter text-slate-900 mb-0.5">Dispatch Canvas</h1>
                 <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Global Fleet Management System</p>
             </div>
             
-            <button class="btn btn-sm bg-blue-600 hover:bg-blue-700 text-white border-none font-black rounded-lg px-6 shadow-lg"
-                    onclick={() => isTomorrowAnnounced = !isTomorrowAnnounced}>
-                {isTomorrowAnnounced ? '17시 재공지 완료' : '17시 확정 공지'}
-            </button>
+            {#if selectedRoute}
+                <button class="btn btn-sm bg-blue-600 hover:bg-blue-700 text-white border-none font-black rounded-lg px-6 shadow-lg"
+                        onclick={() => saveDispatch('CONFIRMED')}>
+                    {isTomorrowAnnounced ? '17시 재공지 완료' : '17시 확정 공지'}
+                </button>
+            {/if}
         </div>
     </header>
 
-    <!-- 날짜 네비게이션 (지속 가능한 슬라이딩 방식) -->
-    <div class="mb-8 flex items-center justify-between bg-white p-2 rounded-2xl border-2 border-slate-900 shadow-[4px_4px_0_rgba(0,0,0,1)]">
+    <!-- 날짜 네비게이션 -->
+    <div class="mb-4 flex items-center justify-between bg-white p-1.5 rounded-xl border-2 border-slate-900 shadow-[3px_3px_0_rgba(0,0,0,1)]">
         <div class="flex items-center gap-1">
             <!-- 이전 날짜 -->
             <button 
-                class="px-5 py-2 text-xs font-black rounded-xl text-slate-400 hover:bg-slate-100 hover:text-slate-900 transition-all flex flex-col items-center"
+                class="px-3 py-1.5 text-xs font-black rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-900 transition-all flex flex-col items-center"
                 onclick={() => moveDate(-1)}
             >
                 <span class="text-[9px] uppercase tracking-tighter opacity-70">{getRelativeLabel(prevDate)}</span>
@@ -259,21 +598,21 @@
                 </div>
             </button>
 
-            <!-- 선택된 날짜 (중중) -->
-            <div class="px-8 py-3 bg-slate-900 text-white rounded-xl shadow-lg flex flex-col items-center group relative overflow-hidden">
+            <!-- 선택된 날짜 -->
+            <div class="px-5 py-2 bg-slate-900 text-white rounded-lg shadow-md flex flex-col items-center group relative overflow-hidden">
                 <div class="absolute inset-0 bg-blue-600/10 translate-y-full group-hover:translate-y-0 transition-transform"></div>
-                <span class="text-[9px] font-black uppercase tracking-[0.2em] text-blue-400 mb-1 z-10">
+                <span class="text-[9px] font-black uppercase tracking-[0.2em] text-blue-400 mb-0.5 z-10">
                     {getRelativeLabel(selectedDate)} Target
                 </span>
-                <div class="flex items-center gap-3 z-10">
-                    <Icon icon="ph:calendar-star-fill" class="text-blue-400 text-lg" />
-                    <span class="text-sm font-black tracking-tight">{selectedFullDate}</span>
+                <div class="flex items-center gap-2.5 z-10">
+                    <Icon icon="ph:calendar-star-fill" class="text-blue-400 text-base" />
+                    <span class="text-xs font-black tracking-tight">{selectedFullDate}</span>
                 </div>
             </div>
 
             <!-- 다음 날짜 -->
             <button 
-                class="px-5 py-2 text-xs font-black rounded-xl text-slate-400 hover:bg-slate-100 hover:text-slate-900 transition-all flex flex-col items-center"
+                class="px-3 py-1.5 text-xs font-black rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-900 transition-all flex flex-col items-center"
                 onclick={() => moveDate(1)}
             >
                 <span class="text-[9px] uppercase tracking-tighter opacity-70">{getRelativeLabel(nextDate)}</span>
@@ -285,9 +624,9 @@
 
             <div class="w-[2px] h-8 bg-slate-100 mx-3"></div>
 
-            <!-- 오늘로 즉시 복귀 -->
+            <!-- 오늘로 복귀 -->
             <button 
-                class="px-4 py-2 text-[10px] font-black rounded-xl border-2 border-slate-900 hover:bg-slate-900 hover:text-white transition-all uppercase tracking-tighter flex items-center gap-2"
+                class="px-3 py-2 text-[10px] font-black rounded-lg border-2 border-slate-900 hover:bg-slate-900 hover:text-white transition-all uppercase tracking-tighter flex items-center gap-1.5"
                 onclick={() => setDate(today)}
             >
                 <Icon icon="ph:arrow-u-up-left-bold" />
@@ -297,57 +636,65 @@
 
         <div class="flex items-center gap-6 px-6">
             <div class="flex flex-col items-end">
-                <span class="text-[9px] font-black text-slate-400 uppercase tracking-tighter">Assigned Drivers</span>
+                <span class="text-[9px] font-black text-slate-400 uppercase tracking-tighter">Drivers Active</span>
                 <div class="flex items-baseline gap-1">
-                    <span class="text-xl font-black text-slate-900">{assignedDrivers.length}</span>
-                    <span class="text-[10px] font-bold text-slate-400">/ {ALL_DRIVERS.length}</span>
+                    <span class="text-lg font-black text-emerald-600">{assignedDrivers.length}</span>
+                    <span class="text-[10px] font-bold text-slate-400">/ {driverData.length}</span>
                 </div>
             </div>
-            <div class="w-[1px] h-10 bg-slate-200"></div>
+            <div class="w-[1px] h-8 bg-slate-200"></div>
             <div class="flex flex-col items-end">
                 <span class="text-[9px] font-black text-slate-400 uppercase tracking-tighter">Live Routes</span>
-                <span class="text-xl font-black text-blue-600">{Object.keys(currentDayData).length}</span>
+                <span class="text-lg font-black text-slate-900">{routes.length}</span>
             </div>
         </div>
     </div>
 
-    <div class="flex flex-col lg:flex-row gap-8">
-        <!-- 좌측: 노선 선택 -->
-        <aside class="lg:w-1/5 flex flex-col gap-2">
-            <h2 class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Select Route</h2>
-            {#each routes as route}
-                <button 
-                    class="text-left px-4 py-3 rounded-xl border-2 transition-all
-                        {selectedRoute.id === route.id 
-                            ? 'bg-slate-900 border-slate-900 text-white shadow-lg' 
-                            : 'bg-white border-slate-200 text-slate-600 hover:border-slate-400'}"
-                    onclick={() => selectRoute(route)}
+    <!-- 🚌 노선 선택 수평 칩 그룹 (전체 노선 포함) -->
+    {#if routes.length > 0}
+        <div class="mb-4 flex items-center gap-1.5 overflow-x-auto pb-3 pt-0.5 scrollbar-none">
+            <!-- 🌟 "전체 노선" 전용 버튼 탑재 -->
+            <button
+                class="px-4 py-2.5 rounded-xl font-extrabold transition-all shrink-0 text-xs flex items-center gap-1.5 border-2 shadow-sm
+                {selectedRoute?.id === 'ALL' 
+                ? 'bg-slate-900 text-white border-slate-900 shadow-slate-200' 
+                : 'bg-white text-slate-600 hover:bg-slate-50 border-slate-200'}"
+                onclick={() => selectRoute({ id: 'ALL', route_name: '전체 노선' })}
+            >
+                <Icon icon="lucide:layout-grid" class="w-4 h-4" />
+                전체 노선
+            </button>
+
+            {#each routes as r}
+                <button
+                    class="px-4 py-2.5 rounded-xl font-extrabold transition-all shrink-0 text-xs flex items-center gap-1.5 border-2 shadow-sm
+                    {selectedRoute?.id === r.id 
+                    ? 'bg-slate-900 text-white border-slate-900 shadow-slate-200' 
+                    : 'bg-white text-slate-600 hover:bg-slate-50 border-slate-200'}"
+                    onclick={() => selectRoute(r)}
                 >
-                    <div class="flex justify-between items-center">
-                        <span class="font-black text-sm">{route.name}</span>
-                        {#if currentDayData[route.id]?.length > 0}
-                            <span class="text-[9px] bg-emerald-500 text-white px-1.5 py-0.5 rounded-md">LIVE</span>
-                        {/if}
-                    </div>
+                    <span class="w-1.5 h-1.5 rounded-full {selectedRoute?.id === r.id ? 'bg-white' : 'bg-slate-400'}"></span>
+                    {r.route_name}
                 </button>
             {/each}
-            
-            <div class="mt-6 p-4 bg-amber-50 border border-amber-100 rounded-2xl">
-                <p class="text-[11px] font-bold text-amber-800 mb-2">로번 자동 계산</p>
-                <button class="btn btn-xs w-full bg-amber-500 hover:bg-amber-600 text-white border-none font-black rounded-md" onclick={rotateTurns}>
-                    {selectedDateKey} 순환 실행
-                </button>
-            </div>
-        </aside>
+        </div>
+    {/if}
 
-        <!-- 우측: 쌩 엑셀 스타일 배차표 (2열) -->
-        <main class="lg:w-4/5 bg-white rounded-3xl border border-slate-200 shadow-xl p-6 overflow-hidden">
-            <div class="flex flex-col gap-4 mb-6">
+    {#if !selectedRoute}
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-lg p-12 flex flex-col items-center justify-center min-h-[400px]" transition:fade>
+            <Icon icon="ph:calendar-x-bold" class="text-6xl text-slate-300 mb-4" />
+            <h3 class="text-lg font-black text-slate-700 mb-1">활성화된 노선이 없습니다</h3>
+            <p class="text-sm text-slate-400">선택하신 날짜({selectedFullDate})에 운행 중인 노선 마스터 도면이 존재하지 않습니다.</p>
+            <p class="text-xs text-slate-400 mt-2">노선 마스터 관리 페이지에서 이 날짜에 해당하는 유효한 노선을 먼저 등록해주세요.</p>
+        </div>
+    {:else}
+        <main class="w-full bg-white rounded-2xl border-2 border-slate-900 shadow-[5px_5px_0_rgba(0,0,0,1)] p-5 overflow-hidden" transition:fade>
+            <div class="flex flex-col gap-2 mb-4">
                 <div class="flex justify-between items-center">
-                    <h2 class="text-2xl font-black text-slate-800 flex items-center gap-3">
-                        <div class="w-2 h-8 bg-blue-600 rounded-full"></div>
-                        {selectedRoute.name} 배차표
-                        <span class="ml-4 px-4 py-1.5 bg-slate-900 text-white text-sm font-black rounded-lg shadow-sm tracking-tight">
+                    <h2 class="text-xl font-black text-slate-900 flex items-center gap-2">
+                        <div class="w-2.5 h-6 bg-blue-600 rounded-full"></div>
+                        {selectedRoute.route_name} 배차표 조율 캔버스
+                        <span class="ml-3 px-2.5 py-1 bg-slate-900 text-white text-xs font-black rounded-md shadow-sm tracking-tight">
                             {selectedFullDate}
                         </span>
                     </h2>
@@ -356,86 +703,191 @@
                             <div class="w-3 h-3 bg-emerald-100 border border-emerald-300 rounded"></div>
                             <span class="text-[10px] font-bold text-slate-500">배정됨</span>
                         </div>
-                        <div class="text-[11px] font-bold text-slate-400 uppercase tracking-tighter bg-slate-100 px-3 py-1 rounded-full">Excel-Density Mode</div>
+                        <div class="text-[11px] font-bold text-slate-400 uppercase tracking-tighter bg-slate-100 px-3 py-1 rounded-full">Widescreen Excel-Density Grid</div>
                     </div>
                 </div>
             </div>
 
-            <div class="flex flex-row gap-6 w-full items-start">
-            <div class="flex flex-row gap-6 w-full items-start">
-                <!-- 좌측: 기사 컬럼이 포함된 초슬림 배차 시트 -->
-                <div class="w-fit">
-                    <table class="excel-table" style="width: 390px;">
-                        <thead>
-                            <tr>
-                                <th style="width: 70px;">차량</th>
-                                <th style="width: 50px;">로번</th>
-                                <th style="width: 70px;">시간</th>
-                                <th style="width: 100px;">기사</th>
-                                <th style="width: 100px;">비고</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {#each currentRouteData as row}
-                                <tr>
-                                    <td><input type="text" bind:value={row.vehicle} class="excel-input text-slate-800 text-center" /></td>
-                                    <td class="turn-cell"><input type="number" bind:value={row.turnNo} class="excel-input text-center text-amber-900" /></td>
-                                    <td class="bg-blue-50/30"><input type="text" bind:value={row.time} class="excel-input text-center text-blue-700 text-[11px]" /></td>
-                                    <td 
-                                        class="cursor-pointer transition-colors {selectedDriverName ? 'bg-emerald-100 animate-pulse' : 'bg-emerald-50/30'}"
-                                        onclick={() => assignDriver(row)}
-                                    >
-                                        <input type="text" bind:value={row.driver} placeholder={selectedDriverName ? '배정하기' : '기사 배정'} class="excel-input text-center text-emerald-700 font-black pointer-events-none" readonly />
-                                    </td>
-                                    <td><input type="text" bind:value={row.memo} class="excel-input text-slate-500 font-normal" /></td>
-                                </tr>
-                            {/each}
-                        </tbody>
-                    </table>
-                </div>
+            <!-- 🚐 [Density Excel Sheet] 전면 격자 노선별 표 분할 렌더링 -->
+            <div class="mt-2">
+                {#each activeRoutesForRender as route}
+                    {@const routeRowsCount = dispatchRows.filter(row => row.route_id === route.id).length}
+                    {#if routeRowsCount > 0}
+                        <div class="mb-8">
+                            <!-- 🏷️ 노선 전용 구분 헤더 -->
+                            <div class="flex items-center justify-between mb-2 px-1">
+                                <h3 class="text-sm font-extrabold text-slate-800 flex items-center gap-1.5">
+                                    <span class="inline-block w-2 h-4 bg-indigo-600 rounded-sm"></span>
+                                    {route.route_name} 배차표
+                                </h3>
+                                <span class="text-[10px] bg-indigo-50 text-indigo-700 border border-indigo-100 px-2 py-0.5 rounded font-black uppercase tracking-wider">
+                                    {routeRowsCount}개 로번
+                                </span>
+                            </div>
 
-                <!-- 우측: 기사 목록 영역 (Data Source) -->
-                <div class="flex-1 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden min-h-[500px] flex flex-col">
-                    <div class="bg-slate-50 px-4 py-3 border-b border-slate-200 flex justify-between items-center">
-                        <h3 class="text-sm font-black text-slate-700 flex items-center gap-2">
-                            <Icon icon="ph:users-four-fill" class="text-blue-600" />
-                            투입 가능 기사 목록
+                            <div class="overflow-x-auto border-2 border-slate-900 rounded-xl shadow-[2px_2px_0_rgba(0,0,0,1)] bg-white">
+                                <table class="excel-table w-full text-left border-collapse min-w-[1000px]">
+                                    <thead>
+                                        <tr class="bg-slate-100 border-b border-slate-200 text-[11px] text-slate-600 font-extrabold uppercase">
+                                            <th style="width: 120px;">차량 번호</th>
+                                            <th style="width: 60px;">로번</th>
+                                            <th style="width: 80px;">출발 시각</th>
+                                            <th style="width: 80px;">종료 시각</th>
+                                            <th style="width: 150px;">시작 위치</th>
+                                            <th style="width: 150px;">종료 위치</th>
+                                            <th style="width: 120px; background-color: #ecfdf5; color: #047857;">기사</th>
+                                            <th style="width: 120px; background-color: #f5f3ff; color: #4338ca;">다음 날 기사</th>
+                                            <th style="width: 250px;">비고/메모</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-slate-200">
+                                        {#each dispatchRows as row}
+                                            {#if row.route_id === route.id}
+                                                <tr class="hover:bg-indigo-50/20 text-xs transition-all {row.is_regular_duty ? 'bg-indigo-50/10' : ''}">
+                                                    <!-- 차량 번호 -->
+                                                    <td class="bg-blue-50/10">
+                                                        <input type="text" bind:value={row.vehicle_no} oninput={() => row.is_inherited = false} placeholder="차량 번호" class="excel-input {row.is_inherited ? 'text-indigo-700 italic' : 'text-blue-700'} text-center font-bold" />
+                                                    </td>
+                                                    
+                                                    <!-- 로번 (turn index, seq) -->
+                                                    <td class="turn-cell bg-amber-50/20 text-center text-amber-900 font-extrabold text-sm relative border-r">
+                                                        {row.seq}
+                                                        {#if row.is_regular_duty}
+                                                            <div class="absolute top-0.5 right-0.5 w-1.5 h-1.5 bg-indigo-600 rounded-full" title="당연 근무"></div>
+                                                        {/if}
+                                                    </td>
+                                                    
+                                                    <!-- 출발 시각 (start_time) -->
+                                                    <td class="bg-blue-50/30">
+                                                        <input type="text" bind:value={row.start_time} class="excel-input text-center text-blue-700 font-bold border-r" />
+                                                    </td>
+                                                    
+                                                    <!-- 종료 시각 (end_time) -->
+                                                    <td class="bg-slate-50/40 text-center border-r">
+                                                        <input type="text" value={row.end_time || ''} class="excel-input text-center text-slate-500 font-semibold pointer-events-none" readonly />
+                                                    </td>
+                                                    
+                                                    <!-- 시작 위치 (start_location) -->
+                                                    <td class="bg-slate-50/40 px-3 border-r">
+                                                        <input type="text" value={row.start_location || ''} class="excel-input text-slate-500 font-semibold pointer-events-none" readonly />
+                                                    </td>
+                                                    
+                                                    <!-- 종료 위치 (end_location) -->
+                                                    <td class="bg-slate-50/40 px-3 border-r">
+                                                        <input type="text" value={row.end_location || ''} class="excel-input text-center text-slate-500 font-semibold pointer-events-none" readonly />
+                                                    </td>
+                                                    
+                                                    <!-- 기사 배정 (driver_name) -->
+                                                    <td 
+                                                        class="cursor-pointer transition-colors relative border-r border-slate-200 {selectedDriver ? 'bg-emerald-100 animate-pulse' : (row.driver_name && (!isHideRecommendations || !row.is_inherited) ? (row.is_inherited ? 'bg-indigo-50/80' : 'bg-emerald-50') : 'bg-emerald-50/20')}"
+                                                        onclick={() => assignTodayDriver(row)}
+                                                    >
+                                                        <input type="text" value={(isHideRecommendations && row.is_inherited) ? '' : (row.driver_name || '')} placeholder={selectedDriver ? '배정하기' : '기사 배정'} class="excel-input text-center {row.is_inherited ? 'text-indigo-700 italic' : 'text-emerald-700'} font-black pointer-events-none" readonly />
+                                                        {#if row.is_inherited && !isHideRecommendations}
+                                                            <span class="absolute top-[1px] right-1 text-[7px] text-indigo-500 font-extrabold tracking-tighter leading-none scale-90 origin-top-right">승계</span>
+                                                        {/if}
+                                                    </td>
+                                                    
+                                                    <!-- 다음 날 기사 배정 (tomorrow_driver_name) -->
+                                                    <td 
+                                                        class="cursor-pointer transition-colors relative border-r border-slate-200 {selectedDriver ? 'bg-indigo-100 animate-pulse' : (row.tomorrow_driver_name && (!isHideRecommendations || !row.is_tomorrow_inherited) ? (row.is_tomorrow_inherited ? 'bg-indigo-50/50' : 'bg-indigo-50') : 'bg-indigo-50/20')}"
+                                                        onclick={() => assignTomorrowDriver(row)}
+                                                    >
+                                                        <input type="text" value={(isHideRecommendations && row.is_tomorrow_inherited) ? '' : (row.tomorrow_driver_name || '')} placeholder={selectedDriver ? '배정하기' : '기사 지정'} class="excel-input text-center {row.is_tomorrow_inherited ? 'text-indigo-600/70 italic' : 'text-indigo-800'} font-black pointer-events-none" readonly />
+                                                        {#if row.is_tomorrow_inherited && !isHideRecommendations}
+                                                            <span class="absolute top-[1px] right-1 text-[7px] text-indigo-500 font-extrabold tracking-tighter leading-none scale-90 origin-top-right">자동</span>
+                                                        {/if}
+                                                    </td>
+
+                                                    <!-- 비고/메모 -->
+                                                    <td class="px-2">
+                                                        <input type="text" bind:value={row.memo} class="excel-input text-slate-600 text-xs font-semibold px-1" placeholder="메모 입력" />
+                                                    </td>
+                                                </tr>
+                                            {/if}
+                                        {/each}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    {/if}
+                {/each}
+            </div>
+
+            <!-- 기사 리소스 보드 (하단에 넓게 가로 그리드 배치) -->
+            <div class="mt-8 border-t-2 border-slate-200 pt-6">
+                <div class="bg-white rounded-2xl border-2 border-slate-900 shadow-[3px_3px_0_rgba(0,0,0,1)] overflow-hidden flex flex-col">
+                    <div class="bg-slate-100 px-4 py-3 border-b-2 border-slate-900 flex justify-between items-center">
+                        <h3 class="text-xs font-black text-slate-800 flex items-center gap-2 uppercase tracking-tight">
+                            <Icon icon="ph:users-four-fill" class="text-indigo-600 text-lg" />
+                            투입 대기 기사 등록 보드
                         </h3>
-                        <span class="badge bg-blue-100 text-blue-700 font-bold text-[10px]">{availableDrivers.length}명 대기중</span>
+                        <span class="badge bg-indigo-100 text-indigo-700 font-black text-[10px] px-3 py-1 rounded-full uppercase tracking-tighter">
+                            {availableDrivers.length}명 대기중
+                        </span>
                     </div>
-                    <div class="p-4 grid grid-cols-2 xl:grid-cols-3 gap-2 overflow-y-auto">
-                        {#each availableDrivers as name}
-                            <button 
-                                class="flex items-center justify-between p-2 rounded-lg border transition-all group
-                                    {selectedDriverName === name 
-                                        ? 'bg-emerald-600 border-emerald-600 text-white shadow-md' 
-                                        : 'bg-slate-50 border-slate-100 hover:border-emerald-400 hover:bg-emerald-50 text-slate-700'}"
-                                onclick={() => selectDriver(name)}
-                            >
-                                <span class="text-sm font-bold">{name}</span>
-                                <Icon icon="ph:check-circle-fill" class="{selectedDriverName === name ? 'text-white' : 'text-slate-300 group-hover:text-emerald-500'} transition-colors" />
-                            </button>
-                        {/each}
+                    
+                    <div class="p-4 bg-slate-50/50">
+                        <div class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2 max-h-[220px] overflow-y-auto">
+                            {#each availableDrivers as driver}
+                                <button 
+                                    class="flex items-center justify-between p-2 rounded-xl border-2 transition-all text-xs group shadow-sm
+                                        {selectedDriver?.name === driver.name 
+                                            ? 'bg-indigo-600 border-indigo-600 text-white shadow-md' 
+                                            : 'bg-white border-slate-200 hover:border-indigo-400 hover:bg-indigo-50 text-slate-700'}"
+                                    onclick={() => selectDriver(driver)}
+                                >
+                                    <div class="flex flex-col items-start gap-0.5 text-left">
+                                        <div class="flex items-center gap-1">
+                                            <span class="font-black tracking-tight">{driver.name}</span>
+                                            {#if driver.role === 'MAIN'}
+                                                <span class="px-1 py-0.2 text-[8px] font-black rounded bg-blue-100 text-blue-800 uppercase tracking-tighter">주</span>
+                                            {:else}
+                                                <span class="px-1 py-0.2 text-[8px] font-black rounded bg-amber-100 text-amber-800 uppercase tracking-tighter">보</span>
+                                            {/if}
+                                        </div>
+                                        {#if driver.vehicle_no}
+                                            <span class="text-[9px] font-bold text-slate-400 group-hover:text-slate-500 {selectedDriver?.name === driver.name ? 'text-indigo-200' : ''}">
+                                                {driver.vehicle_no}
+                                            </span>
+                                        {/if}
+                                    </div>
+                                    <Icon icon="ph:check-circle-fill" class="{selectedDriver?.name === driver.name ? 'text-white' : 'text-slate-200 group-hover:text-indigo-500'} text-sm transition-colors" />
+                                </button>
+                            {/each}
+                        </div>
                     </div>
-                    <div class="p-4 mt-auto border-t border-slate-100 bg-slate-50/50">
-                        <p class="text-[10px] text-slate-400 leading-relaxed font-medium">
-                            {#if selectedDriverName}
-                                <span class="text-emerald-600 font-black animate-bounce inline-block mr-1">[{selectedDriverName}]</span> 기사님이 선택되었습니다. 배차표의 빈칸을 클릭하세요.
+                    
+                    <div class="px-4 py-2 border-t border-slate-200 bg-white">
+                        <p class="text-[10px] text-slate-500 leading-relaxed font-bold">
+                            {#if selectedDriver}
+                                <span class="text-indigo-600 font-black animate-pulse">[{selectedDriver.name}] ({selectedDriver.vehicle_no || '전담 차량 없음'})</span> 기사님이 조율 카드로 선택되었습니다. 위 표에서 임의의 노선의 <span class="text-indigo-600 font-black">기사 칸</span> 또는 <span class="text-indigo-600 font-black">다음 날 기사 칸</span>을 클릭하여 자원을 신속히 임명하십시오.
                             {:else}
-                                * 기사 이름을 클릭한 후, 왼쪽 배차표의 기사 칸을 클릭하여 배정하세요.
+                                * 투입 대기 기사 버튼을 클릭해 기사를 선정한 다음, 원하는 차량의 오늘/다음 날 기사 칸을 클릭해 즉석에서 배치하십시오.
                             {/if}
                         </p>
                     </div>
                 </div>
             </div>
-            </div>
 
-            <!-- 하단 플로팅 저장 -->
-            <div class="mt-8 flex justify-end">
-                <button class="btn bg-slate-900 hover:bg-black text-white border-none rounded-xl px-8 font-black shadow-xl">
+            <!-- 하단 플로팅 저장 버튼 그룹 -->
+            <div class="mt-6 flex justify-end gap-3">
+                <button class="btn {isAutoFilled ? 'bg-rose-50 hover:bg-rose-100 text-rose-700 border-rose-200' : 'bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border-indigo-200'} border-2 rounded-xl px-6 font-black flex items-center gap-1.5 transition-all shadow-sm" onclick={autoFillDrivers}>
+                    {#if isAutoFilled}
+                        <Icon icon="ph:x-circle-fill" class="h-4.5 w-4.5" />
+                        채우기 취소
+                    {:else}
+                        <Icon icon="ph:magic-wand-fill" class="h-4.5 w-4.5" />
+                        자동 채우기
+                    {/if}
+                </button>
+                <button class="btn bg-white hover:bg-slate-50 text-slate-800 border-slate-200 border-2 rounded-xl px-6 font-black" onclick={() => saveDispatch('DRAFT')}>
                     임시저장
+                </button>
+                <button class="btn bg-slate-900 hover:bg-black text-white border-none rounded-xl px-8 font-black shadow-lg" onclick={() => saveDispatch('CONFIRMED')}>
+                    공지 발행 (확정)
                 </button>
             </div>
         </main>
-    </div>
+    {/if}
 </div>
