@@ -1,22 +1,36 @@
 <script>
 	/**
-	 * @file (app)/+layout.svelte (Premium Dashboard: Modular Architecture)
-	 * @description [v15.0] 우측 동적 폼을 독립 컴포넌트로 분리하여 레이아웃 가독성 및 유지보수성을 극대화한 버전
+	 * ============================================================================
+	 * [시각 디자인 전담 레이아웃: 3분할 반응형 대시보드 ((app)/+layout.svelte)]
+	 * ============================================================================
+	 * 
+	 * 💡 이 파일의 역할:
+	 * 로그인된 메인 업무 화면의 '순수한 시각적 디자인(UI Shell)'만 책임집니다.
+	 * 
+	 * 🌟 철저한 위계 분리 (Before vs After):
+	 * - [이전]: 인증 처리(auth.setUser), 웹소켓 등 시스템 기능과 대시보드 UI 디자인이 한데 뒤엉켜 있었음.
+	 * - [현재]: 유저 인증, PWA, 웹소켓 등 모든 시스템 코어 기능은 최상위 Root(+layout.svelte)가 전담!
+	 *          이 파일은 오직 3분할 대시보드(좌측 사이드바, 중앙 업무 컨텐츠, 우측 보조창)를
+	 *          아름답고 반응형(PC/모바일)으로 그리는 디자인 역할에만 100% 집중합니다.
 	 */
 	import { page } from '$app/state';
 	import { onMount, untrack } from 'svelte';
 	import { alertState } from '$lib/runes/alert.svelte.js';
-	import { auth } from '$lib/runes/auth.svelte.js';
+	import { auth } from '$lib/runes/auth.svelte.js'; // 헤더의 유저 프로필 표시에 사용
 	import { navState } from '$lib/runes/nav.svelte.js';
 	import DynamicSidebar from '$lib/components/Nav/DynamicSidebar.svelte';
 	import '../layout.css';
 	import Icon from '@iconify/svelte';
 
+	// 📌 Root 및 상위 레이아웃에서 전달받은 데이터(메뉴 트리 등)와 자식 컴포넌트(실제 페이지)
 	let { data, children } = $props();
 
-	// 컴포넌트 생성 시점에 상태 동기화
+	// ----------------------------------------------------------------------------
+	// [사이드바 메뉴 데이터 동기화]
+	// ----------------------------------------------------------------------------
+	// 유저 세션 주입(auth.setUser)은 이미 최상위 Root 레이아웃이 끝마쳤으므로,
+	// 여기서는 화면에 보여줄 좌측 사이드바 메뉴 목록(data.menus)만 네비게이션 스토어에 전달합니다.
 	untrack(() => {
-		auth.setUser(data.user);
 		if (data.menus) {
 			navState.setMenus(data.menus);
 			navState.isLoading = false;
