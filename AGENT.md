@@ -46,6 +46,6 @@
 - 재사용 가능한 구조로 작성
 - 불필요한 중복 코드 제거 
 [출력 요구 사항]
-- svelte5 RUNE 문법 사용
+- svelte5 RUNE 문법 및 TypeScript(.ts / .svelte.ts) 사용
 - 즉시 실행 가능한 완성 코드 작성 
 - ui/ux 포함된 형태로 작성 
