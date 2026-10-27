@@ -66,6 +66,7 @@ export const adminGetApps = () => request(`${BASE_URL}/apps`);
 export const adminGetAppDetail = (id) => request(`${BASE_URL}/apps/${id}`);
 export const adminCreateApp = (data) => request(`${BASE_URL}/apps`, 'POST', data);
 export const adminUpdateApp = (id, data) => request(`${BASE_URL}/apps/${id}`, 'PATCH', data);
+export const adminDeleteApp = (id) => request(`${BASE_URL}/apps/${id}`, 'DELETE');
 // 📑 게시판 관리 API
 export const adminGetBoards = () => request(`${BASE_URL}/boards`);
 export const adminCreateBoard = (data) => request(`${BASE_URL}/boards`, 'POST', data);
@@ -105,7 +106,19 @@ export const adminDeleteServiceInstance = (id) =>
 	request(`${BASE_URL}/service-instances/${id}`, 'DELETE');
 
 // 🚀 범용 앱 데이터 프로바이더 (Hardcoding Zero의 핵심)
-export const adminGetAppData = (appId, slug) => request(`${BASE_URL}/app/data/${appId}/${slug}`);
+// - 엔드포인트는 /api/v1/admin이 아닌 /api/v1/app/data/{appId}/{slug}를 호출합니다.
+// - 페이징 및 검색 파라미터(page, size, keyword 등)를 쿼리스트링으로 변환하여 전달합니다.
+export const adminGetAppData = (appId, slug, params = {}) => {
+	const searchParams = new URLSearchParams();
+	Object.entries(params || {}).forEach(([key, value]) => {
+		if (value !== undefined && value !== null && value !== '') {
+			searchParams.set(key, String(value));
+		}
+	});
+	const queryString = searchParams.toString();
+	const url = `/api/v1/app/data/${appId}/${slug}${queryString ? `?${queryString}` : ''}`;
+	return request(url);
+};
 
 // 🏖️ 휴무 관리 API
 export const adminGetAllDayoffs = () => request(`${BASE_URL}/dayoffs`);
@@ -152,5 +165,41 @@ export const adminDeleteRouteMaster = (id) => request(BASE_URL + '/route-masters
 export const adminGetActiveRouteMasters = (date) => request(BASE_URL + '/dispatch/active-routes?target_date=' + date);
 export const adminGetDailyDispatch = (date, routeMasterId) => request(BASE_URL + '/dispatch?target_date=' + date + '&route_master_id=' + routeMasterId);
 export const adminSaveDailyDispatch = (payload) => request(BASE_URL + '/dispatch', 'POST', payload);
+
+// 🔐 [조직·권한 그룹 마스터 API] (PostgreSQL DB groups 기반)
+export const adminGetAuthGroupsMaster = (groupType) => 
+	request(`/api/v1/admin/auth-groups/master${groupType ? `?group_type=${groupType}` : ''}`);
+export const adminCreateAuthGroupMaster = (data) => 
+	request('/api/v1/admin/auth-groups/master', 'POST', data);
+export const adminUpdateAuthGroupMaster = (groupId, data) => 
+	request(`/api/v1/admin/auth-groups/master/${groupId}`, 'PUT', data);
+export const adminDeleteAuthGroupMaster = (groupId) => 
+	request(`/api/v1/admin/auth-groups/master/${groupId}`, 'DELETE');
+
+// 👤 [사용자 뷰] 회원-그룹 매칭 API
+export const adminGetAuthGroupUsers = (query) => 
+	request(`/api/v1/admin/auth-groups/users${query ? `?query=${encodeURIComponent(query)}` : ''}`);
+export const adminUpdateUserPrimaryGroup = (userId, primaryGroup) => 
+	request(`/api/v1/admin/auth-groups/users/${userId}/primary`, 'PATCH', { primary_group: primaryGroup });
+export const adminAddUserSecondaryGroup = (userId, code) => 
+	request(`/api/v1/admin/auth-groups/users/${userId}/secondary`, 'POST', { code });
+export const adminRemoveUserSecondaryGroup = (userId, code) => 
+	request(`/api/v1/admin/auth-groups/users/${userId}/secondary/${encodeURIComponent(code)}`, 'DELETE');
+export const adminUpdateUserGroupsBatch = (userId, data) => 
+	request(`/api/v1/admin/auth-groups/users/${userId}/groups`, 'PUT', data);
+
+// 📱 [앱 뷰] 앱 권한 랭킹 & allow/deny API
+export const adminGetAuthGroupApps = () => 
+	request('/api/v1/admin/auth-groups/apps');
+export const adminUpdateAppPermissions = (appId, data) => 
+	request(`/api/v1/admin/auth-groups/apps/${appId}/permissions`, 'PATCH', data);
+
+// 🧩 [인스턴스 뷰] 개별 인스턴스(게시판/페이지/커스텀앱) 통합 권한 API
+export const adminGetAuthGroupInstances = () => 
+	request('/api/v1/admin/auth-groups/instances');
+export const adminUpdateInstancePermissions = (instanceType, targetId, data) => 
+	request(`/api/v1/admin/auth-groups/instances/${instanceType}/${targetId}/permissions`, 'PATCH', data);
+
+
 
 
