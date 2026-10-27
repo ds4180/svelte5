@@ -21,14 +21,80 @@ import { setContext, getContext } from 'svelte';
 const AUTH_KEY = Symbol('AUTH_CONTEXT');
 
 export class AuthState {
-	// 반응형 유저 정보 상태
+	// 반응형 유저 정보 상태 ({ id, username, email, rank_level, primary_group, secondary_groups })
 	user = $state(null);
 	isAuthenticated = $derived(!!this.user);
+	isRoot = $derived(this.user?.rank_level === 9);
 
 	constructor(initialUser = null) {
 		if (initialUser) {
 			this.user = initialUser;
 		}
+	}
+
+	/**
+	 * 사용자의 주그룹(1개)과 부그룹(N개)을 합친 배열을 반환합니다.
+	 */
+	getGroups() {
+		if (!this.user) return [];
+		const groups = new Set();
+		if (this.user.primary_group) {
+			groups.add(this.user.primary_group);
+		}
+		if (Array.isArray(this.user.secondary_groups)) {
+			for (const g of this.user.secondary_groups) {
+				if (g) groups.add(g);
+			}
+		}
+		return Array.from(groups);
+	}
+
+	/**
+	 * 🌟 [`정책재정의.md` 4단계 권한 판별 헬퍼 (백엔드 core/permission.py와 100% 동일한 로직)]
+	 * 
+	 * 처리 순서:
+	 * 1. root(rank_level === 9) 인가? ➔ 무조건 true (읽기/쓰기 모두 가능)
+	 * 2. 앱의 denyGroups에 부그룹 또는 주그룹이 있는가? ➔ 있으면 무조건 false (차단)
+	 * 3. 앱의 allowGroups에 부그룹 또는 주그룹이 있는가? ➔ 있으면 무조건 true (읽기/쓰기 모두 가능)
+	 * 4. 앱의 읽기/쓰기 랭킹과 사용자 랭킹(0~9)을 비교(>=, >, <, <=, ==)하여 결정
+	 */
+	canAccess({
+		action = 'read',
+		minReadRank = 0,
+		minWriteRank = 2,
+		allowGroups = [],
+		denyGroups = [],
+		op = '>='
+	} = {}) {
+		const userRank = this.user?.rank_level ?? 0;
+
+		// [1단계] root(랭킹 9) 인가?
+		if (userRank === 9) return true;
+
+		const userGroups = this.getGroups();
+
+		// [2단계] deny 목록에 부그룹이나 주그룹이 있는가?
+		if (Array.isArray(denyGroups) && denyGroups.length > 0) {
+			if (userGroups.some((g) => denyGroups.includes(g))) {
+				return false;
+			}
+		}
+
+		// [3단계] allow 목록에 부그룹이나 주그룹이 있는가? (속하면 읽기/쓰기 모두 가능)
+		if (Array.isArray(allowGroups) && allowGroups.length > 0) {
+			if (userGroups.some((g) => allowGroups.includes(g))) {
+				return true;
+			}
+		}
+
+		// [4단계] 앱의 읽기/쓰기 랭킹과 사용자 랭킹(0~9) 비교
+		const targetRank = action === 'write' ? minWriteRank : minReadRank;
+		if (op === '>=') return userRank >= targetRank;
+		if (op === '>') return userRank > targetRank;
+		if (op === '==') return userRank === targetRank;
+		if (op === '<=') return userRank <= targetRank;
+		if (op === '<') return userRank < targetRank;
+		return userRank >= targetRank;
 	}
 
 	/**
