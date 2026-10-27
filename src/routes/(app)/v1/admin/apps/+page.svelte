@@ -64,10 +64,37 @@
 		isEditMode = true;
 		editingApp = {
 			...app,
+			app_type: app.app_type === 'STATIC' ? 'CUSTOM' : (app.app_type || 'INSTANCE'),
 			min_read_rank: Number(app.min_read_rank ?? 0),
 			min_write_rank: Number(app.min_write_rank ?? 2)
 		};
 		document.getElementById('form-anchor')?.scrollIntoView({ behavior: 'smooth' });
+	}
+
+	/**
+	 * @function handleDelete
+	 * @description 앱 삭제 (SYSTEM 앱은 삭제 불가)
+	 */
+	async function handleDelete(app) {
+		if (app.app_type === 'SYSTEM') {
+			alertState.send('SYSTEM 앱은 시스템 필수 관제 앱이므로 삭제할 수 없습니다.', {
+				level: 2,
+				style: 'warning'
+			});
+			return;
+		}
+		if (!confirm(`'${app.title || app.name || app.app_id}' 앱을 삭제하시겠습니까?`)) return;
+		try {
+			await api.adminDeleteApp(app.app_id);
+			alertState.send('앱이 삭제되었습니다.', { level: 1, style: 'success' });
+			if (editingApp.app_id === app.app_id) {
+				resetForm();
+				isEditMode = false;
+			}
+			await loadApps();
+		} catch (e) {
+			alertState.send(e.message, { level: 3, style: 'error' });
+		}
 	}
 
 	function resetForm() {
@@ -187,21 +214,36 @@
 								>
 									{app.icon_default || app.app_id.substring(0, 1).toUpperCase()}
 								</div>
-								<button
-									class="btn rounded-none border-black text-[9px] font-black uppercase btn-outline btn-xs hover:bg-black hover:text-white"
-									onclick={() => startEdit(app)}>Modify</button
-								>
+								<div class="flex items-center gap-1">
+									<button
+										class="btn rounded-none border-black text-[9px] font-black uppercase btn-outline btn-xs hover:bg-black hover:text-white"
+										onclick={() => startEdit(app)}>Modify</button
+									>
+									{#if app.app_type !== 'SYSTEM'}
+										<button
+											class="btn rounded-none border-rose-600 text-[9px] font-black text-rose-600 uppercase btn-outline btn-xs hover:bg-rose-600 hover:text-white"
+											onclick={() => handleDelete(app)}>Delete</button
+										>
+									{:else}
+										<span
+											class="border border-purple-600/40 bg-purple-50 px-1.5 py-0.5 text-[8px] font-black text-purple-700 uppercase"
+											title="SYSTEM 앱은 삭제할 수 없습니다">Locked</span
+										>
+									{/if}
+								</div>
 							</div>
 							<h4 class="mb-1 text-lg font-black tracking-tight uppercase italic">
 								{app.title || app.name || app.app_id}
 							</h4>
 							<div class="mb-2 flex items-center justify-between">
 								<div
-									class="text-[9px] font-black {app.app_type === 'STATIC'
+									class="text-[9px] font-black {app.app_type === 'CUSTOM' || app.app_type === 'STATIC'
 										? 'text-rose-600'
-										: 'text-blue-600'} tracking-tighter uppercase opacity-60"
+										: app.app_type === 'SYSTEM'
+											? 'text-purple-600'
+											: 'text-blue-600'} tracking-tighter uppercase opacity-80"
 								>
-									{app.app_type === 'STATIC' ? 'CUSTOM' : app.app_type} ENGINE
+									{app.app_type === 'STATIC' ? 'CUSTOM' : app.app_type} APP
 								</div>
 								{#if app.app_type === 'INSTANCE'}
 									<a
@@ -314,9 +356,9 @@
 								bind:value={editingApp.app_type}
 								class="h-12 w-full border border-black bg-slate-50 px-4 text-xs font-black"
 							>
-								<option value="INSTANCE">INSTANCE (범용 엔진)</option>
-								<option value="STATIC">CUSTOM (100% 커스텀)</option>
-								<option value="SYSTEM">SYSTEM (시스템 코어)</option>
+								<option value="INSTANCE">INSTANCE (추상화 다중 인스턴스)</option>
+								<option value="CUSTOM">CUSTOM (추상화 제외 단일 앱)</option>
+								<option value="SYSTEM">SYSTEM (관리자 전용 · 삭제 불가)</option>
 							</select>
 						</div>
 						<div class="space-y-2">
@@ -340,9 +382,11 @@
 							type="text"
 							bind:value={editingApp.frontend_route}
 							class="h-12 w-full border border-black bg-slate-50 px-4 font-mono text-xs font-bold transition-all focus:bg-white focus:outline-none"
-							placeholder={editingApp.app_type === 'STATIC'
+							placeholder={editingApp.app_type === 'CUSTOM'
 								? '/v1/custom/앱이름'
-								: '/v1/app/엔진명/[slug]'}
+								: editingApp.app_type === 'SYSTEM'
+									? '/v1/admin/앱이름'
+									: '/v1/app/엔진명/[slug]'}
 						/>
 					</div>
 

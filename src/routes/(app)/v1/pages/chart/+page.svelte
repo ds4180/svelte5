@@ -1,7 +1,7 @@
 <script>
 	/**
-	 * @file (app)/v1/app/chart/+page.svelte
-	 * @description Chart.js 연동 차트 데모 페이지 (Svelte 5 & DaisyUI)
+	 * @file (app)/v1/pages/chart/+page.svelte
+	 * @description Chart.js 연동 차트 데모 정적 페이지 (PAGES 레이어 / Svelte 5 & DaisyUI)
 	 */
 	import Chart from '$lib/components/Chart.svelte';
 	import Icon from '@iconify/svelte';
@@ -62,10 +62,18 @@
 
 	/**
 	 * @function randomizeData
-	 * @description 임의의 데이터로 차트 업데이트 테스트
+	 * @description 임의의 데이터로 차트 업데이트 테스트 (불변성 재할당 방식 준수)
 	 */
 	function randomizeData() {
-		chartData.datasets[0].data = Array.from({ length: 6 }, () => Math.floor(Math.random() * 20));
+		chartData = {
+			...chartData,
+			datasets: [
+				{
+					...chartData.datasets[0],
+					data: Array.from({ length: 6 }, () => Math.floor(Math.random() * 20))
+				}
+			]
+		};
 	}
 </script>
 
@@ -78,7 +86,7 @@
 	>
 		<div>
 			<span class="mb-2 block text-[10px] font-black tracking-[0.4em] text-slate-400 uppercase"
-				>Visualization Engine v4.0</span
+				>Visualization Engine v4.0 · PAGES</span
 			>
 			<h1 class="text-4xl font-black tracking-tighter text-slate-900 uppercase italic md:text-6xl">
 				데이터 <span class="NOT-ITALIC text-indigo-600"

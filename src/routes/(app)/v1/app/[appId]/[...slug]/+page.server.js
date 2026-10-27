@@ -64,7 +64,8 @@ export async function load({ params, fetch, locals }) {
 	}
 
 	// 1-1. 🛡️ [4단계 권한 SSR 입구 검문] (1.root(9) ➔ 2.deny_groups ➔ 3.allow_groups ➔ 4.min_read_rank)
-	const userRank = Number(user?.rank ?? 0);
+	// 📌 백엔드 `/api/users/me` 응답 스키마의 공식 필드명인 `rank_level`을 우선 참조합니다.
+	const userRank = Number(user?.rank_level ?? user?.rank ?? 0);
 	const userGroups = [];
 	if (user?.primary_group) userGroups.push(user.primary_group);
 	if (Array.isArray(user?.secondary_groups)) {
@@ -98,7 +99,12 @@ export async function load({ params, fetch, locals }) {
 			// ✅ 특정 엔진을 체크하는 if 문 없이, 범용 엔드포인트 호출
 			const res = await fetch(`/api/v1/app/data/${appId}/${slug}`); 
 			if (res.status === 403) {
-				throw error(403, `해당 앱("${appInfo.title || appId}") 데이터에 접근할 권한이 없습니다.`);
+				let errDetail = `해당 앱("${appInfo.title || appId}") 데이터에 접근할 권한이 없습니다.`;
+				try {
+					const errJson = await res.json();
+					if (errJson?.detail) errDetail = errJson.detail;
+				} catch (_) {}
+				throw error(403, errDetail);
 			}
 			if (res.ok) {
 				const data = await res.json();

@@ -17,8 +17,10 @@
 		<span class="text-sm font-semibold">{alert.message}</span>
 	</div>
 	<div class="flex-none">
-		<button class="btn btn-circle btn-ghost btn-xs" onclick={() => alertState.neverShowAgain(alert.id)}
-			>✕</button
-		>
+		<button
+			class="btn btn-circle btn-ghost btn-xs"
+			onclick={() => alertState.dismiss(alert.id)}
+			aria-label="알림 닫기"
+		>✕</button>
 	</div>
 </div>

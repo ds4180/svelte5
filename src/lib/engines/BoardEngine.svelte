@@ -13,9 +13,12 @@
 	import * as engines from '$lib/index';
 	import { goto } from '$app/navigation';
 	import TiptapEditor from '$lib/components/TiptapEditor.svelte';
+	import { getAuthContext } from '$lib/runes/auth.svelte.js';
 
 	/** @type {{ slug: string, appId: string, initialData?: any }} */
 	let { slug, appId, initialData = null } = $props();
+
+	const auth = getAuthContext();
 
 	// --- [라우팅 및 모드 분석] ---
 	let mode = $state('list'); // list, view, write, edit
@@ -36,6 +39,17 @@
 	let total = $state(initialData?.total || 0);
 	let isLoading = $state(false); // initialData 유무와 무관하게 false 로 시작 (loadData 내부에서 제어)
 	let errorMessage = $state('');
+
+	// 🛡️ [4단계 권한 기반 쓰기 권한 파생 상태]
+	let canWrite = $derived(
+		auth.canAccess({
+			action: 'write',
+			minWriteRank: board?.min_write_rank ?? 2,
+			minReadRank: board?.min_read_rank ?? 0,
+			allowGroups: board?.allow_groups ?? [],
+			denyGroups: board?.deny_groups ?? []
+		})
+	);
 
 	// --- [폼 상태] ---
 	// ⚠️ $state 초기화 시 다른 $state(post)를 直접 참조하면 state_referenced_locally 에러 발생
@@ -97,7 +111,7 @@
 	loadData();
 
 	// --- [데이터 로드] ---
-	async function loadData() {
+	async function loadData(forceRefresh = false) {
 		// [방어 코드] 이미 로딩 중이면 중복 실행 방지
 		if (isLoading) return;
 
@@ -106,11 +120,13 @@
 			return;
 		}
 
-		// ✅ [핵심] SSR 데이터가 이미 있으면 API 재호출 없이 종료
-		//    목록 모드: posts 배열 존재 여부로 판단
-		//    상세 모드: post 객체 존재 여부로 판단
+		// ✅ [핵심] 초기 마운트 시 SSR 데이터가 이미 있으면 API 재호출 없이 종료
+		//    목록 모드: board 설정 객체 존재 여부로 판단 (게시글이 0건인 빈 게시판도 SSR 데이터로 정상 인정)
+		//    상세/수정 모드: post 객체 존재 여부로 판단
 		const hasSSRData =
-			initialData && (mode === 'list' ? posts.length > 0 : post !== null);
+			!forceRefresh &&
+			Boolean(initialData) &&
+			(mode === 'list' ? board !== null : post !== null);
 
 		if (hasSSRData) {
 			console.log('🚀 [BoardEngine] SSR data hydrated — skipping API fetch');
@@ -224,12 +240,12 @@
 
 	function handlePageChange(p) {
 		currentPage = p;
-		loadData();
+		loadData(true);
 	}
 
 	function handleSearch() {
 		currentPage = 1;
-		loadData();
+		loadData(true);
 	}
 
 	/** 날짜 포맷팅 */
@@ -336,14 +352,14 @@
 					{/if}
 
 					<div class="flex gap-4">
-						{#if mode === 'list'}
+						{#if mode === 'list' && canWrite}
 							<a
 								href="/v1/app/{appId}/{boardSlug}/write"
 								class="flex h-16 items-center justify-center border-4 border-black bg-blue-600 px-10 text-lg font-black text-white uppercase italic shadow-[8px_8px_0_rgba(0,0,0,1)] transition-all hover:translate-x-1 hover:translate-y-1 hover:bg-black hover:shadow-none"
 							>
 								New Post
 							</a>
-						{:else}
+						{:else if mode !== 'list'}
 							<a
 								href="/v1/app/{appId}/{boardSlug}"
 								class="flex h-16 items-center justify-center border-4 border-black bg-white px-10 text-lg font-black text-black uppercase italic transition-all hover:bg-slate-100"

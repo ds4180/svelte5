@@ -1,6 +1,6 @@
 import { env } from '$env/dynamic/public';
 import { auth } from '$lib/runes/auth.svelte.js';
-import { alertState } from '$lib/runes/alert.svelte.js';
+import { toast } from '$lib/runes/toast.svelte.js';
 import { browser } from '$app/environment';
 
 /**
@@ -86,10 +86,8 @@ export const fastApi = async (method, url, params = {}, success_callback, failur
 			// (비로그인 손님이 공개 페이지를 볼 때는 무한 리다이렉트가 발생하지 않도록 보호)
 			if (browser && !isLoginAttempt && auth.user) {
 				auth.clear();
-				alertState.send(
-					'세션이 만료되었거나 다른 기기에서 로그인하여 접속이 종료되었습니다.',
-					{ level: 2, style: 'warning' }
-				);
+				// 🍞 사내 공지 배너 대신 시스템 기본 알림(Toast)으로 가볍게 안내
+				toast.warning('세션이 만료되었거나 다른 기기에서 로그인하여 접속이 종료되었습니다.');
 				if (!window.location.pathname.startsWith('/login')) {
 					setTimeout(() => {
 						window.location.href = '/login';
@@ -118,12 +116,12 @@ export const fastApi = async (method, url, params = {}, success_callback, failur
 			if (success_callback) success_callback(data);
 			return data;
 		} else {
-			// 500번대 서버 내부 오류 발생 시 별도 콜백이 없으면 전역 알림 표시
+			// 500번대 서버 내부 오류 발생 시 별도 콜백이 없으면 시스템 기본 알림(Toast) 표시
 			if (browser && response.status >= 500 && !failure_callback) {
-				alertState.send(
-					data.detail || '서버 내부 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.',
-					{ level: 2, style: 'error' }
-				);
+				const errMsg = typeof data.detail === 'string' 
+					? data.detail 
+					: '서버 내부 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.';
+				toast.error(errMsg);
 			}
 			if (failure_callback) failure_callback(data);
 			return Promise.reject(data);
@@ -137,8 +135,9 @@ export const fastApi = async (method, url, params = {}, success_callback, failur
 		console.error('[API Network Error]:', error);
 		const errorData = { detail: errorMessage };
 
+		// 🍞 사내 공지 배너 대신 시스템 기본 알림(Toast)으로 에러 표출
 		if (browser && !failure_callback) {
-			alertState.send(errorMessage, { level: 2, style: 'error' });
+			toast.error(errorMessage);
 		}
 		if (failure_callback) failure_callback(errorData);
 		return Promise.reject(errorData);

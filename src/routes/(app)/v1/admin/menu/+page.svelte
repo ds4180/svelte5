@@ -22,7 +22,7 @@
 		parent_id: '',
 		title: '',
 		icon_name: '🚀',
-		link_type: 'APP',
+		link_type: 'INSTANCE',
 		external_url: '',
 		app_id: '',
 		app_instance_id: '',
@@ -38,27 +38,34 @@
 		if (menu.link_type === 'FOLDER' || menu.link_type === 'DIVIDER') return '#';
 
 		let currentPath = '';
-		// [v2.2] URL만 수동 입력 주소 사용
+		// [v2.3] URL만 수동 입력 주소 사용, INSTANCE / CUSTOM / SYSTEM 앱 분류 일치화
 		if (menu.link_type === 'URL') {
 			currentPath = menu.external_url || '';
-		} else if ((menu.link_type === 'APP' || menu.link_type === 'CUSTOM') && menu.app_id) {
-			// 관리자 여부 판별
-			const is_admin = menu.app_instance_id == -1 || menu.page_mode === 'admin';
-			const prefix = is_admin ? 'admin' : menu.link_type === 'CUSTOM' ? 'custom' : 'app';
-			
-			let instancePath = '';
-			if (menu.app_instance_id && menu.app_instance_id != -1) {
-				if (menu.app_id === 'board') {
-					const target = boards.find(b => b.id == menu.app_instance_id);
-					instancePath = target ? `/${target.slug}` : `/${menu.app_instance_id}`;
-				} else if (menu.app_id === 'page') {
-					const target = pages.find(p => p.id == menu.app_instance_id);
-					instancePath = target ? `/${target.slug}` : `/${menu.app_instance_id}`;
-				} else {
-					instancePath = `/${menu.app_instance_id}`;
+		} else if (['INSTANCE', 'CUSTOM', 'SYSTEM', 'APP'].includes(menu.link_type) && menu.app_id) {
+			const is_admin =
+				menu.link_type === 'SYSTEM' ||
+				menu.app_instance_id == -1 ||
+				menu.page_mode === 'admin';
+
+			if (is_admin) {
+				currentPath = `/v1/admin/${menu.app_id}`;
+			} else if (menu.link_type === 'CUSTOM') {
+				currentPath = `/v1/custom/${menu.app_id}`;
+			} else {
+				let instancePath = '';
+				if (menu.app_instance_id && menu.app_instance_id != -1) {
+					if (menu.app_id === 'board') {
+						const target = boards.find((b) => b.id == menu.app_instance_id);
+						instancePath = target ? `/${target.slug}` : `/${menu.app_instance_id}`;
+					} else if (menu.app_id === 'page') {
+						const target = pages.find((p) => p.id == menu.app_instance_id);
+						instancePath = target ? `/${target.slug}` : `/${menu.app_instance_id}`;
+					} else {
+						instancePath = `/${menu.app_instance_id}`;
+					}
 				}
+				currentPath = `/v1/app/${menu.app_id}${instancePath}`;
 			}
-			currentPath = `/v1/${prefix}/${menu.app_id}${instancePath}`;
 		}
 
 		if (menu.parent_id) {
@@ -112,10 +119,16 @@
 	function startEdit(m) {
 		editingMenu = {
 			...m,
+			link_type: m.link_type === 'APP' ? 'INSTANCE' : m.link_type,
 			parent_id: m.parent_id || '',
 			app_id: m.app_id || '',
-			app_instance_id: m.app_instance_id ?? '',
-			page_mode: m.app_instance_id == -1 || m.external_url?.includes('/admin/') ? 'admin' : 'user'
+			app_instance_id: m.link_type === 'SYSTEM' ? -1 : (m.app_instance_id ?? ''),
+			page_mode:
+				m.link_type === 'SYSTEM' ||
+				m.app_instance_id == -1 ||
+				m.external_url?.includes('/admin/')
+					? 'admin'
+					: 'user'
 		};
 		document.getElementById('form-anchor')?.scrollIntoView({ behavior: 'smooth' });
 	}
@@ -127,7 +140,7 @@
 			parent_id: '',
 			title: '',
 			icon_name: '🚀',
-			link_type: 'APP',
+			link_type: 'INSTANCE',
 			external_url: '',
 			app_id: '',
 			app_instance_id: '',
@@ -142,10 +155,11 @@
 		try {
 			const data = { ...editingMenu };
 
-			// 🧹 [v2.2] 관리자 모드이면서 인스턴스 미지정 시 -1로 강제 (백엔드 규격)
+			// 🧹 [v2.3] SYSTEM 앱이거나 관리자 모드이면서 인스턴스 미지정 시 -1로 강제 (백엔드 규격)
 			if (
-				data.page_mode === 'admin' &&
-				(data.app_instance_id === '' || data.app_instance_id === null)
+				data.link_type === 'SYSTEM' ||
+				(data.page_mode === 'admin' &&
+					(data.app_instance_id === '' || data.app_instance_id === null))
 			) {
 				data.app_instance_id = -1;
 			}
@@ -346,13 +360,21 @@
 							<select
 								id="menu-type"
 								bind:value={editingMenu.link_type}
+								onchange={() => {
+									if (editingMenu.link_type === 'SYSTEM') {
+										editingMenu.app_instance_id = -1;
+									} else if (editingMenu.link_type === 'CUSTOM' && editingMenu.app_instance_id != -1) {
+										editingMenu.app_instance_id = '';
+									}
+								}}
 								class="h-14 w-full border border-black bg-slate-50 px-4 text-sm font-black transition-all focus:bg-white focus:outline-none"
 							>
-								<option value="APP">⚙️ 시스템 엔진/앱 (표준)</option>
-								<option value="CUSTOM">🛠️ 커스텀 앱 (CUSTOM)</option>
-								<option value="URL">🔗 고정 주소 (외부/정적)</option>
-								<option value="FOLDER">📁 메뉴 그룹 (폴더)</option>
-								<option value="DIVIDER">➖ 구분선</option>
+								<option value="INSTANCE">🧩 인스턴스 앱 (INSTANCE - 기본 추상화)</option>
+								<option value="CUSTOM">🛠️ 커스텀 앱 (CUSTOM - 추상화 제외 단일 앱)</option>
+								<option value="SYSTEM">🛡️ 시스템 앱 (SYSTEM - 관리자 화면 전용)</option>
+								<option value="URL">🔗 고정 주소 (URL - 외부/정적)</option>
+								<option value="FOLDER">📁 메뉴 그룹 (FOLDER)</option>
+								<option value="DIVIDER">➖ 구분선 (DIVIDER)</option>
 							</select>
 						</div>
 						<div class="space-y-2">
@@ -372,48 +394,69 @@
 						</div>
 					</div>
 
-					<!-- ⚙️ 엔진 설정 통합 섹션 (APP & CUSTOM 공유) -->
-					{#if editingMenu.link_type === 'APP' || editingMenu.link_type === 'CUSTOM'}
+					<!-- ⚙️ 엔진 설정 통합 섹션 (INSTANCE / CUSTOM / SYSTEM 공유) -->
+					{#if ['INSTANCE', 'CUSTOM', 'SYSTEM', 'APP'].includes(editingMenu.link_type)}
 						<div class="space-y-6 border-2 border-black bg-blue-50/50 p-8" in:fade>
-							<!-- 1. 서비스 엔진 선택 -->
+							<!-- 1. 앱 엔진 선택 -->
 							<div class="space-y-2">
 								<label for="menu-app-id" class="text-[9px] font-black tracking-widest text-blue-600 uppercase"
-									>1. 서비스 엔진 선택</label
+									>1. 연결할 앱 엔진 선택</label
 								>
 								<select
 									id="menu-app-id"
 									bind:value={editingMenu.app_id}
+									onchange={() => {
+										const selected = apps.find((a) => a.app_id === editingMenu.app_id);
+										if (selected) {
+											const normType = selected.app_type === 'STATIC' ? 'CUSTOM' : selected.app_type;
+											if (['INSTANCE', 'CUSTOM', 'SYSTEM'].includes(normType)) {
+												editingMenu.link_type = normType;
+												if (normType === 'SYSTEM') {
+													editingMenu.app_instance_id = -1;
+												} else if (normType === 'CUSTOM' && editingMenu.app_instance_id != -1) {
+													editingMenu.app_instance_id = '';
+												}
+											}
+										}
+									}}
 									class="h-12 w-full border border-black px-4 text-sm font-black transition-all focus:bg-white"
 								>
 									<option value="">-- 연결할 앱 엔진 선택 --</option>
 									{#each apps as app}
-										<option value={app.app_id}>{app.title || app.name} ({app.app_id})</option>
+										<option value={app.app_id}
+											>[{app.app_type === 'STATIC' ? 'CUSTOM' : app.app_type}] {app.title || app.name} ({app.app_id})</option
+										>
 									{/each}
 								</select>
 							</div>
 
-							<!-- 2. 상세 인스턴스 / 관리자 (단일 셀렉트) -->
+							<!-- 2. 상세 인스턴스 / 화면 선택 -->
 							<div class="space-y-2">
 								<label for="menu-instance" class="text-[9px] font-black tracking-widest text-blue-600 uppercase"
-									>2. 상세 인스턴스 / 관리자</label
+									>2. 상세 인스턴스 / 화면 모드</label
 								>
 								<select
 									id="menu-instance"
 									bind:value={editingMenu.app_instance_id}
+									disabled={editingMenu.link_type === 'SYSTEM'}
 									class="h-12 w-full border border-black bg-white px-4 text-sm font-black transition-all focus:bg-slate-50"
 								>
-									<option value="-1">🛠️ 관리자 (Admin Dashboard)</option>
-									<option disabled>────────────────────</option>
-									<option value="">👤 사용자 (General Main)</option>
-									{#if editingMenu.app_id === 'board'}
-										{#each boards as b}
-											<option value={b.id}>📑 게시판: {b.name} ({b.id})</option>
-										{/each}
-									{/if}
-									{#if editingMenu.app_id === 'page'}
-										{#each pages as p}
-											<option value={p.id}>📄 페이지: {p.title} ({p.id})</option>
-										{/each}
+									<option value="-1">🛠️ 관리자 화면 (Admin Dashboard)</option>
+									{#if editingMenu.link_type !== 'SYSTEM'}
+										<option disabled>────────────────────</option>
+										<option value="">👤 사용자 기본 화면 (User Main)</option>
+										{#if editingMenu.link_type === 'INSTANCE' || editingMenu.link_type === 'APP'}
+											{#if editingMenu.app_id === 'board'}
+												{#each boards as b}
+													<option value={b.id}>📑 게시판 인스턴스: {b.name} ({b.slug})</option>
+												{/each}
+											{/if}
+											{#if editingMenu.app_id === 'page'}
+												{#each pages as p}
+													<option value={p.id}>📄 페이지 인스턴스: {p.title} ({p.slug})</option>
+												{/each}
+											{/if}
+										{/if}
 									{/if}
 								</select>
 							</div>

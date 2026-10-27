@@ -137,9 +137,9 @@
 			</div>
 		</a>
 
-		<!-- Card 2: Day-Off -->
+		<!-- Card 2: Day-Off (CUSTOM 단일 앱 표준 경로: /v1/custom/dayoff) -->
 		<a
-			href="/v1/app/dayoff"
+			href="/v1/custom/dayoff"
 			class="group border border-black bg-white p-8 transition-all hover:bg-black hover:text-white"
 		>
 			<div class="flex h-full flex-col justify-between gap-10">

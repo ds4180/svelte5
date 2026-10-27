@@ -1,7 +1,7 @@
 <script>
 	/**
-	 * @file (app)/v1/app/uploadfile/+page.svelte
-	 * @description 고도화된 파일 업로드 테스트 페이지 (Svelte 5 & DaisyUI)
+	 * @file (app)/v1/pages/uploadfile/+page.svelte
+	 * @description 고도화된 파일 업로드 테스트 정적 페이지 (PAGES 레이어 / Svelte 5 & DaisyUI)
 	 */
 	import ImageUploader from '$lib/components/ImageUploader.svelte';
 	import Icon from '@iconify/svelte';
@@ -19,7 +19,7 @@
 	>
 		<div>
 			<span class="mb-2 block text-[10px] font-black tracking-[0.4em] text-slate-400 uppercase"
-				>Storage Asset Engine</span
+				>Storage Asset Engine · PAGES</span
 			>
 			<h1 class="text-4xl font-black tracking-tighter text-slate-900 uppercase italic md:text-6xl">
 				파일 <span class="NOT-ITALIC text-blue-600"
@@ -71,7 +71,7 @@
 				Server Response Metadata
 				<span
 					class="rounded-md bg-blue-100 px-2 py-0.5 text-[10px] font-bold text-blue-600 not-italic"
-					>{uploadedFiles.length} FILLES</span
+					>{uploadedFiles.length} FILES</span
 				>
 			</h3>
 			<div

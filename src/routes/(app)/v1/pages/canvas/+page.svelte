@@ -1,7 +1,7 @@
 <script>
 	/**
-	 * @file (app)/v1/app/canvas/+page.svelte
-	 * @description [Restored] Canvas 2D 드로잉 데모 및 약도 서비스 (Svelte 5 & DaisyUI)
+	 * @file (app)/v1/pages/canvas/+page.svelte
+	 * @description Canvas 2D 드로잉 데모 및 약도 정적 페이지 (PAGES 레이어 / Svelte 5 & DaisyUI)
 	 */
 	import Canvas from '$lib/components/Canvas.svelte';
 	import Icon from '@iconify/svelte';
@@ -27,7 +27,7 @@
 	>
 		<div>
 			<span class="mb-2 block text-[10px] font-black tracking-[0.4em] text-slate-400 uppercase"
-				>Navigation Engine v1.0</span
+				>Navigation Engine v1.0 · PAGES</span
 			>
 			<h1 class="text-4xl font-black tracking-tighter text-slate-900 uppercase italic md:text-6xl">
 				약도 <span class="NOT-ITALIC text-rose-600"
@@ -76,12 +76,14 @@
 
 				<div class="space-y-8">
 					<div class="space-y-4">
-						<label class="block text-[10px] font-black tracking-[0.2em] uppercase opacity-60"
-							>Asset Colorimetry</label
+						<span class="block text-[10px] font-black tracking-[0.2em] uppercase opacity-60"
+							>Asset Colorimetry</span
 						>
 						<div class="grid grid-cols-4 gap-4">
-							{#each ['#f43f5e', '#10b981', '#3b82f6', '#f59e0b'] as color}
+							{#each ['#f43f5e', '#10b981', '#3b82f6', '#f59e0b'] as color (color)}
 								<button
+									type="button"
+									aria-label="색상 선택 {color}"
 									class="aspect-square w-full rounded-2xl border-4 transition-all {buildingColor ===
 									color
 										? 'scale-110 border-white shadow-lg'
@@ -114,10 +116,10 @@
 					Live Feed Status
 				</h4>
 				<div class="space-y-3 font-mono text-[9px] leading-none text-slate-500">
-					<p>[{new Date().toISOString()}] Initializing raster engine...</p>
-					<p>[{new Date().toISOString()}] Draw sequence executed.</p>
-					<p>[{new Date().toISOString()}] Building color changed to {buildingColor}.</p>
-					<p>[{new Date().toISOString()}] Path highlight set to {isPathHighlighted}.</p>
+					<p>Initializing raster engine...</p>
+					<p>Draw sequence executed.</p>
+					<p>Building color changed to {buildingColor}.</p>
+					<p>Path highlight set to {isPathHighlighted}.</p>
 				</div>
 			</div>
 		</div>

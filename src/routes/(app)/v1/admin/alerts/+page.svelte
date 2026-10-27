@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import * as api from '$lib/api/admin.js';
 	import { alertState } from '$lib/runes/alert.svelte.js';
+	import { toast } from '$lib/runes/toast.svelte.js';
 	import Icon from '@iconify/svelte';
 
 	let alerts = $state([]);
@@ -30,7 +31,7 @@
 		try {
 			alerts = await api.adminGetAlerts();
 		} catch (e) {
-			alertState.send(e.message, { level: 3, style: 'error' });
+			toast.error(e.message || '알림 목록 조회 실패');
 		} finally {
 			loading = false;
 		}
@@ -46,11 +47,11 @@
 				level: parseInt(newAlert.level) // 문자열로 넘어올 수 있으므로 정수 변환
 			};
 			await api.adminCreateAlert(alertData);
-			alertState.send('새 알림이 생성되었습니다.', { level: 2, style: 'info' });
+			toast.success('새 알림이 성공적으로 등록되었습니다.');
 			showCreateModal = false;
 			await loadAlerts();
 		} catch (e) {
-			alertState.send(e.message, { level: 3, style: 'error' });
+			toast.error(e.message || '알림 등록 실패');
 		}
 	}
 
@@ -72,21 +73,21 @@
 				level: parseInt(editingAlert.level) // 문자열로 넘어올 수 있으므로 정수 변환
 			};
 			await api.adminUpdateAlert(editingAlert.id, alertData);
-			alertState.send('알림이 수정되었습니다.', { level: 2, style: 'info' });
+			toast.success('알림이 수정되었습니다.');
 			showEditModal = false;
 			await loadAlerts();
 		} catch (e) {
-			alertState.send(e.message, { level: 3, style: 'error' });
+			toast.error(e.message || '알림 수정 실패');
 		}
 	}
 
 	async function toggleAlertStatus(alertId) {
 		try {
 			await api.adminToggleAlert(alertId);
-			alertState.send('알림 상태가 변경되었습니다.', { level: 2, style: 'info' });
+			toast.info('알림 활성 상태가 변경되었습니다.');
 			await loadAlerts();
 		} catch (e) {
-			alertState.send(e.message, { level: 3, style: 'error' });
+			toast.error(e.message || '상태 변경 실패');
 		}
 	}
 
@@ -94,10 +95,10 @@
 		if (!confirm('정말 이 알림을 삭제하시겠습니까?')) return;
 		try {
 			await api.adminDeleteAlert(alertId);
-			alertState.send('알림이 삭제되었습니다.', { level: 2, style: 'info' });
+			toast.success('알림이 삭제되었습니다.');
 			await loadAlerts();
 		} catch (e) {
-			alertState.send(e.message, { level: 3, style: 'error' });
+			toast.error(e.message || '알림 삭제 실패');
 		}
 	}
 

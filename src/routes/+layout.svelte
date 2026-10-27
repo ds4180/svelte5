@@ -17,6 +17,7 @@
 	import { alertState } from '$lib/runes/alert.svelte.js';
 	import { websocket } from '$lib/runes/websocket.svelte.js';
 	import Alert from '$lib/components/Alert.svelte';
+	import Toast from '$lib/components/Toast.svelte';
 	import './layout.css';
 
 	// 📌 상위(+layout.server.ts)에서 건네받은 data 와 자식 화면 children
@@ -61,9 +62,16 @@
 	});
 </script>
 
-<!-- 🔔 시스템 전역 알림 레이어 (상단 토스트 / 중앙 모달 팝업) -->
-<Alert positionFilter="top" />
-<Alert positionFilter="modal" />
+<!-- 🔔 사내 업무 소통/공지 알림 레이어 (로그인한 임직원에게만 노출) -->
+<!-- 💡 비로그인 손님이나 로그인 화면에서는 사내 배차 공지나 업무 지시가 뜨지 않도록 완벽 격리합니다. -->
+{#if data.user}
+	<Alert positionFilter="top" />
+	<Alert positionFilter="modal" />
+{/if}
+
+<!-- 🍞 시스템 기본 알림 레이어 (우측 하단 API/네트워크 오류 및 작업 피드백) -->
+<!-- 💡 로그인 실패 안내("비밀번호 불일치") 등을 띄워야 하므로 전역에서 대기합니다. -->
+<Toast />
 
 <!-- 🎨 하위 시각 디자인 레이아웃((app) 또는 (auth)) 렌더링 -->
 {@render children()}

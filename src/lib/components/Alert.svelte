@@ -6,6 +6,7 @@
 	 * - 레벨별 전용 컴포넌트(Toast, Banner, Modal) 호출
 	 */
 	import { alertState } from '$lib/runes/alert.svelte.js';
+	import { websocket } from '$lib/runes/websocket.svelte.js';
 	import { page } from '$app/state';
 	import { onMount } from 'svelte';
 	
@@ -45,11 +46,25 @@
 	}
 
 	onMount(() => {
-		// modal 컨테이너에서만 대표로 폴링 수행
+		// modal 컨테이너에서만 대표로 실시간 리스너 및 백업 폴링 수행
 		if (positionFilter === 'modal') {
 			fetchActiveAlerts();
-			const interval = setInterval(fetchActiveAlerts, 30000); // 30초 주기
-			return () => clearInterval(interval);
+
+			// 🌐 [실시간 웹소켓 연동] 관리자의 새 알림 등록 및 상태 변경 시 0초 즉각 반영
+			const unsubscribeWs = websocket.addMessageListener((msg) => {
+				if (msg && msg.type === 'new_alert') {
+					console.log('🔔 [Alert] 새 알림 웹소켓 신호 감지 -> 즉시 갱신 시작');
+					fetchActiveAlerts();
+				}
+			});
+
+			// 혹시 모를 웹소켓 일시 단절에 대비한 백업 폴링 (60초 주기)
+			const interval = setInterval(fetchActiveAlerts, 60000);
+
+			return () => {
+				unsubscribeWs();
+				clearInterval(interval);
+			};
 		}
 	});
 

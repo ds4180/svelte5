@@ -1,84 +1,190 @@
 <script>
 	/**
 	 * @file lib/components/FileManager.svelte
-	 * @description [v3.2] 미니 미디어 센터 - 통합 관리자 레이아웃 기반 개인 파일 관리
+	 * @description [v3.3] 미니 미디어 센터 (Private 전용) - 미디어 마스터 레이아웃 기반 개인 파일 업로드·삭제·리스트 관리
 	 */
 	import { onMount } from 'svelte';
-	import { listUserAssets, listStaffAssets, createUserFolder, deleteAsset } from '$lib/services/mediaService';
+	import { fastApi } from '$lib/api';
 	import { env } from '$env/dynamic/public';
 	import { getSecureMediaUrl } from '$lib/config/media';
-	import { fade, slide, fly } from 'svelte/transition';
-	import Icon from '@iconify/svelte';
+	import { fade, fly } from 'svelte/transition';
 	import ImageUploader from './ImageUploader.svelte';
-	import { auth } from '$lib/runes/auth.svelte.js';
+	import Icon from '@iconify/svelte';
+	import { getAuthContext } from '$lib/runes/auth.svelte.js';
 
 	const PUBLIC_SERVER_URL = env.PUBLIC_SERVER_URL || '';
+	const auth = getAuthContext();
 
 	// --- [Props] ---
-	let { 
-		app_id = 'personal_vault', 
-		access_level = 'PRIVATE', 
-		sub_path = '' 
+	let {
+		app_id = 'personal_vault',
+		access_level = 'PRIVATE',
+		sub_path = ''
 	} = $props();
 
+	// --- [개인 전용 고정 경로 설정] ---
+	const userId = $derived(auth.user?.id ?? 0);
+	const tier = $derived((access_level || 'PRIVATE').toUpperCase());
+	const basePath = $derived(sub_path || (userId ? `USERS/${userId}` : ''));
+
 	// --- [States] ---
-	let files = $state([]);
 	let folders = $state([]);
-	let currentTier = $state(access_level.toUpperCase());
-	let currentSubPath = $state(sub_path); 
-	let isLoading = $state(true);
+	let recursiveFiles = $state([]);
+	let isLoadingMedia = $state(true);
+
 	let selectedAsset = $state(null);
-	let isUploading = $state(false);
-	let viewMode = $state('grid'); // 'grid' or 'list'
+	let uploadedInSession = $state([]);
 
-	const userRank = $derived(auth.user?.rank_level || 0);
+	// 탐색기 상태
+	let currentSubPath = $state('');
+	let viewMode = $state('grid'); // 'grid' | 'list'
+	let isRecursive = $state(true);
 
-	// 접근 가능한 티어 목록 정의
-	const availableTiers = $derived.by(() => {
-		if (userRank >= 4) return ['PUBLIC', 'PROTECTED', 'PRIVATE', 'SYSTEM'];
-		if (userRank >= 2) return ['PUBLIC', 'PROTECTED', 'PRIVATE', 'SYSTEM'];
-		return ['PRIVATE'];
-	});
+	// 다중 선택 관리 (Set Reassignment for Svelte 5 Reactivity)
+	let selectedIds = $state(new Set());
+	let selectedFolders = $state(new Set());
 
 	// --- [Functions] ---
+	async function handleUploadSuccess() {
+		await loadMedia();
+		uploadedInSession = [];
+	}
+
 	async function loadMedia() {
-		isLoading = true;
+		if (!basePath) return;
+		if (!currentSubPath || !currentSubPath.startsWith(basePath)) {
+			currentSubPath = basePath;
+		}
+		isLoadingMedia = true;
+		selectedIds = new Set();
+		selectedFolders = new Set();
 		try {
-			let res;
-			if (userRank >= 2) {
-				res = await listStaffAssets(currentTier, currentSubPath, false);
-			} else {
-				res = await listUserAssets(currentSubPath, false);
-			}
-			files = res.files || [];
+			const res = await fastApi(
+				'GET',
+				`/api/media/admin/list?tier=${tier}&sub_path=${encodeURIComponent(currentSubPath)}&recursive=${isRecursive}`
+			);
 			folders = res.folders || [];
+			recursiveFiles = res.files || [];
 		} catch (err) {
-			console.error('Media list fail', err);
+			console.error('Mini Media Center list fail:', err);
 		} finally {
-			isLoading = false;
+			isLoadingMedia = false;
 		}
 	}
 
-	async function handleCreateFolder() {
+	function toggleSelect(id) {
+		if (selectedIds.has(id)) selectedIds.delete(id);
+		else selectedIds.add(id);
+		selectedIds = new Set(selectedIds);
+	}
+
+	function toggleFolderSelect(path) {
+		if (selectedFolders.has(path)) selectedFolders.delete(path);
+		else selectedFolders.add(path);
+		selectedFolders = new Set(selectedFolders);
+	}
+
+	function toggleSelectAll() {
+		const currentlySelected = selectedIds.size + selectedFolders.size;
+		if (currentlySelected > 0) {
+			selectedIds = new Set();
+			selectedFolders = new Set();
+		} else {
+			const newIds = new Set();
+			const newFolders = new Set();
+			recursiveFiles.forEach((f) => newIds.add(f.id));
+			folders.forEach((f) => newFolders.add(f.path));
+			selectedIds = newIds;
+			selectedFolders = newFolders;
+		}
+	}
+
+	async function createFolder() {
 		const name = prompt('새 폴더 이름을 입력하세요:');
 		if (!name) return;
 		try {
-			await createUserFolder(currentSubPath, name);
+			await fastApi('POST', '/api/media/admin/folder/create', {
+				tier,
+				sub_path: currentSubPath,
+				folder_name: name
+			});
 			await loadMedia();
 		} catch (err) {
 			alert('폴더 생성 실패: ' + (err.detail || '오류'));
 		}
 	}
 
-	async function handleDelete(id) {
+	async function handleBulkDelete() {
+		if (selectedIds.size === 0 && selectedFolders.size === 0) return;
+		if (!confirm('선택한 항목들을 삭제하시겠습니까?')) return;
+
+		try {
+			await fastApi('POST', '/api/media/admin/bulk-delete', {
+				asset_ids: Array.from(selectedIds),
+				folder_paths: Array.from(selectedFolders),
+				tier
+			});
+			selectedIds = new Set();
+			selectedFolders = new Set();
+			await loadMedia();
+		} catch (err) {
+			alert('삭제 실패: ' + (err.detail || '오류'));
+		}
+	}
+
+	async function deleteSingleFolder(folderPath, folderName) {
+		if (!confirm(`정말로 '${folderName}' 폴더와 내부 파일을 모두 삭제하시겠습니까?`)) return;
+		try {
+			await fastApi('POST', '/api/media/admin/bulk-delete', {
+				asset_ids: [],
+				folder_paths: [folderPath],
+				tier
+			});
+			selectedFolders.delete(folderPath);
+			selectedFolders = new Set(selectedFolders);
+			await loadMedia();
+		} catch (err) {
+			alert('폴더 삭제 실패: ' + (err.detail || '오류'));
+		}
+	}
+
+	async function deleteSingleAsset(id) {
 		if (!confirm('정말로 이 파일을 삭제하시겠습니까?')) return;
 		try {
-			await deleteAsset(id);
+			await fastApi('POST', `/api/media/delete/${id}`);
 			selectedAsset = null;
 			await loadMedia();
 		} catch (err) {
 			alert('삭제 실패: ' + (err.detail || '오류'));
 		}
+	}
+
+	async function downloadSingleFile(asset) {
+		try {
+			const response = await fetch(getSecureMediaUrl(PUBLIC_SERVER_URL, asset), {
+				credentials: 'include'
+			});
+			if (!response.ok) throw new Error('Download fail');
+			const blob = await response.blob();
+			const url = window.URL.createObjectURL(blob);
+			const a = document.createElement('a');
+			a.href = url;
+			a.download = asset.original_name;
+			document.body.appendChild(a);
+			a.click();
+			a.remove();
+			window.URL.revokeObjectURL(url);
+		} catch (err) {
+			alert('다운로드 실패: ' + err.message);
+		}
+	}
+
+	function formatBytes(bytes) {
+		if (!bytes || bytes === 0) return '0 B';
+		const k = 1024;
+		const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+		const i = Math.floor(Math.log(bytes) / Math.log(k));
+		return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 	}
 
 	function enterFolder(path) {
@@ -87,316 +193,418 @@
 	}
 
 	function goToParent() {
-		if (!currentSubPath) return;
-		
-		// [v3.3] Rank 1-3의 PRIVATE 티어일 경우 본인 폴더 상위로 이동 불가
-		if (userRank < 4 && currentTier === 'PRIVATE' && currentSubPath === `USERS/${auth.user.id}`) {
-			return; 
-		}
-
-		const parts = currentSubPath.split('/').filter(p => p);
+		if (!currentSubPath || currentSubPath === basePath) return;
+		const parts = currentSubPath.split('/').filter((p) => p);
 		parts.pop();
-		currentSubPath = parts.join('/');
+		const nextPath = parts.join('/');
+		currentSubPath = nextPath.startsWith(basePath) ? nextPath : basePath;
 		loadMedia();
 	}
 
-	function formatBytes(bytes) {
-		if (bytes === 0) return '0 B';
-		const k = 1024;
-		const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
-		const i = Math.floor(Math.log(bytes) / Math.log(k));
-		return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+	function getFileRelativePath(filePath) {
+		const prefix = `${tier}/${currentSubPath}`.replace(/\/$/, '') + '/';
+		if (filePath.startsWith(prefix)) {
+			const relative = filePath.substring(prefix.length);
+			const parts = relative.split('/');
+			if (parts.length > 1) return parts.slice(0, -1).join('/') + '/';
+		}
+		return './';
 	}
 
-	onMount(loadMedia);
+	onMount(() => {
+		currentSubPath = basePath;
+		loadMedia();
+	});
+
+	$effect(() => {
+		if (basePath && !currentSubPath) {
+			currentSubPath = basePath;
+			loadMedia();
+		}
+	});
 </script>
 
-<div class="space-y-8 animate-fade-in font-['Outfit']">
-	<!-- 미디어 센터 스타일 헤더 (Stats + Breadcrumbs) -->
-	<div class="grid grid-cols-1 md:grid-cols-12 gap-6">
-		<!-- Stats Box -->
-		<div class="md:col-span-4 bg-black p-8 text-white shadow-[12px_12px_0_0_#3b82f6]">
-			<span class="text-[10px] font-black tracking-[0.4em] uppercase opacity-50">Storage Usage</span>
-			<div class="mt-4 flex items-end justify-between">
-				<div>
-					<div class="text-4xl font-black italic tracking-tighter">{files.length}</div>
-					<p class="text-[9px] font-bold uppercase tracking-widest text-blue-400">Total Assets</p>
+<div class="space-y-8 font-['Outfit']">
+	<div class="flex flex-col lg:flex-row gap-8">
+		<!-- Sidebar: 빠른 업로드 (개인 폴더 전용) -->
+		<aside class="lg:w-80 flex-shrink-0 space-y-6">
+			<div class="bg-white rounded-[2.5rem] border-2 border-slate-100 p-8 shadow-sm sticky top-8 transition-all hover:border-rose-200">
+				<div class="mb-6 flex items-center justify-between">
+					<h3 class="text-xs font-black uppercase tracking-widest text-rose-600 flex items-center gap-2">
+						<Icon icon="ph:cloud-arrow-up-bold" class="text-lg" /> 빠른 업로드
+					</h3>
+					<span class="text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full bg-slate-100 text-slate-500">
+						PRIVATE
+					</span>
 				</div>
-				<div class="text-right">
-					<div class="text-xl font-black">{formatBytes(files.reduce((acc, f) => acc + f.file_size, 0))}</div>
-					<p class="text-[9px] font-bold uppercase tracking-widest opacity-40">Consumed</p>
+				<div class="p-4 bg-slate-50 rounded-2xl mb-6 border border-slate-100">
+					<p class="text-[9px] font-black text-slate-300 uppercase tracking-widest mb-1">Target Path</p>
+					<p class="text-[10px] font-bold text-slate-900 font-mono truncate leading-none italic">
+						/{tier}/{currentSubPath}
+					</p>
 				</div>
+				<ImageUploader
+					{app_id}
+					access_level={tier}
+					sub_path={currentSubPath}
+					bind:uploadedAssets={uploadedInSession}
+					onUpload={handleUploadSuccess}
+				/>
 			</div>
-		</div>
+		</aside>
 
-		<!-- Breadcrumb & Control Box -->
-		<div class="md:col-span-8 bg-white border-4 border-black p-8 flex flex-col justify-between">
-			<div class="flex items-center justify-between mb-4">
-				<div class="flex items-center gap-2 text-[11px] font-black uppercase tracking-widest text-slate-400">
-					<button onclick={() => enterFolder('')} class="hover:text-blue-600 transition-colors">ROOT</button>
-					{#each currentSubPath.split('/').filter(p => p) as part, i}
-						<Icon icon="ph:caret-right-bold" />
-						<button 
-							onclick={() => {
-								const parts = currentSubPath.split('/').filter(p => p).slice(0, i + 1);
-								enterFolder(parts.join('/'));
-							}}
-							class="hover:text-blue-600 transition-colors {i === currentSubPath.split('/').filter(p => p).length - 1 ? 'text-black' : ''}"
-						>
-							{part}
-						</button>
-					{/each}
+		<!-- Main Content: 폴더 및 파일 탐색기 -->
+		<main class="flex-1 space-y-8 min-w-0">
+			<!-- 상단 컨트롤 바 -->
+			<div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 bg-slate-50 p-6 rounded-[2.5rem] border-2 border-slate-100">
+				<div class="text-[11px] breadcrumbs p-0 font-bold uppercase tracking-widest text-slate-400">
+					<ul>
+						<li>
+							<button
+								onclick={() => {
+									currentSubPath = basePath;
+									loadMedia();
+								}}
+								class="hover:text-rose-600"
+							>
+								🏠 개인폴더
+							</button>
+						</li>
+						{#each currentSubPath.substring(basePath.length).split('/').filter((p) => p) as part, i}
+							<li>
+								<button
+									onclick={() => {
+										const subParts = currentSubPath
+											.substring(basePath.length)
+											.split('/')
+											.filter((p) => p)
+											.slice(0, i + 1);
+										currentSubPath = basePath + (basePath ? '/' : '') + subParts.join('/');
+										loadMedia();
+									}}
+									class="hover:text-rose-600"
+								>
+									{part}
+								</button>
+							</li>
+						{/each}
+					</ul>
 				</div>
-				<div class="flex gap-2">
-					<button onclick={() => viewMode = 'grid'} class="p-2 border-2 border-black {viewMode === 'grid' ? 'bg-black text-white' : 'bg-white text-black'}"><Icon icon="ph:grid-four-bold" /></button>
-					<button onclick={() => viewMode = 'list'} class="p-2 border-2 border-black {viewMode === 'list' ? 'bg-black text-white' : 'bg-white text-black'}"><Icon icon="ph:list-bullets-bold" /></button>
-				</div>
-			</div>
-			
-			<div class="flex flex-wrap gap-3">
-				<button 
-					onclick={() => isUploading = !isUploading}
-					class="flex-1 md:flex-none flex items-center justify-center gap-3 px-8 py-3 bg-yellow-400 border-2 border-black font-black uppercase text-xs tracking-widest hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-all shadow-[6px_6px_0_0_#000]"
-				>
-					<Icon icon={isUploading ? "ph:x-bold" : "ph:upload-simple-bold"} class="text-lg" />
-					{isUploading ? 'Close' : 'Upload Files'}
-				</button>
-				<button 
-					onclick={handleCreateFolder}
-					class="flex-1 md:flex-none flex items-center justify-center gap-3 px-8 py-3 bg-white border-2 border-black font-black uppercase text-xs tracking-widest hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-all shadow-[6px_6px_0_0_#000]"
-				>
-					<Icon icon="ph:folder-plus-bold" class="text-lg" />
-					New Folder
-				</button>
-				<button onclick={loadMedia} class="p-3 border-2 border-black hover:bg-slate-50 transition-all"><Icon icon="ph:arrows-clockwise-bold" class="text-xl" /></button>
 
-				<!-- [v3.3] Rank 4 전용 어드민 도구 -->
-				{#if userRank >= 4}
-					<a 
-						href="/v1/admin/media"
-						class="flex items-center justify-center gap-2 px-6 py-3 bg-indigo-600 text-white border-2 border-black font-black uppercase text-xs tracking-widest hover:bg-indigo-700 transition-all shadow-[6px_6px_0_0_#000]"
+				<div class="flex flex-wrap items-center gap-3 w-full md:w-auto">
+					<button
+						class="flex items-center gap-2 px-4 py-2 bg-white border-2 border-slate-200 rounded-full hover:border-rose-300 transition-all shadow-sm group"
+						onclick={toggleSelectAll}
 					>
-						<Icon icon="ph:gear-six-bold" /> Admin Dashboard
-					</a>
-				{/if}
-			</div>
-		</div>
-	</div>
-	<!-- Upload Area -->
-	{#if isUploading}
-		<div transition:slide class="bg-slate-50 border-4 border-dashed border-black p-10 animate-fade-in">
-			<div class="mb-6 flex items-center justify-between">
-				<h3 class="text-sm font-black uppercase tracking-widest italic text-blue-600">파일 전송 터미널</h3>
-				<span class="text-[10px] font-bold text-slate-400">Target: /PRIVATE/USERS/{auth.user?.id}/{currentSubPath}</span>
-			</div>
-			<ImageUploader 
-				{app_id} 
-				{access_level} 
-				sub_path="USERS/{auth.user?.id}/{currentSubPath}" 
-				onUpload={() => { isUploading = false; loadMedia(); }}
-			/>
-		</div>
-	{/if}
-
-	<!-- Main Content Area -->
-	{#if isLoading}
-		<div class="flex h-96 flex-col items-center justify-center border-4 border-dashed border-slate-200">
-			<div class="h-16 w-16 animate-spin border-8 border-black border-t-blue-600"></div>
-			<p class="mt-4 text-[10px] font-black uppercase tracking-[0.5em] text-slate-300">Synchronizing Data...</p>
-		</div>
-	{:else}
-		<section class="min-h-[600px]">
-			{#if viewMode === 'grid'}
-				<div class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-6">
-					<!-- Up Button -->
-					{#if currentSubPath}
-						<button 
-							onclick={goToParent}
-							class="flex flex-col items-center justify-center aspect-square border-4 border-black bg-slate-50 hover:bg-blue-50 transition-all group p-6"
+						<div
+							class="h-4 w-4 rounded border-2 flex items-center justify-center transition-all {selectedIds.size + selectedFolders.size > 0 ? 'bg-rose-600 border-rose-600' : 'border-slate-300'}"
 						>
-							<Icon icon="ph:arrow-u-up-left-bold" class="text-4xl opacity-20 group-hover:opacity-100 group-hover:text-blue-600 mb-2" />
-							<span class="text-[10px] font-black uppercase tracking-tighter">Go Up</span>
-						</button>
+							{#if selectedIds.size + selectedFolders.size === folders.length + recursiveFiles.length && folders.length + recursiveFiles.length > 0}
+								<Icon icon="ph:check-bold" class="text-white text-[10px]" />
+							{:else if selectedIds.size + selectedFolders.size > 0}
+								<div class="w-2 h-0.5 bg-white"></div>
+							{/if}
+						</div>
+						<span class="text-[10px] font-black uppercase tracking-widest text-slate-500 group-hover:text-rose-600">Select All</span>
+					</button>
+
+					<!-- 하위 전체 보기 토글 -->
+					<button
+						class="flex items-center gap-2 px-3 py-2 bg-white border-2 border-slate-200 rounded-full transition-all shadow-sm hover:border-indigo-300"
+						onclick={() => {
+							isRecursive = !isRecursive;
+							loadMedia();
+						}}
+					>
+						<Icon icon={isRecursive ? 'mdi:file-tree' : 'mdi:file-document'} class="text-sm {isRecursive ? 'text-indigo-600' : 'text-slate-400'}" />
+						<span class="text-[10px] font-black uppercase tracking-widest {isRecursive ? 'text-indigo-600' : 'text-slate-500'}">
+							{isRecursive ? '하위 전체 보기' : '폴더내 파일만'}
+						</span>
+					</button>
+
+					{#if selectedIds.size > 0 || selectedFolders.size > 0}
+						<div class="flex items-center gap-2 bg-rose-600 text-white px-4 py-2 rounded-full shadow-lg" in:fly={{ x: 20 }}>
+							<span class="text-[10px] font-black uppercase tracking-tighter">{selectedIds.size + selectedFolders.size} Items</span>
+							<div class="w-px h-4 bg-white/20 mx-2"></div>
+							<button class="text-[10px] font-black uppercase hover:underline" onclick={handleBulkDelete}>Delete</button>
+						</div>
 					{/if}
 
-					<!-- Folder Icons -->
-					{#each folders as folder}
-						<button 
-							onclick={() => enterFolder(folder.path)}
-							class="flex flex-col items-center justify-center aspect-square border-4 border-black bg-white hover:border-blue-600 transition-all group p-6 shadow-[8px_8px_0_0_#000] hover:shadow-none hover:translate-x-1 hover:translate-y-1"
-						>
-							<Icon icon="ph:folder-duotone" class="text-5xl text-blue-600/20 group-hover:text-blue-600 transition-colors mb-2" />
-							<span class="text-[11px] font-black uppercase truncate w-full text-center tracking-tighter">{folder.name}</span>
-						</button>
-					{/each}
+					<button class="btn btn-xs btn-outline rounded-full px-4 font-black uppercase tracking-widest" onclick={createFolder}>
+						<Icon icon="ph:folder-plus-bold" class="mr-1" /> New Folder
+					</button>
 
-					<!-- File Icons -->
-					{#each files as asset}
-						<div class="relative group aspect-square border-4 border-black bg-white overflow-hidden shadow-[8px_8px_0_0_#000] hover:shadow-none hover:translate-x-1 hover:translate-y-1 transition-all">
-							<button onclick={() => selectedAsset = asset} class="w-full h-full">
-								{#if asset.category === 'image'}
-									<img src={getSecureMediaUrl(PUBLIC_SERVER_URL, asset, 'sm')} alt="" class="w-full h-full object-cover transition-all duration-500" />
-								{:else}
-									<div class="flex flex-col items-center justify-center w-full h-full bg-slate-50">
-										<Icon icon="ph:file-bold" class="text-4xl opacity-10" />
-										<span class="text-[9px] font-black uppercase mt-1 tracking-tighter text-slate-400">{asset.file_path.split('.').pop()}</span>
-									</div>
-								{/if}
+					<div class="join border-2 border-slate-200 rounded-full overflow-hidden bg-white">
+						<button class="join-item btn btn-xs px-4 {viewMode === 'grid' ? 'bg-black text-white' : 'bg-transparent text-slate-400'}" onclick={() => (viewMode = 'grid')}>Grid</button>
+						<button class="join-item btn btn-xs px-4 {viewMode === 'list' ? 'bg-black text-white' : 'bg-transparent text-slate-400'}" onclick={() => (viewMode = 'list')}>List</button>
+					</div>
+					<button class="btn btn-sm btn-ghost btn-circle text-slate-400 hover:text-rose-600" onclick={loadMedia}>
+						<Icon icon="ph:arrows-clockwise-bold" class="text-lg" />
+					</button>
+				</div>
+			</div>
+
+			{#if isLoadingMedia}
+				<div class="flex h-64 items-center justify-center">
+					<div class="h-12 w-12 animate-spin rounded-full border-4 border-rose-600 border-t-transparent"></div>
+				</div>
+			{:else}
+				<!-- Folders Section -->
+				<section class="space-y-6">
+					<div class="flex items-center gap-3">
+						<div class="h-px flex-1 bg-slate-100"></div>
+						<h3 class="text-[10px] font-black uppercase tracking-[0.4em] text-slate-300">Folders ({folders.length})</h3>
+						<div class="h-px flex-1 bg-slate-100"></div>
+					</div>
+					<div class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-4">
+						{#if currentSubPath !== basePath}
+							<button
+								class="flex flex-col items-center p-6 rounded-[2rem] border-2 border-slate-100 bg-white hover:border-rose-300 transition-all group"
+								onclick={goToParent}
+							>
+								<Icon icon="ph:arrow-u-up-left-bold" class="text-4xl text-slate-200 group-hover:text-rose-600 mb-2" />
+								<span class="text-[10px] font-black uppercase tracking-widest text-slate-400 group-hover:text-rose-600">Go Up</span>
 							</button>
-							
-							<!-- Hover Actions -->
-							<div class="absolute inset-0 bg-black/80 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-3 p-4">
-								<p class="text-[10px] text-white font-black uppercase truncate w-full text-center tracking-tighter">{asset.original_name}</p>
-								<div class="flex gap-2 mt-2">
-									<button class="p-2 bg-white text-black hover:bg-blue-600 hover:text-white transition-all shadow-[4px_4px_0_0_#000] hover:shadow-none" title="Quick View" onclick={() => selectedAsset = asset}>
-										<Icon icon="ph:magnifying-glass-bold" />
+						{/if}
+						{#each folders as folder}
+							<div class="relative group">
+								<button
+									class="flex flex-col items-center w-full p-6 rounded-[2rem] border-2 border-slate-100 bg-white hover:border-rose-300 hover:shadow-xl transition-all group"
+									onclick={() => enterFolder(folder.path)}
+								>
+									<Icon icon="ph:folder-duotone" class="text-5xl text-rose-600/20 group-hover:text-rose-600 transition-colors mb-2" />
+									<p class="text-[10px] font-black truncate w-full text-center tracking-tight text-slate-600 group-hover:text-rose-600">{folder.name}</p>
+								</button>
+								<div class="absolute right-3 top-3 flex items-center gap-1">
+									<button
+										class="h-6 w-6 rounded-full bg-white/90 border border-slate-200 text-slate-400 hover:text-rose-600 hover:border-rose-300 flex items-center justify-center transition-all opacity-0 group-hover:opacity-100 shadow-sm"
+										title="폴더 삭제"
+										onclick={(e) => {
+											e.stopPropagation();
+											deleteSingleFolder(folder.path, folder.name);
+										}}
+									>
+										<Icon icon="ph:trash-bold" class="text-xs" />
 									</button>
-									<button class="p-2 bg-white text-rose-600 hover:bg-rose-600 hover:text-white transition-all shadow-[4px_4px_0_0_#000] hover:shadow-none" title="Delete" onclick={() => handleDelete(asset.id)}>
-										<Icon icon="ph:trash-bold" />
+									<button
+										class="h-6 w-6 rounded-full border-2 border-slate-200 flex items-center justify-center transition-all {selectedFolders.has(folder.path) ? 'bg-rose-600 border-rose-600 scale-110 shadow-lg' : 'bg-white opacity-0 group-hover:opacity-100'}"
+										onclick={(e) => {
+											e.stopPropagation();
+											toggleFolderSelect(folder.path);
+										}}
+									>
+										{#if selectedFolders.has(folder.path)}<Icon icon="ph:check-bold" class="text-white text-xs" />{/if}
 									</button>
 								</div>
 							</div>
-						</div>
-					{/each}
-				</div>
-			{:else}
-				<!-- List View -->
-				<div class="border-4 border-black bg-white overflow-hidden shadow-[12px_12px_0_0_#000]">
-					<table class="w-full text-left border-collapse">
-						<thead>
-							<tr class="bg-black text-white text-[10px] font-black uppercase tracking-widest">
-								<th class="px-6 py-4">Type</th>
-								<th class="px-6 py-4">Name</th>
-								<th class="px-6 py-4">Size</th>
-								<th class="px-6 py-4">Date</th>
-								<th class="px-6 py-4 text-right">Actions</th>
-							</tr>
-						</thead>
-						<tbody class="divide-y-2 divide-black/5">
-							{#if currentSubPath}
-								<tr class="hover:bg-blue-50 cursor-pointer" onclick={goToParent}>
-									<td class="px-6 py-4"><Icon icon="ph:arrow-u-up-left-bold" class="text-xl" /></td>
-									<td class="px-6 py-4 font-black text-xs uppercase">.. (Go Up)</td>
-									<td colspan="3"></td>
-								</tr>
-							{/if}
-							{#each folders as folder}
-								<tr class="hover:bg-blue-50 cursor-pointer group" onclick={() => enterFolder(folder.path)}>
-									<td class="px-6 py-4"><Icon icon="ph:folder-fill" class="text-xl text-blue-600/40 group-hover:text-blue-600" /></td>
-									<td class="px-6 py-4 font-black text-xs uppercase text-blue-600">{folder.name}</td>
-									<td class="px-6 py-4 text-[10px] font-bold opacity-30">FOLDER</td>
-									<td class="px-6 py-4">--</td>
-									<td class="px-6 py-4 text-right">
-										<Icon icon="ph:caret-right-bold" class="inline opacity-20" />
-									</td>
-								</tr>
-							{/each}
-							{#each files as asset}
-								<tr class="hover:bg-slate-50 cursor-pointer group" onclick={() => selectedAsset = asset}>
-									<td class="px-6 py-4"><Icon icon={asset.category === 'image' ? "ph:image-bold" : "ph:file-bold"} class="text-xl opacity-20" /></td>
-									<td class="px-6 py-4 font-black text-xs uppercase">{asset.original_name}</td>
-									<td class="px-6 py-4 font-mono text-[10px] font-bold opacity-40">{formatBytes(asset.file_size)}</td>
-									<td class="px-6 py-4 font-mono text-[10px] font-bold opacity-40">{new Date(asset.created_at).toLocaleDateString()}</td>
-									<td class="px-6 py-4 text-right space-x-2">
-										<button class="text-rose-600 opacity-0 group-hover:opacity-100" onclick={(e) => { e.stopPropagation(); handleDelete(asset.id); }}>
-											<Icon icon="ph:trash-bold" />
-										</button>
-									</td>
-								</tr>
-							{/each}
-						</tbody>
-					</table>
-				</div>
-			{/if}
+						{/each}
+					</div>
+				</section>
 
-			{#if folders.length === 0 && files.length === 0}
-				<div class="py-40 text-center border-4 border-dashed border-slate-100">
-					<Icon icon="ph:folder-simple-dashed-bold" class="text-7xl mx-auto opacity-5 mb-6" />
-					<p class="text-xs font-black text-slate-300 uppercase tracking-[0.4em]">Empty Vault</p>
-				</div>
+				<!-- Files Section -->
+				<section class="space-y-6">
+					<div class="flex items-center gap-3">
+						<div class="h-px flex-1 bg-slate-100"></div>
+						<h3 class="text-[10px] font-black uppercase tracking-[0.4em] text-slate-300">Files ({recursiveFiles.length})</h3>
+						<div class="h-px flex-1 bg-slate-100"></div>
+					</div>
+					{#if recursiveFiles.length === 0}
+						<div class="py-24 text-center rounded-[3rem] border-2 border-dashed border-slate-100 bg-slate-50/30">
+							<Icon icon="ph:images-square-bold" class="text-6xl text-slate-200 mx-auto mb-4" />
+							<p class="text-xs font-black text-slate-300 uppercase tracking-[0.2em]">No Assets Found</p>
+						</div>
+					{:else if viewMode === 'grid'}
+						<div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6">
+							{#each recursiveFiles as asset (asset.id)}
+								<div in:fade class="group relative flex flex-col items-center">
+									<div
+										class="relative aspect-square w-full overflow-hidden rounded-[2rem] border-2 border-slate-100 bg-white p-2 transition-all hover:border-rose-600 hover:shadow-2xl hover:-translate-y-2 cursor-pointer"
+										onclick={() => (selectedAsset = asset)}
+										onkeydown={(e) => e.key === 'Enter' && (selectedAsset = asset)}
+										role="button"
+										tabindex="0"
+									>
+										{#if asset.category === 'image'}
+											<img
+												src={getSecureMediaUrl(PUBLIC_SERVER_URL, asset, 'sm')}
+												alt={asset.original_name}
+												class="h-full w-full rounded-[1.5rem] object-cover transition-transform duration-500 group-hover:scale-110"
+											/>
+										{:else}
+											<div class="flex h-full w-full flex-col items-center justify-center rounded-[1.5rem] bg-slate-50 text-slate-300">
+												<Icon icon="ph:file-bold" class="text-4xl" />
+												<span class="mt-1 text-[8px] font-black uppercase">{asset.file_path.split('.').pop()}</span>
+											</div>
+										{/if}
+									</div>
+									<div class="absolute right-3 top-3 flex items-center gap-1">
+										<button
+											class="h-6 w-6 rounded-full bg-white/90 border border-slate-200 text-slate-400 hover:text-rose-600 hover:border-rose-300 flex items-center justify-center transition-all opacity-0 group-hover:opacity-100 shadow-sm"
+											title="파일 삭제"
+											onclick={(e) => {
+												e.stopPropagation();
+												deleteSingleAsset(asset.id);
+											}}
+										>
+											<Icon icon="ph:trash-bold" class="text-xs" />
+										</button>
+										<button
+											class="h-6 w-6 rounded-full border-2 border-white flex items-center justify-center transition-all {selectedIds.has(asset.id) ? 'bg-rose-600 scale-110 shadow-lg' : 'bg-black/20 opacity-0 group-hover:opacity-100 hover:bg-black/40'}"
+											onclick={(e) => {
+												e.stopPropagation();
+												toggleSelect(asset.id);
+											}}
+										>
+											{#if selectedIds.has(asset.id)}<Icon icon="ph:check-bold" class="text-white text-xs" />{/if}
+										</button>
+									</div>
+									<div class="mt-3 w-full px-2 text-center">
+										<p class="truncate text-[10px] font-black tracking-tighter text-slate-900">{asset.original_name}</p>
+										<p class="truncate text-[8px] font-bold text-slate-300 tracking-tighter italic">{getFileRelativePath(asset.file_path)}</p>
+									</div>
+								</div>
+							{/each}
+						</div>
+					{:else}
+						<div class="overflow-hidden rounded-[2rem] border-2 border-slate-100 bg-white">
+							<table class="w-full text-left">
+								<thead class="bg-slate-50 text-[10px] font-black uppercase tracking-widest text-slate-400">
+									<tr>
+										<th class="px-8 py-4 w-12"></th>
+										<th class="px-8 py-4">Name & Path</th>
+										<th class="px-8 py-4">Size</th>
+										<th class="px-8 py-4">Created</th>
+										<th class="px-8 py-4 text-right">Actions</th>
+									</tr>
+								</thead>
+								<tbody class="divide-y divide-slate-100 font-bold">
+									{#each recursiveFiles as asset (asset.id)}
+										<tr class="group hover:bg-slate-50/50 transition-colors cursor-pointer" onclick={() => (selectedAsset = asset)}>
+											<td class="px-8 py-6">
+												<button
+													class="h-6 w-6 rounded-lg border-2 flex items-center justify-center transition-all {selectedIds.has(asset.id) ? 'bg-rose-600 border-rose-600 shadow-lg' : 'border-slate-200'}"
+													onclick={(e) => {
+														e.stopPropagation();
+														toggleSelect(asset.id);
+													}}
+												>
+													{#if selectedIds.has(asset.id)}<Icon icon="ph:check-bold" class="text-white text-xs" />{/if}
+												</button>
+											</td>
+											<td class="px-8 py-6">
+												<div class="flex items-center gap-4">
+													<div class="h-10 w-10 overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
+														{#if asset.category === 'image'}
+															<img src={getSecureMediaUrl(PUBLIC_SERVER_URL, asset, 'sm')} alt="" class="h-full w-full object-cover" />
+														{:else}
+															<div class="flex h-full w-full items-center justify-center text-slate-300"><Icon icon="ph:file-bold" /></div>
+														{/if}
+													</div>
+													<div class="min-w-0">
+														<div class="text-sm font-black text-slate-900 truncate max-w-xs">{asset.original_name}</div>
+														<div class="text-[9px] font-bold text-slate-300 truncate">{asset.file_path}</div>
+													</div>
+												</div>
+											</td>
+											<td class="px-8 py-6 text-xs text-slate-400 font-mono">{formatBytes(asset.file_size)}</td>
+											<td class="px-8 py-6 text-[10px] text-slate-400 font-mono">{new Date(asset.created_at).toLocaleDateString()}</td>
+											<td class="px-8 py-6 text-right opacity-0 group-hover:opacity-100 transition-opacity space-x-1">
+												<button
+													class="btn btn-square btn-ghost btn-sm text-slate-400 hover:text-rose-600"
+													onclick={(e) => {
+														e.stopPropagation();
+														downloadSingleFile(asset);
+													}}
+												>
+													<Icon icon="ph:download-simple-bold" />
+												</button>
+												<button
+													class="btn btn-square btn-ghost btn-sm text-slate-400 hover:text-rose-600"
+													onclick={(e) => {
+														e.stopPropagation();
+														deleteSingleAsset(asset.id);
+													}}
+												>
+													<Icon icon="ph:trash-bold" />
+												</button>
+											</td>
+										</tr>
+									{/each}
+								</tbody>
+							</table>
+						</div>
+					{/if}
+				</section>
 			{/if}
-		</section>
-	{/if}
+		</main>
+	</div>
 </div>
 
-<!-- Asset Detail Modal (v3.2 Reverted) -->
+<!-- 상세 정보 모달 -->
 {#if selectedAsset}
-	<div transition:fade class="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-md p-4 md:p-6">
-		<div 
-			transition:fly={{ y: 100 }} 
-			class="bg-white border-4 md:border-8 border-black max-w-5xl w-full max-h-[90vh] overflow-y-auto md:overflow-hidden shadow-[20px_20px_0_0_#3b82f6] flex flex-col md:flex-row relative"
-		>
-			<!-- Close Button (Mobile Floating) -->
-			<button 
-				onclick={() => selectedAsset = null} 
-				class="absolute top-4 right-4 z-[110] p-2 bg-white border-2 border-black hover:bg-yellow-400 transition-all shadow-[4px_4px_0_0_#000] md:hidden"
+	<div transition:fade class="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4 backdrop-blur-md">
+		<div transition:fly={{ y: 100 }} class="relative w-full max-w-6xl overflow-hidden rounded-[3rem] bg-white shadow-2xl flex flex-col md:flex-row">
+			<button
+				class="absolute top-6 right-6 z-10 btn btn-circle btn-ghost text-slate-400 hover:text-black hover:bg-slate-100"
+				onclick={() => (selectedAsset = null)}
 			>
-				<Icon icon="ph:x-bold" class="text-xl" />
+				<Icon icon="ph:x-bold" class="text-2xl" />
 			</button>
-
-			<!-- Preview Area -->
-			<div class="md:w-3/5 bg-slate-950 flex items-center justify-center min-h-[300px] md:min-h-[400px] border-b-4 md:border-b-0 md:border-r-4 border-black relative">
-				<button 
-					onclick={() => selectedAsset = null} 
-					class="hidden md:block absolute top-6 left-6 z-10 p-3 bg-white border-4 border-black hover:bg-yellow-400 transition-all shadow-[6px_6px_0_0_#000]"
-				>
-					<Icon icon="ph:x-bold" class="text-2xl" />
-				</button>
-				
+			<div class="md:w-2/3 bg-slate-950 flex items-center justify-center p-2 min-h-[500px]">
 				{#if selectedAsset.category === 'image'}
-					<img src={getSecureMediaUrl(PUBLIC_SERVER_URL, selectedAsset, 'lg')} alt="" class="max-w-full max-h-full object-contain" />
+					<img
+						src={getSecureMediaUrl(PUBLIC_SERVER_URL, selectedAsset, 'lg')}
+						alt={selectedAsset.original_name}
+						class="w-full h-full max-h-[85vh] rounded-2xl object-contain shadow-2xl shadow-black/50"
+					/>
 				{:else}
-					<div class="flex flex-col items-center text-white/20">
-						<Icon icon="ph:file-bold" class="text-[80px] md:text-[120px] mb-6" />
-						<span class="text-xl md:text-3xl font-black uppercase tracking-tighter">{selectedAsset.file_path.split('.').pop()} FILE</span>
+					<div class="flex flex-col items-center text-slate-700">
+						<Icon icon="ph:file-bold" class="text-9xl mb-4" />
+						<span class="text-2xl font-black uppercase">{selectedAsset.file_path.split('.').pop()} FILE</span>
 					</div>
 				{/if}
 			</div>
-
-			<!-- Info Area (Scrollable on mobile) -->
-			<div class="md:w-2/5 p-6 md:p-12 flex flex-col justify-between bg-white overflow-y-auto">
-				<div class="space-y-6 md:space-y-8">
+			<div class="md:w-1/3 p-8 flex flex-col justify-between bg-white border-l border-slate-100">
+				<div class="space-y-6">
 					<header>
-						<span class="text-[10px] font-black text-blue-600 uppercase tracking-[0.4em] mb-2 block">Asset Terminal</span>
-						<h2 class="text-xl md:text-3xl font-black tracking-tighter uppercase italic break-all leading-tight">{selectedAsset.original_name}</h2>
+						<span class="text-[10px] font-black tracking-[0.4em] text-rose-600 uppercase mb-2 block">Asset Details</span>
+						<h2 class="text-2xl font-black tracking-tighter text-slate-900 leading-tight break-all">{selectedAsset.original_name}</h2>
 					</header>
-
-					<div class="grid grid-cols-2 gap-4 md:gap-8 border-y-4 border-black py-6 md:py-8">
-						<div>
-							<span class="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Weight</span>
-							<p class="text-sm md:text-lg font-black italic">{formatBytes(selectedAsset.file_size)}</p>
+					<div class="grid grid-cols-2 gap-4 border-y border-slate-100 py-6">
+						<div class="space-y-1">
+							<span class="text-[9px] font-black text-slate-300 uppercase tracking-widest block">Access Tier</span>
+							<div class="flex items-center gap-2">
+								<span class="h-2 w-2 rounded-full bg-rose-500"></span>
+								<span class="text-xs font-black text-slate-600 uppercase tracking-tighter">{selectedAsset.access_level}</span>
+							</div>
 						</div>
-						<div>
-							<span class="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Ident</span>
-							<p class="text-sm md:text-lg font-black italic">{selectedAsset.id}</p>
+						<div class="space-y-1">
+							<span class="text-[9px] font-black text-slate-300 uppercase tracking-widest block">File Weight</span>
+							<span class="text-xs font-black text-slate-600 font-mono tracking-tighter">{formatBytes(selectedAsset.file_size)}</span>
 						</div>
 					</div>
-
 					<div class="space-y-2">
-						<span class="text-[10px] font-black text-slate-400 uppercase tracking-widest block">System Path</span>
-						<code class="block bg-slate-100 p-3 md:p-4 border-2 border-black/5 text-[9px] md:text-[10px] font-bold text-slate-500 break-all">{selectedAsset.file_path}</code>
+						<span class="text-[9px] font-black text-slate-300 uppercase tracking-widest block">Physical Path</span>
+						<code class="block bg-slate-50 p-4 rounded-2xl text-[10px] font-bold text-slate-400 break-all border border-slate-100">
+							{selectedAsset.file_path}
+						</code>
 					</div>
 				</div>
-
-				<div class="pt-8 md:pt-10 space-y-3">
-					<button class="w-full py-4 md:py-5 bg-black text-white font-black uppercase tracking-widest hover:bg-blue-600 transition-all shadow-[6px_6px_0_0_#ccc] md:shadow-[8px_8px_0_0_#ccc] hover:shadow-none hover:translate-x-1 hover:translate-y-1">
-						<Icon icon="ph:download-simple-bold" class="inline mr-2" /> Download
+				<div class="pt-8 flex flex-col gap-3">
+					<button
+						onclick={() => downloadSingleFile(selectedAsset)}
+						class="btn h-14 rounded-2xl bg-black text-white font-black uppercase tracking-widest hover:bg-rose-600 transition-all border-none"
+					>
+						<Icon icon="ph:download-simple-bold" class="text-xl mr-2" /> Download
 					</button>
-					<div class="flex gap-2">
-						<button class="flex-1 py-3 md:py-4 border-2 md:border-4 border-black font-black uppercase text-[10px] md:text-xs tracking-widest hover:bg-slate-50 transition-all">
-							<Icon icon="ph:share-network-bold" class="inline mr-1" /> Publish
-						</button>
-						<button onclick={() => handleDelete(selectedAsset.id)} class="flex-1 py-3 md:py-4 border-2 md:border-4 border-black text-rose-600 font-black uppercase text-[10px] md:text-xs tracking-widest hover:bg-rose-50 transition-all">
-							<Icon icon="ph:trash-bold" class="inline mr-1" /> Delete
-						</button>
-					</div>
+					<button
+						onclick={() => deleteSingleAsset(selectedAsset.id)}
+						class="btn h-12 rounded-xl border-2 border-slate-200 bg-white text-rose-500 hover:bg-rose-50 hover:border-rose-600 hover:text-rose-600 transition-all"
+					>
+						<Icon icon="ph:trash-bold" class="text-lg mr-1" /> Delete
+					</button>
 				</div>
 			</div>
 		</div>
 	</div>
 {/if}
-
-<style>
-	.animate-fade-in { animation: fadeIn 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
-	@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-</style>

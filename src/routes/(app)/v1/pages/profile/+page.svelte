@@ -5,6 +5,7 @@
 	 */
 	import { auth } from '$lib/runes/auth.svelte.js';
 	import Icon from '@iconify/svelte';
+	import FileManager from '$lib/components/FileManager.svelte';
 
 	// 1. 전체 메뉴 및 중첩 탭 구성 데이터 (여기만 수정하면 무한 확장 가능)
 	const navigationMap = {
@@ -13,6 +14,7 @@
 			icon: 'ph:identification-card-bold',
 			tabs: [
 				{ id: 'SUMMARY', label: '프로필 요약', icon: 'ph:user-focus-bold' },
+				{ id: 'EXPLORER', label: '내 파일함', icon: 'ph:folder-open-bold' },
 				{ id: 'RANK', label: '권한 및 등급', icon: 'ph:shield-star-bold' }
 			]
 		},

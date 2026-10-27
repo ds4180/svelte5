@@ -59,3 +59,16 @@ export async function createUserFolder(sub_path, folder_name, tier = 'PRIVATE') 
 		folder_name
 	});
 }
+
+/**
+ * [v3.3] 내 파일함(PRIVATE)의 자산들을 서비스 영역(PUBLIC/PROTECTED)으로 물리 복사(Publish)하여 첨부합니다.
+ */
+export async function publishAssets(asset_ids, { app_id = 'general', access_level = 'PUBLIC', sub_path = null, target_id = null } = {}) {
+	return await fastApi('POST', '/api/media/publish', {
+		asset_ids,
+		app_id,
+		access_level,
+		sub_path,
+		target_id
+	});
+}
