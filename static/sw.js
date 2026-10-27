@@ -1,5 +1,37 @@
-// 서비스 워커: 백그라운드 푸시 알림 및 API 캐싱 제어
-const CACHE_NAME = 'board-cache-v1';
+// ============================================================================
+// [PWA 서비스 워커 (static/sw.js)]
+// ============================================================================
+// 💡 역할: 백그라운드 푸시 알림 수신, 알림 클릭 시 페이지 라우팅, 구버전 캐시 자동 정화
+// 📌 [긴급수정 Phase 4 반영]: 캐시 버전을 v2로 업그레이드하고,
+//    설치(install) 및 활성화(activate) 시 구버전 캐시(v1 등)를 강제 삭제합니다.
+const CACHE_NAME = 'board-cache-v2';
+
+// 1. 서비스 워커 설치(Install) 이벤트: 대기 상태 없이 즉시 새 워커로 교체 준비
+self.addEventListener('install', (event) => {
+	self.skipWaiting();
+});
+
+// 2. 서비스 워커 활성화(Activate) 이벤트: 이전 버전(v1 등)의 낡은 캐시를 모두 삭제
+self.addEventListener('activate', (event) => {
+	event.waitUntil(
+		caches
+			.keys()
+			.then((cacheNames) => {
+				return Promise.all(
+					cacheNames.map((cacheName) => {
+						if (cacheName !== CACHE_NAME) {
+							console.log('🧹 [SW] 구버전 캐시 삭제:', cacheName);
+							return caches.delete(cacheName);
+						}
+					})
+				);
+			})
+			.then(() => {
+				// 현재 열려 있는 모든 클라이언트 탭을 즉시 새 서비스 워커가 제어하도록 인수
+				return self.clients.claim();
+			})
+	);
+});
 
 // 푸시 알림 수신 (JSON 자동 파서 적용)
 self.addEventListener('push', function (event) {

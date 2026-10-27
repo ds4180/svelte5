@@ -16,7 +16,7 @@
 	import { page } from '$app/state';
 	import { onMount, untrack } from 'svelte';
 	import { alertState } from '$lib/runes/alert.svelte.js';
-	import { auth } from '$lib/runes/auth.svelte.js'; // 헤더의 유저 프로필 표시에 사용
+	import { getAuthContext } from '$lib/runes/auth.svelte.js'; // 최상위 Root가 주입한 안전 인증 Context 사용
 	import { navState } from '$lib/runes/nav.svelte.js';
 	import DynamicSidebar from '$lib/components/Nav/DynamicSidebar.svelte';
 	import '../layout.css';
@@ -25,12 +25,15 @@
 	// 📌 Root 및 상위 레이아웃에서 전달받은 데이터(메뉴 트리 등)와 자식 컴포넌트(실제 페이지)
 	let { data, children } = $props();
 
+	// 📌 최상위 Root(+layout.svelte)에서 1:1로 격리 주입한 현재 사용자의 인증 상태를 꺼내옵니다.
+	const auth = getAuthContext();
+
 	// ----------------------------------------------------------------------------
 	// [사이드바 메뉴 데이터 동기화]
 	// ----------------------------------------------------------------------------
-	// 유저 세션 주입(auth.setUser)은 이미 최상위 Root 레이아웃이 끝마쳤으므로,
-	// 여기서는 화면에 보여줄 좌측 사이드바 메뉴 목록(data.menus)만 네비게이션 스토어에 전달합니다.
-	untrack(() => {
+	// 💡 서버(SSR)에서는 전역 navState 싱글톤을 건드리지 않아 사용자 간 메뉴 누수를 원천 차단하고,
+	//    브라우저 환경($effect)에서만 네비게이션 스토어에 메뉴 목록을 반응형으로 동기화합니다.
+	$effect(() => {
 		if (data.menus) {
 			navState.setMenus(data.menus);
 			navState.isLoading = false;

@@ -5,9 +5,12 @@
 	 */
 	import Icon from '@iconify/svelte';
 	import { navState } from '$lib/runes/nav.svelte.js';
-	import { auth } from '$lib/runes/auth.svelte.js';
+	import { getAuthContext } from '$lib/runes/auth.svelte.js';
 	import { miniappStore } from '$lib/runes/miniapps.svelte.js';
 	import { goto } from '$app/navigation';
+
+	// 📌 상위 Root 레이아웃에서 주입된 요청별 안전 인증 Context를 가져옵니다.
+	const auth = getAuthContext();
 
 	/**
 	 * @typedef {Object} Props

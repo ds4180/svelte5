@@ -50,10 +50,18 @@ export class AuthState {
 
 	/**
 	 * 유저 정보 갱신 및 로컬스토리지 동기화
+	 * 
+	 * 💡 [하위 호환성 브릿지]:
+	 * 서버(SSR)에서는 각 요청의 Context만 독립적으로 유지하여 메모리 오염을 막고,
+	 * 브라우저(browser === true)에서는 기존 도메인 앱들이 참조하는 전역 폴백(fallbackAuth)에도
+	 * 동일한 유저 정보를 함께 넣어주어 레거시 코드(import { auth })가 100% 정상 작동하도록 보장합니다.
 	 */
 	setUser(userData) {
 		this.user = userData;
 		if (browser) {
+			if (this !== fallbackAuth) {
+				fallbackAuth.user = userData;
+			}
 			if (userData) {
 				localStorage.setItem('auth_user', JSON.stringify(userData));
 				console.log('👤 [AuthState] User Synced:', userData.username);
@@ -70,6 +78,9 @@ export class AuthState {
 	clear() {
 		this.user = null;
 		if (browser) {
+			if (this !== fallbackAuth) {
+				fallbackAuth.user = null;
+			}
 			localStorage.removeItem('auth_user');
 			console.log('👤 [AuthState] Context & Storage Cleared.');
 		}
@@ -79,9 +90,13 @@ export class AuthState {
 /**
  * 🌟 [최상위 Root 레이아웃 전용]
  * 매 사용자 요청마다 독립된 AuthState 인스턴스를 생성하여 Svelte Context 트리에 주입합니다.
+ * 브라우저 환경에서는 초기 유저 정보를 전역 폴백(fallbackAuth)에도 즉시 동기화합니다.
  */
 export function setAuthContext(initialUser = null) {
 	const authState = new AuthState(initialUser);
+	if (browser) {
+		fallbackAuth.user = initialUser;
+	}
 	setContext(AUTH_KEY, authState);
 	return authState;
 }
