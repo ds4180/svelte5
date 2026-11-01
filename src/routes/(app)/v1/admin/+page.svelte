@@ -154,6 +154,28 @@
 			link: '/v1/admin/target-groups',
 			icon: 'mdi:bullhorn-outline',
 			color: 'bg-amber-600'
+		},
+		{
+			type: 'SYSTEM',
+			category: 'OPERATIONS',
+			appId: 'admin_pushs',
+			minRank: 4,
+			title: '푸시 발송 & 구독자 관리',
+			desc: '모바일/PC Web Push 활성 구독 기기 현황 모니터링, 무효 구독 정리 및 전사 푸시 발송',
+			link: '/v1/admin/pushs',
+			icon: 'mdi:cellphone-message',
+			color: 'bg-pink-600'
+		},
+		{
+			type: 'SYSTEM',
+			category: 'OPERATIONS',
+			appId: 'admin_sessions',
+			minRank: 4,
+			title: '세션 모니터링 (구버전)',
+			desc: '실시간 멀티 디바이스 접속자(JTI) 확인 및 중복 세션 관리',
+			link: '/v1/admin/sessions',
+			icon: 'mdi:account-clock-outline',
+			color: 'bg-rose-600'
 		}
 	];
 

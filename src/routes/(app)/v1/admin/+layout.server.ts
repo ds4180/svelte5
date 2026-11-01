@@ -25,6 +25,7 @@ const PATH_TO_APP_ID: Record<string, string> = {
 	'/v1/admin/media': 'admin_media',
 	'/v1/admin/target-groups': 'admin_target_groups',
 	'/v1/admin/pushs': 'admin_pushs',
+	'/v1/admin/sessions': 'admin_sessions',
 	'/v1/admin/dispatch': 'admin_dispatch',
 	'/v1/admin/route_master': 'admin_route_master',
 	'/v1/admin/dayoff': 'admin_dayoff',
