@@ -15,6 +15,9 @@
     let total = $state(0);
     let isLoading = $state(true);
     let selectedStatus = $state('');
+    let autoRefresh = $state(false);
+    let refreshTimer = null;
+    let selectedDetailTask = $state(null); // 에러 로그 및 상세 보기 모달용
 
     // --- Registration Form State ---
     let scheduleType = $state('none'); // none, cron, interval
@@ -153,7 +156,29 @@
         }
     });
 
-    onMount(loadTasks);
+    // 자동 새로고침 관리 (5초 주기)
+    $effect(() => {
+        if (autoRefresh && activeTab !== 'register') {
+            refreshTimer = setInterval(() => {
+                loadTasks();
+            }, 5000);
+        } else if (refreshTimer) {
+            clearInterval(refreshTimer);
+            refreshTimer = null;
+        }
+
+        return () => {
+            if (refreshTimer) {
+                clearInterval(refreshTimer);
+                refreshTimer = null;
+            }
+        };
+    });
+
+    onMount(() => {
+        loadTasks();
+        loadTaskTypes();
+    });
 </script>
 
 <div class="p-6">
@@ -161,9 +186,15 @@
         <h1 class="text-2xl font-bold flex items-center gap-2">
             <Icon icon="mdi:cogs" class="text-primary" /> 시스템 태스크 관리
         </h1>
-        <button onclick={loadTasks} class="btn btn-sm btn-outline" disabled={activeTab === 'register'}>
-            <Icon icon="mdi:refresh" /> 새로고침
-        </button>
+        <div class="flex items-center gap-3">
+            <label class="label cursor-pointer gap-2 bg-base-200 px-3 py-1.5 rounded-lg border border-base-300">
+                <span class="label-text text-xs font-semibold">자동 갱신 (5초)</span>
+                <input type="checkbox" bind:checked={autoRefresh} class="toggle toggle-primary toggle-xs" />
+            </label>
+            <button onclick={loadTasks} class="btn btn-sm btn-outline" disabled={activeTab === 'register'}>
+                <Icon icon="mdi:refresh" /> 새로고침
+            </button>
+        </div>
     </div>
 
     <!-- 탭 메뉴 -->
@@ -251,7 +282,8 @@
                                     {/if}
                                 </td>
                                 <td>
-                                    <div class="flex gap-1">
+                                    <div class="flex gap-1 items-center">
+                                        <button onclick={() => selectedDetailTask = task} class="btn btn-xs btn-outline">상세</button>
                                         {#if task.status === 'FAILED'}
                                             <button onclick={() => retryTask(task.id)} class="btn btn-xs btn-primary">재시도</button>
                                         {/if}
@@ -434,4 +466,69 @@
             </div>
             </div>
             </div>
+
+<!-- 태스크 상세 및 에러 로그 모달 -->
+{#if selectedDetailTask}
+    <div class="modal modal-open">
+        <div class="modal-box max-w-3xl">
+            <h3 class="font-bold text-lg flex items-center justify-between border-b pb-3 mb-4">
+                <span class="flex items-center gap-2">
+                    <Icon icon="mdi:information-box" class="text-primary text-xl" />
+                    태스크 상세 정보 #{selectedDetailTask.id}
+                </span>
+                <span class="badge {selectedDetailTask.status === 'SUCCESS' ? 'badge-success' : selectedDetailTask.status === 'FAILED' ? 'badge-error' : selectedDetailTask.status === 'RUNNING' ? 'badge-info' : 'badge-warning'}">
+                    {selectedDetailTask.status}
+                </span>
+            </h3>
+
+            <div class="grid grid-cols-2 gap-4 text-xs mb-4 bg-base-200 p-4 rounded-lg">
+                <div><strong>작업 유형:</strong> {selectedDetailTask.task_type}</div>
+                <div><strong>워커 ID:</strong> {selectedDetailTask.worker_id || '(미할당)'}</div>
+                <div><strong>우선순위:</strong> {selectedDetailTask.priority}</div>
+                <div><strong>재시도:</strong> {selectedDetailTask.retry_count} / {selectedDetailTask.max_retries}</div>
+                <div><strong>예약 시각:</strong> {selectedDetailTask.scheduled_at ? selectedDetailTask.scheduled_at.substring(0, 19).replace('T', ' ') : '-'}</div>
+                <div><strong>등록 시각:</strong> {selectedDetailTask.created_at ? selectedDetailTask.created_at.substring(0, 19).replace('T', ' ') : '-'}</div>
+                {#if selectedDetailTask.cron_expression}
+                    <div class="col-span-2"><strong>Cron 표현식:</strong> <code>{selectedDetailTask.cron_expression}</code></div>
+                {/if}
+                {#if selectedDetailTask.repeat_interval}
+                    <div class="col-span-2"><strong>반복 간격:</strong> {selectedDetailTask.repeat_interval}초</div>
+                {/if}
+            </div>
+
+            <!-- 에러 로그가 있는 경우 -->
+            {#if selectedDetailTask.error_log}
+                <div class="mb-4">
+                    <div class="font-bold text-xs text-error mb-1 flex items-center gap-1">
+                        <Icon icon="mdi:alert-circle" /> 실패 에러 로그
+                    </div>
+                    <pre class="bg-error/10 text-error p-3 rounded text-[11px] font-mono whitespace-pre-wrap max-h-48 overflow-y-auto border border-error/20">{selectedDetailTask.error_log}</pre>
+                </div>
+            {/if}
+
+            <!-- Payload 및 Result -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <div class="font-bold text-xs mb-1">Payload (입력값)</div>
+                    <pre class="bg-slate-900 text-slate-100 p-3 rounded text-[11px] font-mono max-h-40 overflow-y-auto">{JSON.stringify(selectedDetailTask.payload, null, 2)}</pre>
+                </div>
+                <div>
+                    <div class="font-bold text-xs mb-1">Result (산출물)</div>
+                    <pre class="bg-slate-900 text-slate-100 p-3 rounded text-[11px] font-mono max-h-40 overflow-y-auto">{JSON.stringify(selectedDetailTask.result, null, 2)}</pre>
+                </div>
+            </div>
+
+            <div class="modal-action mt-6">
+                {#if selectedDetailTask.status === 'FAILED'}
+                    <button onclick={() => { retryTask(selectedDetailTask.id); selectedDetailTask = null; }} class="btn btn-primary btn-sm">
+                        <Icon icon="mdi:reload" /> 즉시 재시도
+                    </button>
+                {/if}
+                <button onclick={() => selectedDetailTask = null} class="btn btn-ghost btn-sm">닫기</button>
+            </div>
+        </div>
+        <div class="modal-backdrop" onclick={() => selectedDetailTask = null}></div>
+    </div>
+{/if}
+
 
