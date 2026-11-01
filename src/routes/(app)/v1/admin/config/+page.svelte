@@ -14,6 +14,14 @@
 	let watchdogSecurityAlert = $state(true);
 	let watchdogInstructionDelayMinutes = $state(30);
 
+	// 🗑️ [Data Retention & GC 데이터 보존 및 Redis 메모리 관리 설정]
+	let retentionAuditLogDays = $state(180);
+	let retentionSystemTaskDays = $state(30);
+	let retentionSessionHistoryDays = $state(60);
+	let retentionRedisDynamicHours = $state(48);
+	let isGcRunning = $state(false);
+	let lastGcResult = $state(null);
+
 	console.log('Config page script is running!');
 	// State to hold original values from backend for comparison or reset
 	let originalSettings = $state({});
@@ -60,6 +68,20 @@
 					watchdogInstructionDelayMinutes = Number(configMap.watchdog_instruction_delay_minutes) || 30;
 				}
 
+				// 🗑️ Data Retention 설정 로드
+				if (configMap.retention_audit_log_days !== undefined) {
+					retentionAuditLogDays = Number(configMap.retention_audit_log_days) || 180;
+				}
+				if (configMap.retention_system_task_days !== undefined) {
+					retentionSystemTaskDays = Number(configMap.retention_system_task_days) || 30;
+				}
+				if (configMap.retention_session_history_days !== undefined) {
+					retentionSessionHistoryDays = Number(configMap.retention_session_history_days) || 60;
+				}
+				if (configMap.retention_redis_dynamic_hours !== undefined) {
+					retentionRedisDynamicHours = Number(configMap.retention_redis_dynamic_hours) || 48;
+				}
+
 				// Store original for comparison
 				originalSettings = {
 					site_title: topTitle,
@@ -69,7 +91,11 @@
 					watchdog_enabled: watchdogEnabled,
 					watchdog_fail_threshold: watchdogFailThreshold,
 					watchdog_security_alert: watchdogSecurityAlert,
-					watchdog_instruction_delay_minutes: watchdogInstructionDelayMinutes
+					watchdog_instruction_delay_minutes: watchdogInstructionDelayMinutes,
+					retention_audit_log_days: retentionAuditLogDays,
+					retention_system_task_days: retentionSystemTaskDays,
+					retention_session_history_days: retentionSessionHistoryDays,
+					retention_redis_dynamic_hours: retentionRedisDynamicHours
 				};
 			}
 		} catch (e) {
@@ -126,6 +152,24 @@
 				originalSettings.watchdog_instruction_delay_minutes = watchdogInstructionDelayMinutes;
 			}
 
+			// 🗑️ Data Retention 설정 저장
+			if (retentionAuditLogDays !== originalSettings.retention_audit_log_days) {
+				await fastApi('PUT', '/api/v1/admin/config/retention_audit_log_days', { value: Number(retentionAuditLogDays) });
+				originalSettings.retention_audit_log_days = retentionAuditLogDays;
+			}
+			if (retentionSystemTaskDays !== originalSettings.retention_system_task_days) {
+				await fastApi('PUT', '/api/v1/admin/config/retention_system_task_days', { value: Number(retentionSystemTaskDays) });
+				originalSettings.retention_system_task_days = retentionSystemTaskDays;
+			}
+			if (retentionSessionHistoryDays !== originalSettings.retention_session_history_days) {
+				await fastApi('PUT', '/api/v1/admin/config/retention_session_history_days', { value: Number(retentionSessionHistoryDays) });
+				originalSettings.retention_session_history_days = retentionSessionHistoryDays;
+			}
+			if (retentionRedisDynamicHours !== originalSettings.retention_redis_dynamic_hours) {
+				await fastApi('PUT', '/api/v1/admin/config/retention_redis_dynamic_hours', { value: Number(retentionRedisDynamicHours) });
+				originalSettings.retention_redis_dynamic_hours = retentionRedisDynamicHours;
+			}
+
 			alert('설정이 저장되었습니다.');
 			// Reload the page to ensure all UI elements reflect the updated configuration
 			window.location.reload();
@@ -133,6 +177,31 @@
 			console.error('Failed to save settings:', e);
 			// Optionally, show an alert
 			alert('설정 저장에 실패했습니다.');
+		}
+	}
+
+	// 🧹 수동 가비지 컬렉션(GC) 즉시 실행 함수
+	async function runGcNow() {
+		if (isGcRunning) return;
+		if (!confirm('보존 기간을 초과한 DB 이력 데이터와 Redis 만료/고아 키를 지금 즉시 정리하시겠습니까?')) return;
+
+		isGcRunning = true;
+		try {
+			const res = await fastApi('POST', '/api/v1/admin/system/gc/run');
+			lastGcResult = res;
+			alert(
+				`가비지 컬렉션(GC) 완료!\n` +
+				`- 만료 태스크 삭제: ${res.deleted_tasks}건\n` +
+				`- 만료 세션 이력 삭제: ${res.deleted_sessions}건\n` +
+				`- 만료 감사로그 삭제: ${res.deleted_audit_logs}건\n` +
+				`- Redis TTL 강제 적용: ${res.redis_ttl_enforced}건\n` +
+				`- Redis 고아 키 삭제: ${res.redis_orphans_removed}건`
+			);
+		} catch (e) {
+			console.error('Failed to run GC:', e);
+			alert('가비지 컬렉션(GC) 실행에 실패했습니다.');
+		} finally {
+			isGcRunning = false;
 		}
 	}
 
@@ -350,6 +419,133 @@
 							disabled={!watchdogEnabled}
 						/>
 						<span class="text-xs font-bold text-slate-600">분 경과 후 미확인율 점검</span>
+					</div>
+				</div>
+			</div>
+		</div>
+	</div>
+
+	<!-- 🗑️ 구분선: 시스템 데이터 보존 및 가비지 컬렉션 (Data Retention & GC) -->
+	<div class="divider my-8 font-black text-slate-500 uppercase tracking-widest text-xs md:text-sm">
+		<Icon icon="mdi:database-clock-outline" class="inline-block text-emerald-500 h-5 w-5 mr-1 align-text-bottom" />
+		데이터 보존 주기 및 메모리 관리 (Data Retention & GC)
+	</div>
+
+	<!-- Data Retention 설정 카드 -->
+	<div class="card mb-8 border border-base-300 bg-base-100 shadow-md">
+		<div class="card-body space-y-6 rounded-b-xl bg-base-200 p-5 md:p-8">
+			<!-- 카드 헤더 및 즉시 GC 실행 버튼 -->
+			<div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-slate-300 pb-4">
+				<div>
+					<h3 class="text-lg font-black text-slate-800 flex items-center gap-2">
+						<Icon icon="mdi:broom" class="text-emerald-600 h-5 w-5" />
+						자율 가비지 컬렉션(GC) 및 저장소 수명 주기 정책
+					</h3>
+					<p class="text-xs font-semibold text-slate-500 mt-1">
+						Redis 만료 기한(TTL)을 강제하고, DB에 누적된 감사로그/세션/태스크 이력을 자동 정리하여 용량을 보존합니다.
+					</p>
+				</div>
+				<button
+					onclick={runGcNow}
+					disabled={isGcRunning}
+					class="btn rounded-xl border-none bg-emerald-600 px-5 font-black text-white shadow-md transition-all hover:bg-emerald-700 btn-sm md:btn-md shrink-0 flex items-center gap-2"
+				>
+					<Icon icon={isGcRunning ? "mdi:loading" : "mdi:play-circle-outline"} class={`h-4 w-4 md:h-5 md:w-5 ${isGcRunning ? 'animate-spin' : ''}`} />
+					{isGcRunning ? '정리 수행 중...' : '지금 즉시 정리 (Run GC Now)'}
+				</button>
+			</div>
+
+			<!-- 설정 항목 그리드 -->
+			<div class="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
+				<!-- 1. 감사로그 보존 기간 -->
+				<div class="form-control w-full bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
+					<label class="label pb-1" for="auditLogRetentionInput">
+						<span class="label-text font-black text-slate-800 flex items-center gap-1.5">
+							<Icon icon="mdi:file-document-outline" class="text-blue-500 h-4 w-4" />
+							감사로그 (Audit Log) 보존 기간
+						</span>
+					</label>
+					<span class="text-[11px] text-slate-500 mb-2 font-medium">법적 컴플라이언스 및 보안 감사 이력을 지정 일수 동안 보존 후 자동 파기합니다.</span>
+					<div class="flex items-center gap-3">
+						<input
+							type="number"
+							id="auditLogRetentionInput"
+							class="input input-bordered w-32 font-black text-slate-900 bg-slate-50"
+							min="30"
+							max="730"
+							step="30"
+							bind:value={retentionAuditLogDays}
+						/>
+						<span class="text-xs font-bold text-slate-600">일간 보존</span>
+					</div>
+				</div>
+
+				<!-- 2. 완료/실패 백그라운드 태스크 보존 기간 -->
+				<div class="form-control w-full bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
+					<label class="label pb-1" for="systemTaskRetentionInput">
+						<span class="label-text font-black text-slate-800 flex items-center gap-1.5">
+							<Icon icon="mdi:checkbox-marked-circle-outline" class="text-emerald-500 h-4 w-4" />
+							완료/실패 태스크 이력 보존 기간
+						</span>
+					</label>
+					<span class="text-[11px] text-slate-500 mb-2 font-medium">SUCCESS 또는 FAILED로 종료된 백그라운드 작업 이력을 지정 일수 후 자동 삭제합니다.</span>
+					<div class="flex items-center gap-3">
+						<input
+							type="number"
+							id="systemTaskRetentionInput"
+							class="input input-bordered w-32 font-black text-slate-900 bg-slate-50"
+							min="7"
+							max="180"
+							step="7"
+							bind:value={retentionSystemTaskDays}
+						/>
+						<span class="text-xs font-bold text-slate-600">일간 보존</span>
+					</div>
+				</div>
+
+				<!-- 3. 만료 세션 이력 보존 기간 -->
+				<div class="form-control w-full bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
+					<label class="label pb-1" for="sessionHistoryRetentionInput">
+						<span class="label-text font-black text-slate-800 flex items-center gap-1.5">
+							<Icon icon="mdi:history" class="text-indigo-500 h-4 w-4" />
+							로그아웃/만료 세션 이력 보존 기간
+						</span>
+					</label>
+					<span class="text-[11px] text-slate-500 mb-2 font-medium">로그아웃되거나 강제 추방(KICKED_OUT)된 세션 이력을 지정 일수 후 자동 정리합니다.</span>
+					<div class="flex items-center gap-3">
+						<input
+							type="number"
+							id="sessionHistoryRetentionInput"
+							class="input input-bordered w-32 font-black text-slate-900 bg-slate-50"
+							min="7"
+							max="365"
+							step="7"
+							bind:value={retentionSessionHistoryDays}
+						/>
+						<span class="text-xs font-bold text-slate-600">일간 보존</span>
+					</div>
+				</div>
+
+				<!-- 4. Redis 동적 타겟 그룹 만료 시간 (TTL) -->
+				<div class="form-control w-full bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
+					<label class="label pb-1" for="redisDynamicTtlInput">
+						<span class="label-text font-black text-slate-800 flex items-center gap-1.5">
+							<Icon icon="mdi:timer-outline" class="text-rose-500 h-4 w-4" />
+							Redis 동적 그룹 만료 기한 (TTL)
+						</span>
+					</label>
+					<span class="text-[11px] text-slate-500 mb-2 font-medium">일별 배차/휴무 동적 타겟 그룹 키가 메모리에 잔류할 수 있는 최대 수명(TTL)을 지정합니다.</span>
+					<div class="flex items-center gap-3">
+						<input
+							type="number"
+							id="redisDynamicTtlInput"
+							class="input input-bordered w-32 font-black text-slate-900 bg-slate-50"
+							min="12"
+							max="168"
+							step="12"
+							bind:value={retentionRedisDynamicHours}
+						/>
+						<span class="text-xs font-bold text-slate-600">시간 후 자동 소멸</span>
 					</div>
 				</div>
 			</div>
