@@ -117,16 +117,22 @@
 		</div>
 
 		<!-- 상태 뱃지 및 제어 -->
-		{#if item.type === 'INSTRUCTION'}
-			<button 
-				type="button"
-				class="rounded-lg px-2.5 py-1 text-[11px] font-black transition active:scale-95 shadow-sm {item.status === 'COMPLETED' ? 'bg-emerald-600 text-white' : item.status === 'ONGOING' ? 'bg-amber-500 text-white' : 'bg-slate-200 text-slate-700 hover:bg-slate-300'}"
-				onclick={handleStatusToggle}
-				title="상태 변경 (대기 ➔ 진행 ➔ 완료)"
-			>
-				{item.status === 'ONGOING' ? '진행중 ⏳' : item.status === 'COMPLETED' ? '완료됨 ✅' : '대기중 ⏳'}
-			</button>
-		{:else if item.type === 'NOTIFICATION'}
+		{#if item.type === 'INSTRUCTION' || item.category === 'INSTRUCTION'}
+			{#if item.status === 'CONFIRMED' || item.status === 'COMPLETED'}
+				<span class="rounded-lg bg-emerald-600 px-2.5 py-1 text-[11px] font-black text-white shadow-sm flex items-center gap-1">
+					<Icon icon="mdi:check-circle" class="w-3.5 h-3.5" /> 확인 완료
+				</span>
+			{:else}
+				<button 
+					type="button"
+					class="rounded-lg bg-indigo-600 hover:bg-indigo-700 px-3 py-1 text-[11px] font-black text-white transition active:scale-95 shadow-sm flex items-center gap-1"
+					onclick={() => onAction('status', 'CONFIRMED')}
+					title="지시사항 인지 및 수신 확인"
+				>
+					<Icon icon="mdi:checkbox-marked-circle-outline" class="w-3.5 h-3.5" /> 지시 확인
+				</button>
+			{/if}
+		{:else if item.type === 'NOTIFICATION' || item.category === 'NOTIFICATION'}
 			{#if item.status === 'PENDING'}
 				<button
 					type="button"
