@@ -187,13 +187,17 @@
 							<h3 class="text-lg font-black mt-2">{group.name}</h3>
 							<p class="text-xs opacity-80 mb-4">{group.desc || '설명 없음'}</p>
 							<div class="flex items-center justify-between mt-auto pt-4 border-t border-current/10">
-								<div class="flex items-center gap-1 font-bold">
+								<div class="flex items-center gap-1 font-bold text-sm">
 									<Icon icon="mdi:account-multiple" />
 									{group.count}명
 								</div>
-								<div class="text-[10px] opacity-60">
-									{group.created_at || '-'}
-								</div>
+								<a
+									href="/v1/admin/alerts?target_group={encodeURIComponent(group.name)}"
+									class="btn btn-xs rounded-lg border-current text-[10px] font-bold flex items-center gap-1 hover:bg-slate-900 hover:text-white hover:border-slate-900 transition-colors"
+								>
+									<Icon icon="mdi:bullhorn-outline" />
+									알림/지시 발송
+								</a>
 							</div>
 						</div>
 					</div>

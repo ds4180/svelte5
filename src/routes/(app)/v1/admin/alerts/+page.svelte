@@ -1,11 +1,13 @@
 <script>
 	import { onMount } from 'svelte';
+	import { page } from '$app/state';
 	import * as api from '$lib/api/admin.js';
 	import { alertState } from '$lib/runes/alert.svelte.js';
 	import { toast } from '$lib/runes/toast.svelte.js';
 	import Icon from '@iconify/svelte';
 
 	let alerts = $state([]);
+	let groups = $state([]); // Redis 타겟 그룹 목록 (target-group 앱의 출력물)
 	let loading = $state(true);
 	let showCreateModal = $state(false);
 	let showEditModal = $state(false);
@@ -14,6 +16,8 @@
 		level: 1,
 		style: 'info',
 		position: 'top',
+		category: 'NOTIFICATION', // 'NOTIFICATION' (알림) | 'INSTRUCTION' (지시사항) | 'NOTICE' (공지사항)
+		target_group: '', // Redis 타겟 그룹명 (target-group 앱 연계)
 		start_date: new Date().toISOString().slice(0, 16),
 		end_date: new Date(new Date().setFullYear(new Date().getFullYear() + 1))
 			.toISOString()
@@ -34,6 +38,14 @@
 			toast.error(e.message || '알림 목록 조회 실패');
 		} finally {
 			loading = false;
+		}
+	}
+
+	async function loadGroups() {
+		try {
+			groups = await api.adminGetGroups();
+		} catch (e) {
+			console.error('타겟 그룹 로드 오류:', e);
 		}
 	}
 
@@ -58,6 +70,8 @@
 	function openEditModal(alert) {
 		editingAlert = { ...alert }; // 원본 객체 변경 방지를 위해 복사
 		editingAlert.level = String(editingAlert.level); // select box가 string 값을 기대할 수 있으므로 변환
+		editingAlert.category = editingAlert.category || 'NOTIFICATION';
+		editingAlert.target_group = editingAlert.target_group || '';
 		// 날짜를 input[type="datetime-local"]에 맞게 포맷
 		editingAlert.start_date = formatDateForInput(editingAlert.start_date);
 		editingAlert.end_date = formatDateForInput(editingAlert.end_date);
@@ -102,7 +116,16 @@
 		}
 	}
 
-	onMount(loadAlerts);
+	onMount(async () => {
+		await Promise.all([loadAlerts(), loadGroups()]);
+
+		// target-group 관리 화면에서 ?target_group=... 파라미터로 넘어왔을 경우 자동 오픈
+		const queryGroup = page.url.searchParams.get('target_group');
+		if (queryGroup) {
+			newAlert.target_group = queryGroup;
+			showCreateModal = true;
+		}
+	});
 
 	// 시간 포맷터
 	function formatDateTime(dateString) {
@@ -197,6 +220,8 @@
 				<tr>
 					<th class="px-4 py-4 md:px-8 md:py-6">ID</th>
 					<th>메시지</th>
+					<th>분류</th>
+					<th>수신 대상</th>
 					<th>레벨</th>
 					<th>유형</th>
 					<th>기간</th>
@@ -208,14 +233,14 @@
 			<tbody class="divide-y divide-slate-50">
 				{#if loading}
 					<tr
-						><td colspan="8" class="py-16 text-center md:py-32"
+						><td colspan="10" class="py-16 text-center md:py-32"
 							><span class="loading loading-lg loading-bars text-blue-600"></span></td
 						></tr
 					>
 				{:else if alerts.length === 0}
 					<tr
 						><td
-							colspan="8"
+							colspan="10"
 							class="py-16 text-center text-xl font-bold text-slate-300 italic md:py-32"
 							>생성된 알림이 없습니다.</td
 						></tr
@@ -232,7 +257,7 @@
 							</td>
 							<td>
 								<div class="flex items-center gap-2">
-									<span class="max-w-[200px] truncate text-sm font-black text-slate-900 md:max-w-[400px] md:text-base">
+									<span class="max-w-[180px] truncate text-sm font-black text-slate-900 md:max-w-[320px] md:text-base">
 										{alert.message}
 									</span>
 									<button
@@ -242,6 +267,29 @@
 										[미리보기]
 									</button>
 								</div>
+							</td>
+							<td>
+								<span
+									class="rounded-md px-2 py-0.5 text-[8px] font-black md:text-[10px] {alert.category === 'INSTRUCTION' ? 'bg-purple-100 text-purple-700' : alert.category === 'NOTICE' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-700'}"
+								>
+									{alert.category === 'INSTRUCTION' ? '지시사항' : alert.category === 'NOTICE' ? '공지사항' : '알림'}
+								</span>
+							</td>
+							<td>
+								{#if alert.target_group}
+									<span class="inline-flex items-center gap-1 rounded-md bg-blue-50 border border-blue-200 px-2 py-0.5 text-[9px] font-bold text-blue-700">
+										<Icon icon="mdi:target" class="text-blue-500" />
+										{alert.target_group}
+									</span>
+								{:else if alert.target_users}
+									<span class="rounded-md bg-slate-100 px-2 py-0.5 text-[9px] font-bold text-slate-600">
+										사원 {alert.target_users.split(',').length}명
+									</span>
+								{:else}
+									<span class="rounded-md bg-emerald-50 border border-emerald-200 px-2 py-0.5 text-[9px] font-bold text-emerald-700">
+										전사 전체
+									</span>
+								{/if}
 							</td>
 							<td>
 								<span
@@ -344,6 +392,27 @@
 						</span>
 					</div>
 
+					<div class="flex items-center justify-between text-xs">
+						<div class="flex items-center gap-1.5">
+							<span class="rounded-md px-1.5 py-0.5 text-[9px] font-black {alert.category === 'INSTRUCTION' ? 'bg-purple-100 text-purple-700' : alert.category === 'NOTICE' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-700'}">
+								{alert.category === 'INSTRUCTION' ? '지시사항' : alert.category === 'NOTICE' ? '공지사항' : '알림'}
+							</span>
+							{#if alert.target_group}
+								<span class="rounded-md bg-blue-50 border border-blue-200 px-1.5 py-0.5 text-[9px] font-bold text-blue-700">
+									🎯 {alert.target_group}
+								</span>
+							{:else}
+								<span class="rounded-md bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 text-[9px] font-bold text-emerald-700">
+									전사 전체
+								</span>
+							{/if}
+						</div>
+						<span
+							><span class="font-semibold text-slate-400">스타일:</span>
+							<span class="capitalize text-slate-700 font-bold">{alert.style}</span></span
+						>
+					</div>
+
 					<div class="flex justify-between text-xs text-slate-500">
 						<span
 							><span class="font-semibold">유형:</span>
@@ -416,6 +485,55 @@
 							required
 						></textarea>
 					</div>
+
+					<div class="grid grid-cols-1 gap-4 md:grid-cols-2 p-3 bg-slate-50 rounded-xl border border-slate-200">
+						<div>
+							<label class="label py-1"><span class="label-text font-bold text-xs flex items-center gap-1">
+								<Icon icon="mdi:shape-outline" class="text-blue-600" />
+								미니앱 피드 분류 (Category)
+							</span></label>
+							<select
+								class="select-bordered select select-sm w-full rounded-lg bg-white text-slate-900 font-bold"
+								bind:value={newAlert.category}
+							>
+								<option value="NOTIFICATION">🔔 일반 알림 (NOTIFICATION)</option>
+								<option value="INSTRUCTION">📋 업무 지시사항 (INSTRUCTION - 완료처리형)</option>
+								<option value="NOTICE">📢 전사/그룹 공지사항 (NOTICE)</option>
+							</select>
+							<span class="text-[10px] text-slate-400 mt-1 block">미니앱 피드 허브의 해당 탭으로 자동 분류 적재됩니다.</span>
+						</div>
+						<div>
+							<div class="flex items-center justify-between">
+								<label class="label py-1"><span class="label-text font-bold text-xs flex items-center gap-1">
+									<Icon icon="mdi:target" class="text-amber-600" />
+									수신 대상 그룹 (Redis Target Group)
+								</span></label>
+								<a href="/v1/admin/target-groups" target="_blank" class="text-[10px] text-blue-600 hover:underline flex items-center gap-0.5">
+									타겟그룹 관리 <Icon icon="mdi:open-in-new" class="text-xs" />
+								</a>
+							</div>
+							<select
+								class="select-bordered select select-sm w-full rounded-lg bg-white text-slate-900 font-bold"
+								bind:value={newAlert.target_group}
+							>
+								<option value="">📢 전사 전체 공지 (모든 사용자 수신)</option>
+								{#each groups as g}
+									<option value={g.name}>
+										🎯 [{g.type}] {g.name} ({g.count}명)
+									</option>
+								{/each}
+							</select>
+							<span class="text-[10px] text-slate-400 mt-1 block">
+								{#if newAlert.target_group}
+									{@const selectedG = groups.find(g => g.name === newAlert.target_group)}
+									{selectedG ? `설명: ${selectedG.desc || '설명 없음'} (현재 대상 ${selectedG.count}명)` : '선택된 그룹의 사원에게만 알림/지시가 도달합니다.'}
+								{:else}
+									로그인한 사내 전체 임직원에게 발송 및 노출됩니다.
+								{/if}
+							</span>
+						</div>
+					</div>
+
 					<div class="grid grid-cols-1 gap-4 md:grid-cols-2">
 						<div>
 							<label class="label"><span class="label-text">레벨 (1-5)</span></label>
@@ -540,6 +658,55 @@
 							required
 						></textarea>
 					</div>
+
+					<div class="grid grid-cols-1 gap-4 md:grid-cols-2 p-3 bg-slate-50 rounded-xl border border-slate-200">
+						<div>
+							<label class="label py-1"><span class="label-text font-bold text-xs flex items-center gap-1">
+								<Icon icon="mdi:shape-outline" class="text-blue-600" />
+								미니앱 피드 분류 (Category)
+							</span></label>
+							<select
+								class="select-bordered select select-sm w-full rounded-lg bg-white text-slate-900 font-bold"
+								bind:value={editingAlert.category}
+							>
+								<option value="NOTIFICATION">🔔 일반 알림 (NOTIFICATION)</option>
+								<option value="INSTRUCTION">📋 업무 지시사항 (INSTRUCTION - 완료처리형)</option>
+								<option value="NOTICE">📢 전사/그룹 공지사항 (NOTICE)</option>
+							</select>
+							<span class="text-[10px] text-slate-400 mt-1 block">미니앱 피드 허브의 해당 탭으로 자동 분류 적재됩니다.</span>
+						</div>
+						<div>
+							<div class="flex items-center justify-between">
+								<label class="label py-1"><span class="label-text font-bold text-xs flex items-center gap-1">
+									<Icon icon="mdi:target" class="text-amber-600" />
+									수신 대상 그룹 (Redis Target Group)
+								</span></label>
+								<a href="/v1/admin/target-groups" target="_blank" class="text-[10px] text-blue-600 hover:underline flex items-center gap-0.5">
+									타겟그룹 관리 <Icon icon="mdi:open-in-new" class="text-xs" />
+								</a>
+							</div>
+							<select
+								class="select-bordered select select-sm w-full rounded-lg bg-white text-slate-900 font-bold"
+								bind:value={editingAlert.target_group}
+							>
+								<option value="">📢 전사 전체 공지 (모든 사용자 수신)</option>
+								{#each groups as g}
+									<option value={g.name}>
+										🎯 [{g.type}] {g.name} ({g.count}명)
+									</option>
+								{/each}
+							</select>
+							<span class="text-[10px] text-slate-400 mt-1 block">
+								{#if editingAlert.target_group}
+									{@const selectedG = groups.find(g => g.name === editingAlert.target_group)}
+									{selectedG ? `설명: ${selectedG.desc || '설명 없음'} (현재 대상 ${selectedG.count}명)` : '선택된 그룹의 사원에게만 알림/지시가 도달합니다.'}
+								{:else}
+									로그인한 사내 전체 임직원에게 발송 및 노출됩니다.
+								{/if}
+							</span>
+						</div>
+					</div>
+
 					<div class="grid grid-cols-1 gap-4 md:grid-cols-2">
 						<div>
 							<label class="label"><span class="label-text">레벨 (1-5)</span></label>
