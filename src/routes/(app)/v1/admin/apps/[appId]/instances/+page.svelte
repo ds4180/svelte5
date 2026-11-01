@@ -6,7 +6,7 @@
 	import { page } from '$app/state';
 	import { onMount } from 'svelte';
 	import * as api from '$lib/api/admin.js';
-	import { alertState } from '$lib/runes/alert.svelte.js';
+	import { toast } from '$lib/runes/toast.svelte.ts';
 	import Icon from '@iconify/svelte';
 
 	const appId = $derived(page.params.appId);
@@ -38,7 +38,7 @@
 				instances = [];
 			}
 		} catch (e) {
-			alertState.send(e.message, { level: 3, style: 'error' });
+			toast.error(e.message);
 		} finally {
 			loading = false;
 		}

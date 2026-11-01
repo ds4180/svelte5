@@ -237,10 +237,10 @@ export const adminGetLiveSessions = () =>
 /**
  * @function adminKickLiveSession
  * @description 특정 실시간 세션을 즉시 강제 종료(Kicked-out) 처리합니다.
- * @param {string} sessionKey - 강제 추방 대상 세션 키
+ * @param {number|string} sessionId - 강제 추방 대상 세션 ID 또는 session_key
  */
-export const adminKickLiveSession = (sessionKey) =>
-	request(`/api/v1/admin/observability/sessions/kick/${encodeURIComponent(sessionKey)}`, 'POST');
+export const adminKickLiveSession = (sessionId) =>
+	request(`/api/v1/admin/observability/sessions/kick/${encodeURIComponent(sessionId)}`, 'POST');
 
 
 

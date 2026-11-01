@@ -2,7 +2,7 @@
 	import { onMount } from 'svelte';
 	import { fade } from 'svelte/transition';
 	import * as api from '$lib/api/admin.js';
-	import { alertState } from '$lib/runes/alert.svelte.js';
+	import { toast } from '$lib/runes/toast.svelte.ts';
 	import Icon from '@iconify/svelte';
 
 	let subscriptions = $state([]);
@@ -20,7 +20,7 @@
 		try {
 			subscriptions = await api.adminGetPushSubscriptions();
 		} catch (e) {
-			alertState.send('구독 목록 로드 실패: ' + e.message, { level: 3, style: 'error' });
+			toast.error('구독 목록 로드 실패: ' + e.message);
 		} finally {
 			loading = false;
 		}
@@ -28,17 +28,17 @@
 
 	async function sendPush() {
 		if (!pushData.body) {
-			alert('메시지 본문을 입력해주세요.');
+			toast.warning('메시지 본문을 입력해주세요.');
 			return;
 		}
 
 		try {
 			const result = await api.adminSendPush(pushData);
-			alertState.send(`${result.sent_count}개의 기기에 푸시를 발송했습니다.`, { level: 2, style: 'success' });
+			toast.success(`${result.sent_count}개의 기기에 푸시를 발송했습니다.`);
 			showSendModal = false;
 			pushData.body = '';
 		} catch (e) {
-			alertState.send(e.message, { level: 3, style: 'error' });
+			toast.error(e.message);
 		}
 	}
 
@@ -46,10 +46,10 @@
 		if (!confirm('정말 이 구독 정보를 삭제하시겠습니까? (더 이상 알림이 가지 않습니다)')) return;
 		try {
 			await api.adminDeletePushSubscription(id);
-			alertState.send('구독 정보가 삭제되었습니다.', { level: 2, style: 'info' });
+			toast.info('구독 정보가 삭제되었습니다.');
 			await loadSubscriptions();
 		} catch (e) {
-			alertState.send(e.message, { level: 3, style: 'error' });
+			toast.error(e.message);
 		}
 	}
 

@@ -6,7 +6,7 @@
   import { onMount } from 'svelte';
   import { fade, slide, scale } from 'svelte/transition';
   import Icon from '@iconify/svelte';
-  import { alertState } from '$lib/runes/alert.svelte.js';
+  import { toast } from '$lib/runes/toast.svelte.ts';
   import {
     adminGetAuthGroupsMaster,
     adminCreateAuthGroupMaster,
@@ -128,7 +128,7 @@
       users = usersRes || [];
       instances = instancesRes || [];
     } catch (e) {
-      alertState.send('데이터 로드 실패: ' + e.message, { level: 3, style: 'error' });
+      toast.error('데이터 로드 실패: ' + e.message);
     } finally {
       loading = false;
     }
@@ -163,7 +163,7 @@
   // 1) 신규 그룹 생성 (root 전용)
   async function handleCreateGroup() {
     if (!newGroupCode.trim() || !newGroupName.trim()) {
-      alertState.send('그룹 식별 코드와 그룹 이름을 모두 입력해주세요.', { level: 2, style: 'warning' });
+      toast.warning('그룹 식별 코드와 그룹 이름을 모두 입력해주세요.');
       return;
     }
 
@@ -176,14 +176,14 @@
         description: newGroupDesc.trim() || null
       });
 
-      alertState.send(`새 그룹 [${newGroupName}]이(가) 등록되었습니다.`, { level: 1, style: 'success' });
+      toast.success(`새 그룹 [${newGroupName}]이(가) 등록되었습니다.`);
       newGroupCode = '';
       newGroupName = '';
       newGroupDesc = '';
       isCreateModalOpen = false;
       await loadAllData();
     } catch (e) {
-      alertState.send('그룹 생성 실패: ' + e.message, { level: 3, style: 'error' });
+      toast.error('그룹 생성 실패: ' + e.message);
     }
   }
 
@@ -199,7 +199,7 @@
   // 1-3) 그룹 정보 수정 제출 (root 전용)
   async function handleUpdateGroup() {
     if (!editGroupName.trim()) {
-      alertState.send('그룹 이름을 입력해주세요.', { level: 2, style: 'warning' });
+      toast.warning('그룹 이름을 입력해주세요.');
       return;
     }
 
@@ -210,11 +210,11 @@
         description: editGroupDesc.trim() || null
       });
 
-      alertState.send(`그룹 [${editGroupName}] 정보가 수정되었습니다.`, { level: 1, style: 'success' });
+      toast.success(`그룹 [${editGroupName}] 정보가 수정되었습니다.`);
       isEditModalOpen = false;
       await loadAllData();
     } catch (e) {
-      alertState.send('그룹 수정 실패: ' + e.message, { level: 3, style: 'error' });
+      toast.error('그룹 수정 실패: ' + e.message);
     }
   }
 
@@ -232,10 +232,10 @@
 
     try {
       await adminDeleteAuthGroupMaster(group.id);
-      alertState.send(`그룹 [${group.name}]이(가) 삭제되었습니다.`, { level: 1, style: 'info' });
+      toast.info(`그룹 [${group.name}]이(가) 삭제되었습니다.`);
       await loadAllData();
     } catch (e) {
-      alertState.send('그룹 삭제 실패: ' + e.message, { level: 3, style: 'error' });
+      toast.error('그룹 삭제 실패: ' + e.message);
     }
   }
 
@@ -244,11 +244,11 @@
     try {
       await adminUpdateUserPrimaryGroup(userId, newCode || null);
       users = users.map(u => u.id === userId ? { ...u, primary_group: newCode || null } : u);
-      alertState.send('주그룹이 성공적으로 변경되었습니다.', { level: 1, style: 'success' });
+      toast.success('주그룹이 성공적으로 변경되었습니다.');
       const groupsRes = await adminGetAuthGroupsMaster();
       groups = groupsRes;
     } catch (e) {
-      alertState.send('주그룹 변경 실패: ' + e.message, { level: 3, style: 'error' });
+      toast.error('주그룹 변경 실패: ' + e.message);
     }
   }
 
@@ -265,11 +265,11 @@
         }
         return u;
       });
-      alertState.send(`부그룹 [${code}]이(가) 추가되었습니다.`, { level: 1, style: 'success' });
+      toast.success(`부그룹 [${code}]이(가) 추가되었습니다.`);
       const groupsRes = await adminGetAuthGroupsMaster();
       groups = groupsRes;
     } catch (e) {
-      alertState.send('부그룹 추가 실패: ' + e.message, { level: 3, style: 'error' });
+      toast.error('부그룹 추가 실패: ' + e.message);
     }
   }
 
@@ -283,11 +283,11 @@
         }
         return u;
       });
-      alertState.send(`부그룹 [${code}]이(가) 해제되었습니다.`, { level: 1, style: 'info' });
+      toast.info(`부그룹 [${code}]이(가) 해제되었습니다.`);
       const groupsRes = await adminGetAuthGroupsMaster();
       groups = groupsRes;
     } catch (e) {
-      alertState.send('부그룹 해제 실패: ' + e.message, { level: 3, style: 'error' });
+      toast.error('부그룹 해제 실패: ' + e.message);
     }
   }
 
@@ -300,11 +300,11 @@
         allow_groups: inst.allow_groups,
         deny_groups: inst.deny_groups
       });
-      alertState.send(`[${inst.title}] 인스턴스 권한이 저장되었습니다.`, { level: 1, style: 'success' });
+      toast.success(`[${inst.title}] 인스턴스 권한이 저장되었습니다.`);
       const groupsRes = await adminGetAuthGroupsMaster();
       groups = groupsRes;
     } catch (e) {
-      alertState.send('인스턴스 권한 저장 실패: ' + e.message, { level: 3, style: 'error' });
+      toast.error('인스턴스 권한 저장 실패: ' + e.message);
     }
   }
 

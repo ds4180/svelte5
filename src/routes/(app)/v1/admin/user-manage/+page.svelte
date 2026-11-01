@@ -6,7 +6,7 @@
 	import { onMount } from 'svelte';
 	import { fade, fly } from 'svelte/transition';
 	import * as api from '$lib/api/admin.js';
-	import { alertState } from '$lib/runes/alert.svelte.js';
+	import { toast } from '$lib/runes/toast.svelte.ts';
 	import Icon from '@iconify/svelte';
 
 	let users = $state([]);
@@ -27,7 +27,7 @@
 		try {
 			users = await api.adminGetUsers();
 		} catch (e) {
-			alertState.send(e.message, { level: 3, style: 'error' });
+			toast.error(e.message);
 		} finally {
 			loading = false;
 		}
@@ -44,10 +44,10 @@
 					}
 					return u;
 				});
-				alertState.send(`${res.username}님의 등급이 ${newRank}(으)로 변경되었습니다.`, { level: 1, style: 'success' });
+				toast.success(`${res.username}님의 등급이 ${newRank}(으)로 변경되었습니다.`);
 			}
 		} catch (e) {
-			alertState.send(e.message, { level: 3, style: 'error' });
+			toast.error(e.message);
 		}
 	}
 

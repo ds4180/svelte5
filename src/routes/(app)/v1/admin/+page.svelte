@@ -5,7 +5,7 @@
 	 */
 	import { onMount } from 'svelte';
 	import * as api from '$lib/api/admin.js';
-	import { alertState } from '$lib/runes/alert.svelte.js';
+	import { toast } from '$lib/runes/toast.svelte.ts';
 	import { fade, fly } from 'svelte/transition';
 	import Icon from '@iconify/svelte';
 
@@ -32,7 +32,7 @@
 		try {
 			stats = await api.adminGetDashboard();
 		} catch (e) {
-			alertState.send(e.message, { level: 3, style: 'error' });
+			toast.error(e.message);
 		} finally {
 			loading = false;
 		}

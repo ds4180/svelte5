@@ -5,7 +5,7 @@
 	 */
 	import { onMount } from 'svelte';
 	import * as api from '$lib/api/admin.js';
-	import { alertState } from '$lib/runes/alert.svelte.js';
+	import { toast } from '$lib/runes/toast.svelte.ts';
 	import { fade } from 'svelte/transition';
 
 	let boards = $state([]);
@@ -24,7 +24,7 @@
 		try {
 			boards = await api.adminGetBoards();
 		} catch (e) {
-			alertState.send(e.message, { level: 3, style: 'error' });
+			toast.error(e.message);
 		} finally {
 			loading = false;
 		}
@@ -45,24 +45,21 @@
 
 	async function handleSave() {
 		if (!editingBoard.slug || !editingBoard.name) {
-			alertState.send('슬러그와 이름은 필수입니다.', { level: 2, style: 'warning' });
+			toast.warning('슬러그와 이름은 필수입니다.');
 			return;
 		}
 		try {
 			if (!editingBoard.id) {
 				await api.adminCreateBoard(editingBoard);
-				alertState.send(`[${editingBoard.name}] 게시판이 생성되었습니다.`, {
-					level: 1,
-					style: 'success'
-				});
+				toast.success(`[${editingBoard.name}] 게시판이 생성되었습니다.`);
 			} else {
 				await api.adminUpdateBoard(editingBoard.id, editingBoard);
-				alertState.send('게시판 설정이 업데이트되었습니다.', { level: 1, style: 'success' });
+				toast.success('게시판 설정이 업데이트되었습니다.');
 			}
 			resetForm();
 			await loadBoards();
 		} catch (e) {
-			alertState.send(e.message, { level: 3, style: 'error' });
+			toast.error(e.message);
 		}
 	}
 

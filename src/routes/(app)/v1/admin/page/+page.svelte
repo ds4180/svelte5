@@ -5,7 +5,7 @@
 	 */
 	import { onMount } from 'svelte';
 	import * as api from '$lib/api/page.js';
-	import { alertState } from '$lib/runes/alert.svelte.js';
+	import { toast } from '$lib/runes/toast.svelte.ts';
 	import Icon from '@iconify/svelte';
 
 	let { data } = $props();
@@ -40,7 +40,7 @@
 		try {
 			pages = await api.adminGetPages();
 		} catch (e) {
-			alertState.send(e.message, { level: 3, style: 'error' });
+			toast.error(e.message);
 		}
 	}
 
@@ -89,11 +89,11 @@
 			});
 
 			await api.adminUpdatePage(payload);
-			alertState.send('페이지 설정이 완벽하게 업데이트되었습니다.', { level: 1, style: 'success' });
+			toast.success('페이지 설정이 완벽하게 업데이트되었습니다.');
 			showMetaModal = false;
 			loadData();
 		} catch (e) {
-			alertState.send(e.message, { level: 3, style: 'error' });
+			toast.error(e.message);
 		} finally {
 			isSavingMeta = false;
 		}
@@ -103,10 +103,10 @@
 		if (!confirm('정말로 이 페이지를 영구 삭제하시겠습니까?')) return;
 		try {
 			await api.adminDeletePage(id);
-			alertState.send('페이지가 삭제되었습니다.', { level: 1, style: 'success' });
+			toast.success('페이지가 삭제되었습니다.');
 			loadData();
 		} catch (e) {
-			alertState.send(e.message, { level: 3, style: 'error' });
+			toast.error(e.message);
 		}
 	}
 

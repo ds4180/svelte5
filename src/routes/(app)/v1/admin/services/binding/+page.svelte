@@ -5,7 +5,7 @@
 	 */
 	import { onMount } from 'svelte';
 	import * as api from '$lib/api/admin.js';
-	import { alertState } from '$lib/runes/alert.svelte.js';
+	import { toast } from '$lib/runes/toast.svelte.ts';
 	import Icon from '@iconify/svelte';
 	import { fade, fly } from 'svelte/transition';
 
@@ -23,7 +23,7 @@
 			boards = b;
 			serviceInstances = i;
 		} catch (err) {
-			alertState.send(err.message, { level: 3, style: 'error' });
+			toast.error(err.message);
 		} finally {
 			loading = false;
 		}
@@ -42,10 +42,10 @@
 				service_instance_id: instanceId ? Number(instanceId) : null
 			});
 			
-			alertState.send('서비스 바인딩이 업데이트되었습니다.', { style: 'success' });
+			toast.success('서비스 바인딩이 업데이트되었습니다.');
 			loadData();
 		} catch (err) {
-			alertState.send(err.message, { level: 3, style: 'error' });
+			toast.error(err.message);
 		}
 	}
 </script>

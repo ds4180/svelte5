@@ -15,6 +15,7 @@
 	import { onMount, onDestroy } from 'svelte';
 	import { page as pageStore } from '$app/stores';
 	import * as api from '$lib/api/admin.js';
+	import { toast } from '$lib/runes/toast.svelte.js';
 	import Icon from '@iconify/svelte';
 
 	// 📊 상단 4대 핵심 지표 요약 상태
@@ -107,16 +108,16 @@
 	 * @param {any} session
 	 */
 	async function handleKickSession(session) {
-		const targetLabel = session.user_name || session.session_key;
-		if (!confirm(`[주의] ${targetLabel} 님의 접속 세션을 즉시 강제 종료(Kicked-out)하시겠습니까?\n종료 즉시 모든 기기에서 로그아웃 처리됩니다.`)) {
+		const targetLabel = session.username || session.user_name || `세션 #${session.id}`;
+		if (!confirm(`[주의] ${targetLabel} 님의 접속 세션을 즉시 강제 종료(Kicked-out)하시겠습니까?\n종료 즉시 해당 기기에서 로그아웃 처리됩니다.`)) {
 			return;
 		}
 		try {
-			await api.adminKickLiveSession(session.session_key);
-			alert('세션이 성공적으로 강제 종료되었습니다.');
+			await api.adminKickLiveSession(session.id);
+			toast.success(`${targetLabel} 세션이 성공적으로 강제 종료되었습니다.`);
 			await refreshData(false);
 		} catch (/** @type {any} */ e) {
-			alert('세션 강제 종료 실패: ' + e.message);
+			toast.error('세션 강제 종료 실패: ' + e.message);
 		}
 	}
 

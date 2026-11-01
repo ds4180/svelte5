@@ -5,7 +5,7 @@
 	 */
 	import { onMount } from 'svelte';
 	import * as api from '$lib/api/admin.js';
-	import { alertState } from '$lib/runes/alert.svelte.js';
+	import { toast } from '$lib/runes/toast.svelte.ts';
 	import Icon from '@iconify/svelte';
 	import { fade, fly } from 'svelte/transition';
 
@@ -30,7 +30,7 @@
 			serviceApps = a;
 			serviceInstances = i;
 		} catch (err) {
-			alertState.send(err.message, { level: 3, style: 'error' });
+			toast.error(err.message);
 		} finally {
 			loading = false;
 		}
@@ -81,11 +81,11 @@
 					await api.adminCreateServiceInstance(formData);
 				}
 			}
-			alertState.send('성공적으로 저장되었습니다.', { style: 'success' });
+			toast.success('성공적으로 저장되었습니다.');
 			showModal = false;
 			loadAll();
 		} catch (err) {
-			alertState.send(err.message, { level: 3, style: 'error' });
+			toast.error(err.message);
 		}
 	}
 
@@ -95,10 +95,10 @@
 			if (type === 'registry') await api.adminDeleteServiceRegistry(id);
 			else if (type === 'engine') await api.adminDeleteServiceEngine(id);
 			else if (type === 'instance') await api.adminDeleteServiceInstance(id);
-			alertState.send('삭제되었습니다.', { style: 'success' });
+			toast.success('삭제되었습니다.');
 			loadAll();
 		} catch (err) {
-			alertState.send(err.message, { level: 3, style: 'error' });
+			toast.error(err.message);
 		}
 	}
 </script>

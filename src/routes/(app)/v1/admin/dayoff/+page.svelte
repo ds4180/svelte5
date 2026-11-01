@@ -6,7 +6,6 @@
 	 */
 	import { onMount } from 'svelte';
 	import * as api from '$lib/api/admin.js';
-	import { alertState } from '$lib/runes/alert.svelte.js';
 	import Icon from '@iconify/svelte';
 	import { formatDateTime } from '$lib/utils.js';
 

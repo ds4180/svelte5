@@ -6,7 +6,7 @@
 	 */
 	import { onMount } from 'svelte';
 	import * as api from '$lib/api/admin.js';
-	import { alertState } from '$lib/runes/alert.svelte.js';
+	import { toast } from '$lib/runes/toast.svelte.ts';
 	import { fade, fly } from 'svelte/transition';
 	import Icon from '@iconify/svelte';
 
@@ -38,7 +38,7 @@
 		try {
 			apps = await api.adminGetApps();
 		} catch (e) {
-			alertState.send(e.message, { level: 3, style: 'error' });
+			toast.error(e.message);
 		} finally {
 			loading = false;
 		}
@@ -77,23 +77,20 @@
 	 */
 	async function handleDelete(app) {
 		if (app.app_type === 'SYSTEM') {
-			alertState.send('SYSTEM 앱은 시스템 필수 관제 앱이므로 삭제할 수 없습니다.', {
-				level: 2,
-				style: 'warning'
-			});
+			toast.warning('SYSTEM 앱은 시스템 필수 관제 앱이므로 삭제할 수 없습니다.');
 			return;
 		}
 		if (!confirm(`'${app.title || app.name || app.app_id}' 앱을 삭제하시겠습니까?`)) return;
 		try {
 			await api.adminDeleteApp(app.app_id);
-			alertState.send('앱이 삭제되었습니다.', { level: 1, style: 'success' });
+			toast.success('앱이 삭제되었습니다.');
 			if (editingApp.app_id === app.app_id) {
 				resetForm();
 				isEditMode = false;
 			}
 			await loadApps();
 		} catch (e) {
-			alertState.send(e.message, { level: 3, style: 'error' });
+			toast.error(e.message);
 		}
 	}
 
@@ -119,7 +116,7 @@
 	 */
 	async function handleSave() {
 		if (!editingApp.app_id || !editingApp.name) {
-			alertState.send('ID와 내부 이름은 필수 항목입니다.', { level: 2, style: 'warning' });
+			toast.warning('ID와 내부 이름은 필수 항목입니다.');
 			return;
 		}
 
@@ -136,18 +133,18 @@
 			if (isEditMode) {
 				// 기존 앱 수정 (PATCH) - URL에만 id가 들어가고 body에는 빠져야 함
 				await api.adminUpdateApp(app_id, payload);
-				alertState.send('앱 엔진 설정이 업데이트되었습니다.', { level: 1, style: 'success' });
+				toast.success('앱 엔진 설정이 업데이트되었습니다.');
 			} else {
 				// 신규 앱 등록 (POST) - 여기서는 app_id가 포함된 전체 데이터(editingApp) 필요
 				await api.adminCreateApp(editingApp);
-				alertState.send('새로운 앱 엔진이 등록되었습니다.', { level: 1, style: 'success' });
+				toast.success('새로운 앱 엔진이 등록되었습니다.');
 			}
 
 			resetForm();
 			isEditMode = false;
 			await loadApps();
 		} catch (e) {
-			alertState.send(e.message, { level: 3, style: 'error' });
+			toast.error(e.message);
 		}
 	}
 </script>

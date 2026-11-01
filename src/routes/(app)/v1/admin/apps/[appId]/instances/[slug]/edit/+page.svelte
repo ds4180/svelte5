@@ -7,7 +7,7 @@
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
 	import * as api from '$lib/api/admin.js';
-	import { alertState } from '$lib/runes/alert.svelte.js';
+	import { toast } from '$lib/runes/toast.svelte.ts';
 	import Icon from '@iconify/svelte';
 
 	const appId = $derived(page.params.appId);
@@ -59,7 +59,7 @@
 			
 			isReady = true;
 		} catch (e) {
-			alertState.send(e.message, { level: 3, style: 'error' });
+			toast.error(e.message);
 		}
 	}
 
@@ -100,11 +100,11 @@
 		try {
 			if (appId === 'board') {
 				await api.adminUpdateBoard(originalBoard.id, refinedData);
-				alertState.send('인스턴스 설정이 업데이트되었습니다.', { level: 1, style: 'success' });
+				toast.success('인스턴스 설정이 업데이트되었습니다.');
 				goto(`/v1/admin/apps/${appId}/instances`);
 			}
 		} catch (e) {
-			alertState.send(e.message, { level: 3, style: 'error' });
+			toast.error(e.message);
 		} finally {
 			isSaving = false;
 		}

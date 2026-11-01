@@ -8,7 +8,7 @@
 	import { fade, fly } from 'svelte/transition';
 	import * as api from '$lib/api/admin.js';
 	import { adminGetPages } from '$lib/api/page.js';
-	import { alertState } from '$lib/runes/alert.svelte.js';
+	import { toast } from '$lib/runes/toast.svelte.ts';
 	import { browser } from '$app/environment';
 
 	let menus = $state([]);
@@ -106,7 +106,7 @@
 			boards = b;
 			pages = p;
 		} catch (e) {
-			alertState.send(e.message || '데이터 로드 실패', { level: 3, style: 'error' });
+			toast.error(e.message || '데이터 로드 실패');
 		} finally {
 			loading = false;
 		}
@@ -171,15 +171,15 @@
 
 			if (!data.id) {
 				await api.adminCreateMenu(data);
-				alertState.send('등록 완료', { level: 1, style: 'success' });
+				toast.success('등록 완료');
 			} else {
 				await api.adminUpdateMenu(data.id, data);
-				alertState.send('수정 완료', { level: 1, style: 'success' });
+				toast.success('수정 완료');
 			}
 			resetForm();
 			await loadData();
 		} catch (e) {
-			alertState.send(e.message || '저장 실패', { level: 3, style: 'error' });
+			toast.error(e.message || '저장 실패');
 		}
 	}
 
@@ -187,10 +187,10 @@
 		if (!confirm('삭제하시겠습니까?')) return;
 		try {
 			await api.adminDeleteMenu(menuId);
-			alertState.send('삭제 완료', { level: 1, style: 'success' });
+			toast.success('삭제 완료');
 			await loadData();
 		} catch (e) {
-			alertState.send('삭제 실패', { level: 3, style: 'error' });
+			toast.error('삭제 실패');
 		}
 	}
 </script>

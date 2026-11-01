@@ -7,7 +7,7 @@
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
 	import * as api from '$lib/api/admin.js';
-	import { alertState } from '$lib/runes/alert.svelte.js';
+	import { toast } from '$lib/runes/toast.svelte.ts';
 	import Icon from '@iconify/svelte';
 
 	const appId = $derived(page.params.appId);
@@ -52,7 +52,7 @@
 			isReady = true;
 
 		} catch (e) {
-			alertState.send('앱 스키마 정보를 불러오지 못했습니다.', { level: 3, style: 'error' });
+			toast.error('앱 스키마 정보를 불러오지 못했습니다.');
 		}
 	}
 
@@ -106,7 +106,7 @@
 		// 필수 항목 검증
 		for (const [key, field] of Object.entries(configSchema)) {
 			if (field.required && !formData[key]) {
-				alertState.send(`${field.label || key} 항목은 필수입니다.`, { level: 2, style: 'warning' });
+				toast.warning(`${field.label || key} 항목은 필수입니다.`);
 				return;
 			}
 		}
@@ -115,14 +115,11 @@
 		try {
 			if (appId === 'board') {
 				await api.adminCreateBoard(refinedData);
-				alertState.send(`인스턴스가 성공적으로 생성되었습니다.`, {
-					level: 1,
-					style: 'success'
-				});
+				toast.success('인스턴스가 성공적으로 생성되었습니다.');
 				goto(`/v1/admin/apps/${appId}/instances`);
 			}
 		} catch (e) {
-			alertState.send(e.message, { level: 3, style: 'error' });
+			toast.error(e.message);
 		} finally {
 			isSaving = false;
 		}
