@@ -7,6 +7,13 @@
 	let darkMode = $state(false);
 	let redirectRank1 = $state(false);
 	let landingPage = $state('/');
+
+	// ⚡ [Watchdog 자율 이상 감지 & 자동 경보 설정]
+	let watchdogEnabled = $state(true);
+	let watchdogFailThreshold = $state(3);
+	let watchdogSecurityAlert = $state(true);
+	let watchdogInstructionDelayMinutes = $state(30);
+
 	console.log('Config page script is running!');
 	// State to hold original values from backend for comparison or reset
 	let originalSettings = $state({});
@@ -40,12 +47,29 @@
 				redirectRank1 = configMap.redirect_rank1_to_profile === true;
 				landingPage = getStringValue(configMap.landing_page, '/');
 
+				if (configMap.watchdog_enabled !== undefined) {
+					watchdogEnabled = configMap.watchdog_enabled === true || configMap.watchdog_enabled === 'true';
+				}
+				if (configMap.watchdog_fail_threshold !== undefined) {
+					watchdogFailThreshold = Number(configMap.watchdog_fail_threshold) || 3;
+				}
+				if (configMap.watchdog_security_alert !== undefined) {
+					watchdogSecurityAlert = configMap.watchdog_security_alert === true || configMap.watchdog_security_alert === 'true';
+				}
+				if (configMap.watchdog_instruction_delay_minutes !== undefined) {
+					watchdogInstructionDelayMinutes = Number(configMap.watchdog_instruction_delay_minutes) || 30;
+				}
+
 				// Store original for comparison
 				originalSettings = {
 					site_title: topTitle,
 					theme_mode: darkMode ? 'dark' : 'light',
 					redirect_rank1_to_profile: redirectRank1,
-					landing_page: landingPage
+					landing_page: landingPage,
+					watchdog_enabled: watchdogEnabled,
+					watchdog_fail_threshold: watchdogFailThreshold,
+					watchdog_security_alert: watchdogSecurityAlert,
+					watchdog_instruction_delay_minutes: watchdogInstructionDelayMinutes
 				};
 			}
 		} catch (e) {
@@ -83,6 +107,24 @@
 				originalSettings.redirect_rank1_to_profile = redirectRank1;
 			}
 			*/
+
+			// ⚡ Watchdog 설정 저장
+			if (watchdogEnabled !== originalSettings.watchdog_enabled) {
+				await fastApi('PUT', '/api/v1/admin/config/watchdog_enabled', { value: watchdogEnabled });
+				originalSettings.watchdog_enabled = watchdogEnabled;
+			}
+			if (watchdogFailThreshold !== originalSettings.watchdog_fail_threshold) {
+				await fastApi('PUT', '/api/v1/admin/config/watchdog_fail_threshold', { value: Number(watchdogFailThreshold) });
+				originalSettings.watchdog_fail_threshold = watchdogFailThreshold;
+			}
+			if (watchdogSecurityAlert !== originalSettings.watchdog_security_alert) {
+				await fastApi('PUT', '/api/v1/admin/config/watchdog_security_alert', { value: watchdogSecurityAlert });
+				originalSettings.watchdog_security_alert = watchdogSecurityAlert;
+			}
+			if (watchdogInstructionDelayMinutes !== originalSettings.watchdog_instruction_delay_minutes) {
+				await fastApi('PUT', '/api/v1/admin/config/watchdog_instruction_delay_minutes', { value: Number(watchdogInstructionDelayMinutes) });
+				originalSettings.watchdog_instruction_delay_minutes = watchdogInstructionDelayMinutes;
+			}
 
 			alert('설정이 저장되었습니다.');
 			// Reload the page to ensure all UI elements reflect the updated configuration
@@ -212,5 +254,116 @@
 			</div>
 			-->
 		</div>
+	</div>
+
+	<!-- ⚡ 구분선: 자율 이상 징후 감지 및 경보 (System Watchdog) -->
+	<div class="divider my-8 font-black text-slate-500 uppercase tracking-widest text-xs md:text-sm">
+		<Icon icon="mdi:shield-alert-outline" class="inline-block text-amber-500 h-5 w-5 mr-1 align-text-bottom" />
+		자율 이상 징후 감지 및 경보 (System Watchdog)
+	</div>
+
+	<!-- Watchdog 설정 카드 -->
+	<div class="card mb-8 border border-base-300 bg-base-100 shadow-md">
+		<div class="card-body space-y-6 rounded-b-xl bg-base-200 p-5 md:p-8">
+			<!-- 카드 헤더 및 전체 활성화 토글 -->
+			<div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-slate-300 pb-4">
+				<div>
+					<h3 class="text-lg font-black text-slate-800 flex items-center gap-2">
+						<Icon icon="mdi:radar" class="text-blue-600 h-5 w-5" />
+						자율신경계 Watchdog 실시간 모니터링 정책
+					</h3>
+					<p class="text-xs font-semibold text-slate-500 mt-1">
+						워커 연속 실패, 비인가 보안 침해, 긴급 지시 미확인 지연 감지 시 최고 관리자에게 L4 경보를 자동 발송합니다.
+					</p>
+				</div>
+				<label class="label cursor-pointer gap-3 bg-white px-4 py-2 rounded-xl shadow-xs border border-slate-200 shrink-0">
+					<span class="label-text font-black text-sm text-slate-800">Watchdog 활성화</span>
+					<input type="checkbox" class="toggle toggle-primary toggle-sm md:toggle-md" bind:checked={watchdogEnabled} />
+				</label>
+			</div>
+
+			<!-- 설정 항목 그리드 -->
+			<div class="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2" class:opacity-50={!watchdogEnabled}>
+				<!-- 1. 태스크 연속 실패 임계치 -->
+				<div class="form-control w-full bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
+					<label class="label pb-1" for="taskFailThresholdInput">
+						<span class="label-text font-black text-slate-800 flex items-center gap-1.5">
+							<Icon icon="mdi:alert-circle-outline" class="text-rose-500 h-4 w-4" />
+							워커 연속 실패(FAILED) 경보 임계치
+						</span>
+					</label>
+					<span class="text-[11px] text-slate-500 mb-2 font-medium">최근 1시간 내 태스크가 지정 횟수 이상 영구 실패 시 즉각 관리자 L4 알림을 발송합니다.</span>
+					<div class="flex items-center gap-3">
+						<input
+							type="number"
+							id="taskFailThresholdInput"
+							class="input input-bordered w-32 font-black text-slate-900 bg-slate-50"
+							min="1"
+							max="10"
+							bind:value={watchdogFailThreshold}
+							disabled={!watchdogEnabled}
+						/>
+						<span class="text-xs font-bold text-slate-600">회 연속 실패 시</span>
+					</div>
+				</div>
+
+				<!-- 2. 보안 침해 감지 즉시 경보 -->
+				<div class="form-control w-full bg-white p-4 rounded-xl border border-slate-200 shadow-xs justify-between">
+					<div>
+						<label class="label pb-1 cursor-pointer justify-start gap-2">
+							<Icon icon="mdi:shield-lock-outline" class="text-amber-500 h-4 w-4" />
+							<span class="label-text font-black text-slate-800">보안 침해 시도 즉시 경보</span>
+						</label>
+						<span class="text-[11px] text-slate-500 mb-2 font-medium block">403 Forbidden 권한 침해 또는 위조 토큰 감지 시 즉각 관리자 L4 알림을 발송합니다.</span>
+					</div>
+					<div class="pt-2">
+						<label class="label cursor-pointer justify-start gap-3">
+							<input
+								type="checkbox"
+								class="toggle toggle-warning"
+								bind:checked={watchdogSecurityAlert}
+								disabled={!watchdogEnabled}
+							/>
+							<span class="text-xs font-bold text-slate-700">{watchdogSecurityAlert ? '즉시 발송 활성화됨' : '비활성화됨'}</span>
+						</label>
+					</div>
+				</div>
+
+				<!-- 3. 현장 지시사항 미확인 지연 기준 시간 -->
+				<div class="form-control w-full bg-white p-4 rounded-xl border border-slate-200 shadow-xs md:col-span-2">
+					<label class="label pb-1" for="instructionDelayInput">
+						<span class="label-text font-black text-slate-800 flex items-center gap-1.5">
+							<Icon icon="mdi:clock-alert-outline" class="text-blue-600 h-4 w-4" />
+							현장 지시사항 미확인 인지 지연 감시 기준
+						</span>
+					</label>
+					<span class="text-[11px] text-slate-500 mb-2 font-medium">긴급 지시사항 발행 후 지정 시간이 경과했음에도 미확인율이 50% 이상 지속될 때 관제탑 경보를 발송합니다.</span>
+					<div class="flex items-center gap-3">
+						<input
+							type="number"
+							id="instructionDelayInput"
+							class="input input-bordered w-32 font-black text-slate-900 bg-slate-50"
+							min="5"
+							max="180"
+							step="5"
+							bind:value={watchdogInstructionDelayMinutes}
+							disabled={!watchdogEnabled}
+						/>
+						<span class="text-xs font-bold text-slate-600">분 경과 후 미확인율 점검</span>
+					</div>
+				</div>
+			</div>
+		</div>
+	</div>
+
+	<!-- 하단 액션 바 -->
+	<div class="flex justify-end gap-3 pt-2">
+		<button
+			onclick={saveSettings}
+			class="btn rounded-xl border-none bg-blue-600 px-8 font-black text-white shadow-lg transition-all hover:bg-blue-700 btn-md md:btn-lg"
+		>
+			<Icon icon="mdi:content-save-outline" class="h-5 w-5" />
+			설정 전체 저장
+		</button>
 	</div>
 </div>
