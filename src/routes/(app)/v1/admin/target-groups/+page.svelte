@@ -53,11 +53,11 @@
 	});
 
 	const handleRefreshDynamic = async () => {
-		if (!confirm('직급 및 아이디 길이별 다이나믹 그룹을 갱신하시겠습니까?')) return;
+		if (!confirm('오늘 근무자/휴무자, 시내/시외버스, 노선별 배차 동적 그룹을 실시간 연산하여 Redis에 갱신하시겠습니까?')) return;
 		try {
 			await adminRefreshDynamicGroups();
 			await fetchGroups();
-			alert('다이나믹 그룹이 갱신되었습니다.');
+			alert('동적 타겟 그룹이 성공적으로 연산 및 갱신되었습니다.');
 		} catch (e) {
 			alert('갱신 실패: ' + e.message);
 		}
@@ -147,7 +147,7 @@
 		</div>
 		<div class="flex gap-2">
 			<button class="btn btn-sm btn-outline border-slate-200" onclick={handleRefreshDynamic}>
-				<Icon icon="mdi:refresh" /> 다이나믹 갱신
+				<Icon icon="mdi:refresh" /> 실시간 동적 그룹 연산
 			</button>
 		</div>
 	</div>
