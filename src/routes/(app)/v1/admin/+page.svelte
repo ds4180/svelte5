@@ -7,7 +7,12 @@
 	import * as api from '$lib/api/admin.js';
 	import { alertState } from '$lib/runes/alert.svelte.js';
 	import { fade, fly } from 'svelte/transition';
-	import Icon from '@iconify/svelte'; // Iconify 임포트
+	import Icon from '@iconify/svelte';
+
+	let { data } = $props();
+	const user = $derived(data?.user || null);
+	const userRank = $derived(Number(user?.rank_level ?? 0));
+	const isRoot = $derived(userRank >= 9);
 
 	let stats = $state({
 		user_count: 0,
@@ -17,6 +22,10 @@
 		admin_name: '관리자'
 	});
 	let loading = $state(true);
+
+	// 🔍 모듈 검색어 및 카테고리 필터
+	let moduleSearch = $state('');
+	let moduleCategory = $state('ALL'); // 'ALL' | 'CORE' | 'OPERATIONS' | 'BUSINESS'
 
 	async function loadStats() {
 		loading = true;
@@ -32,11 +41,14 @@
 	onMount(loadStats);
 
 	// ----------------------------------------------------------------------------
-	// 🛡️ 1. 시스템 코어 관제 모듈 (SYSTEM App: 사용자 화면 없이 관리자 화면만 존재하는 필수 앱)
+	// 🛡️ 1. 시스템 코어 인프라 모듈 (Lv.8~9 코어 관리자 전용)
 	// ----------------------------------------------------------------------------
 	const systemModules = [
 		{
 			type: 'SYSTEM',
+			category: 'CORE',
+			appId: 'admin_apps',
+			minRank: 9,
 			title: '앱 레지스트리',
 			desc: 'INSTANCE / CUSTOM / SYSTEM 앱 엔진 등록 및 메타데이터·권한 관리',
 			link: '/v1/admin/apps',
@@ -45,6 +57,9 @@
 		},
 		{
 			type: 'SYSTEM',
+			category: 'CORE',
+			appId: 'admin_menu',
+			minRank: 8,
 			title: '메뉴 마스터',
 			desc: '시스템 전체 내비게이션 트리 및 앱 연결·접근 권한 구조 편집',
 			link: '/v1/admin/menu',
@@ -53,7 +68,10 @@
 		},
 		{
 			type: 'SYSTEM',
-			title: '사용자 관리',
+			category: 'CORE',
+			appId: 'admin_user_manage',
+			minRank: 8,
+			title: '사용자·직급 관리',
 			desc: '회원 권한 등급(rank_level 0~9) 조정 및 주그룹/부그룹 소속 관리',
 			link: '/v1/admin/user-manage',
 			icon: 'mdi:account-group-outline',
@@ -61,22 +79,20 @@
 		},
 		{
 			type: 'SYSTEM',
-			title: '조직·권한 그룹 마스터',
-			desc: '리눅스식 소속 부서(주그룹 1개) 및 직무/예외 통제(부그룹 N개) 마스터 등록 및 회원 매칭',
+			category: 'CORE',
+			appId: 'admin_group_manage',
+			minRank: 9,
+			title: '조직·권한 통제소',
+			desc: '주/부그룹 마스터 및 인스턴스/시스템 앱 독립 권한 배분 관제탑',
 			link: '/v1/admin/group-manage',
-			icon: 'mdi:account-multiple-check-outline',
+			icon: 'mdi:shield-account-outline',
 			color: 'bg-cyan-700'
 		},
 		{
 			type: 'SYSTEM',
-			title: '메시징 타겟 그룹',
-			desc: '알림·메시지 발송을 위한 기사 노선별/직급별 동적 그룹 필터링 및 교집합 연산',
-			link: '/v1/admin/target-groups',
-			icon: 'mdi:bullhorn-outline',
-			color: 'bg-amber-600'
-		},
-		{
-			type: 'SYSTEM',
+			category: 'CORE',
+			appId: 'admin_observability',
+			minRank: 8,
 			title: '통합 관제 & 감사로그',
 			desc: '실시간 세션 추적·강제추방, 4대 감사로그(접근/도메인Diff/장애/보안) 전사 관제',
 			link: '/v1/admin/observability',
@@ -85,43 +101,59 @@
 		},
 		{
 			type: 'SYSTEM',
-			title: '세션 모니터링 (Legacy)',
-			desc: '실시간 멀티 디바이스 접속자(JTI) 확인 및 비정상 세션 강제 종료',
-			link: '/v1/admin/sessions',
-			icon: 'mdi:shield-lock-outline',
-			color: 'bg-purple-600'
-		},
-		{
-			type: 'SYSTEM',
-			title: '시스템 설정',
-			desc: '글로벌 환경 변수, 기본 랜딩 페이지 및 공통 코드 동적 제어',
+			category: 'CORE',
+			appId: 'admin_config',
+			minRank: 8,
+			title: '시스템 환경설정',
+			desc: '글로벌 환경 변수, 데이터 보존 주기(GC) 및 Watchdog 이상 경보 제어',
 			link: '/v1/admin/config',
-			icon: 'mdi:cog-outline',
+			icon: 'mdi:tune-vertical',
 			color: 'bg-slate-700'
 		},
 		{
 			type: 'SYSTEM',
+			category: 'CORE',
+			appId: 'admin_tasks',
+			minRank: 8,
+			title: '태스크 & 크론 워커',
+			desc: '비동기 백그라운드 작업 큐 상태 모니터링 및 자율신경계 스케줄러 제어',
+			link: '/v1/admin/tasks',
+			icon: 'mdi:robot-industrial',
+			color: 'bg-violet-600'
+		},
+		// 🌟 운영팀 위임 가능 모듈 (Lv.4 일반 관리자 허용)
+		{
+			type: 'SYSTEM',
+			category: 'OPERATIONS',
+			appId: 'admin_alerts',
+			minRank: 4,
 			title: '알림 관리',
-			desc: '전역/경로별 상단 공지 배너 및 중앙 모달 알림 생성·배포',
+			desc: '전역/경로별 상단 공지 배너 및 중앙 모달 알림 생성·배포 (운영 위임 가능)',
 			link: '/v1/admin/alerts',
 			icon: 'mdi:bell-cog-outline',
 			color: 'bg-teal-600'
 		},
 		{
 			type: 'SYSTEM',
+			category: 'OPERATIONS',
+			appId: 'admin_media',
+			minRank: 4,
 			title: '미디어 관제탑',
-			desc: '전체 업로드 파일 자산 모니터링 및 보안 Tier별 스토리지 관리',
+			desc: '전체 업로드 파일 자산 모니터링 및 스토리지 용량 관리 (운영 위임 가능)',
 			link: '/v1/admin/media',
 			icon: 'mdi:database-cog-outline',
 			color: 'bg-indigo-600'
 		},
 		{
 			type: 'SYSTEM',
-			title: '시스템 태스크 관제탑',
-			desc: '비동기 백그라운드 작업 큐 상태 모니터링 및 스케줄러 제어',
-			link: '/v1/admin/tasks',
-			icon: 'mdi:cogs',
-			color: 'bg-violet-600'
+			category: 'OPERATIONS',
+			appId: 'admin_target_groups',
+			minRank: 4,
+			title: '메시징 타겟 그룹',
+			desc: '알림·메시지 발송을 위한 기사 노선별/직급별 동적 그룹 필터링 및 연산',
+			link: '/v1/admin/target-groups',
+			icon: 'mdi:bullhorn-outline',
+			color: 'bg-amber-600'
 		}
 	];
 
@@ -212,6 +244,31 @@
 			default:
 				return 'border-slate-200 bg-slate-50 text-slate-700';
 		}
+	}
+
+	// 🔍 필터링 로직
+	const filteredSystemModules = $derived(
+		systemModules.filter(m => {
+			const matchesCategory = moduleCategory === 'ALL' || moduleCategory === m.category;
+			const q = moduleSearch.trim().toLowerCase();
+			const matchesSearch = !q || m.title.toLowerCase().includes(q) || m.desc.toLowerCase().includes(q) || m.link.toLowerCase().includes(q);
+			return matchesCategory && matchesSearch;
+		})
+	);
+
+	const filteredAppModules = $derived(
+		appModules.filter(m => {
+			const matchesCategory = moduleCategory === 'ALL' || moduleCategory === 'BUSINESS';
+			const q = moduleSearch.trim().toLowerCase();
+			const matchesSearch = !q || m.title.toLowerCase().includes(q) || m.desc.toLowerCase().includes(q) || m.link.toLowerCase().includes(q);
+			return matchesCategory && matchesSearch;
+		})
+	);
+
+	function canAccess(mod) {
+		if (isRoot) return true;
+		const reqRank = mod.minRank ?? 4;
+		return userRank >= reqRank;
 	}
 </script>
 
@@ -385,133 +442,254 @@
 		</a>
 	</div>
 
+	<!-- 🔍 모듈 검색 및 카테고리 필터 바 -->
+	<div class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+		<!-- 카테고리 탭 -->
+		<div class="join border border-slate-200 bg-slate-100 p-1 rounded-xl shadow-xs">
+			<button 
+				class="btn btn-xs join-item font-bold border-none {moduleCategory === 'ALL' ? 'bg-purple-700 text-white shadow' : 'bg-transparent text-slate-600'}"
+				onclick={() => moduleCategory = 'ALL'}
+			>
+				전체 모듈 ({systemModules.length + appModules.length})
+			</button>
+			<button 
+				class="btn btn-xs join-item font-bold border-none {moduleCategory === 'CORE' ? 'bg-purple-700 text-white shadow' : 'bg-transparent text-slate-600'}"
+				onclick={() => moduleCategory = 'CORE'}
+			>
+				🛡️ 코어 인프라 ({systemModules.filter(m => m.category === 'CORE').length})
+			</button>
+			<button 
+				class="btn btn-xs join-item font-bold border-none {moduleCategory === 'OPERATIONS' ? 'bg-purple-700 text-white shadow' : 'bg-transparent text-slate-600'}"
+				onclick={() => moduleCategory = 'OPERATIONS'}
+			>
+				📢 운영 관제 ({systemModules.filter(m => m.category === 'OPERATIONS').length})
+			</button>
+			<button 
+				class="btn btn-xs join-item font-bold border-none {moduleCategory === 'BUSINESS' ? 'bg-blue-600 text-white shadow' : 'bg-transparent text-slate-600'}"
+				onclick={() => moduleCategory = 'BUSINESS'}
+			>
+				🚐 현장 업무 ({appModules.length})
+			</button>
+		</div>
+
+		<!-- 검색창 -->
+		<div class="w-full md:w-72 relative">
+			<Icon icon="mdi:magnify" class="absolute top-1/2 left-3 -translate-y-1/2 text-slate-400" />
+			<input 
+				type="text" 
+				bind:value={moduleSearch} 
+				placeholder="모듈명, 설명, 경로 검색..." 
+				class="input input-sm input-bordered w-full rounded-xl pl-9 font-bold bg-white focus:border-purple-500"
+			/>
+		</div>
+	</div>
+
 	<!-- 🛡️ 섹션 1: 시스템 코어 관제 모듈 (SYSTEM App: 사용자 화면 없이 관리자 화면만 존재 / 삭제 불가) -->
+	{#if filteredSystemModules.length > 0}
 	<div class="space-y-4 md:space-y-6">
 		<div class="flex flex-col gap-1 border-l-4 border-purple-700 pl-3 md:border-l-8 md:pl-4">
 			<div class="flex items-center gap-2">
 				<h3 class="text-xl font-black tracking-tighter text-slate-900 italic md:text-2xl">
-					시스템 코어 관제 모듈 (System Apps)
+					시스템 관리자 관제 모듈 (System Apps)
 				</h3>
 				<span
 					class="rounded border border-purple-200 bg-purple-50 px-2 py-0.5 text-[10px] font-black tracking-widest text-purple-700 uppercase"
 				>
-					SYSTEM · 관리자 전용 (삭제 불가)
+					SYSTEM · {filteredSystemModules.length}개
 				</span>
 			</div>
 			<p class="text-xs font-bold text-slate-500">
-				일반 사용자 화면을 제외하고 오직 관리자 화면만 존재하는 시스템 필수 인프라 및 보안 관제 앱입니다.
+				티어 구속 없이 시스템 앱별로 독립적인 권한(허용 그룹 및 최소 랭크)이 적용된 관리자 전용 앱입니다.
 			</p>
 		</div>
 		<div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-			{#each systemModules as mod (mod.link)}
-				<a
-					href={mod.link}
-					class="group relative overflow-hidden rounded-xl border border-slate-200 bg-white p-6 shadow-md transition-all duration-300 hover:border-purple-400 hover:bg-slate-50 md:rounded-2xl md:p-8 md:shadow-lg"
-				>
-					<div class="relative z-10 flex items-start justify-between">
-						<div
-							class="h-12 w-12 md:h-14 md:w-14 {mod.color} flex items-center justify-center rounded-lg text-xl text-white shadow-md transition-transform group-hover:scale-110 md:rounded-xl md:text-2xl"
-						>
-							<Icon icon={mod.icon} />
-						</div>
-						<div class="flex flex-col items-end gap-1.5">
-							<span
-								class="rounded border px-2 py-0.5 text-[9px] font-black tracking-wider uppercase {getTypeBadgeClass(
-									mod.type
-								)}"
-							>
-								{mod.type} APP
-							</span>
+			{#each filteredSystemModules as mod (mod.link)}
+				{@const hasAccess = canAccess(mod)}
+				{#if hasAccess}
+					<!-- 접근 권한 있음: 정상 진입 링크 -->
+					<a
+						href={mod.link}
+						class="group relative overflow-hidden rounded-xl border border-slate-200 bg-white p-6 shadow-md transition-all duration-300 hover:border-purple-400 hover:bg-slate-50 md:rounded-2xl md:p-8 md:shadow-lg"
+					>
+						<div class="relative z-10 flex items-start justify-between">
 							<div
-								class="flex items-center gap-1 text-[8px] font-black tracking-widest text-slate-500 uppercase opacity-0 transition-opacity group-hover:opacity-100 md:gap-2 md:text-[9px]"
+								class="h-12 w-12 md:h-14 md:w-14 {mod.color} flex items-center justify-center rounded-lg text-xl text-white shadow-md transition-transform group-hover:scale-110 md:rounded-xl md:text-2xl"
 							>
-								관제 진입 <span
-									class="translate-x-0 transition-transform group-hover:translate-x-1 md:group-hover:translate-x-2"
-									>→</span
+								<Icon icon={mod.icon} />
+							</div>
+							<div class="flex flex-col items-end gap-1.5">
+								<span
+									class="rounded border px-2 py-0.5 text-[9px] font-black tracking-wider uppercase {getTypeBadgeClass(
+										mod.type
+									)}"
 								>
+									{mod.type} APP
+								</span>
+								<div
+									class="flex items-center gap-1 text-[8px] font-black tracking-widest text-slate-500 uppercase opacity-0 transition-opacity group-hover:opacity-100 md:gap-2 md:text-[9px]"
+								>
+									관제 진입 <span
+										class="translate-x-0 transition-transform group-hover:translate-x-1 md:group-hover:translate-x-2"
+										>→</span
+									>
+								</div>
 							</div>
 						</div>
+						<div class="relative z-10 mt-6 md:mt-8">
+							<h4
+								class="mb-1 text-xl font-black tracking-tighter text-slate-900 md:mb-2 md:text-2xl"
+							>
+								{mod.title}
+							</h4>
+							<p
+								class="text-xs leading-relaxed font-bold text-slate-500 opacity-70 group-hover:opacity-90"
+							>
+								{mod.desc}
+							</p>
+						</div>
+					</a>
+				{:else}
+					<!-- 접근 권한 없음: 비활성화 카드 (링크 없음, L2 알림 배너 미호출) -->
+					<div
+						class="relative overflow-hidden rounded-xl border border-slate-200 bg-slate-50/70 p-6 opacity-65 md:rounded-2xl md:p-8 select-none"
+						title="해당 시스템 모듈은 Lv.{mod.minRank} 이상 관리자 권한이 필요합니다."
+					>
+						<div class="relative z-10 flex items-start justify-between">
+							<div
+								class="h-12 w-12 md:h-14 md:w-14 bg-slate-300 text-slate-500 flex items-center justify-center rounded-lg text-xl md:rounded-xl md:text-2xl"
+							>
+								<Icon icon={mod.icon} />
+							</div>
+							<div class="flex flex-col items-end gap-1.5">
+								<span class="rounded bg-rose-50 text-rose-700 border border-rose-200 px-2 py-0.5 text-[10px] font-bold flex items-center gap-1">
+									<Icon icon="mdi:lock" class="text-xs" /> Lv.{mod.minRank} 이상 권한 필요
+								</span>
+							</div>
+						</div>
+						<div class="relative z-10 mt-6 md:mt-8">
+							<div class="flex items-center gap-1.5">
+								<h4
+									class="mb-1 text-xl font-bold tracking-tighter text-slate-500 md:mb-2 md:text-2xl"
+								>
+									{mod.title}
+								</h4>
+								<Icon icon="mdi:lock-outline" class="text-slate-400 text-lg mb-1" />
+							</div>
+							<p
+								class="text-xs leading-relaxed font-medium text-slate-400"
+							>
+								{mod.desc}
+							</p>
+						</div>
 					</div>
-					<div class="relative z-10 mt-6 md:mt-8">
-						<h4
-							class="mb-1 text-xl font-black tracking-tighter text-slate-900 md:mb-2 md:text-2xl"
-						>
-							{mod.title}
-						</h4>
-						<p
-							class="text-xs leading-relaxed font-bold text-slate-500 opacity-70 group-hover:opacity-90"
-						>
-							{mod.desc}
-						</p>
-					</div>
-				</a>
+				{/if}
 			{/each}
 		</div>
 	</div>
+	{/if}
 
 	<!-- 🧩 섹션 2: 비즈니스 & 콘텐츠 앱 관리 모듈 (INSTANCE / CUSTOM / SERVICE / PAGES) -->
+	{#if filteredAppModules.length > 0}
 	<div class="space-y-4 pt-4 md:space-y-6 md:pt-6">
 		<div class="flex flex-col gap-1 border-l-4 border-blue-600 pl-3 md:border-l-8 md:pl-4">
 			<div class="flex items-center gap-2">
 				<h3 class="text-xl font-black tracking-tighter text-slate-900 italic md:text-2xl">
-					비즈니스 & 콘텐츠 앱 관리 (Instance · Custom · Service · Pages)
+					현장 비즈니스 & 콘텐츠 앱 관리
 				</h3>
 				<span
 					class="rounded border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] font-black tracking-widest text-blue-700 uppercase"
 				>
-					NON-SYSTEM · 사용자/애드온 연동
+					업무 앱 · {filteredAppModules.length}개
 				</span>
 			</div>
 			<p class="text-xs font-bold text-slate-500">
-				다중 추상화 인스턴스 앱(INSTANCE), 단일 업무 앱(CUSTOM), 애드온 서비스 앱(SERVICE) 및 정적 페이지(PAGES)를 관리합니다.
+				배차, 노선, 결근계 등 현장 업무 및 게시판/페이지 인스턴스를 관리합니다.
 			</p>
 		</div>
 		<div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-			{#each appModules as mod (mod.link)}
-				<a
-					href={mod.link}
-					class="group relative overflow-hidden rounded-xl border border-slate-200 bg-white p-6 shadow-md transition-all duration-300 hover:border-blue-400 hover:bg-slate-50 md:rounded-2xl md:p-8 md:shadow-lg"
-				>
-					<div class="relative z-10 flex items-start justify-between">
-						<div
-							class="h-12 w-12 md:h-14 md:w-14 {mod.color} flex items-center justify-center rounded-lg text-xl text-white shadow-md transition-transform group-hover:scale-110 md:rounded-xl md:text-2xl"
-						>
-							<Icon icon={mod.icon} />
-						</div>
-						<div class="flex flex-col items-end gap-1.5">
-							<span
-								class="rounded border px-2 py-0.5 text-[9px] font-black tracking-wider uppercase {getTypeBadgeClass(
-									mod.type
-								)}"
-							>
-								{mod.type} APP
-							</span>
+			{#each filteredAppModules as mod (mod.link)}
+				{@const hasAccess = canAccess(mod)}
+				{#if hasAccess}
+					<a
+						href={mod.link}
+						class="group relative overflow-hidden rounded-xl border border-slate-200 bg-white p-6 shadow-md transition-all duration-300 hover:border-blue-400 hover:bg-slate-50 md:rounded-2xl md:p-8 md:shadow-lg"
+					>
+						<div class="relative z-10 flex items-start justify-between">
 							<div
-								class="flex items-center gap-1 text-[8px] font-black tracking-widest text-slate-500 uppercase opacity-0 transition-opacity group-hover:opacity-100 md:gap-2 md:text-[9px]"
+								class="h-12 w-12 md:h-14 md:w-14 {mod.color} flex items-center justify-center rounded-lg text-xl text-white shadow-md transition-transform group-hover:scale-110 md:rounded-xl md:text-2xl"
 							>
-								관리 진입 <span
-									class="translate-x-0 transition-transform group-hover:translate-x-1 md:group-hover:translate-x-2"
-									>→</span
+								<Icon icon={mod.icon} />
+							</div>
+							<div class="flex flex-col items-end gap-1.5">
+								<span
+									class="rounded border px-2 py-0.5 text-[9px] font-black tracking-wider uppercase {getTypeBadgeClass(
+										mod.type
+									)}"
 								>
+									{mod.type} APP
+								</span>
+								<div
+									class="flex items-center gap-1 text-[8px] font-black tracking-widest text-slate-500 uppercase opacity-0 transition-opacity group-hover:opacity-100 md:gap-2 md:text-[9px]"
+								>
+									관리 진입 <span
+										class="translate-x-0 transition-transform group-hover:translate-x-1 md:group-hover:translate-x-2"
+										>→</span
+									>
+								</div>
 							</div>
 						</div>
+						<div class="relative z-10 mt-6 md:mt-8">
+							<h4
+								class="mb-1 text-xl font-black tracking-tighter text-slate-900 md:mb-2 md:text-2xl"
+							>
+								{mod.title}
+							</h4>
+							<p
+								class="text-xs leading-relaxed font-bold text-slate-500 opacity-70 group-hover:opacity-90"
+							>
+								{mod.desc}
+							</p>
+						</div>
+					</a>
+				{:else}
+					<div
+						class="relative overflow-hidden rounded-xl border border-slate-200 bg-slate-50/70 p-6 opacity-65 md:rounded-2xl md:p-8 select-none"
+						title="해당 업무 모듈은 Lv.{mod.minRank} 이상 관리자 권한이 필요합니다."
+					>
+						<div class="relative z-10 flex items-start justify-between">
+							<div
+								class="h-12 w-12 md:h-14 md:w-14 bg-slate-300 text-slate-500 flex items-center justify-center rounded-lg text-xl md:rounded-xl md:text-2xl"
+							>
+								<Icon icon={mod.icon} />
+							</div>
+							<div class="flex flex-col items-end gap-1.5">
+								<span class="rounded bg-rose-50 text-rose-700 border border-rose-200 px-2 py-0.5 text-[10px] font-bold flex items-center gap-1">
+									<Icon icon="mdi:lock" class="text-xs" /> Lv.{mod.minRank} 이상 권한 필요
+								</span>
+							</div>
+						</div>
+						<div class="relative z-10 mt-6 md:mt-8">
+							<div class="flex items-center gap-1.5">
+								<h4
+									class="mb-1 text-xl font-bold tracking-tighter text-slate-500 md:mb-2 md:text-2xl"
+								>
+									{mod.title}
+								</h4>
+								<Icon icon="mdi:lock-outline" class="text-slate-400 text-lg mb-1" />
+							</div>
+							<p
+								class="text-xs leading-relaxed font-medium text-slate-400"
+							>
+								{mod.desc}
+							</p>
+						</div>
 					</div>
-					<div class="relative z-10 mt-6 md:mt-8">
-						<h4
-							class="mb-1 text-xl font-black tracking-tighter text-slate-900 md:mb-2 md:text-2xl"
-						>
-							{mod.title}
-						</h4>
-						<p
-							class="text-xs leading-relaxed font-bold text-slate-500 opacity-70 group-hover:opacity-90"
-						>
-							{mod.desc}
-						</p>
-					</div>
-				</a>
+				{/if}
 			{/each}
 		</div>
 	</div>
+	{/if}
+
 	<!-- ⚙️ 퀵 링크: 메뉴 마스터 -->
 	<div
 		class="flex flex-col items-center justify-between gap-6 rounded-xl border border-slate-200 bg-white p-8 shadow-xl md:flex-row md:gap-8 md:rounded-2xl md:p-10"

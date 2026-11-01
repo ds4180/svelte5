@@ -46,9 +46,17 @@
   let instanceFilter = $state('ALL'); // 'ALL' | 'BOARD' | 'PAGE' | 'APP'
   let instanceSearchQuery = $state('');
 
-  // 필터링된 인스턴스 목록
+  // 🏛️ 시스템 앱(admin_*)과 일반 업무 인스턴스 파생 분리
+  let adminApps = $derived(
+    instances.filter(i => i.target_id && String(i.target_id).startsWith('admin'))
+  );
+  let businessInstances = $derived(
+    instances.filter(i => !i.target_id || !String(i.target_id).startsWith('admin'))
+  );
+
+  // 3번 탭: 일반 업무 인스턴스 필터링 목록
   let filteredInstances = $derived(
-    instances.filter(i => {
+    businessInstances.filter(i => {
       const matchesType = instanceFilter === 'ALL' || i.instance_type === instanceFilter;
       const q = instanceSearchQuery.trim().toLowerCase();
       const matchesSearch = !q ||
@@ -57,6 +65,19 @@
         (i.target_id && String(i.target_id).toLowerCase().includes(q)) ||
         (i.parent_engine && i.parent_engine.toLowerCase().includes(q));
       return matchesType && matchesSearch;
+    })
+  );
+
+  // 4번 탭: 시스템 앱 검색 및 필터링 목록
+  let systemAppSearchQuery = $state('');
+  let filteredSystemApps = $derived(
+    adminApps.filter(i => {
+      const q = systemAppSearchQuery.trim().toLowerCase();
+      return !q ||
+        (i.title && i.title.toLowerCase().includes(q)) ||
+        (i.slug && i.slug.toLowerCase().includes(q)) ||
+        (i.target_id && String(i.target_id).toLowerCase().includes(q)) ||
+        (i.parent_engine && i.parent_engine.toLowerCase().includes(q));
     })
   );
 
@@ -437,11 +458,11 @@
     </button>
   </div>
 
-  <!-- 🎛️ 2. 메인 3대 뷰 내비게이션 탭 바 -->
-  <div class="tabs tabs-boxed bg-slate-200/80 p-1.5 rounded-2xl flex border border-slate-300 shadow-inner">
+  <!-- 🎛️ 2. 메인 4대 뷰 내비게이션 탭 바 -->
+  <div class="tabs tabs-boxed bg-slate-200/80 p-1.5 rounded-2xl flex flex-wrap md:flex-nowrap border border-slate-300 shadow-inner gap-1">
     <!-- 탭 1: 그룹 뷰 -->
     <button 
-      class="tab flex-1 h-12 rounded-xl font-black text-sm transition-all flex items-center justify-center gap-2 {activeMainTab === 'group' ? 'bg-white shadow-md text-cyan-700' : 'text-slate-600 hover:text-slate-900'}"
+      class="tab flex-1 h-12 rounded-xl font-black text-xs md:text-sm transition-all flex items-center justify-center gap-2 {activeMainTab === 'group' ? 'bg-white shadow-md text-cyan-700' : 'text-slate-600 hover:text-slate-900'}"
       onclick={() => activeMainTab = 'group'}
     >
       <Icon icon="mdi:folder-account-outline" class="text-xl" />
@@ -453,7 +474,7 @@
 
     <!-- 탭 2: 사용자 뷰 -->
     <button 
-      class="tab flex-1 h-12 rounded-xl font-black text-sm transition-all flex items-center justify-center gap-2 {activeMainTab === 'user' ? 'bg-white shadow-md text-emerald-700' : 'text-slate-600 hover:text-slate-900'}"
+      class="tab flex-1 h-12 rounded-xl font-black text-xs md:text-sm transition-all flex items-center justify-center gap-2 {activeMainTab === 'user' ? 'bg-white shadow-md text-emerald-700' : 'text-slate-600 hover:text-slate-900'}"
       onclick={() => activeMainTab = 'user'}
     >
       <Icon icon="mdi:account-details-outline" class="text-xl" />
@@ -463,15 +484,27 @@
       </span>
     </button>
 
-    <!-- 탭 3: 인스턴스 뷰 -->
+    <!-- 탭 3: 업무 인스턴스 뷰 -->
     <button 
-      class="tab flex-1 h-12 rounded-xl font-black text-sm transition-all flex items-center justify-center gap-2 {activeMainTab === 'instance' ? 'bg-white shadow-md text-indigo-700' : 'text-slate-600 hover:text-slate-900'}"
+      class="tab flex-1 h-12 rounded-xl font-black text-xs md:text-sm transition-all flex items-center justify-center gap-2 {activeMainTab === 'instance' ? 'bg-white shadow-md text-indigo-700' : 'text-slate-600 hover:text-slate-900'}"
       onclick={() => activeMainTab = 'instance'}
     >
       <Icon icon="mdi:shield-lock-outline" class="text-xl" />
-      <span>3. 인스턴스 뷰 (게시판·페이지·단일앱)</span>
+      <span>3. 인스턴스 뷰</span>
       <span class="rounded-full bg-indigo-100 text-indigo-800 px-2 py-0.5 text-[10px] font-bold">
-        {instances.length}개 인스턴스
+        {businessInstances.length}개
+      </span>
+    </button>
+
+    <!-- 탭 4: 시스템 앱 뷰 (신설!) -->
+    <button 
+      class="tab flex-1 h-12 rounded-xl font-black text-xs md:text-sm transition-all flex items-center justify-center gap-2 {activeMainTab === 'system-app' ? 'bg-white shadow-md text-purple-700' : 'text-slate-600 hover:text-slate-900'}"
+      onclick={() => activeMainTab = 'system-app'}
+    >
+      <Icon icon="mdi:shield-account-outline" class="text-xl text-purple-600" />
+      <span>4. 시스템 앱 뷰</span>
+      <span class="rounded-full bg-purple-100 text-purple-800 px-2 py-0.5 text-[10px] font-bold">
+        {adminApps.length}개 시스템 앱
       </span>
     </button>
   </div>
@@ -806,25 +839,25 @@
               class="btn btn-xs join-item font-bold border-none {instanceFilter === 'ALL' ? 'bg-indigo-600 text-white shadow' : 'bg-transparent text-slate-600'}"
               onclick={() => instanceFilter = 'ALL'}
             >
-              전체 인스턴스 ({instances.length})
+              전체 인스턴스 ({businessInstances.length})
             </button>
             <button 
               class="btn btn-xs join-item font-bold border-none {instanceFilter === 'BOARD' ? 'bg-indigo-600 text-white shadow' : 'bg-transparent text-slate-600'}"
               onclick={() => instanceFilter = 'BOARD'}
             >
-              📋 게시판 ({instances.filter(i => i.instance_type === 'BOARD').length})
+              📋 게시판 ({businessInstances.filter(i => i.instance_type === 'BOARD').length})
             </button>
             <button 
               class="btn btn-xs join-item font-bold border-none {instanceFilter === 'PAGE' ? 'bg-indigo-600 text-white shadow' : 'bg-transparent text-slate-600'}"
               onclick={() => instanceFilter = 'PAGE'}
             >
-              📄 페이지 ({instances.filter(i => i.instance_type === 'PAGE').length})
+              📄 페이지 ({businessInstances.filter(i => i.instance_type === 'PAGE').length})
             </button>
             <button 
               class="btn btn-xs join-item font-bold border-none {instanceFilter === 'APP' ? 'bg-indigo-600 text-white shadow' : 'bg-transparent text-slate-600'}"
               onclick={() => instanceFilter = 'APP'}
             >
-              🚐 단일 앱 ({instances.filter(i => i.instance_type === 'APP').length})
+              🚐 업무 앱 ({businessInstances.filter(i => i.instance_type === 'APP').length})
             </button>
           </div>
 
@@ -1067,6 +1100,281 @@
             <div class="card bg-white border border-slate-200 p-12 text-center text-slate-400 rounded-2xl">
               <Icon icon="mdi:database-search-outline" class="mx-auto text-4xl mb-2 text-slate-300" />
               <p class="font-bold text-sm">조건에 맞는 인스턴스가 존재하지 않습니다.</p>
+            </div>
+          {/if}
+        </div>
+
+      </div>
+    {/if}
+
+    <!-- ========================================================================= -->
+    <!-- ⚙️ 3-D. [4. 시스템 앱 뷰]: admin_* 시스템 앱별 원자적 권한 배분 및 허용 그룹 관리 -->
+    <!-- ========================================================================= -->
+    {#if activeMainTab === 'system-app'}
+      <div class="space-y-4" in:fade={{ duration: 150 }}>
+        
+        <!-- 상단 정책 요약 배너 -->
+        <div class="rounded-2xl border border-purple-200 bg-gradient-to-r from-purple-50/80 via-white to-purple-50/40 p-4 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <h3 class="text-sm font-black text-purple-950 flex items-center gap-1.5">
+              <Icon icon="mdi:shield-account" class="text-purple-600 text-lg" />
+              시스템 관리자 앱(`admin_*`) 독립 권한 배분 통제소
+            </h3>
+            <p class="text-xs font-bold text-slate-600 mt-1">
+              티어 구분 없이 각 시스템 앱별로 <strong>허용 그룹(`allow_groups`)</strong>과 <strong>최소 권한 랭크(`min_read_rank`)</strong>를 원자적으로 배분합니다.
+            </p>
+            <div class="mt-2 flex flex-wrap items-center gap-2 text-xs font-bold text-slate-600">
+              <span class="rounded bg-slate-900 text-white px-2 py-0.5 text-[10px]">1단계</span> root(Lv.9) 무조건 통과
+              <span>➔</span>
+              <span class="rounded bg-rose-600 text-white px-2 py-0.5 text-[10px]">2단계</span> deny 그룹 즉시 차단
+              <span>➔</span>
+              <span class="rounded bg-emerald-600 text-white px-2 py-0.5 text-[10px]">3단계</span> allow 그룹 즉시 통과 (Allow-Wins)
+              <span>➔</span>
+              <span class="rounded bg-blue-600 text-white px-2 py-0.5 text-[10px]">4단계</span> 최소 랭크 대소비교
+            </div>
+          </div>
+          <div class="text-[11px] font-extrabold text-purple-900 bg-purple-100/70 px-3 py-2 rounded-xl border border-purple-200 text-right">
+            <span>✨ 등록된 시스템 앱: <strong>{adminApps.length}개</strong></span><br/>
+            <span class="text-[10px] text-purple-700 font-bold">운영팀, 총무팀 등에 자유롭게 권한 위임 가능</span>
+          </div>
+        </div>
+
+        <!-- 검색 바 -->
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+          <div class="flex items-center gap-2">
+            <span class="text-xs font-black text-slate-600">시스템 앱 필터링:</span>
+            <span class="badge badge-sm badge-purple font-mono font-bold">{filteredSystemApps.length} / {adminApps.length}개</span>
+          </div>
+
+          <div class="w-full md:w-72 relative">
+            <Icon icon="mdi:magnify" class="absolute top-1/2 left-3 -translate-y-1/2 text-slate-400" />
+            <input 
+              type="text" 
+              bind:value={systemAppSearchQuery} 
+              placeholder="시스템 앱 명칭, ID, 경로 검색..." 
+              class="input input-sm input-bordered w-full rounded-xl pl-9 font-bold bg-white focus:border-purple-500"
+            />
+          </div>
+        </div>
+
+        <!-- 시스템 앱 목록 카드 그리드 -->
+        <div class="grid grid-cols-1 gap-4">
+          {#each filteredSystemApps as inst (inst.instance_type + '_' + inst.target_id)}
+            <div class="card bg-white border border-slate-200 hover:border-purple-300 rounded-2xl shadow-sm hover:shadow-md transition-all">
+              <div class="card-body p-6">
+                
+                <!-- 헤더 영역 -->
+                <div class="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-slate-100 pb-4">
+                  <div class="flex items-center gap-3">
+                    <div class="h-11 w-11 rounded-2xl bg-purple-50 border border-purple-200 flex items-center justify-center text-2xl text-purple-600">
+                      <Icon icon={inst.icon || 'mdi:cog-box'} />
+                    </div>
+                    <div>
+                      <div class="flex items-center gap-2">
+                        <span class="rounded px-2 py-0.5 text-[10px] font-black border bg-purple-50 text-purple-700 border-purple-200">
+                          ⚙️ 시스템 앱
+                        </span>
+                        <h3 class="text-lg font-black text-slate-900">{inst.title}</h3>
+                        <span class="rounded bg-slate-100 font-mono text-slate-600 px-2 py-0.5 text-[10px] font-bold">
+                          {inst.target_id}
+                        </span>
+                      </div>
+                      <p class="text-xs text-slate-400 font-bold mt-0.5">
+                        진입 경로: <span class="font-mono text-purple-700 font-black">/v1/admin/{String(inst.target_id).replace('admin_', '')}</span>
+                      </p>
+                    </div>
+                  </div>
+
+                  <!-- 4단계: 랭킹 설정 슬롯 -->
+                  <div class="flex items-center gap-4 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                    <div class="flex items-center gap-2">
+                      <span class="text-xs font-black text-slate-600">열람(진입) 최소 랭크:</span>
+                      <select 
+                        class="select select-bordered select-xs w-20 font-bold bg-white focus:border-purple-500"
+                        bind:value={inst.min_read_rank}
+                        onchange={() => handleSaveInstancePermissions(inst)}
+                      >
+                        {#each Array(10) as _, i}
+                          <option value={i}>Lv.{i}</option>
+                        {/each}
+                      </select>
+                    </div>
+                    <div class="flex items-center gap-2 border-l border-slate-200 pl-4">
+                      <span class="text-xs font-black text-slate-600">실행(쓰기) 최소 랭크:</span>
+                      <select 
+                        class="select select-bordered select-xs w-20 font-bold bg-white focus:border-purple-500"
+                        bind:value={inst.min_write_rank}
+                        onchange={() => handleSaveInstancePermissions(inst)}
+                      >
+                        {#each Array(10) as _, i}
+                          <option value={i}>Lv.{i}</option>
+                        {/each}
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- 그룹 Allow & Deny 설정 영역 (2분할) -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                  
+                  <!-- 3단계: ALLOW 그룹 (허용) -->
+                  <div class="rounded-xl border border-emerald-200 bg-emerald-50/40 p-4 space-y-2.5">
+                    <div class="flex items-center justify-between">
+                      <span class="text-xs font-black text-emerald-900 flex items-center gap-1.5">
+                        <Icon icon="mdi:check-circle-outline" class="text-base text-emerald-600" />
+                        허용 그룹 (allow_groups)
+                      </span>
+                      <span class="text-[10px] font-bold text-emerald-700">지정 시 랭크 무관 즉시 허가 (Allow-Wins)</span>
+                    </div>
+
+                    <div class="flex flex-wrap items-center gap-1.5 min-h-[36px]">
+                      {#each getGroupBadges(inst.allow_groups) as badge}
+                        <span class="inline-flex items-center gap-1.5 rounded-lg border px-2 py-0.5 text-xs font-bold
+                          {badge.action === 'all' ? 'bg-emerald-100 text-emerald-950 border-emerald-300' : ''}
+                          {badge.action === 'read' ? 'bg-sky-100 text-sky-950 border-sky-300' : ''}
+                          {badge.action === 'write' ? 'bg-amber-100 text-amber-950 border-amber-300' : ''}"
+                        >
+                          <span class="text-[9px] font-black px-1 py-0.2 rounded
+                            {badge.action === 'all' ? 'bg-emerald-200 text-emerald-800' : ''}
+                            {badge.action === 'read' ? 'bg-sky-200 text-sky-800' : ''}
+                            {badge.action === 'write' ? 'bg-amber-200 text-amber-800' : ''}"
+                          >
+                            {badge.label}
+                          </span>
+                          <span>{badge.code}</span>
+                          <button 
+                            class="hover:text-red-600 ml-0.5 font-black text-xs leading-none"
+                            onclick={() => handleInstanceRemoveAllow(inst, badge.code, badge.action)}
+                            title="허용 그룹에서 제외"
+                          >
+                            ×
+                          </button>
+                        </span>
+                      {/each}
+
+                      <!-- 허용 그룹 추가 드롭다운 -->
+                      <div class="dropdown dropdown-bottom">
+                        <div tabindex="0" role="button" class="btn btn-xs bg-white border border-emerald-300 text-emerald-800 rounded-lg font-bold hover:bg-emerald-50">
+                          + 허용 추가
+                        </div>
+                        <div tabindex="-1" class="dropdown-content z-20 p-2 shadow-2xl bg-white rounded-2xl w-72 border border-emerald-200 text-xs space-y-1 max-h-64 overflow-y-auto">
+                          <div class="px-2 py-1 text-[11px] font-black text-slate-400 border-b border-slate-100 flex justify-between">
+                            <span>대상 그룹</span>
+                            <span>허용 범위 선택</span>
+                          </div>
+                          {#each allGroupCodes as g}
+                            <div class="flex items-center justify-between p-1.5 hover:bg-emerald-50/60 rounded-xl transition-colors">
+                              <div class="flex flex-col min-w-0 pr-1">
+                                <span class="font-bold text-slate-800 truncate">{g.name}</span>
+                                <span class="text-[10px] font-mono text-slate-400 truncate">({g.code})</span>
+                              </div>
+                              <div class="flex items-center gap-1 shrink-0">
+                                <button 
+                                  class="btn btn-2xs rounded-md bg-emerald-600 text-white hover:bg-emerald-700 font-bold px-1.5"
+                                  onclick={() => handleInstanceAddAllow(inst, g.code, 'all')}
+                                  title="읽기·쓰기 모두 허용"
+                                >
+                                  전체
+                                </button>
+                                <button 
+                                  class="btn btn-2xs rounded-md bg-sky-600 text-white hover:bg-sky-700 font-bold px-1.5"
+                                  onclick={() => handleInstanceAddAllow(inst, g.code, 'read')}
+                                  title="열람만 허용"
+                                >
+                                  열람
+                                </button>
+                              </div>
+                            </div>
+                          {/each}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- 2단계: DENY 그룹 (차단) -->
+                  <div class="rounded-xl border border-rose-200 bg-rose-50/40 p-4 space-y-2.5">
+                    <div class="flex items-center justify-between">
+                      <span class="text-xs font-black text-rose-900 flex items-center gap-1.5">
+                        <Icon icon="mdi:close-circle-outline" class="text-base text-rose-600" />
+                        차단 그룹 (deny_groups)
+                      </span>
+                      <span class="text-[10px] font-bold text-rose-700">소속 시 무조건 차단 (Deny-Wins)</span>
+                    </div>
+
+                    <div class="flex flex-wrap items-center gap-1.5 min-h-[36px]">
+                      {#each getGroupBadges(inst.deny_groups) as badge}
+                        <span class="inline-flex items-center gap-1.5 rounded-lg border px-2 py-0.5 text-xs font-bold
+                          {badge.action === 'all' ? 'bg-rose-100 text-rose-950 border-rose-300' : ''}
+                          {badge.action === 'write' ? 'bg-orange-100 text-orange-950 border-orange-300' : ''}
+                          {badge.action === 'read' ? 'bg-purple-100 text-purple-950 border-purple-300' : ''}"
+                        >
+                          <span class="text-[9px] font-black px-1 py-0.2 rounded
+                            {badge.action === 'all' ? 'bg-rose-200 text-rose-800' : ''}
+                            {badge.action === 'write' ? 'bg-orange-200 text-orange-800' : ''}
+                            {badge.action === 'read' ? 'bg-purple-200 text-purple-800' : ''}"
+                          >
+                            {badge.label}차단
+                          </span>
+                          <span>{badge.code}</span>
+                          <button 
+                            class="hover:text-red-700 ml-0.5 font-black text-xs leading-none"
+                            onclick={() => handleInstanceRemoveDeny(inst, badge.code, badge.action)}
+                            title="차단 그룹에서 제외"
+                          >
+                            ×
+                          </button>
+                        </span>
+                      {/each}
+
+                      <!-- 차단 그룹 추가 드롭다운 -->
+                      <div class="dropdown dropdown-bottom">
+                        <div tabindex="0" role="button" class="btn btn-xs bg-white border border-rose-300 text-rose-800 rounded-lg font-bold hover:bg-rose-50">
+                          + 차단 추가
+                        </div>
+                        <div tabindex="-1" class="dropdown-content z-20 p-2 shadow-2xl bg-white rounded-2xl w-72 border border-rose-200 text-xs space-y-1 max-h-64 overflow-y-auto">
+                          <div class="px-2 py-1 text-[11px] font-black text-slate-400 border-b border-slate-100 flex justify-between">
+                            <span>차단 대상 그룹</span>
+                            <span>차단 범위 선택</span>
+                          </div>
+                          {#each allGroupCodes as g}
+                            <div class="flex items-center justify-between p-1.5 hover:bg-rose-50/60 rounded-xl transition-colors">
+                              <div class="flex flex-col min-w-0 pr-1">
+                                <span class="font-bold text-rose-900 truncate">{g.name}</span>
+                                <span class="text-[10px] font-mono text-slate-400 truncate">({g.code})</span>
+                              </div>
+                              <div class="flex items-center gap-1 shrink-0">
+                                <button 
+                                  class="btn btn-2xs rounded-md bg-rose-600 text-white hover:bg-rose-700 font-bold px-1.5"
+                                  onclick={() => handleInstanceAddDeny(inst, g.code, 'all')}
+                                  title="읽기·쓰기 모두 차단 (Deny-Wins)"
+                                >
+                                  전체차단
+                                </button>
+                                <button 
+                                  class="btn btn-2xs rounded-md bg-orange-600 text-white hover:bg-orange-700 font-bold px-1.5"
+                                  onclick={() => handleInstanceAddDeny(inst, g.code, 'write')}
+                                  title="쓰기만 차단 (열람은 허용)"
+                                >
+                                  쓰기차단
+                                </button>
+                              </div>
+                            </div>
+                          {/each}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                </div>
+
+              </div>
+            </div>
+          {/each}
+
+          {#if filteredSystemApps.length === 0}
+            <div class="card bg-white border border-slate-200 p-12 text-center text-slate-400 rounded-2xl">
+              <Icon icon="mdi:shield-search" class="mx-auto text-4xl mb-2 text-purple-300" />
+              <p class="font-bold text-sm">조건에 맞는 시스템 앱이 존재하지 않습니다.</p>
             </div>
           {/if}
         </div>
