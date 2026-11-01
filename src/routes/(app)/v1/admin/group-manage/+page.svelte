@@ -287,29 +287,121 @@
     }
   }
 
-  // 7) 인스턴스 allow 그룹 토글
-  function handleInstanceToggleAllow(inst, code) {
-    if (inst.deny_groups?.includes(code)) {
-      alertState.send(`[${code}]는 이미 차단(deny) 목록에 있습니다. 먼저 차단을 해제해주세요.`, { level: 2, style: 'warning' });
-      return;
+  // -------------------------------------------------------------------------
+  // 🏷️ JSONB 듀얼 모드 (배열 / 세분화 객체) 뷰 & 변환 헬퍼
+  // -------------------------------------------------------------------------
+
+  /**
+   * allow_groups 또는 deny_groups 데이터를 화면에 표시하기 위한 뱃지 리스트로 정규화 변환
+   * @param {any} groupData
+   * @returns {Array<{ code: string, action: 'all' | 'read' | 'write', label: string }>}
+   */
+  function getGroupBadges(groupData) {
+    if (!groupData) return [];
+    if (Array.isArray(groupData)) {
+      return groupData.filter(Boolean).map(code => ({
+        code: String(code),
+        action: 'all',
+        label: '전체'
+      }));
     }
-    const curr = inst.allow_groups || [];
-    if (curr.includes(code)) {
-      inst.allow_groups = curr.filter(c => c !== code);
-    } else {
-      inst.allow_groups = [...curr, code];
+    if (typeof groupData === 'object' && groupData !== null) {
+      const badges = [];
+      if (Array.isArray(groupData.all)) {
+        groupData.all.forEach(code => {
+          if (code) badges.push({ code: String(code), action: 'all', label: '전체' });
+        });
+      }
+      if (Array.isArray(groupData.read)) {
+        groupData.read.forEach(code => {
+          if (code) badges.push({ code: String(code), action: 'read', label: '읽기' });
+        });
+      }
+      if (Array.isArray(groupData.write)) {
+        groupData.write.forEach(code => {
+          if (code) badges.push({ code: String(code), action: 'write', label: '쓰기' });
+        });
+      }
+      return badges;
     }
+    return [];
+  }
+
+  /**
+   * 그룹 목록에 특정 action('all' | 'read' | 'write')으로 그룹 코드를 추가
+   */
+  function addGroupToAction(groupData, code, action = 'all') {
+    const spec = { read: [], write: [], all: [] };
+    if (Array.isArray(groupData)) {
+      spec.all = [...groupData.filter(Boolean)];
+    } else if (typeof groupData === 'object' && groupData !== null) {
+      if (Array.isArray(groupData.all)) spec.all = [...groupData.all.filter(Boolean)];
+      if (Array.isArray(groupData.read)) spec.read = [...groupData.read.filter(Boolean)];
+      if (Array.isArray(groupData.write)) spec.write = [...groupData.write.filter(Boolean)];
+    }
+
+    if (action === 'all') {
+      spec.read = spec.read.filter(c => c !== code);
+      spec.write = spec.write.filter(c => c !== code);
+      if (!spec.all.includes(code)) spec.all.push(code);
+    } else if (action === 'read') {
+      if (!spec.all.includes(code) && !spec.read.includes(code)) {
+        spec.read.push(code);
+      }
+    } else if (action === 'write') {
+      if (!spec.all.includes(code) && !spec.write.includes(code)) {
+        spec.write.push(code);
+      }
+    }
+
+    if (spec.read.length === 0 && spec.write.length === 0) {
+      return spec.all;
+    }
+    return spec;
+  }
+
+  /**
+   * 특정 그룹과 액션을 그룹 목록에서 제거
+   */
+  function removeGroupFromAction(groupData, code, action = 'all') {
+    if (Array.isArray(groupData)) {
+      return groupData.filter(c => c !== code);
+    }
+    if (typeof groupData === 'object' && groupData !== null) {
+      const updated = {
+        all: (groupData.all || []).filter(c => !(c === code && (action === 'all' || !action))),
+        read: (groupData.read || []).filter(c => !(c === code && (action === 'read' || !action))),
+        write: (groupData.write || []).filter(c => !(c === code && (action === 'write' || !action))),
+      };
+      if (updated.read.length === 0 && updated.write.length === 0) {
+        return updated.all;
+      }
+      return updated;
+    }
+    return [];
+  }
+
+  // 7) 인스턴스 allow 그룹 추가 (전체 / 읽기 / 쓰기)
+  function handleInstanceAddAllow(inst, code, action = 'all') {
+    inst.allow_groups = addGroupToAction(inst.allow_groups, code, action);
     handleSaveInstancePermissions(inst);
   }
 
-  // 8) 인스턴스 deny 그룹 토글 (🚨 Deny-Wins)
-  function handleInstanceToggleDeny(inst, code) {
-    const curr = inst.deny_groups || [];
-    if (curr.includes(code)) {
-      inst.deny_groups = curr.filter(c => c !== code);
-    } else {
-      inst.deny_groups = [...curr, code];
-    }
+  // 7-1) 인스턴스 allow 그룹 제거
+  function handleInstanceRemoveAllow(inst, code, action) {
+    inst.allow_groups = removeGroupFromAction(inst.allow_groups, code, action);
+    handleSaveInstancePermissions(inst);
+  }
+
+  // 8) 인스턴스 deny 그룹 추가 (전체 / 쓰기 🚨 Deny-Wins)
+  function handleInstanceAddDeny(inst, code, action = 'all') {
+    inst.deny_groups = addGroupToAction(inst.deny_groups, code, action);
+    handleSaveInstancePermissions(inst);
+  }
+
+  // 8-1) 인스턴스 deny 그룹 제거
+  function handleInstanceRemoveDeny(inst, code, action) {
+    inst.deny_groups = removeGroupFromAction(inst.deny_groups, code, action);
     handleSaveInstancePermissions(inst);
   }
 </script>
@@ -807,7 +899,7 @@
                   </div>
                 </div>
 
-                <!-- 그룹 Allow & Deny 설정 영역 (2분할) -->
+                <!-- 그룹 Allow & Deny 설정 영역 (2분할 - JSONB 듀얼 모드 완벽 지원) -->
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                   
                   <!-- 3단계: ALLOW 그룹 (허용) -->
@@ -817,16 +909,27 @@
                         <Icon icon="mdi:check-circle-outline" class="text-base text-emerald-600" />
                         허용 그룹 (allow_groups)
                       </span>
-                      <span class="text-[10px] font-bold text-emerald-700">랭킹 무관 즉시 읽기·쓰기 허용</span>
+                      <span class="text-[10px] font-bold text-emerald-700">전체 / 읽기 / 쓰기 세분화 허용</span>
                     </div>
 
                     <div class="flex flex-wrap items-center gap-1.5 min-h-[36px]">
-                      {#each (inst.allow_groups || []) as code}
-                        <span class="inline-flex items-center gap-1 rounded-lg bg-emerald-100 text-emerald-900 border border-emerald-300 px-2.5 py-1 text-xs font-black">
-                          {code}
+                      {#each getGroupBadges(inst.allow_groups) as badge}
+                        <span class="inline-flex items-center gap-1.5 rounded-lg border px-2 py-0.5 text-xs font-bold
+                          {badge.action === 'all' ? 'bg-emerald-100 text-emerald-950 border-emerald-300' : ''}
+                          {badge.action === 'read' ? 'bg-sky-100 text-sky-950 border-sky-300' : ''}
+                          {badge.action === 'write' ? 'bg-amber-100 text-amber-950 border-amber-300' : ''}"
+                        >
+                          <span class="text-[9px] font-black px-1 py-0.2 rounded
+                            {badge.action === 'all' ? 'bg-emerald-200 text-emerald-800' : ''}
+                            {badge.action === 'read' ? 'bg-sky-200 text-sky-800' : ''}
+                            {badge.action === 'write' ? 'bg-amber-200 text-amber-800' : ''}"
+                          >
+                            {badge.label}
+                          </span>
+                          <span>{badge.code}</span>
                           <button 
-                            class="hover:text-red-600 ml-1 font-bold text-xs"
-                            onclick={() => handleInstanceToggleAllow(inst, code)}
+                            class="hover:text-red-600 ml-0.5 font-black text-xs leading-none"
+                            onclick={() => handleInstanceRemoveAllow(inst, badge.code, badge.action)}
                             title="허용 그룹에서 제외"
                           >
                             ×
@@ -834,21 +937,48 @@
                         </span>
                       {/each}
 
-                      <!-- 허용 그룹 추가 드롭다운 -->
+                      <!-- 허용 그룹 추가 드롭다운 (원클릭 전체/읽기/쓰기 선택) -->
                       <div class="dropdown dropdown-bottom">
                         <div tabindex="0" role="button" class="btn btn-xs bg-white border border-emerald-300 text-emerald-800 rounded-lg font-bold hover:bg-emerald-50">
                           + 허용 추가
                         </div>
-                        <ul tabindex="-1" class="dropdown-content z-[1] menu p-1 shadow-lg bg-white rounded-box w-52 border border-emerald-100 text-xs">
-                          {#each allGroupCodes.filter(g => !(inst.allow_groups || []).includes(g.code)) as g}
-                            <li>
-                              <button onclick={() => handleInstanceToggleAllow(inst, g.code)}>
-                                <span class="font-bold">{g.name}</span>
-                                <span class="text-[10px] font-mono text-slate-400">({g.code})</span>
-                              </button>
-                            </li>
+                        <div tabindex="-1" class="dropdown-content z-20 p-2 shadow-2xl bg-white rounded-2xl w-72 border border-emerald-200 text-xs space-y-1 max-h-64 overflow-y-auto">
+                          <div class="px-2 py-1 text-[11px] font-black text-slate-400 border-b border-slate-100 flex justify-between">
+                            <span>대상 그룹</span>
+                            <span>허용 범위 선택</span>
+                          </div>
+                          {#each allGroupCodes as g}
+                            <div class="flex items-center justify-between p-1.5 hover:bg-emerald-50/60 rounded-xl transition-colors">
+                              <div class="flex flex-col min-w-0 pr-1">
+                                <span class="font-bold text-slate-800 truncate">{g.name}</span>
+                                <span class="text-[10px] font-mono text-slate-400 truncate">({g.code})</span>
+                              </div>
+                              <div class="flex items-center gap-1 shrink-0">
+                                <button 
+                                  class="btn btn-2xs rounded-md bg-emerald-600 text-white hover:bg-emerald-700 font-bold px-1.5"
+                                  onclick={() => handleInstanceAddAllow(inst, g.code, 'all')}
+                                  title="읽기·쓰기 모두 허용"
+                                >
+                                  전체
+                                </button>
+                                <button 
+                                  class="btn btn-2xs rounded-md bg-sky-600 text-white hover:bg-sky-700 font-bold px-1.5"
+                                  onclick={() => handleInstanceAddAllow(inst, g.code, 'read')}
+                                  title="읽기(열람)만 허용"
+                                >
+                                  읽기
+                                </button>
+                                <button 
+                                  class="btn btn-2xs rounded-md bg-amber-600 text-white hover:bg-amber-700 font-bold px-1.5"
+                                  onclick={() => handleInstanceAddAllow(inst, g.code, 'write')}
+                                  title="쓰기(등록/수정)만 허용"
+                                >
+                                  쓰기
+                                </button>
+                              </div>
+                            </div>
                           {/each}
-                        </ul>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -860,16 +990,27 @@
                         <Icon icon="mdi:cancel" class="text-base text-rose-600" />
                         차단 그룹 (deny_groups)
                       </span>
-                      <span class="text-[10px] font-extrabold text-rose-700">🚨 소속 시 랭킹과 무관하게 즉시 차단</span>
+                      <span class="text-[10px] font-extrabold text-rose-700">🚨 소속 시 랭킹 무관 즉시 차단</span>
                     </div>
 
                     <div class="flex flex-wrap items-center gap-1.5 min-h-[36px]">
-                      {#each (inst.deny_groups || []) as code}
-                        <span class="inline-flex items-center gap-1 rounded-lg bg-rose-100 text-rose-900 border border-rose-300 px-2.5 py-1 text-xs font-black">
-                          {code}
+                      {#each getGroupBadges(inst.deny_groups) as badge}
+                        <span class="inline-flex items-center gap-1.5 rounded-lg border px-2 py-0.5 text-xs font-bold
+                          {badge.action === 'all' ? 'bg-rose-100 text-rose-950 border-rose-300' : ''}
+                          {badge.action === 'write' ? 'bg-orange-100 text-orange-950 border-orange-300' : ''}
+                          {badge.action === 'read' ? 'bg-purple-100 text-purple-950 border-purple-300' : ''}"
+                        >
+                          <span class="text-[9px] font-black px-1 py-0.2 rounded
+                            {badge.action === 'all' ? 'bg-rose-200 text-rose-800' : ''}
+                            {badge.action === 'write' ? 'bg-orange-200 text-orange-800' : ''}
+                            {badge.action === 'read' ? 'bg-purple-200 text-purple-800' : ''}"
+                          >
+                            {badge.label}차단
+                          </span>
+                          <span>{badge.code}</span>
                           <button 
-                            class="hover:text-red-700 ml-1 font-bold text-xs"
-                            onclick={() => handleInstanceToggleDeny(inst, code)}
+                            class="hover:text-red-700 ml-0.5 font-black text-xs leading-none"
+                            onclick={() => handleInstanceRemoveDeny(inst, badge.code, badge.action)}
                             title="차단 그룹에서 제외"
                           >
                             ×
@@ -877,21 +1018,41 @@
                         </span>
                       {/each}
 
-                      <!-- 차단 그룹 추가 드롭다운 -->
+                      <!-- 차단 그룹 추가 드롭다운 (원클릭 전체/쓰기차단 선택) -->
                       <div class="dropdown dropdown-bottom">
                         <div tabindex="0" role="button" class="btn btn-xs bg-white border border-rose-300 text-rose-800 rounded-lg font-bold hover:bg-rose-50">
                           + 차단 추가
                         </div>
-                        <ul tabindex="-1" class="dropdown-content z-[1] menu p-1 shadow-lg bg-white rounded-box w-52 border border-rose-100 text-xs">
-                          {#each allGroupCodes.filter(g => !(inst.deny_groups || []).includes(g.code)) as g}
-                            <li>
-                              <button onclick={() => handleInstanceToggleDeny(inst, g.code)}>
-                                <span class="font-bold text-rose-900">{g.name}</span>
-                                <span class="text-[10px] font-mono text-slate-400">({g.code})</span>
-                              </button>
-                            </li>
+                        <div tabindex="-1" class="dropdown-content z-20 p-2 shadow-2xl bg-white rounded-2xl w-72 border border-rose-200 text-xs space-y-1 max-h-64 overflow-y-auto">
+                          <div class="px-2 py-1 text-[11px] font-black text-slate-400 border-b border-slate-100 flex justify-between">
+                            <span>차단 대상 그룹</span>
+                            <span>차단 범위 선택</span>
+                          </div>
+                          {#each allGroupCodes as g}
+                            <div class="flex items-center justify-between p-1.5 hover:bg-rose-50/60 rounded-xl transition-colors">
+                              <div class="flex flex-col min-w-0 pr-1">
+                                <span class="font-bold text-rose-900 truncate">{g.name}</span>
+                                <span class="text-[10px] font-mono text-slate-400 truncate">({g.code})</span>
+                              </div>
+                              <div class="flex items-center gap-1 shrink-0">
+                                <button 
+                                  class="btn btn-2xs rounded-md bg-rose-600 text-white hover:bg-rose-700 font-bold px-1.5"
+                                  onclick={() => handleInstanceAddDeny(inst, g.code, 'all')}
+                                  title="읽기·쓰기 모두 차단 (Deny-Wins)"
+                                >
+                                  전체차단
+                                </button>
+                                <button 
+                                  class="btn btn-2xs rounded-md bg-orange-600 text-white hover:bg-orange-700 font-bold px-1.5"
+                                  onclick={() => handleInstanceAddDeny(inst, g.code, 'write')}
+                                  title="쓰기만 차단 (열람은 허용)"
+                                >
+                                  쓰기차단
+                                </button>
+                              </div>
+                            </div>
                           {/each}
-                        </ul>
+                        </div>
                       </div>
                     </div>
                   </div>

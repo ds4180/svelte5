@@ -20,6 +20,29 @@ import { setContext, getContext } from 'svelte';
 // 📌 Context 식별용 고유 심볼 키
 const AUTH_KEY = Symbol('AUTH_CONTEXT');
 
+/**
+ * [JSONB 듀얼 모드 그룹 추출기 (프론트엔드)]
+ * 배열 모드(['운수팀']) 및 액션별 객체 모드({ read: ['운수팀'], write: ['배차담당'] })를 완벽하게 지원합니다.
+ * @param {Array<string>|Record<string, Array<string>>|null|undefined} groupData
+ * @param {string} action 'read' | 'write'
+ * @returns {string[]}
+ */
+export function extractGroupsForAction(groupData, action = 'read') {
+	if (!groupData) return [];
+	if (Array.isArray(groupData)) {
+		return groupData.filter(Boolean);
+	}
+	if (typeof groupData === 'object' && groupData !== null) {
+		const specific = Array.isArray(groupData[action]) ? groupData[action] : [];
+		const all = Array.isArray(groupData.all) ? groupData.all : [];
+		return [...specific, ...all].filter(Boolean);
+	}
+	if (typeof groupData === 'string' && groupData) {
+		return [groupData];
+	}
+	return [];
+}
+
 export class AuthState {
 	// 반응형 유저 정보 상태 ({ id, username, email, rank_level, primary_group, secondary_groups })
 	user = $state(null);
@@ -73,16 +96,20 @@ export class AuthState {
 
 		const userGroups = this.getGroups();
 
-		// [2단계] deny 목록에 부그룹이나 주그룹이 있는가?
-		if (Array.isArray(denyGroups) && denyGroups.length > 0) {
-			if (userGroups.some((g) => denyGroups.includes(g))) {
+		// [2단계] deny 목록에 부그룹이나 주그룹이 있는가? (Deny-Wins)
+		//         단순 배열 및 { read: [...], write: [...] } 객체 듀얼 모드 지원
+		const effectiveDeny = extractGroupsForAction(denyGroups, action);
+		if (effectiveDeny.length > 0) {
+			if (userGroups.some((g) => effectiveDeny.includes(g))) {
 				return false;
 			}
 		}
 
-		// [3단계] allow 목록에 부그룹이나 주그룹이 있는가? (속하면 읽기/쓰기 모두 가능)
-		if (Array.isArray(allowGroups) && allowGroups.length > 0) {
-			if (userGroups.some((g) => allowGroups.includes(g))) {
+		// [3단계] allow 목록에 부그룹이나 주그룹이 있는가? (Allow-Wins)
+		//         단순 배열 및 { read: [...], write: [...] } 객체 듀얼 모드 지원
+		const effectiveAllow = extractGroupsForAction(allowGroups, action);
+		if (effectiveAllow.length > 0) {
+			if (userGroups.some((g) => effectiveAllow.includes(g))) {
 				return true;
 			}
 		}

@@ -116,13 +116,21 @@ export const fastApi = async (method, url, params = {}, success_callback, failur
 			if (success_callback) success_callback(data);
 			return data;
 		} else {
-			// 500번대 서버 내부 오류 발생 시 별도 콜백이 없으면 시스템 기본 알림(Toast) 표시
-			if (browser && response.status >= 500 && !failure_callback) {
-				const errMsg = typeof data.detail === 'string' 
-					? data.detail 
-					: '서버 내부 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.';
-				toast.error(errMsg);
+			// 🛡️ 표준 에러 메시지 추출 (data.error.message -> data.detail 순서로 안전 추출)
+			const errMsg = 
+				(typeof data.error?.message === 'string' && data.error.message) ||
+				(typeof data.detail === 'string' && data.detail) ||
+				'';
+
+			// [403 권한 거부]: 별도 콜백이 없으면 시스템 경고 알림(Toast) 표시
+			if (browser && response.status === 403 && !failure_callback) {
+				toast.warning(errMsg || '해당 기능에 접근할 권한이 없습니다.');
 			}
+			// [500 서버 장애]: 별도 콜백이 없으면 시스템 에러 알림(Toast) 표시
+			else if (browser && response.status >= 500 && !failure_callback) {
+				toast.error(errMsg || '서버 내부 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.');
+			}
+
 			if (failure_callback) failure_callback(data);
 			return Promise.reject(data);
 		}
