@@ -234,66 +234,144 @@
 				{stats.admin_name}님, 오늘도 시스템은 안정적으로 가동 중입니다.
 			</p>
 		</div>
-		<div class="flex gap-2 text-center">
+		<div class="flex items-center gap-2 text-center">
+			<button
+				onclick={loadStats}
+				class="btn btn-sm btn-outline border-slate-200 bg-white shadow-sm flex items-center gap-1 text-xs"
+				disabled={loading}
+			>
+				<Icon icon="mdi:refresh" class={loading ? 'animate-spin' : ''} /> 새로고침
+			</button>
 			<div
-				class="rounded-lg border border-slate-200 bg-white px-4 py-1.5 text-[8px] font-black uppercase shadow-md md:rounded-2xl md:px-6 md:py-2 md:text-[10px] md:shadow-lg"
+				class="rounded-lg border border-slate-200 bg-white px-4 py-1.5 text-[8px] font-black uppercase shadow-md md:rounded-2xl md:px-5 md:py-2 md:text-[10px] md:shadow-lg"
 			>
 				서버: <span class="text-green-500">가동 중</span>
 			</div>
 			<div
-				class="rounded-lg border border-slate-200 bg-slate-800 px-4 py-1.5 text-[8px] font-black text-white uppercase shadow-md md:rounded-2xl md:px-6 md:py-2 md:text-[10px] md:shadow-lg"
+				class="rounded-lg border border-slate-200 bg-slate-800 px-4 py-1.5 text-[8px] font-black text-white uppercase shadow-md md:rounded-2xl md:px-5 md:py-2 md:text-[10px] md:shadow-lg"
 			>
-				버전: v5.1.0
+				버전: v5.2.0
 			</div>
 		</div>
 	</div>
 
-	<!-- 📊 실시간 주요 지표 -->
+	<!-- 📊 4대 코어 관제탑 라이브 위젯 -->
 	<div class="grid grid-cols-1 gap-4 md:grid-cols-2 md:gap-6 lg:grid-cols-4">
-		<div class="rounded-xl border border-slate-200 bg-white p-6 shadow-lg md:rounded-2xl md:p-8">
-			<div class="mb-3 text-[10px] font-black tracking-widest text-slate-400 uppercase md:mb-4">
-				전체 사용자
-			</div>
-			<div class="flex items-baseline gap-1 md:gap-2">
-				<span class="text-4xl font-black tracking-tighter text-slate-900 md:text-5xl"
-					>{stats.user_count}</span
-				>
-				<span class="text-xs font-bold text-slate-500 md:text-sm">명</span>
-			</div>
-		</div>
-		<div class="rounded-xl border border-slate-200 bg-white p-6 shadow-lg md:rounded-2xl md:p-8">
-			<div class="mb-3 text-[10px] font-black tracking-widest text-slate-400 uppercase md:mb-4">
-				전체 게시물
-			</div>
-			<div class="flex items-baseline gap-1 md:gap-2">
-				<span class="text-4xl font-black tracking-tighter text-slate-900 md:text-5xl"
-					>{stats.post_count}</span
-				>
-				<span class="text-xs font-bold text-slate-500 md:text-sm">건</span>
-			</div>
-		</div>
-		<div class="rounded-xl border border-slate-200 bg-white p-6 shadow-lg md:rounded-2xl md:p-8">
-			<div class="mb-3 text-[10px] font-black tracking-widest text-slate-400 uppercase md:mb-4">
-				작동 중인 엔진
-			</div>
-			<div class="flex items-baseline gap-1 md:gap-2">
-				<span class="text-4xl font-black tracking-tighter text-slate-900 md:text-5xl"
-					>{stats.app_count}</span
-				>
-				<span class="text-xs font-bold text-slate-500 md:text-sm">개</span>
-			</div>
-		</div>
-		<div
-			class="rounded-xl border border-blue-300 bg-blue-600 p-6 text-white shadow-lg md:rounded-2xl md:p-8"
+		<!-- 위젯 1: 자율신경계 태스크 워커 -->
+		<a
+			href="/v1/admin/tasks"
+			class="group rounded-xl border border-slate-200 bg-white p-6 shadow-md hover:shadow-xl hover:border-indigo-300 transition-all md:rounded-2xl md:p-7 block"
 		>
-			<div class="mb-3 text-[10px] font-black tracking-widest uppercase opacity-80 md:mb-4">
-				활성 게시판
+			<div class="flex items-center justify-between mb-3">
+				<div class="flex items-center gap-1.5 text-[11px] font-black tracking-wider text-slate-500 uppercase">
+					<Icon icon="mdi:cog-sync-outline" class="text-indigo-600 text-base" /> 자율신경계 워커
+				</div>
+				<span
+					class="badge badge-xs font-bold {stats.task_engine?.is_healthy ? 'badge-success text-white' : 'badge-error text-white'}"
+				>
+					{stats.task_engine?.is_healthy ? '정상 가동' : '경보 발생'}
+				</span>
 			</div>
-			<div class="flex items-baseline gap-1 md:gap-2">
-				<span class="text-4xl font-black tracking-tighter md:text-5xl">{stats.board_count}</span>
-				<span class="text-xs font-bold opacity-80 md:text-sm">그룹</span>
+			<div class="flex items-baseline justify-between mt-2">
+				<div class="text-3xl font-black text-slate-800">
+					{stats.task_engine?.running_count || 0}<span class="text-xs text-slate-400 font-normal ml-1">실행중</span>
+				</div>
+				<div class="text-right text-xs text-slate-500 font-medium space-y-0.5">
+					<div>대기: <strong class="text-amber-600">{stats.task_engine?.pending_count || 0}</strong>건</div>
+					<div>실패: <strong class={stats.task_engine?.failed_count > 0 ? 'text-rose-600 font-black' : 'text-slate-400'}>{stats.task_engine?.failed_count || 0}</strong>건</div>
+				</div>
 			</div>
-		</div>
+			{#if stats.task_engine?.next_scheduled_task}
+				<div class="mt-3 text-[10px] text-slate-400 border-t pt-2 truncate">
+					다음 예약: {stats.task_engine.next_scheduled_task}
+				</div>
+			{/if}
+		</a>
+
+		<!-- 위젯 2: 보안 & 시스템 건강도 -->
+		<a
+			href="/v1/admin/observability"
+			class="group rounded-xl border border-slate-200 bg-white p-6 shadow-md hover:shadow-xl hover:border-blue-300 transition-all md:rounded-2xl md:p-7 block"
+		>
+			<div class="flex items-center justify-between mb-3">
+				<div class="flex items-center gap-1.5 text-[11px] font-black tracking-wider text-slate-500 uppercase">
+					<Icon icon="mdi:shield-check-outline" class="text-blue-600 text-base" /> 보안 & 시스템
+				</div>
+				<span
+					class="badge badge-xs font-bold {stats.observability?.security_breach_24h > 0 ? 'badge-error text-white' : 'badge-info text-white'}"
+				>
+					{stats.observability?.security_breach_24h > 0 ? '침해 감지' : '안전 보호'}
+				</span>
+			</div>
+			<div class="flex items-baseline justify-between mt-2">
+				<div class="text-3xl font-black {stats.observability?.security_breach_24h > 0 ? 'text-rose-600' : 'text-slate-800'}">
+					{stats.observability?.security_breach_24h || 0}<span class="text-xs text-slate-400 font-normal ml-1">보안침해 24h</span>
+				</div>
+				<div class="text-right text-xs text-slate-500 font-medium space-y-0.5">
+					<div>장애 에러: <strong class={stats.observability?.error_log_24h > 0 ? 'text-rose-500' : 'text-slate-400'}>{stats.observability?.error_log_24h || 0}</strong>건</div>
+					<div>시스템 상태: <strong class="text-emerald-600">안정</strong></div>
+				</div>
+			</div>
+			<div class="mt-3 text-[10px] text-slate-400 border-t pt-2">
+				통합 감사로그 실시간 관제 연동
+			</div>
+		</a>
+
+		<!-- 위젯 3: 실시간 접속 세션 & 근무 현황 -->
+		<a
+			href="/v1/admin/target-groups"
+			class="group rounded-xl border border-slate-200 bg-white p-6 shadow-md hover:shadow-xl hover:border-emerald-300 transition-all md:rounded-2xl md:p-7 block"
+		>
+			<div class="flex items-center justify-between mb-3">
+				<div class="flex items-center gap-1.5 text-[11px] font-black tracking-wider text-slate-500 uppercase">
+					<Icon icon="mdi:account-clock-outline" class="text-emerald-600 text-base" /> 세션 & 근무
+				</div>
+				<span class="badge badge-xs badge-success text-white font-bold animate-pulse">
+					LIVE
+				</span>
+			</div>
+			<div class="flex items-baseline justify-between mt-2">
+				<div class="text-3xl font-black text-emerald-600">
+					{stats.observability?.active_sessions || 0}<span class="text-xs text-slate-500 font-normal ml-1">온라인</span>
+				</div>
+				<div class="text-right text-xs text-slate-500 font-medium space-y-0.5">
+					<div>오늘 근무: <strong class="text-slate-800">{stats.duty_status?.working_count || 0}</strong>명</div>
+					<div>오늘 휴무: <strong class="text-amber-600">{stats.duty_status?.dayoff_count || 0}</strong>명</div>
+				</div>
+			</div>
+			<div class="mt-3 text-[10px] text-slate-400 border-t pt-2">
+				동적 타겟그룹 및 Redis 실시간 연산
+			</div>
+		</a>
+
+		<!-- 위젯 4: 현장 지시사항 인지율 -->
+		<a
+			href="/v1/admin/alerts"
+			class="group rounded-xl border border-slate-200 bg-white p-6 shadow-md hover:shadow-xl hover:border-purple-300 transition-all md:rounded-2xl md:p-7 block"
+		>
+			<div class="flex items-center justify-between mb-3">
+				<div class="flex items-center gap-1.5 text-[11px] font-black tracking-wider text-slate-500 uppercase">
+					<Icon icon="mdi:checkbox-marked-circle-outline" class="text-purple-600 text-base" /> 지시사항 인지율
+				</div>
+				<span
+					class="badge badge-xs font-bold {stats.instruction_watchdog?.unconfirmed_count > 0 ? 'badge-warning' : 'badge-success text-white'}"
+				>
+					{stats.instruction_watchdog?.unconfirmed_count > 0 ? '확인 필요' : '모두 확인'}
+				</span>
+			</div>
+			<div class="flex items-baseline justify-between mt-2">
+				<div class="text-3xl font-black {stats.instruction_watchdog?.unconfirmed_count > 0 ? 'text-amber-600' : 'text-slate-800'}">
+					{stats.instruction_watchdog?.unconfirmed_count || 0}<span class="text-xs text-slate-400 font-normal ml-1">미확인</span>
+				</div>
+				<div class="text-right text-xs text-slate-500 font-medium space-y-0.5">
+					<div>알림 센터: <strong class="text-purple-600">지시사항</strong></div>
+					<div>양방향 피드백: <strong class="text-emerald-600">연동</strong></div>
+				</div>
+			</div>
+			<div class="mt-3 text-[10px] text-slate-400 border-t pt-2">
+				미확인 기사님 실시간 추적 바로가기
+			</div>
+		</a>
 	</div>
 
 	<!-- 🛡️ 섹션 1: 시스템 코어 관제 모듈 (SYSTEM App: 사용자 화면 없이 관리자 화면만 존재 / 삭제 불가) -->
