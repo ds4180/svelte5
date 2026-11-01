@@ -51,6 +51,11 @@
 	let isMobile = $state(false);
 
 	onMount(() => {
+		// 🛡️ [뷰포트 안전 보증] 브라우저 스크롤 좌표를 (0, 0) 원점으로 강제 고정
+		if (typeof window !== 'undefined') {
+			window.scrollTo(0, 0);
+		}
+
 		const updateMedia = () => {
 			isMobile = window.innerWidth < 1200;
 			if (isMobile) {
@@ -122,11 +127,11 @@
 </script>
 
 <div
-	class="relative flex h-screen flex-col overflow-hidden bg-slate-50 font-['Noto_Sans_KR','Outfit'] text-slate-900 antialiased selection:bg-blue-100 selection:text-blue-700"
+	class="relative flex h-screen max-h-screen w-full max-w-full flex-col overflow-hidden bg-slate-50 font-['Noto_Sans_KR','Outfit'] text-slate-900 antialiased selection:bg-blue-100 selection:text-blue-700"
 >
 	<!-- 🌐 Premium Navbar (Global Header) -->
 	<header
-		class="navbar z-[1001] h-20 flex-none border-b-4 border-slate-900 bg-white px-2 transition-all md:px-8 {isScrolled
+		class="navbar z-[1001] h-20 w-full max-w-full flex-none border-b-4 border-slate-900 bg-white px-2 transition-all md:px-6 {isScrolled
 			? 'shadow-2xl'
 			: ''}"
 	>
@@ -139,19 +144,19 @@
 				<Icon icon="ph:list-bold" class="h-6 w-6" />
 			</button>
 		</div>
-		<div class="flex-1 px-4 sm:px-0">
+		<div class="flex-1 min-w-0 px-2 sm:px-0">
 			<a
 				href="/"
-				class="group border-none text-xl leading-none font-black tracking-tighter text-slate-900 uppercase italic md:text-3xl"
+				class="group inline-flex items-center truncate border-none text-xl leading-none font-black tracking-tighter text-slate-900 uppercase italic md:text-3xl"
 			>
 				Jeju.Live <span
-					class="NOT-ITALIC text-blue-600 decoration-4 underline-offset-4 group-hover:underline"
+					class="ml-1 NOT-ITALIC text-blue-600 decoration-4 underline-offset-4 group-hover:underline"
 					>Admin</span
 				>
 			</a>
 		</div>
 		<div
-			class="flex h-full flex-none items-center gap-2 border-slate-100 px-2 sm:border-l-2 sm:pl-6 md:gap-4"
+			class="flex h-full flex-none items-center gap-1.5 border-slate-100 pl-2 pr-1 sm:border-l-2 sm:pl-4 sm:pr-2 md:gap-3"
 		>
 			<!-- 🔔 알림 설정 -->
 			<button
@@ -204,8 +209,7 @@
 			>
 				<Icon icon="ph:magic-wand-fill" class="z-10 h-6 w-6" />
 				{#if miniappStore.counts.TOTAL > 0}
-					<span class="pointer-events-none absolute top-1 right-1 z-20 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-600 px-1 text-[9px] font-black text-white shadow-md">
-						<span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-rose-400 opacity-60"></span>
+					<span class="pointer-events-none absolute top-1 right-1 z-20 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-600 px-1 text-[9px] font-black text-white shadow-sm">
 						<span class="relative">{miniappStore.counts.TOTAL > 99 ? '99+' : miniappStore.counts.TOTAL}</span>
 					</span>
 				{:else if navState.pageMenus && navState.pageMenus.length > 0}
@@ -220,10 +224,10 @@
 		</div>
 	</header>
 
-	<div class="relative flex flex-1 overflow-hidden">
+	<div class="relative flex flex-1 w-full max-w-full min-w-0 min-h-0 overflow-hidden">
 		<!-- ⬅️ 왼쪽 네비게이션 사이드바 -->
 		<aside
-			class="z-[1000] flex-none overflow-hidden bg-slate-900 text-slate-300 shadow-2xl transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]
+			class="z-[1000] flex-none h-full overflow-hidden bg-slate-900 text-slate-300 shadow-2xl transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]
                       {isMobile ? 'absolute top-0 bottom-0 left-0 h-full' : ''} 
                       {isLeftOpen ? 'w-72' : 'w-0'} border-r-4 border-black"
 		>
@@ -301,9 +305,9 @@
 
 		<!-- 🚀 가운데 본문 영역 -->
 		<main
-			class="custom-scrollbar relative z-[100] flex flex-1 flex-col overflow-y-auto bg-slate-50 transition-all"
+			class="custom-scrollbar relative z-[100] flex flex-1 min-w-0 min-h-0 flex-col overflow-y-auto overflow-x-hidden bg-slate-50 transition-all"
 		>
-			<div class="mx-auto min-h-full w-full max-w-[1700px] p-6 md:p-12 lg:p-20">
+			<div class="mx-auto min-h-full w-full max-w-[1700px] p-4 sm:p-6 md:p-12 lg:p-20 min-w-0">
 				{@render children?.()}
 			</div>
 		</main>

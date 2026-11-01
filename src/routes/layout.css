@@ -8,6 +8,14 @@
 	color-scheme: light; /* 브라우저 기본 요소를 라이트 모드로 강제 */
 }
 
+html, body {
+	margin: 0 !important;
+	padding: 0 !important;
+	width: 100% !important;
+	height: 100% !important;
+	overflow: hidden !important;
+}
+
 body {
 	background-color: #f8fafc !important;
 	color: #0f172a !important;

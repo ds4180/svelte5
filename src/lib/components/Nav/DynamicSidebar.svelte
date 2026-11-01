@@ -20,8 +20,8 @@
 	 */
 	let { isMobile = false, isOpen = false, onClose = () => {} } = $props();
 
-	function navigateTo(hash) {
-		goto(`/v1/pages/miniapps#${hash}`);
+	function navigateTo(tab) {
+		goto(`/v1/pages/miniapps?tab=${tab}`);
 		onClose();
 	}
 
@@ -52,7 +52,7 @@
 		: 'top-20 right-0 bottom-0 w-[450px] border-l-4 border-slate-900'} 
           {isOpen
 		? 'translate-x-0 translate-y-0'
-		: 'translate-x-0 translate-y-full'}"
+		: isMobile ? 'translate-x-0 translate-y-full' : 'translate-x-full translate-y-0'}"
 	aria-label="동적 폼 사이드바 패널"
 >
 	<div

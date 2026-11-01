@@ -16,6 +16,7 @@
 	 */
 
 	import { onMount } from 'svelte';
+	import { page } from '$app/state';
 	import Icon from '@iconify/svelte';
 	import FeedItem from '$lib/components/Miniapps/FeedItem.svelte';
 	import { miniappStore } from '$lib/runes/miniapps.svelte.js';
@@ -32,24 +33,30 @@
 	let activeTab = $state('ALL');
 
 	onMount(() => {
+		// 🛡️ [레이아웃 보호] 브라우저 스크롤 오프셋을 즉시 (0, 0) 원점으로 강제 고정
+		if (typeof window !== 'undefined') {
+			window.scrollTo(0, 0);
+		}
+
 		miniappStore.refresh();
 
-		// URL 해시(#instructions 등)가 있으면 해당 섹션으로 부드럽게 스크롤
-		if (window.location.hash) {
-			const hash = window.location.hash.replace('#', '');
+		// 쿼리 파라미터(?tab=...) 또는 해시(#...) 기반 탭 전환 (화면 스크롤 없이 탭만 안전하게 전환)
+		const targetTab = page.url.searchParams.get('tab') || window.location.hash.replace('#', '');
+		if (targetTab) {
 			/** @type {Record<string, string>} */
-			const hashTabMap = {
+			const tabMap = {
 				'notifications': 'NOTIFICATION',
+				'notification': 'NOTIFICATION',
 				'instructions': 'INSTRUCTION',
+				'instruction': 'INSTRUCTION',
+				'alarms': 'ALARM',
+				'alarm': 'ALARM',
 				'memo': 'MEMO',
-				'messaging': 'MESSAGE'
+				'messaging': 'MESSAGE',
+				'message': 'MESSAGE'
 			};
-			if (hashTabMap[hash]) {
-				activeTab = hashTabMap[hash];
-			}
-			const el = document.querySelector(window.location.hash);
-			if (el) {
-				setTimeout(() => el.scrollIntoView({ behavior: 'smooth' }), 100);
+			if (tabMap[targetTab]) {
+				activeTab = tabMap[targetTab];
 			}
 		}
 	});
@@ -133,7 +140,7 @@
 	<title>미니앱 통합 허브 | jeju.live</title>
 </svelte:head>
 
-<div class="mx-auto max-w-5xl px-4 py-8 font-['Noto_Sans_KR','Outfit'] md:px-6 md:py-10 pb-36">
+<div class="mx-auto w-full max-w-5xl px-3 py-6 font-['Noto_Sans_KR','Outfit'] md:px-6 md:py-10 pb-36 min-w-0">
 	<!-- ===================================================================== -->
 	<!-- 1. 페이지 헤더 & 실시간 동기화 상태 -->
 	<!-- ===================================================================== -->
@@ -352,8 +359,8 @@
 	<!-- ===================================================================== -->
 	<!-- 4. 액션 피드 탭 네비게이션 필터 -->
 	<!-- ===================================================================== -->
-	<div class="flex items-center justify-between border-b-2 border-slate-200 pb-3 mb-6">
-		<div class="flex items-center gap-1 overflow-x-auto scrollbar-none">
+	<div class="flex w-full min-w-0 items-center justify-between border-b-2 border-slate-200 pb-3 mb-6 gap-2">
+		<div class="flex flex-1 min-w-0 items-center gap-1 overflow-x-auto scrollbar-none py-1">
 			<button
 				type="button"
 				onclick={() => (activeTab = 'ALL')}
