@@ -1,128 +1,210 @@
 <script>
-    /**
-     * @file FeedItem.svelte
-     * @description 메모, 지시사항, 메시징 통합 액션 아이템 컴포넌트
-     */
-    import Icon from '@iconify/svelte';
-    import { fly, fade } from 'svelte/transition';
+	/**
+	 * ============================================================================
+	 * [미니앱 통합 액션 아이템 컴포넌트 (FeedItem.svelte)]
+	 * ============================================================================
+	 */
+	import Icon from '@iconify/svelte';
+	import { fly, fade } from 'svelte/transition';
 
-    let { 
-        item = {
-            id: null,
-            type: 'MEMO', // MEMO, INSTRUCTION, MESSAGE
-            content: '',
-            status: 'PENDING', // PENDING, ONGOING, COMPLETED
-            sender: null,
-            created_at: new Date().toISOString(),
-            is_done: false
-        },
-        onAction = () => {}
-    } = $props();
+	let { 
+		item = {
+			id: null,
+			type: 'MEMO',
+			title: null,
+			content: '',
+			status: 'PENDING',
+			sender: null,
+			sender_name: null,
+			created_at: new Date().toISOString(),
+			target_time: null,
+			link: null,
+			is_done: false
+		},
+		onAction = () => {}
+	} = $props();
 
-    // 타입별 스타일 설정
-    const typeConfig = {
-        MEMO: {
-            icon: 'ph:notepad-fill',
-            color: 'text-amber-500',
-            bgColor: 'bg-amber-50/30',
-            borderColor: 'border-amber-100'
-        },
-        INSTRUCTION: {
-            icon: 'ph:info-fill',
-            color: 'text-indigo-600',
-            bgColor: 'bg-indigo-50/30',
-            borderColor: 'border-indigo-100'
-        },
-        MESSAGE: {
-            icon: 'ph:paper-plane-tilt-fill',
-            color: 'text-blue-600',
-            bgColor: 'bg-blue-50/30',
-            borderColor: 'border-blue-100'
-        },
-        NOTIFICATION: {
-            icon: 'ph:bell-ringing-fill',
-            color: 'text-rose-500',
-            bgColor: 'bg-rose-50/30',
-            borderColor: 'border-rose-100'
-        }
-    };
+	// 타입별 테마 설정
+	/** @type {Record<string, any>} */
+	const typeConfig = {
+		MEMO: {
+			icon: 'ph:notepad-fill',
+			label: '메모',
+			color: 'text-amber-600',
+			bgColor: 'bg-amber-50/60',
+			borderColor: 'border-amber-200',
+			badgeClass: 'bg-amber-100 text-amber-800'
+		},
+		ALARM: {
+			icon: 'ph:alarm-fill',
+			label: '알람',
+			color: 'text-rose-600',
+			bgColor: 'bg-rose-50/60',
+			borderColor: 'border-rose-200',
+			badgeClass: 'bg-rose-100 text-rose-800'
+		},
+		INSTRUCTION: {
+			icon: 'ph:info-fill',
+			label: '지시사항',
+			color: 'text-indigo-600',
+			bgColor: 'bg-indigo-50/60',
+			borderColor: 'border-indigo-200',
+			badgeClass: 'bg-indigo-100 text-indigo-800'
+		},
+		MESSAGE: {
+			icon: 'ph:paper-plane-tilt-fill',
+			label: '메시지',
+			color: 'text-blue-600',
+			bgColor: 'bg-blue-50/60',
+			borderColor: 'border-blue-200',
+			badgeClass: 'bg-blue-100 text-blue-800'
+		},
+		NOTIFICATION: {
+			icon: 'ph:bell-ringing-fill',
+			label: '공지알림',
+			color: 'text-emerald-600',
+			bgColor: 'bg-emerald-50/60',
+			borderColor: 'border-emerald-200',
+			badgeClass: 'bg-emerald-100 text-emerald-800'
+		}
+	};
 
-    const config = $derived(typeConfig[item.type] || typeConfig.MEMO);
+	const config = $derived(typeConfig[item.type] || typeConfig[item.category] || typeConfig.MEMO);
 
-    function handleStatusToggle() {
-        const nextStatus = {
-            'PENDING': 'ONGOING',
-            'ONGOING': 'COMPLETED',
-            'COMPLETED': 'PENDING'
-        };
-        onAction('status', nextStatus[item.status]);
-    }
+	function handleStatusToggle() {
+		/** @type {Record<string, string>} */
+		const nextStatus = {
+			'PENDING': 'ONGOING',
+			'ONGOING': 'COMPLETED',
+			'COMPLETED': 'PENDING'
+		};
+		const key = String(item.status || 'PENDING');
+		onAction('status', nextStatus[key] || 'COMPLETED');
+	}
+
+	/** @param {any} dtStr */
+	function formatDateTime(dtStr) {
+		if (!dtStr) return '';
+		const d = new Date(dtStr);
+		return d.toLocaleString('ko-KR', {
+			month: 'numeric',
+			day: 'numeric',
+			hour: '2-digit',
+			minute: '2-digit'
+		});
+	}
 </script>
 
 <div 
-    in:fly={{ y: 20, duration: 400 }}
-    out:fade={{ duration: 200 }}
-    class="group p-5 rounded-3xl border-2 transition-all duration-300 {config.bgColor} {config.borderColor} hover:shadow-xl hover:shadow-slate-100"
+	in:fly={{ y: 15, duration: 300 }}
+	out:fade={{ duration: 150 }}
+	class="group relative flex flex-col justify-between rounded-2xl border-2 p-5 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg {config.bgColor} {config.borderColor}"
 >
-    <div class="flex justify-between items-start mb-3">
-        <div class="flex items-center gap-2">
-            <div class="p-2 rounded-xl bg-white shadow-sm">
-                <Icon icon={config.icon} class="h-4 w-4 {config.color}" />
-            </div>
-            <span class="text-[10px] font-black uppercase tracking-widest opacity-40">{item.type}</span>
-        </div>
-        
-        {#if item.type === 'INSTRUCTION'}
-            <button 
-                class="badge badge-sm border-none font-black text-[9px] uppercase cursor-pointer hover:scale-105 transition-transform
-                       {item.status === 'COMPLETED' ? 'bg-emerald-500 text-white' : item.status === 'ONGOING' ? 'bg-amber-400 text-white' : 'bg-slate-200 text-slate-500'}"
-                onclick={handleStatusToggle}
-            >
-                {item.status === 'ONGOING' ? '처리중' : item.status === 'COMPLETED' ? '완료' : '대기중'}
-            </button>
-        {/if}
-    </div>
+	<!-- 카드 상단: 아이콘, 카테고리 뱃지, 상태 버튼 -->
+	<div class="flex items-center justify-between mb-3">
+		<div class="flex items-center gap-2">
+			<div class="flex h-8 w-8 items-center justify-center rounded-xl bg-white shadow-sm border border-slate-100">
+				<Icon icon={config.icon} class="h-4 w-4 {config.color}" />
+			</div>
+			<span class="rounded-md px-2 py-0.5 text-[10px] font-black uppercase tracking-wider {config.badgeClass}">
+				{config.label}
+			</span>
+			{#if item.sender_name || item.sender}
+				<span class="text-[11px] font-bold text-slate-500">
+					From: <strong class="text-slate-800">{item.sender_name || item.sender}</strong>
+				</span>
+			{/if}
+		</div>
 
-    <div class="space-y-1">
-        {#if item.type === 'MESSAGE' && item.sender}
-            <p class="text-[10px] font-black text-slate-400 uppercase tracking-tighter">From: {item.sender}</p>
-        {/if}
-        
-        <p class="text-sm font-bold leading-relaxed text-slate-800 {item.is_done ? 'line-through opacity-40' : ''}">
-            {item.content}
-        </p>
-    </div>
+		<!-- 상태 뱃지 및 제어 -->
+		{#if item.type === 'INSTRUCTION'}
+			<button 
+				type="button"
+				class="rounded-lg px-2.5 py-1 text-[11px] font-black transition active:scale-95 shadow-sm {item.status === 'COMPLETED' ? 'bg-emerald-600 text-white' : item.status === 'ONGOING' ? 'bg-amber-500 text-white' : 'bg-slate-200 text-slate-700 hover:bg-slate-300'}"
+				onclick={handleStatusToggle}
+				title="상태 변경 (대기 ➔ 진행 ➔ 완료)"
+			>
+				{item.status === 'ONGOING' ? '진행중 ⏳' : item.status === 'COMPLETED' ? '완료됨 ✅' : '대기중 ⏳'}
+			</button>
+		{:else if item.type === 'NOTIFICATION'}
+			{#if item.status === 'PENDING'}
+				<button
+					type="button"
+					class="rounded-lg bg-emerald-600 px-2.5 py-1 text-[10px] font-black text-white shadow-sm transition hover:bg-emerald-700 active:scale-95"
+					onclick={() => onAction('status', 'READ')}
+				>
+					확인 완료 ✓
+				</button>
+			{:else}
+				<span class="text-[10px] font-bold text-slate-400">확인됨</span>
+			{/if}
+		{/if}
+	</div>
 
-    <div class="mt-5 flex items-center justify-between">
-        <span class="text-[9px] font-bold text-slate-400 uppercase">
-            {new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-        </span>
+	<!-- 카드 본문: 제목 및 내용 -->
+	<div class="flex-1 space-y-1.5 my-1">
+		{#if item.title}
+			<h4 class="text-sm font-black text-slate-900 leading-tight">
+				{item.title}
+			</h4>
+		{/if}
+		<p class="text-xs font-medium leading-relaxed text-slate-700 whitespace-pre-wrap break-words {item.is_done || item.status === 'COMPLETED' ? 'line-through opacity-50' : ''}">
+			{item.content}
+		</p>
+		
+		{#if item.link}
+			<a
+				href={item.link}
+				class="inline-flex items-center gap-1 text-[11px] font-bold text-blue-600 hover:underline mt-1"
+			>
+				<span>관련 업무 화면으로 이동</span>
+				<Icon icon="ph:arrow-square-out-bold" class="text-xs" />
+			</a>
+		{/if}
+	</div>
 
-        <div class="flex gap-2">
-            {#if item.type === 'MEMO'}
-                <button 
-                    class="btn btn-xs btn-ghost btn-circle {item.is_done ? 'text-emerald-500' : 'opacity-20'}"
-                    onclick={() => onAction('toggle_done', !item.is_done)}
-                >
-                    <Icon icon="ph:check-circle-fill" class="text-lg" />
-                </button>
-            {/if}
+	<!-- 카드 하단: 시간 및 작업 버튼군 -->
+	<div class="mt-4 flex items-center justify-between border-t border-slate-200/50 pt-3">
+		<span class="text-[10px] font-medium text-slate-400">
+			{formatDateTime(item.created_at)}
+			{#if item.target_time}
+				· <span class="font-bold text-rose-600">알람: {formatDateTime(item.target_time)}</span>
+			{/if}
+		</span>
 
-            {#if item.type === 'MESSAGE'}
-                <button 
-                    class="btn btn-xs bg-white border-slate-200 rounded-xl font-black text-[10px] hover:bg-blue-600 hover:text-white hover:border-blue-600"
-                    onclick={() => onAction('reply')}
-                >
-                    REPLY
-                </button>
-            {/if}
+		<div class="flex items-center gap-1">
+			<!-- 메모 완료 체크 버튼 -->
+			{#if item.type === 'MEMO'}
+				<button 
+					type="button"
+					class="flex h-7 w-7 items-center justify-center rounded-lg transition {item.is_done || item.status === 'COMPLETED' ? 'bg-emerald-500 text-white' : 'bg-white text-slate-400 hover:text-emerald-600 border border-slate-200'}"
+					onclick={() => onAction('toggle_done', !(item.is_done || item.status === 'COMPLETED'))}
+					title={item.is_done ? '완료 취소' : '할 일 완료 체크'}
+				>
+					<Icon icon="ph:check-bold" class="text-xs" />
+				</button>
+			{/if}
 
-            <button 
-                class="btn btn-xs btn-ghost btn-circle opacity-0 group-hover:opacity-100 transition-opacity text-slate-300 hover:text-red-500"
-                onclick={() => onAction('delete')}
-            >
-                <Icon icon="ph:trash-bold" />
-            </button>
-        </div>
-    </div>
+			<!-- 메시지 답장 버튼 -->
+			{#if item.type === 'MESSAGE'}
+				<button 
+					type="button"
+					class="rounded-lg border border-slate-200 bg-white px-2 py-1 text-[10px] font-black text-slate-700 transition hover:bg-blue-600 hover:text-white"
+					onclick={() => onAction('reply')}
+				>
+					답장
+				</button>
+			{/if}
+
+			<!-- 삭제 버튼 -->
+			<button 
+				type="button"
+				class="flex h-7 w-7 items-center justify-center rounded-lg text-slate-300 opacity-60 transition hover:bg-rose-50 hover:text-rose-600 group-hover:opacity-100"
+				onclick={() => onAction('delete')}
+				title="삭제"
+			>
+				<Icon icon="ph:trash-bold" class="text-xs" />
+			</button>
+		</div>
+	</div>
 </div>

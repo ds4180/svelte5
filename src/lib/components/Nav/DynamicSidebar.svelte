@@ -153,7 +153,12 @@
 						<Icon icon="ph:alarm-fill" class="h-6 w-6 opacity-40 group-hover:text-white transition-opacity" />
 						알람
 					</span>
-					<Icon icon="ph:caret-right-bold" class="text-[10px]" />
+					<div class="flex items-center gap-2">
+						{#if miniappStore.counts.ALARM > 0}
+							<span class="badge badge-warning badge-sm font-black text-slate-900">{miniappStore.counts.ALARM}</span>
+						{/if}
+						<Icon icon="ph:caret-right-bold" class="text-[10px]" />
+					</div>
 				</button>
 
 				<button 

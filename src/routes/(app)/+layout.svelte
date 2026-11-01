@@ -18,6 +18,7 @@
 	import { alertState } from '$lib/runes/alert.svelte.js';
 	import { getAuthContext } from '$lib/runes/auth.svelte.js'; // 최상위 Root가 주입한 안전 인증 Context 사용
 	import { navState } from '$lib/runes/nav.svelte.js';
+	import { miniappStore } from '$lib/runes/miniapps.svelte.js';
 	import DynamicSidebar from '$lib/components/Nav/DynamicSidebar.svelte';
 	import '../layout.css';
 	import Icon from '@iconify/svelte';
@@ -194,14 +195,20 @@
 				{/if}
 			</div>
 
-			<!-- 🍔 동적 폼 호출 -->
+			<!-- 🍔 동적 폼 호출 (미니앱 통합 미결 뱃지 연동) -->
 			<button
 				class="group btn relative btn-square flex-none overflow-hidden rounded-none border-2 border-slate-900 btn-neutral"
 				onclick={toggleRight}
 				aria-label="동적 폼 열기"
+				title={`미니앱 미결 업무: ${miniappStore.counts.TOTAL}건`}
 			>
 				<Icon icon="ph:magic-wand-fill" class="z-10 h-6 w-6" />
-				{#if navState.pageMenus && navState.pageMenus.length > 0}
+				{#if miniappStore.counts.TOTAL > 0}
+					<span class="pointer-events-none absolute top-1 right-1 z-20 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-600 px-1 text-[9px] font-black text-white shadow-md">
+						<span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-rose-400 opacity-60"></span>
+						<span class="relative">{miniappStore.counts.TOTAL > 99 ? '99+' : miniappStore.counts.TOTAL}</span>
+					</span>
+				{:else if navState.pageMenus && navState.pageMenus.length > 0}
 					<span class="pointer-events-none absolute top-1 right-1 flex h-2 w-2">
 						<span
 							class="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75"
