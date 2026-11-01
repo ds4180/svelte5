@@ -266,11 +266,16 @@
 				<div class="flex items-center gap-1.5 text-[11px] font-black tracking-wider text-slate-500 uppercase">
 					<Icon icon="mdi:cog-sync-outline" class="text-indigo-600 text-base" /> 자율신경계 워커
 				</div>
-				<span
-					class="badge badge-xs font-bold {stats.task_engine?.is_healthy ? 'badge-success text-white' : 'badge-error text-white'}"
-				>
-					{stats.task_engine?.is_healthy ? '정상 가동' : '경보 발생'}
-				</span>
+				<div class="flex items-center gap-1">
+					<span class="badge badge-xs bg-blue-100 text-blue-700 font-bold border-blue-200">
+						⚡ Watchdog
+					</span>
+					<span
+						class="badge badge-xs font-bold {stats.task_engine?.is_healthy ? 'badge-success text-white' : 'badge-error text-white'}"
+					>
+						{stats.task_engine?.is_healthy ? '정상 가동' : '경보 발생'}
+					</span>
+				</div>
 			</div>
 			<div class="flex items-baseline justify-between mt-2">
 				<div class="text-3xl font-black text-slate-800">
@@ -282,8 +287,14 @@
 				</div>
 			</div>
 			{#if stats.task_engine?.next_scheduled_task}
-				<div class="mt-3 text-[10px] text-slate-400 border-t pt-2 truncate">
-					다음 예약: {stats.task_engine.next_scheduled_task}
+				<div class="mt-3 text-[10px] text-slate-400 border-t pt-2 truncate flex items-center justify-between">
+					<span class="truncate">다음 예약: {stats.task_engine.next_scheduled_task}</span>
+					<span class="text-emerald-600 font-bold shrink-0 ml-1">자율 순환</span>
+				</div>
+			{:else}
+				<div class="mt-3 text-[10px] text-slate-400 border-t pt-2 truncate flex items-center justify-between">
+					<span>정기 Cron 스케줄러</span>
+					<span class="text-emerald-600 font-bold">자율 순환</span>
 				</div>
 			{/if}
 		</a>
