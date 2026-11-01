@@ -200,6 +200,49 @@ export const adminGetAuthGroupInstances = () =>
 export const adminUpdateInstancePermissions = (instanceType, targetId, data) => 
 	request(`/api/v1/admin/auth-groups/instances/${instanceType}/${targetId}/permissions`, 'PATCH', data);
 
+// ============================================================================
+// 🏛️ [통합 감사로그 및 시스템 관제 (Observability & Audit) API]
+// ============================================================================
+
+/**
+ * @function adminGetObservabilitySummary
+ * @description 시스템 관제 상단 4대 핵심 지표 요약(활성 세션, 오늘 접근, 데이터 변경, 에러/보안경보)을 조회합니다.
+ */
+export const adminGetObservabilitySummary = () =>
+	request('/api/v1/admin/observability/summary');
+
+/**
+ * @function adminGetAuditLogs
+ * @description 전사 통합 감사로그(ACCESS, CHANGE, ERROR, SECURITY)를 다중 조건으로 필터링 조회합니다.
+ * @param {Object} params - { app_id, log_type, severity, user_id, date_from, date_to, skip, limit }
+ */
+export const adminGetAuditLogs = (params = {}) => {
+	const query = new URLSearchParams();
+	Object.entries(params).forEach(([key, val]) => {
+		if (val !== undefined && val !== null && val !== '') {
+			query.append(key, val);
+		}
+	});
+	const qs = query.toString();
+	return request(`/api/v1/admin/observability/logs${qs ? `?${qs}` : ''}`);
+};
+
+/**
+ * @function adminGetLiveSessions
+ * @description Redis 및 DB에 동기화된 전사 실시간 접속 세션 목록을 조회합니다.
+ */
+export const adminGetLiveSessions = () =>
+	request('/api/v1/admin/observability/sessions');
+
+/**
+ * @function adminKickLiveSession
+ * @description 특정 실시간 세션을 즉시 강제 종료(Kicked-out) 처리합니다.
+ * @param {string} sessionKey - 강제 추방 대상 세션 키
+ */
+export const adminKickLiveSession = (sessionKey) =>
+	request(`/api/v1/admin/observability/sessions/kick/${encodeURIComponent(sessionKey)}`, 'POST');
+
+
 
 
 

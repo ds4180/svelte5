@@ -215,6 +215,13 @@
 									{app.icon_default || app.app_id.substring(0, 1).toUpperCase()}
 								</div>
 								<div class="flex items-center gap-1">
+									<a
+										href={`/v1/admin/observability?app_id=${app.app_id}&tab=CHANGE`}
+										class="btn rounded-none border-blue-600 bg-blue-50 text-[9px] font-black text-blue-700 uppercase btn-outline btn-xs hover:bg-blue-600 hover:text-white"
+										title="해당 앱의 실시간 감사로그 및 변경 내역 관제"
+									>
+										Log 📜
+									</a>
 									<button
 										class="btn rounded-none border-black text-[9px] font-black uppercase btn-outline btn-xs hover:bg-black hover:text-white"
 										onclick={() => startEdit(app)}>Modify</button

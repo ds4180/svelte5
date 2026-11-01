@@ -77,7 +77,15 @@
 		},
 		{
 			type: 'SYSTEM',
-			title: '세션 모니터링',
+			title: '통합 관제 & 감사로그',
+			desc: '실시간 세션 추적·강제추방, 4대 감사로그(접근/도메인Diff/장애/보안) 전사 관제',
+			link: '/v1/admin/observability',
+			icon: 'mdi:shield-check-outline',
+			color: 'bg-blue-600'
+		},
+		{
+			type: 'SYSTEM',
+			title: '세션 모니터링 (Legacy)',
 			desc: '실시간 멀티 디바이스 접속자(JTI) 확인 및 비정상 세션 강제 종료',
 			link: '/v1/admin/sessions',
 			icon: 'mdi:shield-lock-outline',

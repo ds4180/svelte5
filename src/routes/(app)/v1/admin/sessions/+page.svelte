@@ -90,6 +90,30 @@
 		</div>
 	</div>
 
+	<!-- 🏛️ [통합 관제 센터 이전 안내 배너] -->
+	<div class="flex flex-col md:flex-row items-center justify-between gap-4 rounded-2xl border-2 border-blue-600 bg-blue-50/70 p-4 md:p-5 shadow-sm">
+		<div class="flex items-center gap-3">
+			<div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white shadow-md">
+				<Icon icon="solar:shield-warning-bold-duotone" class="text-2xl" />
+			</div>
+			<div>
+				<h4 class="text-sm font-black text-slate-900">
+					신규 시스템 통합 관제 & 4대 감사로그 센터가 개설되었습니다!
+				</h4>
+				<p class="text-xs text-slate-600 mt-0.5">
+					실시간 세션 강제 추방, 접근 이력, 도메인 Diff-Patch 및 장애·보안 관제를 하나의 통합 관제 센터에서 제공합니다.
+				</p>
+			</div>
+		</div>
+		<a
+			href="/v1/admin/observability?tab=SESSIONS"
+			class="inline-flex shrink-0 items-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-xs font-black text-white shadow-md transition hover:bg-slate-900 active:scale-95"
+		>
+			<span>통합 관제 센터로 이동</span>
+			<Icon icon="solar:arrow-right-bold" class="text-sm" />
+		</a>
+	</div>
+
 	<div
 		class="hidden overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg sm:block md:rounded-[2rem] md:shadow-2xl"
 	>
