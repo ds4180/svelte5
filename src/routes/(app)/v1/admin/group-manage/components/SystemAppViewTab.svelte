@@ -189,7 +189,7 @@
                   </span>
                 </div>
                 <p class="text-xs text-slate-400 font-bold mt-0.5">
-                  진입 경로: <span class="font-mono text-purple-700 font-black">/v1/admin/{String(inst.target_id).replace('admin_', '')}</span>
+                  진입 경로: <span class="font-mono text-purple-700 font-black">{inst.frontend_route || (inst.target_id === 'admin_dashboard' ? '/v1/admin' : `/v1/admin/${String(inst.target_id).replace('admin_', '').replace(/_/g, '-')}`)}</span>
                 </p>
               </div>
             </div>

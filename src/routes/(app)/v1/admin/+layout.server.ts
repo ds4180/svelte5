@@ -22,6 +22,7 @@ import type { LayoutServerLoad } from './$types';
 // 🌐 시스템 앱 경로와 app_id 매핑 테이블 (대시보드 포함 18종)
 const PATH_TO_APP_ID: Record<string, string> = {
 	'/v1/admin': 'admin_dashboard',
+	'/v1/admin/dashboard': 'admin_dashboard',
 	'/v1/admin/alerts': 'admin_alerts',
 	'/v1/admin/media': 'admin_media',
 	'/v1/admin/target-groups': 'admin_target_groups',
@@ -99,7 +100,7 @@ export const load: LayoutServerLoad = async ({ locals, url, fetch }) => {
 
 	// 시스템 앱 진입 시 DB의 앱 권한(allow_groups, deny_groups, min_read_rank) 조회
 	if (targetAppId) {
-		const isDashboard = currentPath === '/v1/admin';
+		const isDashboard = currentPath === '/v1/admin' || currentPath === '/v1/admin/dashboard';
 		const fallbackRedirect = isDashboard ? '/' : '/v1/admin';
 
 		try {
@@ -135,6 +136,11 @@ export const load: LayoutServerLoad = async ({ locals, url, fetch }) => {
 							`🔒 [RouteGuard] ${user.username} (Lv.${rank}) - ${targetAppId} 권한 부족 (요구: Lv.${minRank})`
 						);
 						throw redirect(302, isDashboard ? '/' : '/v1/admin?insufficient=true');
+					}
+
+					// /v1/admin/dashboard로 들어온 경우 표준 정규 주소 /v1/admin으로 정규화 리다이렉트
+					if (currentPath === '/v1/admin/dashboard') {
+						throw redirect(302, '/v1/admin');
 					}
 
 					return {
