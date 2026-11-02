@@ -19,8 +19,6 @@ export const config = {
 	 * { version: v1, layer: app, instance: ..., action: ... }
 	 */
 	navigation: [
-		{ name: '질문목록', path: '/v1/app/question/list' },
-		{ name: '질문 작성', path: '/v1/app/question/create' },
 		{ name: '달력', path: '/v1/app/calendar' },
 		{ name: '파일', path: '/v1/app/files' },
 		{ name: '결근계', path: '/v1/app/day-off' },
