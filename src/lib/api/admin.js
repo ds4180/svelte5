@@ -106,6 +106,7 @@ export const adminDeletePushSubscription = (id) => request(`${BASE_URL}/push/sub
 
 // 👥 그룹 관리 API (Redis 기반)
 export const adminGetGroups = () => request('/api/v1/admin/groups');
+export const adminGetTargetGroupUsers = () => request('/api/v1/admin/groups/candidates');
 export const adminCreateManualGroup = (data) => request('/api/v1/admin/groups/manual', 'POST', data);
 export const adminRefreshDynamicGroups = () => request('/api/v1/admin/groups/dynamic/refresh', 'POST');
 export const adminCombineGroups = (data) => request('/api/v1/admin/groups/combine', 'POST', data);

@@ -12,7 +12,7 @@
 		adminCreateManualGroup, 
 		adminCombineGroups, 
 		adminDeleteGroup, 
-		adminGetUsers 
+		adminGetTargetGroupUsers 
 	} from '$lib/api/admin';
 
 	let groups = $state([]);
@@ -41,7 +41,7 @@
 
 	const fetchUsers = async () => {
 		try {
-			users = await adminGetUsers();
+			users = await adminGetTargetGroupUsers();
 		} catch (e) {
 			console.error(e);
 		}
