@@ -19,8 +19,9 @@ import type { LayoutServerLoad } from './$types';
  *    - [4단계] rank_level >= min_read_rank 대소비교
  */
 
-// 🌐 시스템 앱 경로와 app_id 매핑 테이블
+// 🌐 시스템 앱 경로와 app_id 매핑 테이블 (대시보드 포함 18종)
 const PATH_TO_APP_ID: Record<string, string> = {
+	'/v1/admin': 'admin_dashboard',
 	'/v1/admin/alerts': 'admin_alerts',
 	'/v1/admin/media': 'admin_media',
 	'/v1/admin/target-groups': 'admin_target_groups',
@@ -92,25 +93,15 @@ export const load: LayoutServerLoad = async ({ locals, url, fetch }) => {
 		user.secondary_groups.forEach((g: any) => g && userGroups.add(String(g)));
 	}
 
-	// 3. [3차 관문] 시스템 앱별 세부 권한 검사
+	// 3. [3차 관문] 시스템 앱별 세부 권한 검사 (대시보드 admin_dashboard 포함 실시간 4단계 거버넌스)
 	const currentPath = url.pathname.replace(/\/$/, ''); // 끝 슬래시 제거 정규화
 	const targetAppId = PATH_TO_APP_ID[currentPath];
 
-	// 관리자 메인 관제탑 대시보드(/v1/admin) 접근 시
-	if (currentPath === '/v1/admin') {
-		// 일반 관리자(Rank >= 4)이거나 최소 1개 이상의 관리자 권한을 가졌으면 허용
-		if (rank < 4 && userGroups.size === 0) {
-			throw redirect(302, '/');
-		}
-		return {
-			user,
-			canManageSystem: rank >= 8,
-			isAdmin: rank >= 4
-		};
-	}
-
-	// 특정 시스템 앱 진입 시 DB의 앱 권한(allow_groups, deny_groups, min_read_rank) 조회
+	// 시스템 앱 진입 시 DB의 앱 권한(allow_groups, deny_groups, min_read_rank) 조회
 	if (targetAppId) {
+		const isDashboard = currentPath === '/v1/admin';
+		const fallbackRedirect = isDashboard ? '/' : '/v1/admin';
+
 		try {
 			const res = await fetch(`/api/v1/admin/apps/${targetAppId}`);
 			if (res.ok) {
@@ -122,14 +113,19 @@ export const load: LayoutServerLoad = async ({ locals, url, fetch }) => {
 					const isDenied = [...userGroups].some(g => denyGroups.has(g));
 					if (isDenied) {
 						console.warn(`🚨 [RouteGuard] ${user.username} - ${targetAppId} 접근 차단됨 (deny_groups 소속)`);
-						throw redirect(302, '/v1/admin?denied=true');
+						throw redirect(302, isDashboard ? '/' : '/v1/admin?denied=true');
 					}
 
 					// [2단계] allow_groups 검사 (Allow-Wins)
 					const allowGroups = extractGroups(targetApp.allow_groups, 'read');
 					const isAllowed = [...userGroups].some(g => allowGroups.has(g));
 					if (isAllowed) {
-						return { user, currentApp: targetApp, isAdmin: true };
+						return {
+							user,
+							currentApp: targetApp,
+							canManageSystem: rank >= 8,
+							isAdmin: true
+						};
 					}
 
 					// [3단계] min_read_rank 비교
@@ -138,10 +134,15 @@ export const load: LayoutServerLoad = async ({ locals, url, fetch }) => {
 						console.warn(
 							`🔒 [RouteGuard] ${user.username} (Lv.${rank}) - ${targetAppId} 권한 부족 (요구: Lv.${minRank})`
 						);
-						throw redirect(302, '/v1/admin?insufficient=true');
+						throw redirect(302, isDashboard ? '/' : '/v1/admin?insufficient=true');
 					}
 
-					return { user, currentApp: targetApp, isAdmin: true };
+					return {
+						user,
+						currentApp: targetApp,
+						canManageSystem: rank >= 8,
+						isAdmin: rank >= 4
+					};
 				}
 			}
 		} catch (err: any) {
@@ -154,7 +155,7 @@ export const load: LayoutServerLoad = async ({ locals, url, fetch }) => {
 
 		// API 호출 실패 시 기본 fallback: 최소 Rank 4 이상만 허용
 		if (rank < 4) {
-			throw redirect(302, '/v1/admin?insufficient=true');
+			throw redirect(302, fallbackRedirect);
 		}
 	}
 
