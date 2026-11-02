@@ -6,6 +6,7 @@
 	 */
 	import Icon from '@iconify/svelte';
 	import { fly, fade } from 'svelte/transition';
+	import { formatDateTime } from '$lib/utils';
 
 	let { 
 		item = {
@@ -59,17 +60,34 @@
 			borderColor: 'border-blue-200',
 			badgeClass: 'bg-blue-100 text-blue-800'
 		},
+		NOTICE: {
+			icon: 'ph:megaphone-simple-fill',
+			label: '📢 공지',
+			color: 'text-blue-600',
+			bgColor: 'bg-blue-50/60',
+			borderColor: 'border-blue-200',
+			badgeClass: 'bg-blue-100 text-blue-800 font-bold'
+		},
+		URGENT_NOTICE: {
+			icon: 'ph:warning-octagon-fill',
+			label: '🚨 중요 공지',
+			color: 'text-rose-600',
+			bgColor: 'bg-rose-50/80',
+			borderColor: 'border-rose-500 border-l-4',
+			badgeClass: 'bg-rose-600 text-white font-black animate-pulse shadow-sm'
+		},
 		NOTIFICATION: {
 			icon: 'ph:bell-ringing-fill',
-			label: '공지알림',
-			color: 'text-emerald-600',
-			bgColor: 'bg-emerald-50/60',
-			borderColor: 'border-emerald-200',
-			badgeClass: 'bg-emerald-100 text-emerald-800'
+			label: '📢 공지',
+			color: 'text-blue-600',
+			bgColor: 'bg-blue-50/60',
+			borderColor: 'border-blue-200',
+			badgeClass: 'bg-blue-100 text-blue-800 font-bold'
 		}
 	};
 
-	const config = $derived(typeConfig[item.type] || typeConfig[item.category] || typeConfig.MEMO);
+	const config = $derived(typeConfig[item.category] || typeConfig[item.type] || typeConfig.MEMO);
+	const isUrgent = $derived(item.category === 'URGENT_NOTICE' || item.type === 'URGENT_NOTICE');
 
 	function handleStatusToggle() {
 		/** @type {Record<string, string>} */
@@ -81,24 +99,12 @@
 		const key = String(item.status || 'PENDING');
 		onAction('status', nextStatus[key] || 'COMPLETED');
 	}
-
-	/** @param {any} dtStr */
-	function formatDateTime(dtStr) {
-		if (!dtStr) return '';
-		const d = new Date(dtStr);
-		return d.toLocaleString('ko-KR', {
-			month: 'numeric',
-			day: 'numeric',
-			hour: '2-digit',
-			minute: '2-digit'
-		});
-	}
 </script>
 
 <div 
 	in:fly={{ y: 15, duration: 300 }}
 	out:fade={{ duration: 150 }}
-	class="group relative flex flex-col justify-between rounded-2xl border-2 p-5 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg {config.bgColor} {config.borderColor}"
+	class="group relative flex flex-col justify-between rounded-2xl border-2 p-5 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg {config.bgColor} {config.borderColor} {isUrgent ? 'ring-2 ring-rose-500/40 shadow-md' : ''}"
 >
 	<!-- 카드 상단: 아이콘, 카테고리 뱃지, 상태 버튼 -->
 	<div class="flex items-center justify-between mb-3">
@@ -132,17 +138,32 @@
 					<Icon icon="mdi:checkbox-marked-circle-outline" class="w-3.5 h-3.5" /> 지시 확인
 				</button>
 			{/if}
-		{:else if item.type === 'NOTIFICATION' || item.category === 'NOTIFICATION'}
+		{:else if item.type === 'NOTIFICATION' || item.category === 'NOTIFICATION' || item.type === 'NOTICE' || item.category === 'NOTICE' || isUrgent}
 			{#if item.status === 'PENDING'}
 				<button
 					type="button"
-					class="rounded-lg bg-emerald-600 px-2.5 py-1 text-[10px] font-black text-white shadow-sm transition hover:bg-emerald-700 active:scale-95"
+					class="rounded-lg {isUrgent ? 'bg-rose-600 hover:bg-rose-700' : 'bg-blue-600 hover:bg-blue-700'} px-2.5 py-1 text-[10px] font-black text-white shadow-sm transition active:scale-95"
 					onclick={() => onAction('status', 'READ')}
 				>
 					확인 완료 ✓
 				</button>
 			{:else}
-				<span class="text-[10px] font-bold text-slate-400">확인됨</span>
+				<span
+					class="rounded-lg bg-slate-200/80 px-2 py-0.5 text-[10px] font-bold text-slate-500"
+					title={item.extra_payload?.confirmed_at ? `확인 시각: ${formatDateTime(item.extra_payload.confirmed_at)}` : '확인 완료'}
+				>
+					확인됨 ✓
+				</span>
+			{/if}
+		{:else if item.type === 'ALARM' || item.category === 'ALARM'}
+			{#if item.is_done || item.status === 'COMPLETED'}
+				<span class="rounded-lg bg-emerald-100 text-emerald-800 px-2 py-0.5 text-[10px] font-bold">
+					완료됨 ✓
+				</span>
+			{:else}
+				<span class="rounded-lg bg-rose-100 text-rose-800 px-2 py-0.5 text-[10px] font-bold flex items-center gap-1">
+					<span class="w-1.5 h-1.5 rounded-full bg-rose-500 animate-ping"></span> 리마인더 대기
+				</span>
 			{/if}
 		{/if}
 	</div>
@@ -179,13 +200,13 @@
 		</span>
 
 		<div class="flex items-center gap-1">
-			<!-- 메모 완료 체크 버튼 -->
-			{#if item.type === 'MEMO'}
+			<!-- 메모 및 알람 리마인더 완료 체크 버튼 -->
+			{#if item.type === 'MEMO' || item.type === 'ALARM' || item.category === 'MEMO' || item.category === 'ALARM'}
 				<button 
 					type="button"
 					class="flex h-7 w-7 items-center justify-center rounded-lg transition {item.is_done || item.status === 'COMPLETED' ? 'bg-emerald-500 text-white' : 'bg-white text-slate-400 hover:text-emerald-600 border border-slate-200'}"
 					onclick={() => onAction('toggle_done', !(item.is_done || item.status === 'COMPLETED'))}
-					title={item.is_done ? '완료 취소' : '할 일 완료 체크'}
+					title={item.is_done || item.status === 'COMPLETED' ? '완료 취소' : '할 일/알람 완료 체크'}
 				>
 					<Icon icon="ph:check-bold" class="text-xs" />
 				</button>

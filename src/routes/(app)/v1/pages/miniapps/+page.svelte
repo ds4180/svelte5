@@ -132,6 +132,16 @@
 	// 필터링된 피드 아이템 목록
 	let filteredItems = $derived.by(() => {
 		if (activeTab === 'ALL') return miniappStore.items;
+		if (activeTab === 'NOTIFICATION') {
+			return miniappStore.items.filter((i) => 
+				i.category === 'NOTIFICATION' || 
+				i.category === 'NOTICE' || 
+				i.category === 'URGENT_NOTICE' || 
+				i.type === 'NOTIFICATION' ||
+				i.type === 'NOTICE' ||
+				i.type === 'URGENT_NOTICE'
+			);
+		}
 		return miniappStore.items.filter((i) => i.type === activeTab || i.category === activeTab);
 	});
 </script>
@@ -175,14 +185,14 @@
 	<!-- 2. 상단 4대 뱃지 요약 카드 (클릭 시 즉시 필터 전환) -->
 	<!-- ===================================================================== -->
 	<div class="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4 mb-8">
-		<!-- 카드 1: 알림 -->
+		<!-- 카드 1: 알림/공지 -->
 		<button
 			type="button"
 			onclick={() => (activeTab = 'NOTIFICATION')}
 			class="flex flex-col justify-between rounded-2xl border-2 p-4 text-left transition {activeTab === 'NOTIFICATION' ? 'border-emerald-600 bg-emerald-50/70 shadow-md ring-2 ring-emerald-500/30' : 'border-slate-200 bg-white hover:border-slate-300'}"
 		>
 			<div class="flex items-center justify-between">
-				<span class="text-[11px] font-black tracking-wider text-slate-400 uppercase">Notification</span>
+				<span class="text-[11px] font-black tracking-wider text-slate-400 uppercase">Notice / Alert</span>
 				<Icon icon="ph:bell-ringing-fill" class="text-lg text-emerald-600" />
 			</div>
 			<div class="mt-3 flex items-baseline justify-between">
@@ -190,7 +200,7 @@
 					{miniappStore.counts.NOTIFICATION}
 					<span class="text-xs font-normal text-slate-500">건</span>
 				</span>
-				<span class="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">전사공지</span>
+				<span class="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">공지·중요공지</span>
 			</div>
 		</button>
 
@@ -373,7 +383,7 @@
 				onclick={() => (activeTab = 'NOTIFICATION')}
 				class="flex items-center gap-1.5 rounded-xl px-4 py-2 text-xs font-black transition {activeTab === 'NOTIFICATION' ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'}"
 			>
-				<span>전사 공지</span>
+				<span>공지/알림</span>
 				{#if miniappStore.counts.NOTIFICATION > 0}
 					<span class="rounded-full bg-emerald-100 text-emerald-800 px-1.5 py-0.2 text-[10px] font-black">
 						{miniappStore.counts.NOTIFICATION}

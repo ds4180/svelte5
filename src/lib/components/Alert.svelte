@@ -70,21 +70,31 @@
 
 	// 현재 경로와 필터에 맞는 알림들만 계산 ($derived)
 	const visibleAlerts = $derived(alertState.getVisibleAlerts(positionFilter, page.url.pathname));
+
+	// 레벨별 필터링 분리 ($derived)
+	const l1Alerts = $derived(visibleAlerts.filter(a => a.level === 1));
+	const l2Alerts = $derived(visibleAlerts.filter(a => a.level === 2));
 </script>
 
-<!-- 🔔 Toast Layer (Lv.1) -->
-{#if positionFilter !== 'modal'}
-	<div class="toast toast-{positionFilter} toast-center z-[1000] gap-2 p-4">
-		{#each visibleAlerts.filter(a => a.level === 1) as alert (alert.id)}
-			<AlertToast {alert} {positionFilter} />
-		{/each}
+<!-- 🔔 Toast Layer (Lv.1: 2건 이상이어도 최신 1건만 단일 스택 큐로 우아하게 노출) -->
+{#if positionFilter !== 'modal' && l1Alerts.length > 0}
+	{@const activeL1 = l1Alerts[l1Alerts.length - 1]}
+	<div 
+		class="toast toast-center z-[9999] pointer-events-auto gap-2 p-2 w-full max-w-[96vw] flex flex-col items-center !whitespace-normal {positionFilter === 'top' ? 'toast-top fixed top-24 bottom-auto left-1/2 -translate-x-1/2' : 'toast-bottom fixed bottom-6 top-auto left-1/2 -translate-x-1/2'}"
+	>
+		<AlertToast 
+			alert={activeL1} 
+			{positionFilter} 
+			totalCount={l1Alerts.length} 
+			currentIndex={l1Alerts.length} 
+		/>
 	</div>
 {/if}
 
-<!-- 🚩 Banner Layer (Lv.2) -->
-{#each visibleAlerts.filter(a => a.level === 2) as alert (alert.id)}
-	<AlertBanner {alert} />
-{/each}
+<!-- 🚩 Banner Layer (Lv.2: 2건 이상이어도 1줄 높이 완전 고정 5초 롤링 티커) -->
+{#if positionFilter !== 'modal' && l2Alerts.length > 0}
+	<AlertBanner alerts={l2Alerts} {positionFilter} />
+{/if}
 
 <!-- 📦 Modal Layer (Lv.3, 4, 5) -->
 {#if positionFilter === 'modal'}

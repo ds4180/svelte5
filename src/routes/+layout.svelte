@@ -75,6 +75,7 @@
 <!-- 💡 비로그인 손님이나 로그인 화면에서는 사내 배차 공지나 업무 지시가 뜨지 않도록 완벽 격리합니다. -->
 {#if data.user}
 	<Alert positionFilter="top" />
+	<Alert positionFilter="bottom" />
 	<Alert positionFilter="modal" />
 {/if}
 

@@ -1,5 +1,6 @@
 <script>
 	import Icon from '@iconify/svelte';
+	import { toLocalISOString } from '$lib/utils';
 
 	let {
 		isOpen = $bindable(false),
@@ -10,17 +11,6 @@
 
 	let editingAlert = $state(null);
 
-	function formatDateForInput(dateString) {
-		if (!dateString) return '';
-		const date = new Date(dateString);
-		const year = date.getFullYear();
-		const month = (date.getMonth() + 1).toString().padStart(2, '0');
-		const day = date.getDate().toString().padStart(2, '0');
-		const hours = date.getHours().toString().padStart(2, '0');
-		const minutes = date.getMinutes().toString().padStart(2, '0');
-		return `${year}-${month}-${day}T${hours}:${minutes}`;
-	}
-
 	$effect(() => {
 		if (isOpen && alertItem) {
 			editingAlert = { ...alertItem };
@@ -28,8 +18,8 @@
 			editingAlert.category = editingAlert.category || 'NOTIFICATION';
 			editingAlert.target_group = editingAlert.target_group || '';
 			editingAlert.position = editingAlert.position || 'top';
-			editingAlert.start_date = formatDateForInput(editingAlert.start_date);
-			editingAlert.end_date = formatDateForInput(editingAlert.end_date);
+			editingAlert.start_date = toLocalISOString(editingAlert.start_date);
+			editingAlert.end_date = toLocalISOString(editingAlert.end_date);
 		}
 	});
 
@@ -38,10 +28,10 @@
 		if (editingAlert) {
 			const lvl = parseInt(String(editingAlert.level));
 			if (lvl >= 3) {
-				editingAlert.position = 'center';
+				editingAlert.position = 'modal';
 				editingAlert.reset_sec = (lvl >= 4) ? 5 : 0;
 			} else {
-				if (editingAlert.position === 'center') {
+				if (editingAlert.position === 'center' || editingAlert.position === 'modal') {
 					editingAlert.position = 'top';
 				}
 				editingAlert.reset_sec = 0;
@@ -119,11 +109,19 @@
 							class="select select-bordered select-sm w-full rounded-xl bg-white text-slate-900 font-bold"
 							bind:value={editingAlert.category}
 						>
-							<option value="NOTIFICATION">🔔 일반 알림 (NOTIFICATION)</option>
-							<option value="INSTRUCTION">📋 업무 지시사항 (INSTRUCTION - 수신확인형)</option>
-							<option value="NOTICE">📢 전사/그룹 공지사항 (NOTICE)</option>
+							<option value="NOTICE">📢 공지 (일반 업무 안내)</option>
+							<option value="URGENT_NOTICE">🚨 중요 공지 (비상/긴급 - 시인성 특화)</option>
+							<option value="INSTRUCTION">📋 지시사항 (수신확인 필수)</option>
 						</select>
-						<span class="text-[10px] text-slate-400 mt-1 block">미니앱 피드 허브의 해당 탭으로 자동 분류 적재됩니다.</span>
+						<span class="text-[10px] text-slate-400 mt-1 block">
+							{#if editingAlert.category === 'URGENT_NOTICE'}
+								<span class="text-rose-600 font-bold">🚨 중요 공지는 사원 피드에서 강렬한 펄스 뱃지와 강조 테두리로 최우선 노출됩니다.</span>
+							{:else if editingAlert.category === 'INSTRUCTION'}
+								<span class="text-purple-600 font-bold">📋 지시사항은 사원의 [확인 완료] 액션 및 관리자 수신 집계가 제공됩니다.</span>
+							{:else}
+								사원 미니앱 피드의 [알림] 탭에 일반 공지로 적재됩니다.
+							{/if}
+						</span>
 					</div>
 					<div>
 						<div class="flex items-center justify-between">

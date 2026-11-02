@@ -1,6 +1,7 @@
 <script>
 	import { onMount } from 'svelte';
 	import * as api from '$lib/api/admin.js';
+	import { formatDateTime } from '$lib/utils';
 	import Icon from '@iconify/svelte';
 
 	let sessions = $state([]);
@@ -29,19 +30,6 @@
 	}
 
 	onMount(loadSessions);
-
-	function formatDateTime(dateString) {
-		if (!dateString) return '-';
-		return new Date(dateString).toLocaleString('ko-KR', {
-			year: 'numeric',
-			month: '2-digit',
-			day: '2-digit',
-			hour: '2-digit',
-			minute: '2-digit',
-			second: '2-digit',
-			hour12: false
-		});
-	}
 </script>
 
 <div

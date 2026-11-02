@@ -16,6 +16,7 @@
 	import { page as pageStore } from '$app/stores';
 	import * as api from '$lib/api/admin.js';
 	import { toast } from '$lib/runes/toast.svelte.js';
+	import { formatDateTime, timeAgo } from '$lib/utils';
 	import Icon from '@iconify/svelte';
 
 	// 📊 상단 4대 핵심 지표 요약 상태
@@ -154,40 +155,6 @@
 		severityFilter = event.target.value;
 		currentPage = 1;
 		refreshData();
-	}
-
-	/**
-	 * 날짜 및 시간 포맷터
-	 * @param {any} dtStr
-	 */
-	function formatDateTime(dtStr) {
-		if (!dtStr) return '-';
-		const d = new Date(dtStr);
-		return d.toLocaleString('ko-KR', {
-			year: 'numeric',
-			month: '2-digit',
-			day: '2-digit',
-			hour: '2-digit',
-			minute: '2-digit',
-			second: '2-digit',
-			hour12: false
-		});
-	}
-
-	/**
-	 * 시간 경과 (예: 3분 전)
-	 * @param {any} dtStr
-	 */
-	function timeAgo(dtStr) {
-		if (!dtStr) return '-';
-		const diffMs = Date.now() - new Date(dtStr).getTime();
-		const diffSec = Math.floor(diffMs / 1000);
-		if (diffSec < 60) return `${diffSec}초 전`;
-		const diffMin = Math.floor(diffSec / 60);
-		if (diffMin < 60) return `${diffMin}분 전`;
-		const diffHr = Math.floor(diffMin / 60);
-		if (diffHr < 24) return `${diffHr}시간 전`;
-		return `${Math.floor(diffHr / 24)}일 전`;
 	}
 
 	/**

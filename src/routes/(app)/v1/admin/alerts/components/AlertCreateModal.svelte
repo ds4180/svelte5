@@ -1,5 +1,6 @@
 <script>
 	import Icon from '@iconify/svelte';
+	import { toLocalISOString } from '$lib/utils';
 
 	let {
 		isOpen = $bindable(false),
@@ -8,21 +9,47 @@
 		onCreate
 	} = $props();
 
+	// D + 3일 후 만료일 계산 헬퍼 함수
+	function getThreeDaysLater() {
+		const d = new Date();
+		d.setDate(d.getDate() + 3);
+		return d;
+	}
+
 	let newAlert = $state({
 		message: '',
 		level: '1',
 		style: 'info',
 		position: 'top',
-		category: 'NOTIFICATION', // 'NOTIFICATION' | 'INSTRUCTION' | 'NOTICE'
+		category: 'NOTICE', // 'NOTICE' | 'URGENT_NOTICE' | 'INSTRUCTION'
 		target_group: '',
-		start_date: new Date().toISOString().slice(0, 16),
-		end_date: new Date(new Date().setFullYear(new Date().getFullYear() + 1))
-			.toISOString()
-			.slice(0, 16),
+		start_date: toLocalISOString(new Date()),
+		end_date: toLocalISOString(getThreeDaysLater()),
+		send_web_push: false, // 📱 전사 웹푸시 알림 발송 플래그
 		reset_sec: 0,
 		redirect_url: '',
 		route: '',
 		is_active: true
+	});
+
+	// 빠른 일자 프리셋 지정 (+1일, +3일, +7일)
+	function setPresetDays(days) {
+		const base = newAlert.start_date ? new Date(newAlert.start_date) : new Date();
+		const target = new Date(base);
+		target.setDate(target.getDate() + days);
+		newAlert.end_date = toLocalISOString(target);
+	}
+
+	// 🚨 중요 공지(URGENT_NOTICE) 선택 시 시인성 극대화를 위한 기본값 자동 보조
+	$effect(() => {
+		if (newAlert.category === 'URGENT_NOTICE') {
+			if (newAlert.style === 'info') {
+				newAlert.style = 'error';
+			}
+			if (parseInt(String(newAlert.level)) < 3) {
+				newAlert.level = '3';
+			}
+		}
 	});
 
 	// 🎯 Level 변경 시 position 및 5초 정독 시간 자동 동기화 규칙
@@ -32,21 +59,37 @@
 	$effect(() => {
 		const lvl = parseInt(String(newAlert.level));
 		if (lvl >= 3) {
-			newAlert.position = 'center';
+			newAlert.position = 'modal';
 			newAlert.reset_sec = (lvl >= 4) ? 5 : 0;
 		} else {
-			if (newAlert.position === 'center') {
+			if (newAlert.position === 'center' || newAlert.position === 'modal') {
 				newAlert.position = 'top';
 			}
 			newAlert.reset_sec = 0;
 		}
 	});
 
+	function resetForm() {
+		newAlert = {
+			message: '',
+			level: '1',
+			style: 'info',
+			position: 'top',
+			category: 'NOTICE',
+			target_group: initialTargetGroup || '',
+			start_date: toLocalISOString(new Date()),
+			end_date: toLocalISOString(getThreeDaysLater()),
+			send_web_push: false,
+			reset_sec: 0,
+			redirect_url: '',
+			route: '',
+			is_active: true
+		};
+	}
+
 	$effect(() => {
 		if (isOpen) {
-			if (initialTargetGroup) {
-				newAlert.target_group = initialTargetGroup;
-			}
+			resetForm();
 		}
 	});
 
@@ -55,11 +98,14 @@
 			...newAlert,
 			start_date: new Date(newAlert.start_date),
 			end_date: new Date(newAlert.end_date),
-			level: parseInt(String(newAlert.level))
+			level: parseInt(String(newAlert.level)),
+			send_web_push: !newAlert.target_group && Boolean(newAlert.send_web_push)
 		});
+		resetForm();
 	}
 
 	function handleClose() {
+		resetForm();
 		isOpen = false;
 	}
 </script>
@@ -119,11 +165,19 @@
 							class="select select-bordered select-sm w-full rounded-xl bg-white text-slate-900 font-bold"
 							bind:value={newAlert.category}
 						>
-							<option value="NOTIFICATION">🔔 일반 알림 (NOTIFICATION)</option>
-							<option value="INSTRUCTION">📋 업무 지시사항 (INSTRUCTION - 수신확인형)</option>
-							<option value="NOTICE">📢 전사/그룹 공지사항 (NOTICE)</option>
+							<option value="NOTICE">📢 공지 (일반 업무 안내)</option>
+							<option value="URGENT_NOTICE">🚨 중요 공지 (비상/긴급 - 시인성 특화)</option>
+							<option value="INSTRUCTION">📋 지시사항 (수신확인 필수)</option>
 						</select>
-						<span class="text-[10px] text-slate-400 mt-1 block">미니앱 피드 허브의 해당 탭으로 자동 분류 적재됩니다.</span>
+						<span class="text-[10px] text-slate-400 mt-1 block">
+							{#if newAlert.category === 'URGENT_NOTICE'}
+								<span class="text-rose-600 font-bold">🚨 중요 공지는 사원 피드에서 강렬한 펄스 뱃지와 강조 테두리로 최우선 노출됩니다.</span>
+							{:else if newAlert.category === 'INSTRUCTION'}
+								<span class="text-purple-600 font-bold">📋 지시사항은 사원의 [확인 완료] 액션 및 관리자 수신 집계가 제공됩니다.</span>
+							{:else}
+								사원 미니앱 피드의 [알림] 탭에 일반 공지로 적재됩니다.
+							{/if}
+						</span>
 					</div>
 					<div>
 						<div class="flex items-center justify-between">
@@ -146,6 +200,25 @@
 								</option>
 							{/each}
 						</select>
+
+						{#if !newAlert.target_group}
+							<!-- 🔔 전사 전체 공지 시 브라우저 웹 푸시(Web Push) 알림 동시 발송 체크박스 -->
+							<div class="mt-2.5 flex items-center justify-between p-2.5 rounded-xl bg-blue-50 border border-blue-200 transition-all">
+								<label class="flex items-center gap-2 cursor-pointer select-none">
+									<input
+										type="checkbox"
+										class="checkbox checkbox-primary checkbox-xs rounded"
+										bind:checked={newAlert.send_web_push}
+									/>
+									<span class="text-xs font-black text-blue-900 flex items-center gap-1">
+										<Icon icon="mdi:bell-ring-outline" class="text-blue-600 text-sm" />
+										전사 브라우저 웹 푸시(Web Push) 알림 동시 발송
+									</span>
+								</label>
+								<span class="badge badge-xs badge-info font-bold text-[9px]">Web Push</span>
+							</div>
+						{/if}
+
 						<span class="text-[10px] text-slate-400 mt-1 block">
 							{#if newAlert.target_group}
 								{@const selectedG = groups.find(g => g.name === newAlert.target_group)}
@@ -209,24 +282,54 @@
 					</div>
 				</div>
 
-				<!-- 시작일시 / 종료일시 -->
-				<div class="grid grid-cols-1 gap-4 md:grid-cols-2">
-					<div>
-						<label class="label pb-1"><span class="label-text font-bold text-xs">시작일시</span></label>
-						<input
-							type="datetime-local"
-							class="input input-bordered input-sm w-full rounded-xl bg-white text-slate-900 font-bold"
-							bind:value={newAlert.start_date}
-						/>
+				<!-- 시작일시 / 종료일시 (기본값 D+3일 및 닫기 버튼 바) -->
+				<div class="p-3 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
+					<div class="flex items-center justify-between">
+						<label class="label py-0"><span class="label-text font-bold text-xs flex items-center gap-1">
+							<Icon icon="mdi:calendar-clock" class="text-blue-600" />
+							노출 기간 설정 (종료일시 기본: D+3일)
+						</span></label>
+						<div class="flex items-center gap-1">
+							<button
+								type="button"
+								class="btn btn-ghost btn-xs text-[10px] font-bold rounded-lg px-2 py-0.5 bg-white border border-slate-200 hover:bg-slate-100"
+								onclick={() => setPresetDays(1)}
+							>+1일</button>
+							<button
+								type="button"
+								class="btn btn-ghost btn-xs text-[10px] font-bold rounded-lg px-2 py-0.5 bg-blue-100 border border-blue-200 text-blue-800 hover:bg-blue-200"
+								onclick={() => setPresetDays(3)}
+							>+3일 (기본)</button>
+							<button
+								type="button"
+								class="btn btn-ghost btn-xs text-[10px] font-bold rounded-lg px-2 py-0.5 bg-white border border-slate-200 hover:bg-slate-100"
+								onclick={() => setPresetDays(7)}
+							>+7일</button>
+						</div>
 					</div>
-					<div>
-						<label class="label pb-1"><span class="label-text font-bold text-xs">종료일시</span></label>
-						<input
-							type="datetime-local"
-							class="input input-bordered input-sm w-full rounded-xl bg-white text-slate-900 font-bold"
-							bind:value={newAlert.end_date}
-						/>
+
+					<div class="grid grid-cols-1 gap-3 md:grid-cols-2">
+						<div>
+							<label class="label py-0.5"><span class="label-text font-bold text-[11px] text-slate-500">시작일시</span></label>
+							<input
+								type="datetime-local"
+								class="input input-bordered input-sm w-full rounded-xl bg-white text-slate-900 font-bold"
+								bind:value={newAlert.start_date}
+							/>
+						</div>
+						<div>
+							<label class="label py-0.5"><span class="label-text font-bold text-[11px] text-slate-500">종료일시 (D+3일 기본)</span></label>
+							<input
+								type="datetime-local"
+								class="input input-bordered input-sm w-full rounded-xl bg-white text-slate-900 font-bold"
+								bind:value={newAlert.end_date}
+							/>
+						</div>
 					</div>
+
+					<span class="text-[10px] text-slate-400 block pt-0.5">
+						종료일시가 도래하면 사용자 화면에서 자동 비활성화 처리됩니다.
+					</span>
 				</div>
 
 				<!-- 적용 경로 & 리다이렉트 URL -->
@@ -276,7 +379,7 @@
 						class="btn btn-sm btn-ghost rounded-xl font-bold text-slate-500"
 						onclick={handleClose}
 					>
-						취소
+						닫기
 					</button>
 					<button type="submit" class="btn btn-sm btn-primary rounded-xl font-black px-6">
 						새 알림 생성
