@@ -3,8 +3,8 @@
 	import { onMount } from 'svelte';
 	import { clearTokens, authStore } from '$lib/stores/authStore.js'; // authStore 및 clearTokens import
 
-	let loggingOut = true;
-	let errorMessage = '';
+	let loggingOut = $state(true);
+	let errorMessage = $state('');
 
 	async function performLogout() {
 		loggingOut = true;

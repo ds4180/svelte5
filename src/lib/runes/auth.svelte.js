@@ -45,10 +45,14 @@ export function extractGroupsForAction(groupData, action = 'read') {
 
 export class AuthState {
 	// 반응형 유저 정보 상태 ({ id, username, email, rank_level, primary_group, secondary_groups })
+	/** @type {any} */
 	user = $state(null);
 	isAuthenticated = $derived(!!this.user);
 	isRoot = $derived(this.user?.rank_level === 9);
 
+	/**
+	 * @param {any} [initialUser]
+	 */
 	constructor(initialUser = null) {
 		if (initialUser) {
 			this.user = initialUser;
@@ -80,6 +84,14 @@ export class AuthState {
 	 * 2. 앱의 denyGroups에 부그룹 또는 주그룹이 있는가? ➔ 있으면 무조건 false (차단)
 	 * 3. 앱의 allowGroups에 부그룹 또는 주그룹이 있는가? ➔ 있으면 무조건 true (읽기/쓰기 모두 가능)
 	 * 4. 앱의 읽기/쓰기 랭킹과 사용자 랭킹(0~9)을 비교(>=, >, <, <=, ==)하여 결정
+	 * 
+	 * @param {object} [options]
+	 * @param {'read'|'write'} [options.action]
+	 * @param {number} [options.minReadRank]
+	 * @param {number} [options.minWriteRank]
+	 * @param {any} [options.allowGroups]
+	 * @param {any} [options.denyGroups]
+	 * @param {string} [options.op]
 	 */
 	canAccess({
 		action = 'read',
@@ -133,7 +145,7 @@ export class AuthState {
 				const storedUser = localStorage.getItem('auth_user');
 				if (storedUser && !this.user) {
 					this.user = JSON.parse(storedUser);
-					console.log('👤 [AuthState] Hydrated from localStorage:', this.user.username);
+					console.log('👤 [AuthState] Hydrated from localStorage:', this.user?.username);
 				}
 			} catch (err) {
 				console.error('❌ [AuthState] LocalStorage Sync Error:', err);
@@ -148,6 +160,8 @@ export class AuthState {
 	 * 서버(SSR)에서는 각 요청의 Context만 독립적으로 유지하여 메모리 오염을 막고,
 	 * 브라우저(browser === true)에서는 기존 도메인 앱들이 참조하는 전역 폴백(fallbackAuth)에도
 	 * 동일한 유저 정보를 함께 넣어주어 레거시 코드(import { auth })가 100% 정상 작동하도록 보장합니다.
+	 * 
+	 * @param {any} [userData]
 	 */
 	setUser(userData) {
 		this.user = userData;

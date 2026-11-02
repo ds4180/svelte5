@@ -1,53 +1,13 @@
-import { auth } from '$lib/runes/auth.svelte.js';
+import { fastApi } from '$lib/api';
 
 /**
  * @function request
- * @description 인증 토큰을 수동으로 주입하여 401 에러를 방지하는 공통 요청 함수
+ * @description 중앙 집중형 통신 관문(fastApi)을 경유하여 Trailing Slash 자동 제거,
+ *              AbortController 타임아웃 제어, 401 세션 만료 및 403/500 에러 토스트를 보장하는
+ *              전사 통합 관리자 API 요청 함수
  */
 async function request(url, method = 'GET', body = null) {
-	const headers = { 'Content-Type': 'application/json' };
-
-	// 🔑 [Auth Check] 인증 정보 확보 (Rune -> localStorage -> Cookie 순서)
-	let token = auth.accessToken;
-	if (!token && typeof localStorage !== 'undefined') {
-		token = localStorage.getItem('accessToken');
-	}
-	if (!token && typeof document !== 'undefined') {
-		const matches = document.cookie.match(/access_token=([^;]+)/);
-		if (matches) token = matches[1];
-	}
-
-	if (token) {
-		headers['Authorization'] = `Bearer ${token}`;
-	}
-
-	const options = {
-		method,
-		headers,
-		credentials: 'include'
-	};
-	if (body) options.body = JSON.stringify(body);
-
-	const response = await fetch(url, options);
-
-	// 401 발생 시 로그 출력 (디버깅용)
-	if (response.status === 401) {
-		console.error(`❌ [401 Unauthorized] URL: ${url} | Token exists: ${!!token}`);
-	}
-	// 204 No Content일 경우 빈 객체 반환
-	if (response.status === 204) {
-		return {};
-	}
-
-	if (!response.ok) {
-		const err = await response.json().catch(() => ({}));
-		throw new Error(
-			Array.isArray(err.detail)
-				? err.detail.map((item) => item.msg || JSON.stringify(item)).join('; ')
-				: err.detail || `API 요청 실패 (${response.status})`
-		);
-	}
-	return response.json();
+	return fastApi(method, url, body || undefined);
 }
 
 const BASE_URL = '/api/v1/admin';

@@ -24,6 +24,9 @@ class ToastState {
 	// 📌 현재 화면에 떠 있는 토스트 목록 ($state 룬)
 	items = $state<ToastItem[]>([]);
 
+	// 🛡️ 권한 거부(403) 디바운스 및 2차 연쇄 에러 자동 진압용 타임스탬프
+	private lastAuthErrorTime = 0;
+
 	/**
 	 * 기본 알림 표시 공통 메서드
 	 * @param message 표시할 메시지
@@ -31,6 +34,29 @@ class ToastState {
 	 * @param duration 유지 시간 (기본 3500ms = 3.5초)
 	 */
 	show(message: string, type: ToastItem['type'] = 'info', duration: number = 3500): string {
+		const now = Date.now();
+		const isAuthError = message.includes('권한이 없습니다') || message.includes('권한 없음');
+
+		// 🛡️ [방어 1]: 권한 오류 토스트 2초 이내 중복 발생 차단 (여러 API 동시 403 대응)
+		if (isAuthError) {
+			if (now - this.lastAuthErrorTime < 2000) {
+				return ''; // 중복 무시
+			}
+			this.lastAuthErrorTime = now;
+		}
+
+		// 🛡️ [방어 2]: 권한 오류 직후(1.5초 내) 컴포넌트 catch 블록에서 날아오는
+		//             2차 연쇄 에러("조회 실패", "로드 실패" 등)는 화면을 어지럽히지 않도록 자동 진압
+		if (type === 'error' && now - this.lastAuthErrorTime < 1500) {
+			console.warn(`[Toast Suppressed] 403 권한 차단 후속 에러 자동 진압: "${message}"`);
+			return '';
+		}
+
+		// 🛡️ [방어 3]: 현재 화면에 이미 완전히 동일한 메시지가 떠 있다면 중복 추가 방지
+		if (this.items.some((item) => item.message === message)) {
+			return '';
+		}
+
 		const id = Math.random().toString(36).substring(2, 9);
 		const newItem: ToastItem = {
 			id,

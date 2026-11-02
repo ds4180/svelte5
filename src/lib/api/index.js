@@ -37,6 +37,7 @@ export const fastApi = async (method, url, params = {}, success_callback, failur
 	let _url = browser ? normalizedUrl : PUBLIC_SERVER_URL + normalizedUrl;
 
 	let body = undefined;
+	/** @type {Record<string, string>} */
 	const headers = {};
 	const isFormData = typeof FormData !== 'undefined' && params instanceof FormData;
 
@@ -44,7 +45,7 @@ export const fastApi = async (method, url, params = {}, success_callback, failur
 	if (method.toLowerCase() === 'get') {
 		// GET 요청: 본문 없음, 파라미터를 쿼리 스트링으로 변환
 		if (params && Object.keys(params).length > 0 && !isFormData) {
-			const query = new URLSearchParams(params).toString();
+			const query = new URLSearchParams(/** @type {any} */ (params)).toString();
 			if (query) {
 				const separator = _url.includes('?') ? '&' : '?';
 				_url = `${_url}${separator}${query}`;
@@ -64,11 +65,12 @@ export const fastApi = async (method, url, params = {}, success_callback, failur
 	const timeoutMs = isFormData ? 120000 : 15000;
 	const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
+	/** @type {RequestInit} */
 	const options = {
 		method: method,
 		headers: headers,
 		body: body,
-		credentials: 'include',
+		credentials: /** @type {RequestCredentials} */ ('include'),
 		signal: controller.signal
 	};
 
@@ -97,6 +99,7 @@ export const fastApi = async (method, url, params = {}, success_callback, failur
 		}
 
 		// 응답 본문 파싱 (표준 json() 사용)
+		/** @type {any} */
 		let data = {};
 		const contentType = response.headers.get('content-type');
 
@@ -116,39 +119,60 @@ export const fastApi = async (method, url, params = {}, success_callback, failur
 			if (success_callback) success_callback(data);
 			return data;
 		} else {
+			// [403 권한 거부]: 모든 시스템 앱에서 복잡한 내부 사유 대신 '접근 권한이 없습니다.' 단일 통일
+			if (response.status === 403) {
+				const simpleMsg = '접근 권한이 없습니다.';
+				if (browser && !failure_callback) {
+					toast.warning(simpleMsg);
+				}
+
+				const errObj = /** @type {any} */ (new Error(simpleMsg));
+				Object.assign(errObj, data, {
+					status: 403,
+					detail: simpleMsg,
+					isPermissionError: true,
+					handledByGateway: true
+				});
+
+				if (failure_callback) failure_callback(errObj);
+				return Promise.reject(errObj);
+			}
+
 			// 🛡️ 표준 에러 메시지 추출 (data.error.message -> data.detail 순서로 안전 추출)
 			const errMsg = 
 				(typeof data.error?.message === 'string' && data.error.message) ||
-				(typeof data.detail === 'string' && data.detail) ||
-				'';
+				(Array.isArray(data.detail) ? data.detail.map((/** @type {any} */ item) => item.msg || JSON.stringify(item)).join('; ') : data.detail) ||
+				`API 요청 실패 (${response.status})`;
 
-			// [403 권한 거부]: 별도 콜백이 없으면 시스템 경고 알림(Toast) 표시
-			if (browser && response.status === 403 && !failure_callback) {
-				toast.warning(errMsg || '해당 기능에 접근할 권한이 없습니다.');
-			}
 			// [500 서버 장애]: 별도 콜백이 없으면 시스템 에러 알림(Toast) 표시
-			else if (browser && response.status >= 500 && !failure_callback) {
+			if (browser && response.status >= 500 && !failure_callback) {
 				toast.error(errMsg || '서버 내부 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.');
 			}
 
-			if (failure_callback) failure_callback(data);
-			return Promise.reject(data);
+			// 🌟 컴포넌트 catch(e)에서 e.message / e.detail / e.error 모두 접근 가능하도록 Error 인스턴스 보장
+			const errObj = /** @type {any} */ (new Error(errMsg));
+			Object.assign(errObj, data, { status: response.status, detail: errMsg });
+
+			if (failure_callback) failure_callback(errObj);
+			return Promise.reject(errObj);
 		}
-	} catch (error) {
+	} catch (rawError) {
+		const error = /** @type {any} */ (rawError);
 		const isTimeout = error && error.name === 'AbortError';
 		const errorMessage = isTimeout
 			? '서버 응답 시간이 초과되었습니다. 네트워크 상태를 확인해 주세요.'
-			: '서버와의 통신에 실패했습니다.';
+			: (error && error.message) || '서버와의 통신에 실패했습니다.';
 
 		console.error('[API Network Error]:', error);
-		const errorData = { detail: errorMessage };
+		const errorObj = /** @type {any} */ (error instanceof Error ? error : new Error(errorMessage));
+		errorObj.detail = errorObj.detail || errorMessage;
 
 		// 🍞 사내 공지 배너 대신 시스템 기본 알림(Toast)으로 에러 표출
 		if (browser && !failure_callback) {
 			toast.error(errorMessage);
 		}
-		if (failure_callback) failure_callback(errorData);
-		return Promise.reject(errorData);
+		if (failure_callback) failure_callback(errorObj);
+		return Promise.reject(errorObj);
 	} finally {
 		// 타이머 메모리 누수 방지를 위해 요청 종료 시 반드시 타이머 해제
 		clearTimeout(timeoutId);

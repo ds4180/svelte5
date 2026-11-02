@@ -19,7 +19,8 @@
 		access_level = 'PUBLIC',  
 		sub_path = '',
 		onUpload = undefined,     
-		uploadedAssets = $bindable([]) 
+		uploadedAssets = $bindable([]),
+		uploadedFiles = $bindable([])
 	} = $props();
 
 	// --- [내부 상태 관리] ---
@@ -48,6 +49,7 @@
 
 	function removeAsset(id) {
 		uploadedAssets = uploadedAssets.filter((a) => a.id !== id);
+		uploadedFiles = uploadedFiles.filter((a) => a.id !== id);
 	}
 
 	/**
@@ -74,6 +76,7 @@
 			if (newAssets) {
 				const assetsToAdd = Array.isArray(newAssets) ? newAssets : [newAssets];
 				uploadedAssets = [...uploadedAssets, ...assetsToAdd];
+				uploadedFiles = [...uploadedFiles, ...assetsToAdd];
 				
 				if (onUpload) {
 					onUpload(newAssets); 

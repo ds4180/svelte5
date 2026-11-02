@@ -23,7 +23,9 @@
 		active_sessions: 0,
 		today_access_count: 0,
 		today_change_count: 0,
-		today_error_alert_count: 0
+		today_error_alert_count: 0,
+		today_security_count: 0,
+		today_errors_count: 0
 	});
 
 	// 📑 5대 관제 탭: 'SESSIONS' | 'ACCESS' | 'CHANGE' | 'ERROR' | 'SECURITY'
@@ -57,6 +59,7 @@
 		{ id: 'board', label: '📝 게시판 (Board)' },
 		{ id: 'page', label: '📄 페이지 (Page)' },
 		{ id: 'auth', label: '🔐 인증 및 권한 (Auth)' },
+		{ id: 'admin_alerts', label: '🔔 시스템 공지 및 알림 (Alerts)' },
 		{ id: 'system', label: '⚙️ 시스템 코어 (System)' }
 	];
 
@@ -89,6 +92,8 @@
 					log_type: currentTab,
 					app_id: appFilter || undefined,
 					severity: severityFilter || undefined,
+					page: currentPage,
+					page_size: pageSize,
 					skip: (currentPage - 1) * pageSize,
 					limit: pageSize
 				};
@@ -363,7 +368,7 @@
 
 		<!-- 카드 4: 장애 및 보안 경보 -->
 		<button
-			onclick={() => switchTab('ERROR')}
+			onclick={() => switchTab(summary.today_security_count > 0 ? 'SECURITY' : 'ERROR')}
 			class="group flex flex-col justify-between rounded-2xl border-2 p-5 text-left transition duration-200 {currentTab === 'ERROR' || currentTab === 'SECURITY' ? 'border-rose-600 bg-rose-50/50 shadow-md ring-2 ring-rose-500/30' : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-sm'}"
 		>
 			<div class="flex items-center justify-between">
@@ -400,6 +405,14 @@
 					{#if tab.id === 'SESSIONS'}
 						<span class="ml-1 rounded-full px-2 py-0.5 text-[10px] font-black {tab.badgeColor}">
 							{liveSessions.length}
+						</span>
+					{:else if tab.id === 'SECURITY' && (summary.today_security_count || 0) > 0}
+						<span class="ml-1 rounded-full px-2 py-0.5 text-[10px] font-black bg-rose-50 text-rose-700 border-rose-200 border animate-pulse">
+							{summary.today_security_count}
+						</span>
+					{:else if tab.id === 'ERROR' && (summary.today_errors_count || 0) > 0}
+						<span class="ml-1 rounded-full px-2 py-0.5 text-[10px] font-black bg-rose-50 text-rose-700 border-rose-200 border">
+							{summary.today_errors_count}
 						</span>
 					{/if}
 				</button>
