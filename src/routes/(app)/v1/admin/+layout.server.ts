@@ -112,12 +112,9 @@ export const load: LayoutServerLoad = async ({ locals, url, fetch }) => {
 	// 특정 시스템 앱 진입 시 DB의 앱 권한(allow_groups, deny_groups, min_read_rank) 조회
 	if (targetAppId) {
 		try {
-			const res = await fetch('/api/v1/admin/auth-groups/instances');
+			const res = await fetch(`/api/v1/admin/apps/${targetAppId}`);
 			if (res.ok) {
-				const instances = await res.json();
-				const targetApp = instances.find(
-					(i: any) => i.target_id === targetAppId || i.slug === targetAppId
-				);
+				const targetApp = await res.json();
 
 				if (targetApp) {
 					// [1단계] deny_groups 검사 (Deny-Wins)

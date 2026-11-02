@@ -23,6 +23,9 @@
 	});
 	let loading = $state(true);
 
+	// 🌐 실시간 AppRegistry 거버넌스 맵 (app_id -> { min_read_rank, min_write_rank, allow_groups, deny_groups })
+	let liveAppMap = $state({});
+
 	// 🔍 모듈 검색어 및 카테고리 필터
 	let moduleSearch = $state('');
 	let moduleCategory = $state('ALL'); // 'ALL' | 'CORE' | 'OPERATIONS' | 'BUSINESS'
@@ -31,6 +34,13 @@
 		loading = true;
 		try {
 			stats = await api.adminGetDashboard();
+			if (stats?.system_apps && Array.isArray(stats.system_apps)) {
+				const map = {};
+				for (const a of stats.system_apps) {
+					map[a.app_id] = a;
+				}
+				liveAppMap = map;
+			}
 		} catch (e) {
 			toast.error(e.message);
 		} finally {
@@ -186,6 +196,7 @@
 	const appModules = [
 		{
 			type: 'CUSTOM',
+			appId: 'admin_dispatch',
 			title: '차량 배차 관리',
 			desc: '실시간 노선별 차량 투입, 기사 배정 및 일일 운행 시간표 조율 (사용자: /v1/custom/dispatch)',
 			link: '/v1/admin/dispatch',
@@ -194,6 +205,7 @@
 		},
 		{
 			type: 'CUSTOM',
+			appId: 'admin_route_master',
 			title: '노선 마스터 관리',
 			desc: '정규 및 임시 노선의 기준 버전 도면 및 회차 시간표 통합 관리 (배차 앱 연동)',
 			link: '/v1/admin/route_master',
@@ -202,6 +214,7 @@
 		},
 		{
 			type: 'CUSTOM',
+			appId: 'admin_dayoff',
 			title: '휴무(결근계) 관리',
 			desc: '직원 및 승무원의 연차/휴무 신청 내역 승인·반려 관제 (사용자: /v1/custom/dayoff)',
 			link: '/v1/admin/dayoff',
@@ -210,6 +223,7 @@
 		},
 		{
 			type: 'INSTANCE',
+			appId: 'admin_boards',
 			title: '게시판 인스턴스 관리',
 			desc: '추상화 다중 게시판(공지, 자유 등) 슬러그 생성 및 레이아웃 정책 설정 (사용자: /v1/app/board/[slug])',
 			link: '/v1/admin/boards',
@@ -218,6 +232,7 @@
 		},
 		{
 			type: 'INSTANCE',
+			appId: 'admin_pages',
 			title: '페이지 엔진 관리',
 			desc: 'DB 기반 고정 콘텐츠 다중 페이지 인스턴스 생성 및 게시 기간 제어 (사용자: /v1/custom/page/[slug])',
 			link: '/v1/admin/page',
@@ -226,6 +241,7 @@
 		},
 		{
 			type: 'SERVICE',
+			appId: 'admin_services',
 			title: '서비스 마스터 (Add-on)',
 			desc: 'INSTANCE 및 CUSTOM 앱에 애드온(Add-on) 결합하는 레고형 서비스(댓글, 업로드 등) 번들 관리',
 			link: '/v1/admin/services',
@@ -234,6 +250,7 @@
 		},
 		{
 			type: 'PAGES',
+			appId: 'admin_pages',
 			title: '정적 페이지 탐색기',
 			desc: '순수 파일 시스템(/v1/pages/...) 매핑 정적 페이지 실시간 스캔 및 탐색',
 			link: '/v1/admin/pages',
@@ -242,6 +259,7 @@
 		},
 		{
 			type: 'PAGES',
+			minRank: 1,
 			title: '통합 미니앱 허브',
 			desc: '메모, 업무지시, 메시지, 알림 등 사용자 통합 위젯 런타임 바로가기',
 			link: '/v1/pages/miniapps',
@@ -287,10 +305,49 @@
 		})
 	);
 
+	// 사용자 주/부그룹 Set
+	const userGroups = $derived.by(() => {
+		const set = new Set();
+		if (user?.primary_group) set.add(String(user.primary_group));
+		if (Array.isArray(user?.secondary_groups)) {
+			user.secondary_groups.forEach(g => g && set.add(String(g)));
+		}
+		return set;
+	});
+
+	// 실시간 AppRegistry 거버넌스 메타데이터 오버라이드 헬퍼
+	function getLiveMod(mod) {
+		const live = mod.appId ? liveAppMap[mod.appId] : null;
+		const minRank = live?.min_read_rank != null ? Number(live.min_read_rank) : Number(mod.minRank ?? 4);
+		const allowGroups = Array.isArray(live?.allow_groups) ? live.allow_groups : [];
+		const denyGroups = Array.isArray(live?.deny_groups) ? live.deny_groups : [];
+		return {
+			...mod,
+			minRank,
+			allowGroups,
+			denyGroups
+		};
+	}
+
+	// 🏛️ 코어 4단계 인가 엔진 실시간 판별
 	function canAccess(mod) {
 		if (isRoot) return true;
-		const reqRank = mod.minRank ?? 4;
-		return userRank >= reqRank;
+		const live = getLiveMod(mod);
+
+		// [1단계] deny_groups 검사 (Deny-Wins)
+		if (live.denyGroups.length > 0) {
+			const isDenied = live.denyGroups.some(g => userGroups.has(String(g)));
+			if (isDenied) return false;
+		}
+
+		// [2단계] allow_groups 검사 (Allow-Wins)
+		if (live.allowGroups.length > 0) {
+			const isAllowed = live.allowGroups.some(g => userGroups.has(String(g)));
+			if (isAllowed) return true;
+		}
+
+		// [3단계] min_read_rank 대소비교
+		return userRank >= live.minRank;
 	}
 </script>
 
@@ -526,6 +583,7 @@
 		</div>
 		<div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
 			{#each filteredSystemModules as mod (mod.link)}
+				{@const liveMod = getLiveMod(mod)}
 				{@const hasAccess = canAccess(mod)}
 				{#if hasAccess}
 					<!-- 접근 권한 있음: 정상 진입 링크 -->
@@ -574,7 +632,7 @@
 					<!-- 접근 권한 없음: 비활성화 카드 (링크 없음, L2 알림 배너 미호출) -->
 					<div
 						class="relative overflow-hidden rounded-xl border border-slate-200 bg-slate-50/70 p-6 opacity-65 md:rounded-2xl md:p-8 select-none"
-						title="해당 시스템 모듈은 Lv.{mod.minRank} 이상 관리자 권한이 필요합니다."
+						title="해당 시스템 모듈은 Lv.{liveMod.minRank} 이상 관리자 권한이 필요합니다."
 					>
 						<div class="relative z-10 flex items-start justify-between">
 							<div
@@ -584,7 +642,7 @@
 							</div>
 							<div class="flex flex-col items-end gap-1.5">
 								<span class="rounded bg-rose-50 text-rose-700 border border-rose-200 px-2 py-0.5 text-[10px] font-bold flex items-center gap-1">
-									<Icon icon="mdi:lock" class="text-xs" /> Lv.{mod.minRank} 이상 권한 필요
+									<Icon icon="mdi:lock" class="text-xs" /> Lv.{liveMod.minRank} 이상 권한 필요
 								</span>
 							</div>
 						</div>
@@ -630,6 +688,7 @@
 		</div>
 		<div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
 			{#each filteredAppModules as mod (mod.link)}
+				{@const liveMod = getLiveMod(mod)}
 				{@const hasAccess = canAccess(mod)}
 				{#if hasAccess}
 					<a
@@ -676,7 +735,7 @@
 				{:else}
 					<div
 						class="relative overflow-hidden rounded-xl border border-slate-200 bg-slate-50/70 p-6 opacity-65 md:rounded-2xl md:p-8 select-none"
-						title="해당 업무 모듈은 Lv.{mod.minRank} 이상 관리자 권한이 필요합니다."
+						title="해당 업무 모듈은 Lv.{liveMod.minRank} 이상 관리자 권한이 필요합니다."
 					>
 						<div class="relative z-10 flex items-start justify-between">
 							<div
@@ -686,7 +745,7 @@
 							</div>
 							<div class="flex flex-col items-end gap-1.5">
 								<span class="rounded bg-rose-50 text-rose-700 border border-rose-200 px-2 py-0.5 text-[10px] font-bold flex items-center gap-1">
-									<Icon icon="mdi:lock" class="text-xs" /> Lv.{mod.minRank} 이상 권한 필요
+									<Icon icon="mdi:lock" class="text-xs" /> Lv.{liveMod.minRank} 이상 권한 필요
 								</span>
 							</div>
 						</div>
