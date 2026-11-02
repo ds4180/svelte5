@@ -5,8 +5,9 @@
      * @route /v1/pages/schedule
      */
     import Icon from '@iconify/svelte';
-    import CalendarView from '$lib/components/Schedule/CalendarView.svelte';
-    import RecurrenceEditor from '$lib/components/Schedule/RecurrenceEditor.svelte';
+    import CalendarView from './components/CalendarView.svelte';
+    import RecurrenceEditor from './components/RecurrenceEditor.svelte';
+    import { formatDDay } from '$lib/utils';
 
     // 가상 데이터 및 상태 (추후 API 연동)
     let userRank = $state(4); // 테스트용: 4이상은 관리자 기능을 보여줌
@@ -124,11 +125,7 @@
                                 <div>
                                     <p class="text-xs font-bold opacity-40 mb-1 uppercase tracking-widest">{s.title}</p>
                                     <p class="text-5xl font-black italic">
-                                        {(() => {
-                                            const diff = new Date(s.date).setHours(0,0,0,0) - new Date().setHours(0,0,0,0);
-                                            const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-                                            return days === 0 ? "D-Day" : days > 0 ? `D-${days}` : `D+${Math.abs(days)}`;
-                                        })()}
+                                        {formatDDay(s.date)}
                                     </p>
                                 </div>
                             {:else}
@@ -373,11 +370,7 @@
                             <span class="text-[10px] font-black opacity-40 uppercase tracking-widest">Countdown Preview</span>
                         </div>
                         <span class="text-3xl font-black italic">
-                            {(() => {
-                                const diff = new Date(newSchedule.start_at).setHours(0,0,0,0) - new Date().setHours(0,0,0,0);
-                                const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-                                return days === 0 ? "D-Day" : days > 0 ? `D-${days}` : `D+${Math.abs(days)}`;
-                            })()}
+                            {formatDDay(newSchedule.start_at)}
                         </span>
                     </div>
                 {/if}

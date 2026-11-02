@@ -180,7 +180,7 @@ export class AuthState {
 	}
 
 	/**
-	 * 로그아웃 시 세션 정리
+	 * 로그아웃 시 세션 정리 (토큰, 쿠키, 로컬스토리지 완전 소거)
 	 */
 	clear() {
 		this.user = null;
@@ -189,9 +189,21 @@ export class AuthState {
 				fallbackAuth.user = null;
 			}
 			localStorage.removeItem('auth_user');
-			console.log('👤 [AuthState] Context & Storage Cleared.');
+			localStorage.removeItem('accessToken');
+			localStorage.removeItem('refreshToken');
+			// 인증 쿠키 만료 소거
+			document.cookie = 'accessToken=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC;';
+			document.cookie = 'refreshToken=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC;';
+			console.log('👤 [AuthState] Context, Tokens & Cookies Completely Cleared.');
 		}
 	}
+}
+
+/**
+ * [레거시 호환 헬퍼] 토큰 및 세션 즉시 소거
+ */
+export function clearTokens() {
+	auth.clear();
 }
 
 /**

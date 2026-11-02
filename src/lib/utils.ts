@@ -136,3 +136,20 @@ export function isExpired(expiresAt: DateInput): boolean {
 	if (isNaN(date.getTime())) return true;
 	return Date.now() > date.getTime();
 }
+
+/**
+ * 8. D-Day 계산 및 포맷팅 (예: "D-Day", "D-3", "D+5")
+ * @param targetDate - 목표 일자
+ * @returns 'D-Day' | 'D-N' | 'D+N' (유효하지 않을 경우 '-')
+ */
+export function formatDDay(targetDate: DateInput): string {
+	if (!targetDate) return '-';
+	const date = targetDate instanceof Date ? targetDate : new Date(targetDate);
+	if (isNaN(date.getTime())) return '-';
+
+	const diff = new Date(date).setHours(0, 0, 0, 0) - new Date().setHours(0, 0, 0, 0);
+	const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+	if (days === 0) return 'D-Day';
+	if (days > 0) return `D-${days}`;
+	return `D+${Math.abs(days)}`;
+}

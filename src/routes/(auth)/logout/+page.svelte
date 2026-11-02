@@ -1,7 +1,7 @@
 <script>
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
-	import { clearTokens, authStore } from '$lib/stores/authStore.js'; // authStore 및 clearTokens import
+	import { clearTokens } from '$lib/runes/auth.svelte.js'; // Svelte 5 runes 인증 소거 연동
 
 	let loggingOut = $state(true);
 	let errorMessage = $state('');

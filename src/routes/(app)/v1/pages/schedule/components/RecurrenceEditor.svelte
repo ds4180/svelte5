@@ -1,7 +1,7 @@
 <script>
     /**
      * @file RecurrenceEditor.svelte
-     * @description [v1.0] 일정 반복 설정을 위한 복잡한 UI 컴포넌트
+     * @description [v1.0] 일정 반복 설정을 위한 복잡한 UI 컴포넌트 (Colocated)
      */
     import Icon from '@iconify/svelte';
 

@@ -1,9 +1,10 @@
 <script>
     /**
      * @file CalendarView.svelte
-     * @description [v1.0] 일정 관리를 위한 프리미엄 캘린더 뷰
+     * @description [v1.0] 일정 관리를 위한 프리미엄 캘린더 뷰 (Colocated)
      */
     import Icon from '@iconify/svelte';
+    import { formatDDay } from '$lib/utils';
 
     let { schedules = [], onDateClick = () => {}, onScheduleClick = () => {} } = $props();
 
@@ -165,11 +166,7 @@
                                 <div class="flex items-center gap-1 truncate">
                                     {#if schedule.is_dday}
                                         <span class="bg-black text-white px-1.5 py-0.5 rounded text-[8px] font-black italic shrink-0">
-                                            {(() => {
-                                                const diff = new Date(schedule.date).setHours(0,0,0,0) - new Date().setHours(0,0,0,0);
-                                                const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-                                                return days === 0 ? "D-Day" : days > 0 ? `D-${days}` : `D+${Math.abs(days)}`;
-                                            })()}
+                                            {formatDDay(schedule.date)}
                                         </span>
                                     {/if}
                                     <span class="font-black truncate">{schedule.title}</span>

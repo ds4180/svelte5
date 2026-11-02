@@ -152,7 +152,7 @@ class MiniappStore {
 	}
 
 	/**
-	 * 아이템 삭제
+	 * 아이템 삭제 (Soft Delete 반영)
 	 * @param {number} id
 	 */
 	async deleteItem(id) {
@@ -160,9 +160,11 @@ class MiniappStore {
 			await api.deleteMiniappItem(id);
 			this.items = this.items.filter((i) => i.id !== id);
 			await this.loadCounts();
+			return true;
 		} catch (e) {
 			console.error('❌ [MiniappStore] 아이템 삭제 실패:', e);
 			await this.refresh();
+			throw e;
 		}
 	}
 

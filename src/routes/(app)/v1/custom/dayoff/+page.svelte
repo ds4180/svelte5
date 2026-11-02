@@ -4,7 +4,7 @@
 	 * @description [v2.0] 근무자 전용 휴무 신청 및 관리 시스템 (Svelte 5 Runes & Premium Design)
 	 */
 	import { enhance } from '$app/forms';
-	import Calendar from '$lib/components/Calendar.svelte';
+	import Calendar from './components/Calendar.svelte';
 	import { timestampToDateString } from '$lib/utils.js';
 	import { alertState } from '$lib/runes/alert.svelte.js';
 	import Icon from '@iconify/svelte';

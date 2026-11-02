@@ -18,7 +18,7 @@
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
 	import Icon from '@iconify/svelte';
-	import FeedItem from '$lib/components/Miniapps/FeedItem.svelte';
+	import FeedItem from './components/FeedItem.svelte';
 	import { miniappStore } from '$lib/runes/miniapps.svelte.js';
 	import { toast } from '$lib/runes/toast.svelte.js';
 
@@ -111,7 +111,14 @@
 			await miniappStore.updateItem(id, { is_done: value });
 		} else if (action === 'delete') {
 			if (confirm('이 항목을 정말 삭제하시겠습니까?')) {
-				await miniappStore.deleteItem(id);
+				try {
+					await miniappStore.deleteItem(id);
+					if (toast?.success) {
+						toast.success('피드에서 삭제되었습니다.');
+					}
+				} catch (/** @type {any} */ e) {
+					alert('삭제에 실패했습니다: ' + (e.message || '서버 오류'));
+				}
 			}
 		} else if (action === 'reply') {
 			const replyText = prompt('답장 메시지를 입력하세요:');
