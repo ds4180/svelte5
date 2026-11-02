@@ -348,6 +348,10 @@
 	<title>노선 마스터 및 로번 스케줄 제어기 (Admin)</title>
 </svelte:head>
 
+<svelte:head>
+	<title>노선 마스터 관리 | jeju.live Core</title>
+</svelte:head>
+
 <div class="animate-fade-in mx-auto max-w-7xl px-4 pb-24 font-['Noto_Sans_KR','Outfit'] md:px-6 md:pb-36 lg:px-8">
 	
 	<!-- 🏷️ 1. 페이지 프리미엄 헤더 -->
@@ -357,7 +361,7 @@
 				Fleet Schedule Database Administration
 			</span>
 			<h1 class="text-3xl font-black tracking-tighter text-slate-900 uppercase italic md:text-5xl">
-				노선 및 <span class="NOT-ITALIC text-indigo-600">로번 시간표 <Icon icon="mdi:bus-clock" class="ml-1 inline-block align-text-bottom text-indigo-600" /></span>
+				노선 마스터 <span class="NOT-ITALIC text-indigo-600">관리 <Icon icon="mdi:bus-clock" class="ml-1 inline-block align-text-bottom text-indigo-600" /></span>
 			</h1>
 			<p class="mt-2 text-xs font-bold text-slate-500 md:mt-3 md:text-sm">
 				정규/임시 노선의 로번 수만큼 로번별 운행 시작과 종료 시각(근무시간) 및 주요 운행 요약 정보를 동기화하여 통제합니다. (🕒 **시간은 24시간제로 관리됩니다**)

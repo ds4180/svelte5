@@ -28,11 +28,11 @@
 			if (!configSchema.slug && appId === 'board') {
 				configSchema = {
 					...configSchema,
-					slug: { type: 'string', label: 'Instance Slug (ID)', description: '이 인스턴스의 고유 주소(URL)가 됩니다. 영소문자와 하이픈(-)만 권장.', icon: 'ph:hash-bold', placeholder: '예: free-board', required: true },
-					name: { type: 'string', label: 'Display Title', description: '사용자에게 보여질 실제 명칭입니다.', icon: 'ph:bookmark-bold', placeholder: '예: 자유게시판', required: true },
-					description: { type: 'string', label: 'Description', description: '사용자와 관리자에게 보여줄 짧은 설명', icon: 'ph:text-align-left-bold', placeholder: '옵션 설명' },
-					layout_type: { type: 'select', label: 'Layout Style', icon: 'ph:layout-bold', options: [{value: 'list', label: 'List Style (Standard)'}, {value: 'gallery', label: 'Gallery Style (Image Centered)'}, {value: 'blog', label: 'Blog Style (Summary/Full Body)'}], default: 'list' },
-					items_per_page: { type: 'number', label: 'Items Per Page', icon: 'ph:list-numbers-bold', default: 10 }
+					slug: { type: 'string', label: 'Instance Slug (ID)', description: '이 인스턴스의 고유 주소(URL)가 됩니다. 영소문자와 하이픈(-)만 권장.', icon: 'mdi:pound', placeholder: '예: free-board', required: true },
+					name: { type: 'string', label: 'Display Title', description: '사용자에게 보여질 실제 명칭입니다.', icon: 'mdi:bookmark-outline', placeholder: '예: 자유게시판', required: true },
+					description: { type: 'string', label: 'Description', description: '사용자와 관리자에게 보여줄 짧은 설명', icon: 'mdi:text', placeholder: '옵션 설명' },
+					layout_type: { type: 'select', label: 'Layout Style', icon: 'mdi:view-dashboard-outline', options: [{value: 'list', label: 'List Style (Standard)'}, {value: 'gallery', label: 'Gallery Style (Image Centered)'}, {value: 'blog', label: 'Blog Style (Summary/Full Body)'}], default: 'list' },
+					items_per_page: { type: 'number', label: 'Items Per Page', icon: 'mdi:format-list-numbered', default: 10 }
 				};
 			}
 
@@ -126,7 +126,11 @@
 	}
 </script>
 
-<div class="animate-fade-in mx-auto max-w-4xl px-4 pb-40 font-['Outfit'] text-black">
+<svelte:head>
+	<title>{appInfo?.title || appId} 인스턴스 생성 | jeju.live Core</title>
+</svelte:head>
+
+<div class="animate-fade-in mx-auto max-w-4xl px-4 pb-40 font-['Outfit','Noto_Sans_KR'] text-black">
 	<!-- 📄 Header -->
 	<div class="mb-12 flex flex-col items-start justify-between gap-6 border-b-4 border-black pb-8 md:flex-row md:items-end">
 		<div>
@@ -135,12 +139,12 @@
 					href="/v1/admin/apps/{appId}/instances"
 					class="group btn rounded-none border-black px-2 text-[9px] font-black tracking-widest uppercase btn-outline btn-xs"
 				>
-					<span class="transition-transform group-hover:-translate-x-1">←</span> Back to Instances
+					<span class="transition-transform group-hover:-translate-x-1">←</span> 인스턴스 목록으로
 				</a>
 				<span class="text-[10px] font-black tracking-[0.4em] uppercase opacity-30">Factory Wizard</span>
 			</div>
 			<h1 class="text-5xl font-black tracking-tighter uppercase italic">
-				{appInfo?.title || appId} <span class="NOT-ITALIC text-blue-600">Factory</span>
+				{appInfo?.title || appId} <span class="NOT-ITALIC text-blue-600">인스턴스 생성</span>
 			</h1>
 			<p class="mt-3 text-xs font-bold italic opacity-40">
 				{appInfo?.description || 'API 스키마 규칙에 따라 새로운 인스턴스를 설계하고 시스템에 배치합니다.'}
@@ -166,7 +170,7 @@
 					{#each Object.entries(configSchema).filter(([k, f]) => f.type) as [key, field]}
 						<div class="space-y-3 {field.type === 'textarea' ? 'md:col-span-2' : ''}">
 							<label class="flex items-center gap-2 text-[10px] font-black tracking-[0.2em] uppercase opacity-30">
-								<Icon icon={field.icon || 'ph:cube-bold'} class="h-4 w-4" /> {field.label || key.toUpperCase()}
+								<Icon icon={field.icon || 'mdi:cube-outline'} class="h-4 w-4" /> {field.label || key.toUpperCase()}
 								{#if field.required} <span class="text-red-500">*</span> {/if}
 							</label>
 							
@@ -206,7 +210,7 @@
 					<div class="space-y-6 pt-10 border-t-2 border-dashed border-black/10">
 						<div class="flex items-center justify-between">
 							<div class="flex items-center gap-2 text-[10px] font-black tracking-[0.2em] uppercase opacity-30">
-								<Icon icon="ph:list-plus-bold" class="h-4 w-4" /> Dynamic Content Fields
+								<Icon icon="mdi:playlist-plus" class="h-4 w-4" /> Dynamic Content Fields
 							</div>
 							<button 
 								type="button"
@@ -255,7 +259,7 @@
 											onclick={() => removeFieldDef(idx)}
 											class="btn btn-square h-10 w-10 min-h-0 border-2 border-black bg-red-500 text-white hover:bg-red-600"
 										>
-											<Icon icon="ph:trash-bold" />
+											<Icon icon="mdi:trash-can-outline" />
 										</button>
 									</div>
 								{/each}
@@ -269,7 +273,7 @@
 				<div class="space-y-6 pt-10 border-t-2 border-dashed border-black/10">
 					<div class="flex items-center justify-between">
 						<div class="flex items-center gap-2 text-[10px] font-black tracking-[0.2em] uppercase opacity-30">
-							<Icon icon="ph:brackets-curly-bold" class="h-4 w-4" /> Custom Configuration (JSONB Injection)
+							<Icon icon="mdi:code-braces" class="h-4 w-4" /> Custom Configuration (JSONB Injection)
 						</div>
 						<button 
 							type="button"
@@ -301,7 +305,7 @@
 										onclick={() => removeOption(idx)}
 										class="btn btn-square h-10 w-10 min-h-0 border-2 border-black bg-slate-100 text-black hover:bg-red-500 hover:text-white"
 									>
-										<Icon icon="ph:x-bold" />
+										<Icon icon="mdi:close" />
 									</button>
 								</div>
 							{/each}
@@ -321,7 +325,7 @@
 							<span class="loading loading-md loading-spinner"></span> Constructing...
 						{:else}
 							<Icon
-								icon="ph:factory-bold"
+								icon="mdi:factory"
 								class="h-8 w-8 transition-transform group-hover:rotate-12"
 							/> Build Instance
 						{/if}
@@ -330,7 +334,7 @@
 
 				<!-- Hint Box -->
 				<div class="mt-10 flex items-start gap-4 border-2 border-black/5 bg-slate-50 p-6 text-[11px] leading-relaxed font-bold text-black/40 italic">
-					<Icon icon="ph:info-bold" class="NOT-ITALIC h-5 w-5 flex-shrink-0 text-blue-600" />
+					<Icon icon="mdi:information-outline" class="NOT-ITALIC h-5 w-5 flex-shrink-0 text-blue-600" />
 					<div>
 						인스턴스를 생성한 직후에는 사용자 메뉴에 자동으로 나타나지 않습니다.<br />
 						필요한 경우 <strong class="text-black">[메뉴 관리]</strong> 메뉴에서 신규 메뉴 항목을 추가하고, 앱 링크 대상을 이 인스턴스로 연결해 주십시오.

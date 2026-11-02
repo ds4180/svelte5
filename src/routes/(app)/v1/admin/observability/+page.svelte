@@ -60,7 +60,7 @@
 		{ id: 'board', label: '📝 게시판 (Board)' },
 		{ id: 'page', label: '📄 페이지 (Page)' },
 		{ id: 'auth', label: '🔐 인증 및 권한 (Auth)' },
-		{ id: 'admin_alerts', label: '🔔 시스템 공지 및 알림 (Alerts)' },
+		{ id: 'admin_alerts', label: '🔔 알림·지시 관리 (Alerts)' },
 		{ id: 'system', label: '⚙️ 시스템 코어 (System)' }
 	];
 
@@ -218,7 +218,7 @@
 </script>
 
 <svelte:head>
-	<title>시스템 관제 및 통합 감사로그 | jeju.live Core</title>
+	<title>접속 기록·감사 로그 | jeju.live Core</title>
 </svelte:head>
 
 <div class="mx-auto max-w-7xl space-y-6 px-4 py-8 font-['Noto_Sans_KR','Outfit'] md:space-y-8 md:px-6 lg:px-8">
@@ -235,7 +235,7 @@
 				<span class="text-xs font-bold text-slate-400">v1/admin/observability</span>
 			</div>
 			<h1 class="mt-2 text-3xl font-black tracking-tight text-slate-900 uppercase italic md:text-4xl">
-				통합 관제 & <span class="not-italic text-blue-600">감사로그 센터</span>
+				접속 기록·<span class="not-italic text-blue-600">감사 로그</span>
 			</h1>
 			<p class="mt-1 text-sm font-medium text-slate-500">
 				실시간 접속 세션 추적, 도메인 데이터 변경 Diff-Patch 감사, 시스템 장애 및 403 보안 위협 전사 관제

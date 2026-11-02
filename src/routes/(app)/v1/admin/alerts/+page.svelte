@@ -108,6 +108,10 @@
 	});
 </script>
 
+<svelte:head>
+	<title>알림·지시 관리 | jeju.live Core</title>
+</svelte:head>
+
 <div
 	class="animate-fade-in mx-auto max-w-7xl space-y-6 px-4 pb-20 font-['Noto_Sans_KR','Outfit'] md:space-y-10 md:px-6 md:pb-40 lg:px-8"
 >
@@ -121,8 +125,8 @@
 				>System Notification</span
 			>
 			<h1 class="text-3xl font-black tracking-tighter text-slate-900 uppercase italic md:text-5xl">
-				알림 <span class="NOT-ITALIC text-blue-600"
-					>관리자 <Icon
+				알림·<span class="NOT-ITALIC text-blue-600"
+					>지시 관리 <Icon
 						icon="mdi:bell-cog-outline"
 						class="ml-1 inline-block align-text-bottom text-blue-600"
 					/></span

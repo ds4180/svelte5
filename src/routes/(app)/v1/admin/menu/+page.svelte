@@ -42,15 +42,22 @@
 		if (menu.link_type === 'URL') {
 			currentPath = menu.external_url || '';
 		} else if (['INSTANCE', 'CUSTOM', 'SYSTEM', 'APP'].includes(menu.link_type) && menu.app_id) {
+			const targetApp = apps.find((a) => a.app_id === menu.app_id);
 			const is_admin =
 				menu.link_type === 'SYSTEM' ||
+				targetApp?.app_type === 'SYSTEM' ||
 				menu.app_instance_id == -1 ||
 				menu.page_mode === 'admin';
 
-			if (is_admin) {
-				currentPath = `/v1/admin/${menu.app_id}`;
+			// 🌟 targetApp의 frontend_route가 존재하면 최우선 적용
+			if (targetApp?.frontend_route) {
+				currentPath = targetApp.frontend_route;
+			} else if (is_admin) {
+				const cleanId = String(menu.app_id).replace(/^admin_/, '');
+				currentPath = cleanId === 'dashboard' || cleanId === '' ? '/v1/admin' : `/v1/admin/${cleanId}`;
 			} else if (menu.link_type === 'CUSTOM') {
-				currentPath = `/v1/custom/${menu.app_id}`;
+				const cleanId = String(menu.app_id).replace(/^custom_/, '');
+				currentPath = `/v1/custom/${cleanId}`;
 			} else {
 				let instancePath = '';
 				if (menu.app_instance_id && menu.app_instance_id != -1) {
@@ -164,6 +171,11 @@
 				data.app_instance_id = -1;
 			}
 
+			// 🌐 엔진 기반 링크(SYSTEM, CUSTOM 등)의 경우 정규화된 URL 사전 계산
+			if (data.link_type !== 'URL') {
+				data.external_url = getRecursiveUrl(data);
+			}
+
 			// 빈 값 처리
 			for (const key in data) {
 				if (data[key] === '') data[key] = null;
@@ -195,6 +207,10 @@
 	}
 </script>
 
+<svelte:head>
+	<title>메뉴 설정 | jeju.live Core</title>
+</svelte:head>
+
 <div
 	class="animate-fade-in mx-auto max-w-7xl space-y-10 px-4 pb-40 font-['Noto_Sans_KR','Outfit'] text-black"
 >
@@ -207,7 +223,7 @@
 				>Navigation Architecture</span
 			>
 			<h1 class="text-5xl font-black tracking-tighter uppercase italic">
-				메뉴 <span class="NOT-ITALIC text-blue-600">마스터</span>
+				메뉴 <span class="NOT-ITALIC text-blue-600">설정</span>
 			</h1>
 			<p
 				class="mt-3 text-xs font-bold italic underline decoration-blue-200 underline-offset-4 opacity-40"

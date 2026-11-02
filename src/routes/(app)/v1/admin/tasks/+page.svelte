@@ -181,10 +181,14 @@
     });
 </script>
 
+<svelte:head>
+    <title>예약 작업 관리 | jeju.live Core</title>
+</svelte:head>
+
 <div class="p-6">
     <div class="flex justify-between items-center mb-6">
         <h1 class="text-2xl font-bold flex items-center gap-2">
-            <Icon icon="mdi:cogs" class="text-primary" /> 시스템 태스크 관리
+            <Icon icon="mdi:robot-industrial" class="text-primary" /> 예약 작업 관리
         </h1>
         <div class="flex items-center gap-3">
             <label class="label cursor-pointer gap-2 bg-base-200 px-3 py-1.5 rounded-lg border border-base-300">

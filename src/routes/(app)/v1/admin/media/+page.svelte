@@ -285,7 +285,11 @@
 
 </script>
 
-<div class="mx-auto max-w-7xl space-y-8 px-4 pb-20 font-['Outfit'] md:px-8">
+<svelte:head>
+	<title>파일·사진 관리 | jeju.live Core</title>
+</svelte:head>
+
+<div class="mx-auto max-w-7xl space-y-8 px-4 pb-20 font-['Outfit','Noto_Sans_KR'] md:px-8">
 	<!-- Header -->
 	<header class="flex flex-col items-start justify-between gap-6 border-b-4 border-black pb-8 md:flex-row md:items-end">
 		<div>
@@ -293,7 +297,7 @@
 				File & Media Asset Management (Rank: {userRank})
 			</span>
 			<h1 class="text-4xl font-black tracking-tighter text-slate-900 uppercase italic md:text-6xl">
-				미디어 <span class="NOT-ITALIC text-rose-600">마스터</span>
+				파일·<span class="NOT-ITALIC text-rose-600">사진 관리</span>
 			</h1>
 			<p class="mt-4 text-sm font-bold text-slate-500">
 				시스템의 모든 물리 자산을 계층별로 탐색하고, 중요한 데이터를 안전하게 백업 및 관리합니다.

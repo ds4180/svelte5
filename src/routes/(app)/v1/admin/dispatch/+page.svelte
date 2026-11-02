@@ -557,7 +557,11 @@
     }
 </style>
 
-<div class="min-h-screen bg-slate-50 p-2 md:p-4 font-sans pb-12">
+<svelte:head>
+    <title>차량 배차 관리 | jeju.live Core</title>
+</svelte:head>
+
+<div class="min-h-screen bg-slate-50 p-2 md:p-4 font-sans pb-12 font-['Noto_Sans_KR','Outfit']">
     <!-- 헤더 영역 -->
     <header class="mb-4 border-b-2 border-slate-900 pb-3">
         <div class="flex justify-between items-end">
@@ -570,7 +574,9 @@
                         <span class="badge bg-emerald-100 text-emerald-700 font-black uppercase text-[10px]">Editing Mode</span>
                     {/if}
                 </div>
-                <h1 class="text-2xl md:text-3xl font-black uppercase italic tracking-tighter text-slate-900 mb-0.5">Dispatch Canvas</h1>
+                <h1 class="text-2xl md:text-3xl font-black uppercase italic tracking-tighter text-slate-900 mb-0.5">
+                    차량 배차 <span class="text-blue-600 not-italic">관리</span> <span class="text-sm font-normal text-slate-400 not-italic">(Dispatch Canvas)</span>
+                </h1>
                 <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Global Fleet Management System</p>
             </div>
             

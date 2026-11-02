@@ -103,13 +103,17 @@
 	}
 </script>
 
-<div class="mx-auto max-w-7xl space-y-8 px-4 pb-20 font-['Outfit'] md:px-8">
+<svelte:head>
+	<title>서비스 마스터 (Add-on) | jeju.live Core</title>
+</svelte:head>
+
+<div class="mx-auto max-w-7xl space-y-8 px-4 pb-20 font-['Outfit','Noto_Sans_KR'] md:px-8">
 	<!-- Header -->
 	<header class="flex flex-col items-start justify-between gap-6 border-b-4 border-black pb-8 md:flex-row md:items-end">
 		<div>
 			<span class="mb-2 block text-[10px] font-black tracking-[0.4em] text-slate-400 uppercase">Modular Services</span>
 			<h1 class="text-4xl font-black tracking-tighter text-slate-900 uppercase italic md:text-6xl">
-				서비스 <span class="NOT-ITALIC text-rose-600">마스터</span>
+				서비스 <span class="NOT-ITALIC text-rose-600">마스터 (Add-on)</span>
 			</h1>
 			<p class="mt-4 text-sm font-bold text-slate-500">
 				댓글, 업로드, 추천 등 독립된 레고 조각들을 관리하고 앱 인스턴스에 주입할 준비를 합니다.

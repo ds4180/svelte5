@@ -149,7 +149,11 @@
 	}
 </script>
 
-<div class="animate-fade-in mx-auto max-w-7xl space-y-12 px-4 pb-40 font-['Outfit'] text-black">
+<svelte:head>
+	<title>앱 설치 등록 | jeju.live Core</title>
+</svelte:head>
+
+<div class="animate-fade-in mx-auto max-w-7xl space-y-12 px-4 pb-40 font-['Outfit','Noto_Sans_KR'] text-black">
 	<!-- 📄 Page Title -->
 	<div
 		class="flex flex-col items-start justify-between gap-6 border-b-4 border-black pb-8 md:flex-row md:items-end"
@@ -159,7 +163,7 @@
 				>Engine Infrastructure Registry</span
 			>
 			<h1 class="text-5xl font-black tracking-tighter uppercase italic">
-				App <span class="NOT-ITALIC text-blue-600">Registry</span>
+				앱 <span class="NOT-ITALIC text-blue-600">설치 등록</span>
 			</h1>
 			<p class="mt-3 text-xs font-bold opacity-40">
 				시스템 엔진들의 메타데이터와 보안 등급을 관리합니다.
@@ -170,13 +174,13 @@
 				class="btn-black btn h-14 rounded-none border-2 border-black px-8 font-black uppercase transition-all"
 				onclick={startCreate}
 			>
-				+ New Engine
+				+ 새 앱 등록
 			</button>
 			<button
 				class="btn h-14 rounded-none border-2 border-black px-8 font-black uppercase transition-all btn-outline hover:bg-black hover:text-white"
 				onclick={loadApps}
 			>
-				Sync
+				동기화
 			</button>
 		</div>
 	</div>
@@ -184,13 +188,13 @@
 	<div class="grid grid-cols-1 items-start gap-10 lg:grid-cols-12">
 		<!-- 📦 등록된 앱 엔진 목록 -->
 		<div class="space-y-6 lg:col-span-7">
-			<h3 class="mb-4 text-xl font-black tracking-tighter uppercase italic">Registered Engines</h3>
+			<h3 class="mb-4 text-xl font-black tracking-tighter uppercase italic">등록된 앱 엔진 목록</h3>
 
 			{#if loading}
 				<div
-					class="flex h-60 items-center justify-center border border-dashed border-black font-black uppercase italic opacity-10 grayscale"
+					class="flex h-60 items-center justify-center border border-dashed border-black font-black uppercase italic opacity-20 grayscale"
 				>
-					Analyzing Registry...
+					앱 레지스트리 분석 중...
 				</div>
 			{:else}
 				<div class="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -202,14 +206,18 @@
 								<div
 									class="absolute inset-0 z-10 flex items-center justify-center bg-white/80 text-sm font-black tracking-widest text-red-500 uppercase"
 								>
-									Disabled
+									비활성화됨
 								</div>
 							{/if}
 							<div class="mb-4 flex items-start justify-between">
 								<div
 									class="flex h-10 w-10 items-center justify-center bg-black text-xl font-black text-white"
 								>
-									{app.icon_default || app.app_id.substring(0, 1).toUpperCase()}
+									{#if app.icon_default && app.icon_default.includes(':')}
+										<Icon icon={app.icon_default} class="text-2xl" />
+									{:else}
+										{app.icon_default || app.app_id.substring(0, 1).toUpperCase()}
+									{/if}
 								</div>
 								<div class="flex items-center gap-1">
 									<a
@@ -217,21 +225,21 @@
 										class="btn rounded-none border-blue-600 bg-blue-50 text-[9px] font-black text-blue-700 uppercase btn-outline btn-xs hover:bg-blue-600 hover:text-white"
 										title="해당 앱의 실시간 감사로그 및 변경 내역 관제"
 									>
-										Log 📜
+										로그 📜
 									</a>
 									<button
 										class="btn rounded-none border-black text-[9px] font-black uppercase btn-outline btn-xs hover:bg-black hover:text-white"
-										onclick={() => startEdit(app)}>Modify</button
+										onclick={() => startEdit(app)}>수정</button
 									>
 									{#if app.app_type !== 'SYSTEM'}
 										<button
 											class="btn rounded-none border-rose-600 text-[9px] font-black text-rose-600 uppercase btn-outline btn-xs hover:bg-rose-600 hover:text-white"
-											onclick={() => handleDelete(app)}>Delete</button
+											onclick={() => handleDelete(app)}>삭제</button
 										>
 									{:else}
 										<span
 											class="border border-purple-600/40 bg-purple-50 px-1.5 py-0.5 text-[8px] font-black text-purple-700 uppercase"
-											title="SYSTEM 앱은 삭제할 수 없습니다">Locked</span
+											title="SYSTEM 앱은 삭제할 수 없습니다">보호됨</span
 										>
 									{/if}
 								</div>
@@ -254,28 +262,28 @@
 										href="/v1/admin/apps/{app.app_id}/instances"
 										class="flex items-center gap-1 text-[9px] font-black tracking-tighter text-emerald-600 uppercase hover:underline"
 									>
-										<Icon icon="ph:circles-three-plus-bold" class="h-3 w-3" />
-										Instances
+										<Icon icon="mdi:layers-plus" class="h-3.5 w-3.5" />
+										인스턴스
 									</a>
 								{/if}
 							</div>
 							<p
 								class="mb-4 line-clamp-2 h-8 overflow-hidden text-[10px] leading-relaxed font-bold opacity-40"
 							>
-								{app.description || 'No description provided.'}
+								{app.description || '등록된 설명이 없습니다.'}
 							</p>
 
 							<div class="space-y-2 border-t border-black/5 pt-3">
 								<div class="flex items-center justify-between text-[10px] font-bold">
-									<span class="text-[8px] uppercase opacity-20">Endpoint</span>
+									<span class="text-[8px] uppercase opacity-20">진입 경로</span>
 									<span class="font-mono">{app.frontend_route}</span>
 								</div>
 								<div class="mt-2 flex gap-2">
 									<span class="badge h-4 rounded-none badge-outline px-1 text-[8px] font-black"
-										>READ R{app.min_read_rank}</span
+										>읽기 R{app.min_read_rank}</span
 									>
 									<span class="badge h-4 rounded-none badge-outline px-1 text-[8px] font-black"
-										>WRITE R{app.min_write_rank}</span
+										>쓰기 R{app.min_write_rank}</span
 									>
 								</div>
 							</div>
@@ -292,7 +300,7 @@
 			>
 				<div class="mb-10 flex items-baseline justify-between border-b-2 border-black pb-4">
 					<h3 class="text-2xl font-black tracking-tighter uppercase italic">
-						{isEditMode ? 'Modify Engine' : 'Register Engine'}
+						{isEditMode ? '앱 엔진 정보 수정' : '신규 앱 엔진 등록'}
 					</h3>
 					<span class="text-[9px] font-black uppercase italic opacity-40"
 						>{isEditMode ? 'Update' : 'New'} Core v5.1</span
@@ -303,7 +311,7 @@
 					<div class="grid grid-cols-2 gap-4">
 						<div class="space-y-2">
 							<label class="text-[9px] font-black tracking-widest uppercase opacity-30"
-								>Engine ID (ID)</label
+								>앱 식별자 (app_id)</label
 							>
 							<input
 								type="text"
@@ -317,32 +325,32 @@
 						</div>
 						<div class="space-y-2">
 							<label class="text-[9px] font-black tracking-widest uppercase opacity-30"
-								>Internal Name</label
+								>내부 명칭 (name)</label
 							>
 							<input
 								type="text"
 								bind:value={editingApp.name}
 								class="h-12 w-full border border-black bg-slate-50 px-4 text-xs font-bold transition-all focus:bg-white focus:outline-none"
-								placeholder="게시판 엔진 등"
+								placeholder="앱 공식 명칭"
 							/>
 						</div>
 					</div>
 
 					<div class="space-y-2">
 						<label class="text-[9px] font-black tracking-widest uppercase opacity-30"
-							>Display Title</label
+							>표시 타이틀 (title)</label
 						>
 						<input
 							type="text"
 							bind:value={editingApp.title}
 							class="h-12 w-full border border-black bg-slate-50 px-4 font-bold transition-all focus:bg-white focus:outline-none"
-							placeholder="UI에 표시될 이름"
+							placeholder="UI에 표시될 명칭"
 						/>
 					</div>
 
 					<div class="space-y-2">
 						<label class="text-[9px] font-black tracking-widest uppercase opacity-30"
-							>Description</label
+							>설명 (description)</label
 						>
 						<textarea
 							bind:value={editingApp.description}
@@ -354,7 +362,7 @@
 					<div class="grid grid-cols-2 gap-4 border-t border-black/5 pt-6">
 						<div class="space-y-2">
 							<label class="text-[9px] font-black tracking-widest uppercase opacity-30"
-								>App Type</label
+								>앱 유형 (app_type)</label
 							>
 							<select
 								bind:value={editingApp.app_type}
@@ -367,7 +375,7 @@
 						</div>
 						<div class="space-y-2">
 							<label class="text-[9px] font-black tracking-widest uppercase opacity-30"
-								>Component Name</label
+								>컴포넌트 명칭 (main_component)</label
 							>
 							<input
 								type="text"
@@ -380,7 +388,7 @@
 
 					<div class="space-y-2">
 						<label class="text-[9px] font-black tracking-widest uppercase opacity-30"
-							>Entry Endpoint</label
+							>진입 경로 (frontend_route)</label
 						>
 						<input
 							type="text"
@@ -397,7 +405,7 @@
 					<div class="grid grid-cols-3 gap-4 border-t border-black/5 pt-6">
 						<div class="space-y-2">
 							<label class="text-[9px] font-black tracking-widest uppercase opacity-30"
-								>Read Rank</label
+								>읽기 최소 랭크 (min_read_rank)</label
 							>
 							<select
 								bind:value={editingApp.min_read_rank}
@@ -411,7 +419,7 @@
 						</div>
 						<div class="space-y-2">
 							<label class="text-[9px] font-black tracking-widest uppercase opacity-30"
-								>Write Rank</label
+								>쓰기 최소 랭크 (min_write_rank)</label
 							>
 							<select
 								bind:value={editingApp.min_write_rank}
@@ -424,12 +432,12 @@
 							</select>
 						</div>
 						<div class="space-y-2">
-							<label class="text-[9px] font-black tracking-widest uppercase opacity-30">Icon</label>
+							<label class="text-[9px] font-black tracking-widest uppercase opacity-30">아이콘 (icon_default)</label>
 							<input
 								type="text"
 								bind:value={editingApp.icon_default}
 								class="h-12 w-full border border-black bg-slate-50 px-4 text-center text-xl font-black transition-all focus:bg-white focus:outline-none"
-								placeholder="Emoji"
+								placeholder="mdi:apps (Iconify)"
 							/>
 						</div>
 					</div>
@@ -443,7 +451,7 @@
 								bind:checked={editingApp.is_active}
 								class="checkbox rounded-none checkbox-xs"
 							/>
-							Engine Active
+							앱 엔진 활성화
 						</label>
 					</div>
 
@@ -452,13 +460,13 @@
 							class="h-16 flex-1 border-2 border-black bg-black text-lg font-black tracking-widest text-white uppercase transition-all hover:bg-white hover:text-black"
 							onclick={handleSave}
 						>
-							{isEditMode ? 'Commit Update' : 'Register Engine'}
+							{isEditMode ? '수정 사항 저장' : '새 앱 엔진 등록'}
 						</button>
 						<button
 							class="h-16 w-20 border-2 border-black text-[10px] font-black uppercase transition-all hover:bg-slate-100"
 							onclick={resetForm}
 						>
-							Reset
+							초기화
 						</button>
 					</div>
 				</div>

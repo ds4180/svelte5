@@ -32,6 +32,10 @@
 	onMount(loadSessions);
 </script>
 
+<svelte:head>
+	<title>세션 모니터링 (구버전) | jeju.live Core</title>
+</svelte:head>
+
 <div
 	class="animate-fade-in mx-auto max-w-7xl space-y-6 px-4 pb-20 font-['Noto_Sans_KR','Outfit'] md:space-y-10 md:px-6 md:pb-40 lg:px-8"
 >
@@ -45,8 +49,8 @@
 			>
 			<h1 class="text-3xl font-black tracking-tighter text-slate-900 uppercase italic md:text-5xl">
 				세션 <span class="NOT-ITALIC text-blue-600"
-					>모니터링 <Icon
-						icon="mdi:monitor-lock-outline"
+					>모니터링 (구버전) <Icon
+						icon="mdi:account-clock-outline"
 						class="ml-1 inline-block align-text-bottom text-blue-600"
 					/></span
 				>

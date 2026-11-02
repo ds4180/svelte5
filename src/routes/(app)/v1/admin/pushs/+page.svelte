@@ -120,7 +120,7 @@
 </script>
 
 <svelte:head>
-	<title>모바일 웹 푸시 & 구독자 관리 | jeju.live Core</title>
+	<title>푸시·구독 관리 | jeju.live Core</title>
 </svelte:head>
 
 <div class="mx-auto max-w-7xl space-y-6 px-4 py-8 font-['Noto_Sans_KR','Outfit'] md:space-y-8 md:px-6 lg:px-8">
@@ -137,7 +137,7 @@
 				<span class="text-xs font-bold text-slate-400">/v1/admin/pushs</span>
 			</div>
 			<h1 class="mt-2 text-3xl font-black tracking-tight text-slate-900 uppercase italic md:text-4xl">
-				모바일 웹 푸시 & <span class="not-italic text-pink-600">구독자 관리</span>
+				푸시·<span class="not-italic text-pink-600">구독 관리</span>
 			</h1>
 			<p class="mt-1 text-sm font-medium text-slate-500">
 				사원 기기별 Web Push 구독 상태 확인, 플랫폼별 모니터링 및 전체/그룹 긴급 푸시 전송

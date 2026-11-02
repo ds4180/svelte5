@@ -193,6 +193,10 @@
   }
 </script>
 
+<svelte:head>
+  <title>그룹·권한 관리 | jeju.live Core</title>
+</svelte:head>
+
 <div class="animate-fade-in mx-auto max-w-7xl space-y-6 px-4 pb-20 font-['Outfit','Noto_Sans_KR']">
 
   <!-- 🧭 1. 상단 브레드크럼 & 헤더 -->
@@ -208,7 +212,7 @@
         </span>
       </div>
       <h1 class="text-3xl font-black tracking-tight text-slate-900 uppercase italic md:text-5xl">
-        통합 그룹 및 <span class="not-italic text-cyan-600">권한 통제 관제탑</span>
+        그룹·<span class="not-italic text-cyan-600">권한 관리</span>
       </h1>
       <p class="mt-2 text-sm font-bold text-slate-500">
         <strong class="text-slate-800">그룹 뷰</strong>(주/부그룹 정의), <strong class="text-slate-800">사용자 뷰</strong>(회원 매칭), <strong class="text-slate-800">인스턴스 뷰</strong>(게시판·페이지·단일앱 4단계 권한 통제)의 일체형 시스템

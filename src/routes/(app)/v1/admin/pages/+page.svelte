@@ -22,7 +22,11 @@
 	}
 </script>
 
-<div class="animate-fade-in mx-auto max-w-7xl space-y-10 px-4 pb-40 font-['Outfit'] text-black">
+<svelte:head>
+	<title>정적 페이지 탐색기 | jeju.live Core</title>
+</svelte:head>
+
+<div class="animate-fade-in mx-auto max-w-7xl space-y-10 px-4 pb-40 font-['Outfit','Noto_Sans_KR'] text-black">
 	<!-- 📄 Hero Section -->
 	<div
 		class="flex flex-col items-start justify-between gap-6 border-b-4 border-black pb-8 md:flex-row md:items-end"
@@ -32,7 +36,7 @@
 				>Pure File-System Navigator</span
 			>
 			<h1 class="text-5xl font-black tracking-tighter uppercase italic">
-				Pages <span class="NOT-ITALIC text-blue-600">Master</span>
+				정적 페이지 <span class="NOT-ITALIC text-blue-600">탐색기</span>
 			</h1>
 			<p class="mt-3 text-xs font-bold opacity-40">
 				DB 없이 /v1/pages 하위의 물리적 파일들을 실시간으로 스캔하여 관리합니다.

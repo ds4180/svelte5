@@ -113,7 +113,11 @@
 	onMount(loadData);
 </script>
 
-<div class="animate-fade-in mx-auto max-w-7xl px-4 pb-40 font-['Outfit'] text-black">
+<svelte:head>
+	<title>페이지 엔진 관리 | jeju.live Core</title>
+</svelte:head>
+
+<div class="animate-fade-in mx-auto max-w-7xl px-4 pb-40 font-['Outfit','Noto_Sans_KR'] text-black">
 	<!-- 📄 Header -->
 	<div class="mb-12 flex flex-col items-start justify-between gap-6 border-b-4 border-black pb-8 md:flex-row md:items-end">
 		<div>
@@ -122,7 +126,7 @@
 				<span class="text-[10px] font-black tracking-[0.4em] uppercase opacity-30">Page Control Center</span>
 			</div>
 			<h1 class="text-5xl font-black tracking-tighter uppercase italic">
-				Page <span class="text-blue-600">Engine</span> Admin
+				페이지 <span class="text-blue-600">엔진 관리</span>
 			</h1>
 		</div>
 		<div class="flex gap-4">

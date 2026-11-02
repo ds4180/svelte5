@@ -36,11 +36,11 @@
 				if (!configSchema.slug) {
 					configSchema = {
 						...configSchema,
-						slug: { type: 'string', label: 'Instance Slug (ID)', icon: 'ph:hash-bold', required: true },
-						name: { type: 'string', label: 'Display Title', icon: 'ph:bookmark-bold', required: true },
-						description: { type: 'string', label: 'Description', icon: 'ph:text-align-left-bold' },
-						layout_type: { type: 'select', label: 'Layout Style', icon: 'ph:layout-bold', options: [{value: 'list', label: 'List Style'}, {value: 'gallery', label: 'Gallery Style'}] },
-						items_per_page: { type: 'number', label: 'Items Per Page', icon: 'ph:list-numbers-bold' }
+						slug: { type: 'string', label: 'Instance Slug (ID)', icon: 'mdi:pound', required: true },
+						name: { type: 'string', label: 'Display Title', icon: 'mdi:bookmark-outline', required: true },
+						description: { type: 'string', label: 'Description', icon: 'mdi:text' },
+						layout_type: { type: 'select', label: 'Layout Style', icon: 'mdi:view-dashboard-outline', options: [{value: 'list', label: 'List Style'}, {value: 'gallery', label: 'Gallery Style'}] },
+						items_per_page: { type: 'number', label: 'Items Per Page', icon: 'mdi:format-list-numbered' }
 					};
 				}
 
@@ -111,18 +111,22 @@
 	}
 </script>
 
-<div class="animate-fade-in mx-auto max-w-4xl px-4 pb-40 font-['Outfit'] text-black">
+<svelte:head>
+	<title>{originalBoard?.name || slug} 수정 | jeju.live Core</title>
+</svelte:head>
+
+<div class="animate-fade-in mx-auto max-w-4xl px-4 pb-40 font-['Outfit','Noto_Sans_KR'] text-black">
 	<!-- 📄 Header -->
 	<div class="mb-12 flex flex-col items-start justify-between gap-6 border-b-4 border-black pb-8 md:flex-row md:items-end">
 		<div>
 			<div class="mb-2 flex items-center gap-3">
 				<a href="/v1/admin/apps/{appId}/instances" class="group btn rounded-none border-black px-2 text-[9px] font-black tracking-widest uppercase btn-outline btn-xs">
-					<span class="transition-transform group-hover:-translate-x-1">←</span> Back to Instances
+					<span class="transition-transform group-hover:-translate-x-1">←</span> 인스턴스 목록으로
 				</a>
 				<span class="text-[10px] font-black tracking-[0.4em] uppercase opacity-30">Field Configuration</span>
 			</div>
 			<h1 class="text-5xl font-black tracking-tighter uppercase italic">
-				Edit <span class="NOT-ITALIC text-orange-500">{originalBoard?.name || slug}</span>
+				인스턴스 수정: <span class="NOT-ITALIC text-orange-500">{originalBoard?.name || slug}</span>
 			</h1>
 		</div>
 	</div>
@@ -139,7 +143,7 @@
 					{#each Object.entries(configSchema).filter(([k, f]) => f.type) as [key, field]}
 						<div class="space-y-3 {field.type === 'textarea' ? 'md:col-span-2' : ''}">
 							<label class="flex items-center gap-2 text-[10px] font-black tracking-[0.2em] uppercase opacity-30">
-								<Icon icon={field.icon || 'ph:cube-bold'} class="h-4 w-4" /> {field.label || key.toUpperCase()}
+								<Icon icon={field.icon || 'mdi:cube-outline'} class="h-4 w-4" /> {field.label || key.toUpperCase()}
 							</label>
 							{#if field.type === 'select' && field.options}
 								<select bind:value={formData[key]} class="h-16 w-full appearance-none border-2 border-black bg-slate-50 px-5 text-base font-black outline-none focus:bg-white focus:ring-4 focus:ring-blue-100">
@@ -161,7 +165,7 @@
 					<div class="space-y-6 pt-10 border-t-2 border-dashed border-black/10">
 						<div class="flex items-center justify-between">
 							<div class="flex items-center gap-2 text-[10px] font-black tracking-[0.2em] uppercase opacity-30">
-								<Icon icon="ph:list-plus-bold" class="h-4 w-4" /> Dynamic Content Fields
+								<Icon icon="mdi:playlist-plus" class="h-4 w-4" /> Dynamic Content Fields
 							</div>
 							<button type="button" onclick={addFieldDef} class="btn btn-xs h-8 rounded-none border-2 border-black bg-emerald-400 font-black text-black">
 								+ New Field Def
@@ -194,7 +198,7 @@
 											<input type="text" bind:value={fdef.options_text} placeholder="A, B, C" class="h-10 w-full border-2 border-blue-600 px-3 font-bold text-sm" />
 										</div>
 									{/if}
-									<button type="button" onclick={() => removeFieldDef(idx)} class="btn btn-square h-10 w-10 border-2 border-black bg-red-500 text-white"><Icon icon="ph:trash-bold" /></button>
+									<button type="button" onclick={() => removeFieldDef(idx)} class="btn btn-square h-10 w-10 border-2 border-black bg-red-500 text-white"><Icon icon="mdi:trash-can-outline" /></button>
 								</div>
 							{/each}
 						</div>
@@ -205,7 +209,7 @@
 				<div class="space-y-6 pt-10 border-t-2 border-dashed border-black/10">
 					<div class="flex items-center justify-between">
 						<div class="flex items-center gap-2 text-[10px] font-black tracking-[0.2em] uppercase opacity-30">
-							<Icon icon="ph:brackets-curly-bold" class="h-4 w-4" /> Custom Configuration (JSONB Injection)
+							<Icon icon="mdi:code-braces" class="h-4 w-4" /> Custom Configuration (JSONB Injection)
 						</div>
 						<button 
 							type="button"
@@ -237,7 +241,7 @@
 										onclick={() => removeOption(idx)}
 										class="btn btn-square h-10 w-10 min-h-0 border-2 border-black bg-slate-100 text-black hover:bg-red-500 hover:text-white"
 									>
-										<Icon icon="ph:x-bold" />
+										<Icon icon="mdi:close" />
 									</button>
 								</div>
 							{/each}
@@ -252,7 +256,7 @@
 						{#if isSaving}
 							<span class="loading loading-md loading-spinner"></span> Syncing...
 						{:else}
-							<Icon icon="ph:floppy-disk-back-bold" class="h-8 w-8 transition-transform group-hover:scale-125" /> Update Configuration
+							<Icon icon="mdi:content-save-outline" class="h-8 w-8 transition-transform group-hover:scale-125" /> Update Configuration
 						{/if}
 					</button>
 				</div>

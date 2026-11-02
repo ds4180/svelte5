@@ -66,13 +66,17 @@
 	}
 </script>
 
+<svelte:head>
+	<title>사용자 랭크 관리 | jeju.live Core</title>
+</svelte:head>
+
 <div class="animate-fade-in mx-auto max-w-7xl space-y-8 px-4 pb-20 font-['Outfit','Noto_Sans_KR']">
 	<!-- 📄 헤더 -->
 	<div class="flex flex-col items-start justify-between gap-4 border-b-4 border-slate-900 pb-8 md:flex-row md:items-end">
 		<div>
 			<span class="mb-2 block text-[10px] font-black tracking-[0.4em] text-slate-400 uppercase">User Protocol</span>
 			<h1 class="text-4xl font-black tracking-tighter text-slate-900 uppercase italic md:text-6xl">
-				사용자 <span class="NOT-ITALIC text-emerald-600">관리</span>
+				사용자 랭크 <span class="NOT-ITALIC text-emerald-600">관리</span>
 			</h1>
 			<p class="mt-3 text-sm font-bold text-slate-500">
 				회원들의 시스템 접근 권한 및 랭크를 실시간으로 조정합니다.

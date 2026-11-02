@@ -59,10 +59,10 @@
 			category: 'CORE',
 			appId: 'admin_apps',
 			minRank: 9,
-			title: '앱 레지스트리',
+			title: '앱 설치 등록',
 			desc: 'INSTANCE / CUSTOM / SYSTEM 앱 엔진 등록 및 메타데이터·권한 관리',
 			link: '/v1/admin/apps',
-			icon: 'mdi:apps-box',
+			icon: 'mdi:apps',
 			color: 'bg-indigo-600'
 		},
 		{
@@ -70,7 +70,7 @@
 			category: 'CORE',
 			appId: 'admin_menu',
 			minRank: 8,
-			title: '메뉴 마스터',
+			title: '메뉴 설정',
 			desc: '시스템 전체 내비게이션 트리 및 앱 연결·접근 권한 구조 편집',
 			link: '/v1/admin/menu',
 			icon: 'mdi:menu-open',
@@ -81,7 +81,7 @@
 			category: 'CORE',
 			appId: 'admin_user_manage',
 			minRank: 8,
-			title: '사용자·직급 관리',
+			title: '사용자 랭크 관리',
 			desc: '회원 권한 등급(rank_level 0~9) 조정 및 주그룹/부그룹 소속 관리',
 			link: '/v1/admin/user-manage',
 			icon: 'mdi:account-group-outline',
@@ -92,7 +92,7 @@
 			category: 'CORE',
 			appId: 'admin_group_manage',
 			minRank: 9,
-			title: '조직·권한 통제소',
+			title: '그룹·권한 관리',
 			desc: '주/부그룹 마스터 및 인스턴스/시스템 앱 독립 권한 배분 관제탑',
 			link: '/v1/admin/group-manage',
 			icon: 'mdi:shield-account-outline',
@@ -103,7 +103,7 @@
 			category: 'CORE',
 			appId: 'admin_observability',
 			minRank: 8,
-			title: '통합 관제 & 감사로그',
+			title: '접속 기록·감사 로그',
 			desc: '실시간 세션 추적·강제추방, 4대 감사로그(접근/도메인Diff/장애/보안) 전사 관제',
 			link: '/v1/admin/observability',
 			icon: 'mdi:shield-check-outline',
@@ -114,7 +114,7 @@
 			category: 'CORE',
 			appId: 'admin_config',
 			minRank: 8,
-			title: '시스템 환경설정',
+			title: '환경설정',
 			desc: '글로벌 환경 변수, 데이터 보존 주기(GC) 및 Watchdog 이상 경보 제어',
 			link: '/v1/admin/config',
 			icon: 'mdi:tune-vertical',
@@ -125,7 +125,7 @@
 			category: 'CORE',
 			appId: 'admin_tasks',
 			minRank: 8,
-			title: '태스크 & 크론 워커',
+			title: '예약 작업 관리',
 			desc: '비동기 백그라운드 작업 큐 상태 모니터링 및 자율신경계 스케줄러 제어',
 			link: '/v1/admin/tasks',
 			icon: 'mdi:robot-industrial',
@@ -137,7 +137,7 @@
 			category: 'OPERATIONS',
 			appId: 'admin_alerts',
 			minRank: 4,
-			title: '알림 관리',
+			title: '알림·지시 관리',
 			desc: '전역/경로별 상단 공지 배너 및 중앙 모달 알림 생성·배포 (운영 위임 가능)',
 			link: '/v1/admin/alerts',
 			icon: 'mdi:bell-cog-outline',
@@ -148,7 +148,7 @@
 			category: 'OPERATIONS',
 			appId: 'admin_media',
 			minRank: 4,
-			title: '미디어 관제탑',
+			title: '파일·사진 관리',
 			desc: '전체 업로드 파일 자산 모니터링 및 스토리지 용량 관리 (운영 위임 가능)',
 			link: '/v1/admin/media',
 			icon: 'mdi:database-cog-outline',
@@ -159,7 +159,7 @@
 			category: 'OPERATIONS',
 			appId: 'admin_target_groups',
 			minRank: 4,
-			title: '메시징 타겟 그룹',
+			title: '임시 그룹 관리',
 			desc: '알림·메시지 발송을 위한 기사 노선별/직급별 동적 그룹 필터링 및 연산',
 			link: '/v1/admin/target-groups',
 			icon: 'mdi:bullhorn-outline',
@@ -170,7 +170,7 @@
 			category: 'OPERATIONS',
 			appId: 'admin_pushs',
 			minRank: 4,
-			title: '푸시 발송 & 구독자 관리',
+			title: '푸시·구독 관리',
 			desc: '모바일/PC Web Push 활성 구독 기기 현황 모니터링, 무효 구독 정리 및 전사 푸시 발송',
 			link: '/v1/admin/pushs',
 			icon: 'mdi:cellphone-message',
@@ -256,15 +256,6 @@
 			link: '/v1/admin/pages',
 			icon: 'mdi:folder-search-outline',
 			color: 'bg-slate-600'
-		},
-		{
-			type: 'PAGES',
-			minRank: 1,
-			title: '통합 미니앱 허브',
-			desc: '메모, 업무지시, 메시지, 알림 등 사용자 통합 위젯 런타임 바로가기',
-			link: '/v1/pages/miniapps',
-			icon: 'mdi:widgets-outline',
-			color: 'bg-emerald-700'
 		}
 	];
 
@@ -351,6 +342,10 @@
 	}
 </script>
 
+<svelte:head>
+	<title>관리자 페이지 | jeju.live Core</title>
+</svelte:head>
+
 <div
 	class="animate-fade-in mx-auto max-w-7xl space-y-6 px-4 pb-20 font-['Outfit','Noto_Sans_KR'] md:space-y-12 md:pb-40"
 >
@@ -364,7 +359,7 @@
 				>Central Operations</span
 			>
 			<h1 class="text-3xl font-black tracking-tighter text-slate-900 uppercase italic md:text-6xl">
-				관리자 <span class="NOT-ITALIC text-blue-600">관제센터</span>
+				관리자 <span class="NOT-ITALIC text-blue-600">페이지</span>
 			</h1>
 			<p class="mt-2 text-xs font-bold text-slate-500 md:mt-3 md:text-sm">
 				{stats.admin_name}님, 오늘도 시스템은 안정적으로 가동 중입니다.
@@ -569,7 +564,7 @@
 		<div class="flex flex-col gap-1 border-l-4 border-purple-700 pl-3 md:border-l-8 md:pl-4">
 			<div class="flex items-center gap-2">
 				<h3 class="text-xl font-black tracking-tighter text-slate-900 italic md:text-2xl">
-					시스템 관리자 관제 모듈 (System Apps)
+					시스템 앱  (System Apps)
 				</h3>
 				<span
 					class="rounded border border-purple-200 bg-purple-50 px-2 py-0.5 text-[10px] font-black tracking-widest text-purple-700 uppercase"
@@ -578,7 +573,7 @@
 				</span>
 			</div>
 			<p class="text-xs font-bold text-slate-500">
-				티어 구속 없이 시스템 앱별로 독립적인 권한(허용 그룹 및 최소 랭크)이 적용된 관리자 전용 앱입니다.
+				시스템에 기본 설치되어 작동하는 앱을 권한에 따라 사용합니다.
 			</p>
 		</div>
 		<div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -674,7 +669,7 @@
 		<div class="flex flex-col gap-1 border-l-4 border-blue-600 pl-3 md:border-l-8 md:pl-4">
 			<div class="flex items-center gap-2">
 				<h3 class="text-xl font-black tracking-tighter text-slate-900 italic md:text-2xl">
-					현장 비즈니스 & 콘텐츠 앱 관리
+					설치 앱 (Install Apps)
 				</h3>
 				<span
 					class="rounded border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] font-black tracking-widest text-blue-700 uppercase"
@@ -683,7 +678,7 @@
 				</span>
 			</div>
 			<p class="text-xs font-bold text-slate-500">
-				배차, 노선, 결근계 등 현장 업무 및 게시판/페이지 인스턴스를 관리합니다.
+				도메인 앱으로 설치·삭제가 가능한 앱들의 관라자 페이지를 사용 합니다. 
 			</p>
 		</div>
 		<div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">

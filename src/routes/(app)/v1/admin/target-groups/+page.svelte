@@ -126,7 +126,11 @@
 	};
 </script>
 
-<div class="p-6 max-w-6xl mx-auto space-y-6">
+<svelte:head>
+	<title>임시 그룹 관리 | jeju.live Core</title>
+</svelte:head>
+
+<div class="p-6 max-w-6xl mx-auto space-y-6 font-['Noto_Sans_KR','Outfit']">
 	<!-- 헤더 -->
 	<div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
 		<div>
@@ -141,7 +145,7 @@
 			</div>
 			<h1 class="text-2xl font-black text-slate-800 flex items-center gap-2">
 				<Icon icon="mdi:bullhorn-outline" class="text-amber-500" />
-				메시징 타겟 그룹 관리 (Redis)
+				임시 그룹 관리
 			</h1>
 			<p class="text-sm text-slate-500">알림·푸시 전송을 위한 다이나믹 및 수동 대상자 그룹을 추출·합성합니다.</p>
 		</div>

@@ -68,6 +68,10 @@
 	}
 </script>
 
+<svelte:head>
+	<title>게시판 인스턴스 관리 | jeju.live Core</title>
+</svelte:head>
+
 <div
 	class="animate-fade-in mx-auto max-w-7xl space-y-10 px-4 pb-40 font-['Noto_Sans_KR'] text-black"
 >
@@ -78,7 +82,7 @@
 				>Board Cluster Registry</span
 			>
 			<h1 class="text-5xl font-black tracking-tighter uppercase italic">
-				게시판 <span class="NOT-ITALIC text-blue-600">마스터</span>
+				게시판 <span class="NOT-ITALIC text-blue-600">인스턴스 관리</span>
 			</h1>
 			<p class="mt-3 text-xs font-bold opacity-40">
 				공지사항, 자유게시판 등 시스템에서 가동할 실제 게시판들을 설계합니다.

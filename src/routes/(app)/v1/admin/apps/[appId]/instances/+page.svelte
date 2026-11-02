@@ -47,7 +47,11 @@
 	onMount(loadData);
 </script>
 
-<div class="animate-fade-in mx-auto max-w-7xl space-y-10 px-4 pb-40 font-['Outfit'] text-black">
+<svelte:head>
+	<title>{appInfo?.title || appId} 인스턴스 | jeju.live Core</title>
+</svelte:head>
+
+<div class="animate-fade-in mx-auto max-w-7xl space-y-10 px-4 pb-40 font-['Outfit','Noto_Sans_KR'] text-black">
 	<!-- 📄 Header -->
 	<div
 		class="flex flex-col items-start justify-between gap-6 border-b-4 border-black pb-8 md:flex-row md:items-end"
@@ -58,14 +62,14 @@
 					href="/v1/admin/apps"
 					class="group btn rounded-none border-black px-2 text-[9px] font-black tracking-widest uppercase btn-outline btn-xs"
 				>
-					<span class="transition-transform group-hover:-translate-x-1">←</span> Back to Registry
+					<span class="transition-transform group-hover:-translate-x-1">←</span> 앱 레지스트리로
 				</a>
 				<span class="text-[10px] font-black tracking-[0.4em] uppercase opacity-30"
 					>Instance Cluster</span
 				>
 			</div>
 			<h1 class="line-clamp-1 text-5xl font-black tracking-tighter uppercase italic">
-				{appInfo?.title || appId} <span class="NOT-ITALIC text-emerald-600">Instances</span>
+				{appInfo?.title || appId} <span class="NOT-ITALIC text-emerald-600">인스턴스 목록</span>
 			</h1>
 			<p class="mt-3 text-xs font-bold italic opacity-40">
 				{appInfo?.description || '이 엔진을 사용하는 활성 인스턴스 목록입니다.'}
@@ -91,7 +95,7 @@
 		<div
 			class="flex h-80 flex-col items-center justify-center gap-4 border-2 border-black bg-slate-50"
 		>
-			<Icon icon="ph:ghost-bold" class="h-16 w-16 opacity-10" />
+			<Icon icon="mdi:ghost-outline" class="h-16 w-16 opacity-10" />
 			<p class="text-center text-sm font-black tracking-widest uppercase italic opacity-30">
 				No active instances found for this engine.<br />
 				<span class="NOT-ITALIC text-[10px] normal-case"
@@ -116,7 +120,7 @@
 								href="/v1/admin/apps/{appId}/instances/{ins.slug}/edit"
 								class="p-1 text-black hover:text-blue-600"
 							>
-								<Icon icon="ph:pencil-simple-bold" class="h-4 w-4" />
+								<Icon icon="mdi:pencil-outline" class="h-4 w-4" />
 							</a>
 						</div>
 					</div>
@@ -148,7 +152,7 @@
 							target="_blank"
 							class="flex items-center gap-1 text-[9px] font-black text-black uppercase hover:underline"
 						>
-							Visit <Icon icon="ph:arrow-square-out-bold" class="h-3 w-3" />
+							Visit <Icon icon="mdi:open-in-new" class="h-3 w-3" />
 						</a>
 					</div>
 				</div>

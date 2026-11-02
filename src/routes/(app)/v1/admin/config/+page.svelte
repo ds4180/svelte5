@@ -223,7 +223,7 @@
 </script>
 
 <svelte:head>
-	<title>{topTitle}</title>
+	<title>환경설정 | jeju.live Core</title>
 </svelte:head>
 
 <div
@@ -239,9 +239,9 @@
 				>System Administration</span
 			>
 			<h1 class="text-3xl font-black tracking-tighter text-black uppercase italic md:text-5xl">
-				기본 <span class="NOT-ITALIC text-blue-600"
-					>설정 <Icon
-						icon="mdi:cog"
+				<span class="NOT-ITALIC text-blue-600"
+					>환경설정 <Icon
+						icon="mdi:tune-vertical"
 						class="ml-1 inline-block align-text-bottom text-blue-600"
 					/></span
 				>
