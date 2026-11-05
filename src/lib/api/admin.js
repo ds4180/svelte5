@@ -115,6 +115,7 @@ export const adminDeletePushSubscription = (id) => request(`${BASE_URL}/push/sub
 // 👥 그룹 관리 API (Redis 기반)
 export const adminGetGroups = () => request('/api/v1/admin/groups');
 export const adminGetTargetGroupUsers = () => request('/api/v1/admin/groups/candidates');
+export const adminGetGroupMembers = (name) => request(`/api/v1/admin/groups/${encodeURIComponent(name)}/members`);
 export const adminCreateManualGroup = (data) => request('/api/v1/admin/groups/manual', 'POST', data);
 export const adminRefreshDynamicGroups = () => request('/api/v1/admin/groups/dynamic/refresh', 'POST');
 export const adminCombineGroups = (data) => request('/api/v1/admin/groups/combine', 'POST', data);
@@ -315,12 +316,29 @@ export const adminRetryTask = (taskId) =>
 	request(`${BASE_URL}/tasks/${taskId}/retry`, 'POST');
 
 /**
- * @function adminCancelTask
- * @description 대기 중인 태스크를 취소합니다.
+ * @function adminUpdateTask
+ * @description 대기 중인 태스크의 스케줄, 주기 및 옵션을 수정합니다.
  * @param {number|string} taskId
+ * @param {Object} data
  */
-export const adminCancelTask = (taskId) =>
-	request(`${BASE_URL}/tasks/${taskId}`, 'DELETE');
+export const adminUpdateTask = (taskId, data) =>
+	request(`${BASE_URL}/tasks/${taskId}`, 'PUT', data);
+
+/**
+ * @function adminCancelTask
+ * @description 대기 중이거나 실패한 태스크를 취소 또는 영구 삭제합니다.
+ * @param {number|string} taskId
+ * @param {boolean} hardDelete
+ */
+export const adminCancelTask = (taskId, hardDelete = false) =>
+	request(`${BASE_URL}/tasks/${taskId}${hardDelete ? '?hard_delete=true' : ''}`, 'DELETE');
+
+/**
+ * @function adminClearFailedTasks
+ * @description 실패(FAILED) 상태인 모든 고아 태스크를 일괄 영구 삭제합니다.
+ */
+export const adminClearFailedTasks = () =>
+	request(`${BASE_URL}/tasks/failed/clear`, 'DELETE');
 
 // ============================================================================
 // 📁 [미디어 및 파일·사진 관리 (Media & File Master) API]

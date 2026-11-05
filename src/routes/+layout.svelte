@@ -15,6 +15,7 @@
 	import { browser } from '$app/environment';
 	import { setAuthContext } from '$lib/runes/auth.svelte.js';
 	import { alertState } from '$lib/runes/alert.svelte.js';
+	import { toast } from '$lib/runes/toast.svelte.js';
 	import { websocket } from '$lib/runes/websocket.svelte.js';
 	import Alert from '$lib/components/Alert.svelte';
 	import Toast from '$lib/components/Toast.svelte';
@@ -60,7 +61,24 @@
 		// [2-1] 전역 알림(토스트/모달) 엔진 초기화
 		alertState.init();
 
-		// [2-2] PWA (Progressive Web App) 서비스 워커 상태 점검
+		// [2-2] 🌐 실시간 WebSocket 시스템 토스트 리스너 장착 (작업 실패 등 시스템 경보 수신)
+		const unsubscribeWs = websocket.addMessageListener((msg) => {
+			if (msg && msg.type === 'TOAST') {
+				const toastType = msg.toast_type || 'info';
+				const text = msg.message || '';
+				if (toastType === 'error') {
+					toast.error(text, 5000);
+				} else if (toastType === 'warning') {
+					toast.warning(text, 5000);
+				} else if (toastType === 'success') {
+					toast.success(text, 5000);
+				} else {
+					toast.info(text, 5000);
+				}
+			}
+		});
+
+		// [2-3] PWA (Progressive Web App) 서비스 워커 상태 점검
 		if (browser && 'serviceWorker' in navigator) {
 			navigator.serviceWorker.ready.then(() => {
 				console.log('📱 [Root Layout] PWA Service Worker 준비 완료');
@@ -68,6 +86,10 @@
 				console.warn('⚠️ [Root Layout] PWA Service Worker 확인 실패:', err);
 			});
 		}
+
+		return () => {
+			unsubscribeWs();
+		};
 	});
 </script>
 

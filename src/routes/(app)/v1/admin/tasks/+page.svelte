@@ -40,6 +40,77 @@
 	// 🔍 상세 보기 모달 상태
 	let selectedDetailTask = $state(/** @type {any} */ (null));
 
+	// ✏️ 작업 스케줄 수정 모달 상태
+	let isEditModalOpen = $state(false);
+	let editingTask = $state(/** @type {any} */ (null));
+	let isSavingEdit = $state(false);
+	let editForm = $state({
+		priority: 5,
+		scheduled_at: '',
+		cron_expression: '',
+		repeat_interval: /** @type {number|null} */ (null),
+		payload_str: '{}',
+		tags_str: ''
+	});
+
+	function openEditModal(task) {
+		editingTask = task;
+		editForm.priority = task.priority ?? 5;
+		if (task.scheduled_at) {
+			const d = new Date(task.scheduled_at);
+			if (!isNaN(d.getTime())) {
+				const pad = (n) => String(n).padStart(2, '0');
+				editForm.scheduled_at = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+			} else {
+				editForm.scheduled_at = '';
+			}
+		} else {
+			editForm.scheduled_at = '';
+		}
+		editForm.cron_expression = task.cron_expression || '';
+		editForm.repeat_interval = task.repeat_interval || null;
+		editForm.payload_str = JSON.stringify(task.payload || {}, null, 2);
+		editForm.tags_str = (task.tags || []).join(', ');
+		isEditModalOpen = true;
+	}
+
+	async function handleSaveEdit() {
+		if (!editingTask) return;
+		isSavingEdit = true;
+		try {
+			let parsedPayload = {};
+			try {
+				parsedPayload = JSON.parse(editForm.payload_str || '{}');
+			} catch (jsonErr) {
+				toast.error('입력값(Payload)이 올바른 JSON 형식이 아닙니다.');
+				isSavingEdit = false;
+				return;
+			}
+
+			const payload = {
+				priority: Number(editForm.priority),
+				payload: parsedPayload,
+				cron_expression: editForm.cron_expression.trim() || null,
+				repeat_interval: editForm.repeat_interval ? Number(editForm.repeat_interval) : null,
+				tags: editForm.tags_str.split(',').map((t) => t.trim()).filter(Boolean)
+			};
+
+			if (editForm.scheduled_at) {
+				payload.scheduled_at = new Date(editForm.scheduled_at).toISOString();
+			}
+
+			await api.adminUpdateTask(editingTask.id, payload);
+			toast.success(`작업 #${editingTask.id} 스케줄이 성공적으로 수정되었습니다.`);
+			isEditModalOpen = false;
+			editingTask = null;
+			await loadAllData(false);
+		} catch (/** @type {any} */ err) {
+			toast.error('작업 수정 실패: ' + (err.detail || err.message || '서버 오류'));
+		} finally {
+			isSavingEdit = false;
+		}
+	}
+
 	// ➕ 쉬운 작업 등록 폼 상태
 	let scheduleMode = $state('once_now'); // 'once_now' | 'daily' | 'interval' | 'specific_time'
 	let selectedTypeItem = $state(/** @type {any} */ (null));
@@ -217,6 +288,35 @@
 			await loadAllData(false);
 		} catch (/** @type {any} */ err) {
 			toast.error('작업 취소 실패: ' + (err.message || '서버 오류'));
+		}
+	}
+
+	/**
+	 * 🗑️ 실패/취소 작업 영구 삭제
+	 * @param {number} taskId
+	 */
+	async function handleDeleteTask(taskId) {
+		if (!confirm(`작업 #${taskId}을(를) 영구 삭제하시겠습니까?`)) return;
+		try {
+			await api.adminCancelTask(taskId, true);
+			toast.success(`작업 #${taskId}이(가) 영구 삭제되었습니다.`);
+			await loadAllData(false);
+		} catch (/** @type {any} */ err) {
+			toast.error('작업 삭제 실패: ' + (err.message || '서버 오류'));
+		}
+	}
+
+	/**
+	 * 🧹 실패한 모든 고아 작업 일괄 정리/삭제
+	 */
+	async function handleClearAllFailed() {
+		if (!confirm(`실패(FAILED) 상태인 모든 작업을 일괄 영구 삭제하시겠습니까?`)) return;
+		try {
+			const res = await api.adminClearFailedTasks();
+			toast.success(res.message || '실패한 작업들이 모두 정리되었습니다.');
+			await loadAllData(false);
+		} catch (/** @type {any} */ err) {
+			toast.error('일괄 삭제 실패: ' + (err.message || '서버 오류'));
 		}
 	}
 
@@ -458,8 +558,19 @@
 					</select>
 				</div>
 
-				<div class="text-xs font-bold text-slate-400">
-					총 <span class="text-blue-600 font-black">{total.toLocaleString()}</span>건의 작업 내역
+				<div class="flex items-center gap-3">
+					{#if summary.failed_count > 0}
+						<button
+							onclick={handleClearAllFailed}
+							class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100 font-bold text-xs transition shadow-xs"
+						>
+							<Icon icon="solar:trash-bin-trash-bold" class="text-sm" />
+							<span>실패 작업({summary.failed_count}건) 일괄 정리</span>
+						</button>
+					{/if}
+					<div class="text-xs font-bold text-slate-400">
+						총 <span class="text-blue-600 font-black">{total.toLocaleString()}</span>건의 작업 내역
+					</div>
 				</div>
 			</div>
 		{/if}
@@ -595,16 +706,42 @@
 													class="inline-flex items-center gap-1 rounded-lg bg-rose-600 px-3 py-1 text-xs font-black text-white shadow-sm transition hover:bg-rose-700 active:scale-95"
 												>
 													<Icon icon="solar:restart-bold" class="text-xs" />
-													<span>즉시 다시 실행</span>
+													<span>다시 실행</span>
+												</button>
+												<button
+													onclick={() => handleDeleteTask(task.id)}
+													class="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-bold text-slate-500 hover:text-rose-600 hover:bg-rose-50 transition"
+													title="실패한 작업을 목록에서 영구 삭제합니다."
+												>
+													<Icon icon="solar:trash-bin-trash-bold" class="text-xs" />
+													<span>삭제</span>
 												</button>
 											{/if}
 
 											{#if task.status === 'PENDING'}
 												<button
+													onclick={() => openEditModal(task)}
+													class="inline-flex items-center gap-1 rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-bold text-blue-700 transition hover:bg-blue-100"
+													title="작업 실행 시간표 및 옵션을 수정합니다."
+												>
+													<Icon icon="solar:pen-bold" class="text-xs" />
+													<span>수정</span>
+												</button>
+												<button
 													onclick={() => handleCancelTask(task.id)}
 													class="rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-bold text-rose-600 transition hover:bg-rose-50"
 												>
 													취소
+												</button>
+											{/if}
+
+											{#if task.status === 'CANCELLED'}
+												<button
+													onclick={() => handleDeleteTask(task.id)}
+													class="rounded-lg border border-slate-200 px-2 py-1 text-xs font-bold text-slate-400 hover:text-rose-600 transition hover:bg-rose-50"
+													title="취소된 기록 영구 삭제"
+												>
+													삭제
 												</button>
 											{/if}
 										</div>
@@ -870,12 +1007,175 @@
 						<Icon icon="solar:restart-bold" class="text-sm" />
 						<span>원클릭 다시 실행</span>
 					</button>
+					<button
+						onclick={() => { const id = selectedDetailTask.id; selectedDetailTask = null; handleDeleteTask(id); }}
+						class="inline-flex items-center gap-1.5 rounded-xl border border-rose-300 bg-white px-4 py-2 text-xs font-bold text-rose-600 hover:bg-rose-50 transition"
+					>
+						<Icon icon="solar:trash-bin-trash-bold" class="text-sm" />
+						<span>작업 삭제</span>
+					</button>
+				{/if}
+				{#if selectedDetailTask.status === 'PENDING'}
+					<button
+						onclick={() => { const task = selectedDetailTask; selectedDetailTask = null; openEditModal(task); }}
+						class="inline-flex items-center gap-1.5 rounded-xl border border-blue-300 bg-blue-50 px-4 py-2 text-xs font-bold text-blue-700 hover:bg-blue-100 transition"
+					>
+						<Icon icon="solar:pen-bold" class="text-sm" />
+						<span>스케줄 수정하기</span>
+					</button>
 				{/if}
 				<button
 					onclick={() => (selectedDetailTask = null)}
 					class="rounded-xl border border-slate-300 bg-white px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-100"
 				>
 					닫기
+				</button>
+			</div>
+		</div>
+	</div>
+{/if}
+
+<!-- ✏️ 태스크 스케줄 및 옵션 수정 모달 -->
+{#if isEditModalOpen && editingTask}
+	<div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+		<div class="w-full max-w-xl rounded-2xl bg-white shadow-2xl border border-slate-200 overflow-hidden animate-in fade-in zoom-in duration-150">
+			<!-- 모달 헤더 -->
+			<div class="flex items-center justify-between border-b border-slate-100 bg-slate-50 px-6 py-4">
+				<div class="flex items-center gap-2.5">
+					<div class="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-100 text-blue-600">
+						<Icon icon="solar:pen-new-square-bold-duotone" class="text-xl" />
+					</div>
+					<div>
+						<h3 class="text-sm font-black text-slate-900">
+							작업 #{editingTask.id} 스케줄 및 설정 수정
+						</h3>
+						<span class="text-[11px] text-slate-400 font-mono">유형: {editingTask.task_type}</span>
+					</div>
+				</div>
+				<button
+					onclick={() => (isEditModalOpen = false)}
+					class="rounded-lg p-1 text-slate-400 hover:bg-slate-200 hover:text-slate-700"
+				>
+					<Icon icon="solar:close-circle-bold" class="text-xl" />
+				</button>
+			</div>
+
+			<!-- 모달 본문 -->
+			<div class="p-6 space-y-4 max-h-[75vh] overflow-y-auto">
+				<!-- 1. 실행 예정 일시 -->
+				<div>
+					<label for="edit-scheduled-at" class="block text-xs font-black text-slate-700 mb-1.5">
+						📅 실행 예정 일시 (지정 시각 실행)
+					</label>
+					<input
+						id="edit-scheduled-at"
+						type="datetime-local"
+						bind:value={editForm.scheduled_at}
+						class="w-full rounded-xl border border-slate-300 bg-slate-50 px-3.5 py-2.5 text-xs font-bold text-slate-800 focus:border-blue-500 focus:bg-white focus:outline-none"
+					/>
+					<p class="text-[10px] text-slate-400 mt-1">지정한 일시가 되면 로봇 일꾼이 자동으로 작업을 실행합니다.</p>
+				</div>
+
+				<!-- 2. 정기 Cron 표현식 -->
+				<div>
+					<div class="flex items-center justify-between mb-1.5">
+						<label for="edit-cron" class="text-xs font-black text-slate-700">
+							⏰ 정기 반복 Cron 표현식 (선택)
+						</label>
+						{#if editForm.cron_expression}
+							<button 
+								type="button" 
+								onclick={() => editForm.cron_expression = ''} 
+								class="text-[10px] font-bold text-rose-500 hover:underline"
+							>
+								Cron 제거 (단발성 실행 전환)
+							</button>
+						{/if}
+					</div>
+					<input
+						id="edit-cron"
+						type="text"
+						bind:value={editForm.cron_expression}
+						placeholder="예: 0 7 * * * (매일 07:00), 0 3 * * * (새벽 3시)"
+						class="w-full rounded-xl border border-slate-300 bg-slate-50 px-3.5 py-2.5 text-xs font-mono font-bold text-slate-800 focus:border-blue-500 focus:bg-white focus:outline-none"
+					/>
+
+					<!-- 빠른 프리셋 뱃지 -->
+					<div class="flex flex-wrap gap-1.5 mt-2">
+						{#each CRON_PRESETS as preset}
+							<button
+								type="button"
+								onclick={() => editForm.cron_expression = preset.cron}
+								class="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 text-[10px] font-bold text-slate-600 hover:border-blue-400 hover:bg-blue-50 hover:text-blue-700 transition"
+							>
+								{preset.label}
+							</button>
+						{/each}
+					</div>
+				</div>
+
+				<!-- 3. 우선순위 -->
+				<div>
+					<label for="edit-priority" class="block text-xs font-black text-slate-700 mb-1.5">
+						⚡ 처리 우선순위 (1: 매우 높음 ~ 10: 여유)
+					</label>
+					<select
+						id="edit-priority"
+						bind:value={editForm.priority}
+						class="w-full rounded-xl border border-slate-300 bg-slate-50 px-3.5 py-2.5 text-xs font-bold text-slate-800 focus:border-blue-500 focus:bg-white focus:outline-none"
+					>
+						<option value={1}>1 - 최우선 긴급 처리</option>
+						<option value={3}>3 - 높은 우선순위</option>
+						<option value={5}>5 - 일반 보통 작업 (기본값)</option>
+						<option value={8}>8 - 여유있는 야간/정리 작업</option>
+						<option value={10}>10 - 가장 낮은 우선순위</option>
+					</select>
+				</div>
+
+				<!-- 4. 입력값 (Payload JSON) -->
+				<div>
+					<label for="edit-payload" class="block text-xs font-black text-slate-700 mb-1.5">
+						📦 작업 매개변수 (Payload JSON)
+					</label>
+					<textarea
+						id="edit-payload"
+						rows="4"
+						bind:value={editForm.payload_str}
+						class="w-full rounded-xl border border-slate-300 bg-slate-900 p-3 text-[11px] font-mono text-emerald-400 focus:border-blue-500 focus:outline-none"
+					></textarea>
+				</div>
+
+				<!-- 5. 태그 -->
+				<div>
+					<label for="edit-tags" class="block text-xs font-black text-slate-700 mb-1.5">
+						🏷️ 검색용 태그 (쉼표로 구분)
+					</label>
+					<input
+						id="edit-tags"
+						type="text"
+						bind:value={editForm.tags_str}
+						placeholder="예: core, dynamic_group, manual"
+						class="w-full rounded-xl border border-slate-300 bg-slate-50 px-3.5 py-2.5 text-xs font-bold text-slate-800 focus:border-blue-500 focus:bg-white focus:outline-none"
+					/>
+				</div>
+			</div>
+
+			<!-- 모달 푸터 -->
+			<div class="flex items-center justify-end gap-2 border-t border-slate-100 bg-slate-50 px-6 py-3">
+				<button
+					onclick={() => (isEditModalOpen = false)}
+					disabled={isSavingEdit}
+					class="rounded-xl border border-slate-300 bg-white px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-100 transition"
+				>
+					취소
+				</button>
+				<button
+					onclick={handleSaveEdit}
+					disabled={isSavingEdit}
+					class="inline-flex items-center gap-1.5 rounded-xl bg-blue-600 px-5 py-2 text-xs font-black text-white shadow-sm transition hover:bg-blue-700 active:scale-95 disabled:opacity-50"
+				>
+					<Icon icon="solar:disk-bold" class="text-sm" />
+					<span>{isSavingEdit ? '저장 중...' : '수정사항 저장'}</span>
 				</button>
 			</div>
 		</div>
