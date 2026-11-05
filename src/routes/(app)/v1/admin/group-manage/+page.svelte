@@ -39,12 +39,12 @@
   let isEditModalOpen = $state(false);
   let editingGroup = $state(null);
 
-  // 2. 파생 데이터
+  // 2. 파생 데이터 (🏛️ 3대 앱 분류 체계 및 접두사 제거 헌법 표준 동기화)
   let adminApps = $derived(
-    instances.filter(i => i.target_id && String(i.target_id).startsWith('admin'))
+    instances.filter(i => i.app_type === 'SYSTEM' || (i.target_id && String(i.target_id).startsWith('admin')))
   );
   let businessInstances = $derived(
-    instances.filter(i => !i.target_id || !String(i.target_id).startsWith('admin'))
+    instances.filter(i => i.app_type !== 'SYSTEM' && (!i.target_id || !String(i.target_id).startsWith('admin')))
   );
   let primaryGroups = $derived(
     groups.filter(g => g.group_type === 'PRIMARY')

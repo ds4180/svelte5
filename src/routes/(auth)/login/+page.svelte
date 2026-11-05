@@ -83,12 +83,19 @@
 			</button>
 		</form>
 
-		<div class="mt-16 flex flex-col items-center gap-2">
+		<div class="mt-12 flex flex-col items-center gap-3 border-t border-black/10 pt-6">
+			<a
+				href="/register"
+				class="text-[10px] font-black tracking-widest uppercase opacity-40 transition-opacity hover:opacity-100"
+			>
+				Create Account / 사원 계정 발급 안내
+			</a>
 			<a
 				href="/"
 				class="border-b border-black text-[9px] font-black tracking-widest uppercase opacity-20 transition-opacity hover:opacity-100"
-				>Return to Public Portal</a
 			>
+				Return to Public Portal
+			</a>
 		</div>
 	</div>
 

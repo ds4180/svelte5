@@ -88,8 +88,14 @@ export const adminUpdateDayoffStatus = (dayoffId, status) =>
 // 👤 유저 관리 API
 export const adminGetUsers = () => request(`${BASE_URL}/users`);
 export const adminGetUserDetail = (userId) => request(`${BASE_URL}/users/${userId}`);
+export const adminCreateUser = (data) => request(`${BASE_URL}/users`, 'POST', data);
+export const adminDeleteUser = (userId) => request(`${BASE_URL}/users/${userId}`, 'DELETE');
+export const adminRestoreUser = (userId) => request(`${BASE_URL}/users/${userId}/restore`, 'PUT');
 export const adminUpdateUserRank = (userId, rankLevel) =>
 	request(`${BASE_URL}/users/${userId}/rank`, 'PUT', { rank_level: rankLevel });
+export const adminGetRegisterMode = () => request(`${BASE_URL}/users/config/register-mode`);
+export const adminUpdateRegisterMode = (mode) =>
+	request(`${BASE_URL}/users/config/register-mode`, 'PUT', { register_mode: mode });
 
 // 🔔 알림 관리 API (새로 추가)
 export const adminGetAlerts = () => request('/api/alert/list'); // 모든 알림 목록

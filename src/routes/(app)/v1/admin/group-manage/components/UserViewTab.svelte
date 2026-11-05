@@ -30,7 +30,7 @@
   );
 </script>
 
-<div class="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden" in:fade={{ duration: 150 }}>
+<div class="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-visible min-h-[380px] pb-12" in:fade={{ duration: 150 }}>
   <!-- 상단 필터 바 -->
   <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 p-5 border-b border-slate-100 bg-slate-50/70">
     <div>
@@ -63,8 +63,9 @@
         </tr>
       </thead>
       <tbody class="divide-y divide-slate-100">
-        {#each filteredUsers as u (u.id)}
+        {#each filteredUsers as u, idx (u.id)}
           {@const rankBadge = getRankBadge(u.rank_level)}
+          {@const isNearBottom = idx >= Math.max(0, filteredUsers.length - 2)}
           <tr class="hover:bg-emerald-50/30 transition-colors">
             
             <!-- 회원 기본 정보 -->
@@ -127,12 +128,12 @@
                   </span>
                 {/each}
 
-                <!-- 부그룹 추가 드롭다운 -->
-                <div class="dropdown dropdown-bottom">
+                <!-- 부그룹 추가 드롭다운 (스마트 상하 방향 & z-[50]) -->
+                <div class="dropdown {isNearBottom ? 'dropdown-top' : 'dropdown-bottom'}">
                   <div tabindex="0" role="button" class="btn btn-xs btn-ghost border border-dashed border-slate-300 rounded font-bold text-[10px] text-slate-500 hover:border-indigo-400 hover:text-indigo-600">
                     + 부그룹 추가
                   </div>
-                  <ul tabindex="-1" class="dropdown-content z-[1] menu p-1 shadow-lg bg-white rounded-box w-56 border border-slate-100 text-xs">
+                  <ul tabindex="-1" class="dropdown-content z-[50] menu p-1 shadow-2xl bg-white rounded-box w-56 border border-slate-200 text-xs">
                     {#each secondaryGroups.filter(g => !(u.secondary_groups || []).includes(g.code)) as g (g.code)}
                       <li>
                         <button onclick={() => onAddSecondary?.(u.id, g.code)}>
