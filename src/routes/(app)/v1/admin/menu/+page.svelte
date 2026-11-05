@@ -32,68 +32,42 @@
 		min_rank: 0
 	});
 
-	// 🔗 [계단식 프리뷰] 백엔드 resolve_menu_url 규칙과 동기화
+	// 🔗 [단일 진실 공급원] 백엔드 resolve_menu_url 규칙과 100% 동기화된 URL 예측기
 	function getRecursiveUrl(menu) {
 		if (!menu) return '';
 		if (menu.link_type === 'FOLDER' || menu.link_type === 'DIVIDER') return '#';
 
 		let currentPath = '';
-		// [v2.3] URL만 수동 입력 주소 사용, INSTANCE / CUSTOM / SYSTEM 앱 분류 일치화
 		if (menu.link_type === 'URL') {
 			currentPath = menu.external_url || '';
 		} else if (['INSTANCE', 'CUSTOM', 'SYSTEM', 'APP'].includes(menu.link_type) && menu.app_id) {
 			const targetApp = apps.find((a) => a.app_id === menu.app_id);
+			const cleanId = String(menu.app_id);
 			const is_admin =
 				menu.link_type === 'SYSTEM' ||
 				targetApp?.app_type === 'SYSTEM' ||
-				menu.app_instance_id == -1 ||
-				menu.page_mode === 'admin';
+				String(menu.app_instance_id) === '-1';
 
-			// 🌟 targetApp의 frontend_route가 존재하면 최우선 적용
-			if (targetApp?.frontend_route) {
-				currentPath = targetApp.frontend_route;
-			} else if (is_admin) {
-				const cleanId = String(menu.app_id).replace(/^admin_/, '');
-				currentPath = cleanId === 'dashboard' || cleanId === '' ? '/v1/admin' : `/v1/admin/${cleanId}`;
-			} else if (menu.link_type === 'CUSTOM') {
-				const cleanId = String(menu.app_id).replace(/^custom_/, '');
+			if (is_admin) {
+				currentPath = targetApp?.frontend_route || (cleanId === 'dashboard' || cleanId === '' ? '/v1/admin' : `/v1/admin/${cleanId}`);
+			} else if (menu.link_type === 'CUSTOM' || targetApp?.app_type === 'CUSTOM') {
 				currentPath = `/v1/custom/${cleanId}`;
-			} else {
-				let instancePath = '';
-				if (menu.app_instance_id && menu.app_instance_id != -1) {
-					if (menu.app_id === 'board') {
-						const target = boards.find((b) => b.id == menu.app_instance_id);
-						instancePath = target ? `/${target.slug}` : `/${menu.app_instance_id}`;
-					} else if (menu.app_id === 'page') {
-						const target = pages.find((p) => p.id == menu.app_instance_id);
-						instancePath = target ? `/${target.slug}` : `/${menu.app_instance_id}`;
-					} else {
-						instancePath = `/${menu.app_instance_id}`;
-					}
+			} else if (menu.link_type === 'INSTANCE' || targetApp?.app_type === 'INSTANCE') {
+				// 🏛️ [인스턴스 3단계 위계]: boards
+				if (menu.app_instance_id && String(menu.app_instance_id) !== '-1') {
+					const target = boards.find((b) => String(b.id) === String(menu.app_instance_id));
+					const slug = target ? target.slug : String(menu.app_instance_id);
+					const prefix = cleanId.endsWith('s') ? cleanId.slice(0, -1) : cleanId;
+					currentPath = `/v1/app/${prefix}/${slug}`;
+				} else {
+					// 미선택 시 복수형 허브
+					currentPath = `/v1/app/${cleanId}`;
 				}
-				currentPath = `/v1/app/${menu.app_id}${instancePath}`;
+			} else {
+				currentPath = `/v1/app/${cleanId}`;
 			}
 		}
 
-		if (menu.parent_id) {
-			const findParent = (list, pid) => {
-				for (let m of list) {
-					if (m.id === pid) return m;
-					if (m.sub_menus) {
-						const found = findParent(m.sub_menus, pid);
-						if (found) return found;
-					}
-				}
-				return null;
-			};
-			const parent = findParent(menus, menu.parent_id);
-			if (parent) {
-				const parentUrl = getRecursiveUrl(parent);
-				const pBase = parentUrl.endsWith('/') ? parentUrl.slice(0, -1) : parentUrl;
-				const cBase = currentPath.startsWith('/') ? currentPath : '/' + currentPath;
-				return pBase + cBase;
-			}
-		}
 		return currentPath;
 	}
 
@@ -125,17 +99,17 @@
 
 	function startEdit(m) {
 		editingMenu = {
-			...m,
-			link_type: m.link_type === 'APP' ? 'INSTANCE' : m.link_type,
+			id: m.id,
 			parent_id: m.parent_id || '',
+			title: m.title || '',
+			icon_name: m.icon_name || '🚀',
+			link_type: m.link_type === 'APP' ? 'INSTANCE' : (m.link_type || 'INSTANCE'),
+			external_url: m.external_url || '',
 			app_id: m.app_id || '',
-			app_instance_id: m.link_type === 'SYSTEM' ? -1 : (m.app_instance_id ?? ''),
-			page_mode:
-				m.link_type === 'SYSTEM' ||
-				m.app_instance_id == -1 ||
-				m.external_url?.includes('/admin/')
-					? 'admin'
-					: 'user'
+			app_instance_id: m.link_type === 'SYSTEM' ? '-1' : (m.app_instance_id != null ? String(m.app_instance_id) : ''),
+			order: m.order || 0,
+			is_visible: m.is_visible !== false,
+			min_rank: m.min_rank || 0
 		};
 		document.getElementById('form-anchor')?.scrollIntoView({ behavior: 'smooth' });
 	}
@@ -151,7 +125,6 @@
 			external_url: '',
 			app_id: '',
 			app_instance_id: '',
-			page_mode: 'user',
 			order: 0,
 			is_visible: true,
 			min_rank: 0
@@ -162,17 +135,17 @@
 		try {
 			const data = { ...editingMenu };
 
-			// 🧹 [v2.3] SYSTEM 앱이거나 관리자 모드이면서 인스턴스 미지정 시 -1로 강제 (백엔드 규격)
-			if (
-				data.link_type === 'SYSTEM' ||
-				(data.page_mode === 'admin' &&
-					(data.app_instance_id === '' || data.app_instance_id === null))
-			) {
+			// SYSTEM 앱이거나 관리자 모드인 경우 -1 고정
+			if (data.link_type === 'SYSTEM' || String(data.app_instance_id) === '-1') {
 				data.app_instance_id = -1;
+			} else if (data.app_instance_id === '') {
+				data.app_instance_id = null;
+			} else if (!isNaN(Number(data.app_instance_id))) {
+				data.app_instance_id = Number(data.app_instance_id);
 			}
 
-			// 🌐 엔진 기반 링크(SYSTEM, CUSTOM 등)의 경우 정규화된 URL 사전 계산
-			if (data.link_type !== 'URL') {
+			// 엔진 기반 링크인 경우 정규화된 URL 사전 계산
+			if (data.link_type !== 'URL' && data.link_type !== 'FOLDER' && data.link_type !== 'DIVIDER') {
 				data.external_url = getRecursiveUrl(data);
 			}
 
@@ -378,17 +351,17 @@
 								bind:value={editingMenu.link_type}
 								onchange={() => {
 									if (editingMenu.link_type === 'SYSTEM') {
-										editingMenu.app_instance_id = -1;
-									} else if (editingMenu.link_type === 'CUSTOM' && editingMenu.app_instance_id != -1) {
+										editingMenu.app_instance_id = '-1';
+									} else if (editingMenu.app_instance_id !== '-1') {
 										editingMenu.app_instance_id = '';
 									}
 								}}
 								class="h-14 w-full border border-black bg-slate-50 px-4 text-sm font-black transition-all focus:bg-white focus:outline-none"
 							>
-								<option value="INSTANCE">🧩 인스턴스 앱 (INSTANCE - 기본 추상화)</option>
-								<option value="CUSTOM">🛠️ 커스텀 앱 (CUSTOM - 추상화 제외 단일 앱)</option>
-								<option value="SYSTEM">🛡️ 시스템 앱 (SYSTEM - 관리자 화면 전용)</option>
-								<option value="URL">🔗 고정 주소 (URL - 외부/정적)</option>
+								<option value="INSTANCE">🧩 인스턴스 앱 (INSTANCE - 게시판 등 다중 생성)</option>
+								<option value="CUSTOM">🛠️ 커스텀 앱 (CUSTOM - 단일 고유 기능)</option>
+								<option value="SYSTEM">🛡️ 시스템 앱 (SYSTEM - 관리자 전용)</option>
+								<option value="URL">🔗 고정 주소 (URL - 외부/정적 직접 입력)</option>
 								<option value="FOLDER">📁 메뉴 그룹 (FOLDER)</option>
 								<option value="DIVIDER">➖ 구분선 (DIVIDER)</option>
 							</select>
@@ -424,12 +397,11 @@
 									onchange={() => {
 										const selected = apps.find((a) => a.app_id === editingMenu.app_id);
 										if (selected) {
-											const normType = selected.app_type === 'STATIC' ? 'CUSTOM' : selected.app_type;
-											if (['INSTANCE', 'CUSTOM', 'SYSTEM'].includes(normType)) {
-												editingMenu.link_type = normType;
-												if (normType === 'SYSTEM') {
-													editingMenu.app_instance_id = -1;
-												} else if (normType === 'CUSTOM' && editingMenu.app_instance_id != -1) {
+											if (['INSTANCE', 'CUSTOM', 'SYSTEM'].includes(selected.app_type)) {
+												editingMenu.link_type = selected.app_type;
+												if (selected.app_type === 'SYSTEM') {
+													editingMenu.app_instance_id = '-1';
+												} else if (editingMenu.app_instance_id !== '-1') {
 													editingMenu.app_instance_id = '';
 												}
 											}
@@ -440,7 +412,7 @@
 									<option value="">-- 연결할 앱 엔진 선택 --</option>
 									{#each apps as app}
 										<option value={app.app_id}
-											>[{app.app_type === 'STATIC' ? 'CUSTOM' : app.app_type}] {app.title || app.name} ({app.app_id})</option
+											>[{app.app_type}] {app.title || app.name} ({app.app_id})</option
 										>
 									{/each}
 								</select>
@@ -451,30 +423,38 @@
 								<label for="menu-instance" class="text-[9px] font-black tracking-widest text-blue-600 uppercase"
 									>2. 상세 인스턴스 / 화면 모드</label
 								>
-								<select
-									id="menu-instance"
-									bind:value={editingMenu.app_instance_id}
-									disabled={editingMenu.link_type === 'SYSTEM'}
-									class="h-12 w-full border border-black bg-white px-4 text-sm font-black transition-all focus:bg-slate-50"
-								>
-									<option value="-1">🛠️ 관리자 화면 (Admin Dashboard)</option>
-									{#if editingMenu.link_type !== 'SYSTEM'}
-										<option disabled>────────────────────</option>
-										<option value="">👤 사용자 기본 화면 (User Main)</option>
-										{#if editingMenu.link_type === 'INSTANCE' || editingMenu.link_type === 'APP'}
-											{#if editingMenu.app_id === 'board'}
-												{#each boards as b}
-													<option value={b.id}>📑 게시판 인스턴스: {b.name} ({b.slug})</option>
-												{/each}
-											{/if}
-											{#if editingMenu.app_id === 'page'}
-												{#each pages as p}
-													<option value={p.id}>📄 페이지 인스턴스: {p.title} ({p.slug})</option>
-												{/each}
-											{/if}
+								{#if editingMenu.link_type === 'SYSTEM'}
+									<!-- 🛡️ SYSTEM 앱: 관리자 화면 전용 고정 -->
+									<div class="flex h-12 w-full items-center border border-black bg-slate-100 px-4 text-sm font-black text-slate-700">
+										🛡️ 시스템 관리자 화면 전용 ({apps.find((a) => a.app_id === editingMenu.app_id)?.frontend_route || `/v1/admin/${editingMenu.app_id}`})
+									</div>
+								{:else if editingMenu.link_type === 'CUSTOM'}
+									<!-- 🛠️ CUSTOM 앱 (page, dayoff, dispatch, route_master 등): 2단계 선택 (관리자 / 사용자) -->
+									<select
+										id="menu-instance"
+										bind:value={editingMenu.app_instance_id}
+										class="h-12 w-full border border-black bg-white px-4 text-sm font-black transition-all focus:bg-slate-50"
+									>
+										<option value="-1">🛠️ 관리자 화면 ({apps.find((a) => a.app_id === editingMenu.app_id)?.frontend_route || `/v1/admin/${editingMenu.app_id}`})</option>
+										<option value="">👤 사용자 화면 (/v1/custom/{editingMenu.app_id})</option>
+									</select>
+								{:else if editingMenu.link_type === 'INSTANCE' || editingMenu.link_type === 'APP'}
+									<!-- 🧩 INSTANCE 앱 (boards): 3단계 인스턴스 위계 선택 -->
+									<select
+										id="menu-instance"
+										bind:value={editingMenu.app_instance_id}
+										class="h-12 w-full border border-black bg-white px-4 text-sm font-black transition-all focus:bg-slate-50"
+									>
+										<option value="-1">🛠️ 관리자 관제탑 (/v1/admin/{editingMenu.app_id})</option>
+										<option value="">🌐 인스턴스 카탈로그 허브 (/v1/app/{editingMenu.app_id})</option>
+										{#if boards && boards.length > 0}
+											<option disabled>────────── [개별 게시판 본체] ──────────</option>
+											{#each boards as b (b.id)}
+												<option value={String(b.id)}>📑 게시판 본체: {b.name} (/v1/app/board/{b.slug})</option>
+											{/each}
 										{/if}
-									{/if}
-								</select>
+									</select>
+								{/if}
 							</div>
 						</div>
 					{:else if editingMenu.link_type === 'URL'}

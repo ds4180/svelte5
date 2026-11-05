@@ -104,7 +104,8 @@
 	}
 	/** @param {any} menuId */
 	function toggleMenu(menuId) {
-		openMenus[menuId] = !openMenus[menuId];
+		const current = openMenus[menuId] ?? true;
+		openMenus[menuId] = !current;
 	}
 
 	/** @param {any} path */
@@ -255,26 +256,26 @@
 										<span class="flex items-center gap-5">
 											<Icon
 												icon={m.icon_name || 'ph:folder-fill'}
-												class="h-7 w-7 {openMenus[m.id] ? 'text-blue-500' : 'opacity-20'}"
+												class="h-7 w-7 {(openMenus[m.id] ?? true) ? 'text-blue-500' : 'opacity-20'}"
 											/>
 											{m.title}
 										</span>
 										<Icon
 											icon="ph:caret-down-bold"
-											class="text-xs transition-transform duration-300 {openMenus[m.id]
+											class="text-xs transition-transform duration-300 {(openMenus[m.id] ?? true)
 												? 'rotate-180 text-blue-500'
 												: ''}"
 										/>
 									</button>
-									{#if openMenus[m.id]}
+									{#if (openMenus[m.id] ?? true)}
 										<div class="mt-1 flex flex-col gap-1 transition-all">
-											{#each m.sub_menus as sub, si (sub.external_url || si)}
+											{#each m.sub_menus as sub, si (sub.id || si)}
 												<a
 													href={sub.external_url}
 													class="flex items-center gap-6 px-10 py-4.5 text-base font-black tracking-tighter uppercase italic transition-all
                                                          {isActive(sub.external_url)
 														? 'border-l-8 border-white bg-blue-600 text-white'
-														: 'text-slate-500 hover:border-l-4 hover:border-slate-700 hover:bg-slate-800 hover:text-white'}"
+														: 'text-slate-400 hover:border-l-4 hover:border-slate-700 hover:bg-slate-800 hover:text-white'}"
 												>
 													<span>{sub.title}</span>
 												</a>

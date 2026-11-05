@@ -8,6 +8,10 @@ import { fastApi } from './index.js';
 export const getPageDetail = (slug) => 
     fastApi('GET', `/api/v1/page/detail/${slug}`);
 
+// 1-1. 사용자용 공개 페이지 목록 조회
+export const getPublicPages = () =>
+    fastApi('GET', '/api/v1/page/public/list');
+
 // 2. 관리자용 페이지 목록 조회
 export const adminGetPages = () => 
     fastApi('GET', '/api/v1/page/admin/list');
