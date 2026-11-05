@@ -199,10 +199,11 @@ export const adminGetAuditLogs = (params = {}) => {
 
 /**
  * @function adminGetLiveSessions
- * @description Redis 및 DB에 동기화된 전사 실시간 접속 세션 목록을 조회합니다.
+ * @description Redis 및 DB에 동기화된 실시간 접속 세션 및 과거 접속 이력을 조회합니다.
+ * @param {boolean} [includeHistory=false] - 과거 만료/추방된 접속 기록까지 포함 여부
  */
-export const adminGetLiveSessions = () =>
-	request('/api/v1/admin/observability/sessions');
+export const adminGetLiveSessions = (includeHistory = false) =>
+	request(`/api/v1/admin/observability/sessions${includeHistory ? '?include_history=true' : ''}`);
 
 /**
  * @function adminKickLiveSession

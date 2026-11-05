@@ -46,6 +46,7 @@
 	let loading = $state(true);
 	let autoRefresh = $state(true);
 	let refreshTimer = /** @type {any} */ (null);
+	let includeSessionHistory = $state(false); // 세션 접속 기록(과거 만료/추방) 포함 여부
 
 	// 🔍 모달 상태 (Diff-Patch / Error Stack)
 	let activeDiffLog = $state(/** @type {any} */ (null));
@@ -97,7 +98,7 @@
 
 			// 2. 현재 선택된 탭에 맞춰 데이터 조회
 			if (currentTab === 'SESSIONS') {
-				liveSessions = await api.adminGetLiveSessions();
+				liveSessions = await api.adminGetLiveSessions(includeSessionHistory);
 				totalCount = liveSessions.length;
 			} else {
 				const params = {
@@ -240,6 +241,23 @@
 				return { icon: 'solar:tablet-bold', text: '태블릿', color: 'bg-indigo-50 text-indigo-700 border-indigo-200' };
 			default:
 				return { icon: 'solar:laptop-minimalistic-bold', text: '데스크톱', color: 'bg-blue-50 text-blue-700 border-blue-200' };
+		}
+	}
+
+	/**
+	 * 세션 상태 뱃지 및 인디케이터 스타일 반환
+	 * @param {string} status
+	 */
+	function getSessionStatusBadge(status) {
+		switch (status) {
+			case 'ACTIVE':
+				return { text: '활동 중', color: 'bg-emerald-50 text-emerald-700 border-emerald-300', dot: 'bg-emerald-500' };
+			case 'EXPIRED':
+				return { text: '정상 종료', color: 'bg-slate-100 text-slate-500 border-slate-300', dot: 'bg-slate-400' };
+			case 'KICKED_OUT':
+				return { text: '강제 추방', color: 'bg-rose-50 text-rose-700 border-rose-300 font-bold', dot: 'bg-rose-500' };
+			default:
+				return { text: status, color: 'bg-slate-100 text-slate-600 border-slate-200', dot: 'bg-slate-400' };
 		}
 	}
 
@@ -450,6 +468,41 @@
 			{/each}
 		</div>
 
+		<!-- 세션 관제 모드 컨트롤 바 (SESSIONS 탭일 때) -->
+		{#if currentTab === 'SESSIONS'}
+			<div class="flex flex-col gap-3 border-b border-slate-100 bg-white p-4 md:flex-row md:items-center md:justify-between">
+				<div class="flex flex-wrap items-center gap-3">
+					<span class="text-xs font-bold text-slate-500">세션 관제 모드:</span>
+					<div class="inline-flex rounded-xl bg-slate-100 p-1 border border-slate-200">
+						<button
+							onclick={() => { includeSessionHistory = false; refreshData(); }}
+							class="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-black transition { !includeSessionHistory ? 'bg-white text-emerald-700 shadow-sm border border-emerald-200' : 'text-slate-500 hover:text-slate-800' }"
+						>
+							<span class="h-2 w-2 rounded-full bg-emerald-500 { !includeSessionHistory ? 'animate-pulse' : '' }"></span>
+							실시간 활성 세션 ({summary.active_sessions})
+						</button>
+						<button
+							onclick={() => { includeSessionHistory = true; refreshData(); }}
+							class="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-black transition { includeSessionHistory ? 'bg-white text-blue-700 shadow-sm border border-blue-200' : 'text-slate-500 hover:text-slate-800' }"
+						>
+							<Icon icon="solar:history-bold-duotone" class="text-sm text-blue-600" />
+							과거 접속 기록 포함 (최근 100건)
+						</button>
+					</div>
+				</div>
+
+				<div class="flex items-center gap-3">
+					<div class="text-xs font-bold text-slate-400">
+						{#if includeSessionHistory}
+							과거 만료·추방 세션 포함 <span class="font-black text-blue-600">{liveSessions.length}</span>건 표시 중
+						{:else}
+							현재 실시간 접속 중인 <span class="font-black text-emerald-600">{liveSessions.length}</span>개 세션 관제 중
+						{/if}
+					</div>
+				</div>
+			</div>
+		{/if}
+
 		<!-- 필터 & 검색 컨트롤 바 (감사로그 탭일 때만 활성화) -->
 		{#if currentTab !== 'SESSIONS'}
 			<div class="flex flex-col gap-3 border-b border-slate-100 bg-white p-4 md:flex-row md:items-center md:justify-between">
@@ -543,13 +596,15 @@
 			</div>
 		{:else}
 			<!-- ------------------------------------------------------------- -->
-			<!-- TAB 1: SESSIONS (실시간 접속 현황 및 강제 퇴장) -->
+			<!-- TAB 1: SESSIONS (실시간 접속 현황 및 과거 접속 이력) -->
 			<!-- ------------------------------------------------------------- -->
 			{#if currentTab === 'SESSIONS'}
 				{#if liveSessions.length === 0}
 					<div class="py-20 text-center text-slate-400">
 						<Icon icon="solar:ghost-bold" class="mx-auto h-12 w-12 text-slate-300" />
-						<p class="mt-2 text-sm font-bold">현재 활성화된 접속 세션이 없습니다.</p>
+						<p class="mt-2 text-sm font-bold">
+							{includeSessionHistory ? '보존된 접속 기록이 없습니다.' : '현재 활성화된 접속 세션이 없습니다.'}
+						</p>
 					</div>
 				{:else}
 					<div class="overflow-x-auto">
@@ -557,9 +612,10 @@
 							<thead class="border-b border-slate-200 bg-slate-50/80 font-black text-slate-500 uppercase tracking-wider">
 								<tr>
 									<th class="px-5 py-3.5">사용자 / 소속</th>
+									<th class="px-4 py-3.5">세션 상태</th>
 									<th class="px-4 py-3.5">접속 기기 / 브라우저</th>
 									<th class="px-4 py-3.5">접속 IP</th>
-									<th class="px-4 py-3.5">최근 활동</th>
+									<th class="px-4 py-3.5">최근 활동 / 종료</th>
 									<th class="px-4 py-3.5">로그인 시각</th>
 									<th class="px-5 py-3.5 text-right">세션 제어</th>
 								</tr>
@@ -567,25 +623,32 @@
 							<tbody class="divide-y divide-slate-100 font-medium text-slate-700">
 								{#each liveSessions as s}
 									{@const devBadge = getDeviceBadge(s.device_category)}
+									{@const statusBadge = getSessionStatusBadge(s.status)}
 									<tr class="hover:bg-slate-50/80 transition">
 										<td class="px-5 py-4">
 											<div class="flex items-center gap-3">
 												<div class="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-100 font-black text-slate-700">
-													{(s.user_name || s.username || '?')[0]}
+													{(s.real_name || s.user_name || s.username || '?')[0]}
 												</div>
 												<div>
 													<div class="flex items-center gap-1.5 font-black text-slate-900 text-sm">
-														{s.user_name || '이름 없음'}
+														{s.real_name || s.user_name || '이름 없음'}
 														<span class="text-xs font-normal text-slate-400">(@{s.username})</span>
-														{#if s.is_active}
-															<span class="h-2 w-2 rounded-full bg-emerald-500"></span>
+														{#if s.status === 'ACTIVE'}
+															<span class="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
 														{/if}
 													</div>
 													<div class="text-[11px] text-slate-500 font-normal mt-0.5">
-														{s.department || '부서 미정'} · {s.role_name || '일반회원'}
+														{s.primary_group || s.department || '소속 미정'}
 													</div>
 												</div>
 											</div>
+										</td>
+										<td class="px-4 py-4 whitespace-nowrap">
+											<span class="inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-[10px] font-black {statusBadge.color}">
+												<span class="h-1.5 w-1.5 rounded-full {statusBadge.dot}"></span>
+												{statusBadge.text}
+											</span>
 										</td>
 										<td class="px-4 py-4">
 											<div class="flex items-center gap-2">
@@ -593,6 +656,11 @@
 													<Icon icon={devBadge.icon} class="text-xs" />
 													{devBadge.text}
 												</span>
+												{#if s.device_name}
+													<span class="text-[10px] font-semibold text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded">
+														{s.device_name}
+													</span>
+												{/if}
 											</div>
 											<div class="text-[10px] text-slate-400 truncate max-w-[200px] mt-1" title={s.user_agent}>
 												{s.user_agent || '-'}
@@ -602,20 +670,29 @@
 											{s.ip_address || '-'}
 										</td>
 										<td class="px-4 py-4">
-											<span class="font-bold text-slate-900">{timeAgo(s.last_activity)}</span>
-											<div class="text-[10px] text-slate-400">{formatDateTime(s.last_activity)}</div>
+											{#if s.status === 'ACTIVE'}
+												<span class="font-bold text-slate-900">{timeAgo(s.last_activity)}</span>
+												<div class="text-[10px] text-slate-400">{formatDateTime(s.last_activity)}</div>
+											{:else}
+												<div class="font-bold text-slate-500">종료: {timeAgo(s.logout_at || s.last_activity)}</div>
+												<div class="text-[10px] text-slate-400">{formatDateTime(s.logout_at || s.last_activity)}</div>
+											{/if}
 										</td>
-										<td class="px-4 py-4 text-slate-500">
+										<td class="px-4 py-4 text-slate-500 whitespace-nowrap">
 											{formatDateTime(s.login_at)}
 										</td>
-										<td class="px-5 py-4 text-right">
-											<button
-												onclick={() => handleKickSession(s)}
-												class="inline-flex items-center gap-1.5 rounded-xl border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-black text-rose-700 shadow-sm transition hover:bg-rose-600 hover:text-white active:scale-95"
-											>
-												<Icon icon="solar:shield-cross-bold" class="text-sm" />
-												강제 추방
-											</button>
+										<td class="px-5 py-4 text-right whitespace-nowrap">
+											{#if s.status === 'ACTIVE'}
+												<button
+													onclick={() => handleKickSession(s)}
+													class="inline-flex items-center gap-1.5 rounded-xl border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-black text-rose-700 shadow-sm transition hover:bg-rose-600 hover:text-white active:scale-95"
+												>
+													<Icon icon="solar:shield-cross-bold" class="text-sm" />
+													강제 추방
+												</button>
+											{:else}
+												<span class="text-xs font-medium text-slate-400 px-2 py-1">종료됨</span>
+											{/if}
 										</td>
 									</tr>
 								{/each}
