@@ -1,222 +1,218 @@
 <script>
-	import { onMount } from 'svelte';
-	import { fastApi } from '$lib/api'; // Assuming fastApi is available from central api.js
-	import Icon from '@iconify/svelte'; // Icon 컴포넌트 추가
+	/**
+	 * ============================================================================
+	 * [전사 시스템 환경설정 및 데이터 라이프사이클 관제 (+page.svelte)]
+	 * ============================================================================
+	 * 
+	 * 💡 이 페이지의 역할:
+	 * 1. 글로벌 사이트 타이틀 및 기본 랜딩 페이지 설정
+	 * 2. 3대 회원 가입 정책 모드 (ADMIN_ONLY / APPROVAL / OPEN) 중앙 통제
+	 * 3. 자율신경계 Watchdog 실시간 모니터링 정책 (실패 임계치, 보안 경보, 지시 지연)
+	 * 4. 데이터 보존 수명 주기(Retention Policy) 및 인메모리 Redis 가비지 컬렉션(GC) 수동 트리거
+	 */
 
-	let topTitle = $state('My Application');
-	let darkMode = $state(false);
-	let redirectRank1 = $state(false);
+	import { onMount } from 'svelte';
+	import * as api from '$lib/api/admin.js';
+	import { toast } from '$lib/runes/toast.svelte.js';
+	import Icon from '@iconify/svelte';
+
+	// 🌐 1. 글로벌 사이트 기본 설정
+	let siteTitle = $state('My Application');
 	let landingPage = $state('/');
 
-	// ⚡ [Watchdog 자율 이상 감지 & 자동 경보 설정]
+	// 👥 2. 회원 가입 정책 모드: 'ADMIN_ONLY' | 'APPROVAL' | 'OPEN'
+	let registerMode = $state('ADMIN_ONLY');
+
+	// ⚡ 3. Watchdog 자율 이상 감지 & 자동 경보 설정
 	let watchdogEnabled = $state(true);
 	let watchdogFailThreshold = $state(3);
 	let watchdogSecurityAlert = $state(true);
 	let watchdogInstructionDelayMinutes = $state(30);
 
-	// 🗑️ [Data Retention & GC 데이터 보존 및 Redis 메모리 관리 설정]
+	// 🗑️ 4. Data Retention & GC 데이터 보존 및 Redis 메모리 관리 설정
 	let retentionAuditLogDays = $state(180);
 	let retentionSystemTaskDays = $state(30);
 	let retentionSessionHistoryDays = $state(60);
 	let retentionRedisDynamicHours = $state(48);
+
+	// 상태 제어
+	let isLoading = $state(true);
+	let isSaving = $state(false);
 	let isGcRunning = $state(false);
+	/** @type {any} */
 	let lastGcResult = $state(null);
-
-	console.log('Config page script is running!');
-	// State to hold original values from backend for comparison or reset
+	/** @type {Record<string, any>} */
 	let originalSettings = $state({});
-	// Function to load settings from backend
-	async function loadSettings() {
-		try {
-			// Assuming GET /v1/admin/config returns a list of {key, value} objects OR a dictionary {key: value}
-			const response = await fastApi('GET', '/api/v1/admin/config');
-			const configList = Array.isArray(response)
-				? response
-				: Object.entries(response).map(([key, value]) => ({ key, value }));
 
-			if (configList) {
-				// Map backend keys to frontend state
-				const configMap = {};
+	/**
+	 * 🔄 백엔드 설정 데이터 로드
+	 */
+	async function loadSettings() {
+		isLoading = true;
+		try {
+			const [configList, regModeRes] = await Promise.all([
+				api.adminGetConfigs().catch(() => []),
+				api.adminGetRegisterMode().catch(() => null)
+			]);
+
+			if (regModeRes && regModeRes.register_mode) {
+				registerMode = regModeRes.register_mode;
+			}
+
+			/** @type {Record<string, any>} */
+			const configMap = {};
+			if (Array.isArray(configList)) {
 				configList.forEach((item) => {
 					configMap[item.key] = item.value;
 				});
-
-				// Helper to safely get string value from JSONB, handling objects
-				const getStringValue = (val, defaultValue) => {
-					if (typeof val === 'object' && val !== null) {
-						// Try common keys or just stringify the object
-						return String(val.text || val.value || val.name || JSON.stringify(val));
-					}
-					return String(val || defaultValue);
-				};
-
-				topTitle = getStringValue(configMap.site_title, 'My Application');
-				darkMode = configMap.theme_mode === 'dark'; // Boolean conversion is fine
-				redirectRank1 = configMap.redirect_rank1_to_profile === true;
-				landingPage = getStringValue(configMap.landing_page, '/');
-
-				if (configMap.watchdog_enabled !== undefined) {
-					watchdogEnabled = configMap.watchdog_enabled === true || configMap.watchdog_enabled === 'true';
-				}
-				if (configMap.watchdog_fail_threshold !== undefined) {
-					watchdogFailThreshold = Number(configMap.watchdog_fail_threshold) || 3;
-				}
-				if (configMap.watchdog_security_alert !== undefined) {
-					watchdogSecurityAlert = configMap.watchdog_security_alert === true || configMap.watchdog_security_alert === 'true';
-				}
-				if (configMap.watchdog_instruction_delay_minutes !== undefined) {
-					watchdogInstructionDelayMinutes = Number(configMap.watchdog_instruction_delay_minutes) || 30;
-				}
-
-				// 🗑️ Data Retention 설정 로드
-				if (configMap.retention_audit_log_days !== undefined) {
-					retentionAuditLogDays = Number(configMap.retention_audit_log_days) || 180;
-				}
-				if (configMap.retention_system_task_days !== undefined) {
-					retentionSystemTaskDays = Number(configMap.retention_system_task_days) || 30;
-				}
-				if (configMap.retention_session_history_days !== undefined) {
-					retentionSessionHistoryDays = Number(configMap.retention_session_history_days) || 60;
-				}
-				if (configMap.retention_redis_dynamic_hours !== undefined) {
-					retentionRedisDynamicHours = Number(configMap.retention_redis_dynamic_hours) || 48;
-				}
-
-				// Store original for comparison
-				originalSettings = {
-					site_title: topTitle,
-					theme_mode: darkMode ? 'dark' : 'light',
-					redirect_rank1_to_profile: redirectRank1,
-					landing_page: landingPage,
-					watchdog_enabled: watchdogEnabled,
-					watchdog_fail_threshold: watchdogFailThreshold,
-					watchdog_security_alert: watchdogSecurityAlert,
-					watchdog_instruction_delay_minutes: watchdogInstructionDelayMinutes,
-					retention_audit_log_days: retentionAuditLogDays,
-					retention_system_task_days: retentionSystemTaskDays,
-					retention_session_history_days: retentionSessionHistoryDays,
-					retention_redis_dynamic_hours: retentionRedisDynamicHours
-				};
 			}
+
+			// 안전한 문자열/불리언/숫자 파싱 헬퍼
+			const getStringValue = (val, defaultValue) => {
+				if (typeof val === 'object' && val !== null) {
+					return String(val.text || val.value || val.name || JSON.stringify(val));
+				}
+				return val !== undefined && val !== null ? String(val) : defaultValue;
+			};
+
+			siteTitle = getStringValue(configMap.site_title, 'My Application');
+			landingPage = getStringValue(configMap.landing_page, '/');
+
+			if (configMap.watchdog_enabled !== undefined) {
+				watchdogEnabled = configMap.watchdog_enabled === true || configMap.watchdog_enabled === 'true';
+			}
+			if (configMap.watchdog_fail_threshold !== undefined) {
+				watchdogFailThreshold = Number(configMap.watchdog_fail_threshold) || 3;
+			}
+			if (configMap.watchdog_security_alert !== undefined) {
+				watchdogSecurityAlert = configMap.watchdog_security_alert === true || configMap.watchdog_security_alert === 'true';
+			}
+			if (configMap.watchdog_instruction_delay_minutes !== undefined) {
+				watchdogInstructionDelayMinutes = Number(configMap.watchdog_instruction_delay_minutes) || 30;
+			}
+
+			if (configMap.retention_audit_log_days !== undefined) {
+				retentionAuditLogDays = Number(configMap.retention_audit_log_days) || 180;
+			}
+			if (configMap.retention_system_task_days !== undefined) {
+				retentionSystemTaskDays = Number(configMap.retention_system_task_days) || 30;
+			}
+			if (configMap.retention_session_history_days !== undefined) {
+				retentionSessionHistoryDays = Number(configMap.retention_session_history_days) || 60;
+			}
+			if (configMap.retention_redis_dynamic_hours !== undefined) {
+				retentionRedisDynamicHours = Number(configMap.retention_redis_dynamic_hours) || 48;
+			}
+
+			// 변경 비교용 원본 스냅샷 저장
+			originalSettings = {
+				site_title: siteTitle,
+				landing_page: landingPage,
+				register_mode: registerMode,
+				watchdog_enabled: watchdogEnabled,
+				watchdog_fail_threshold: watchdogFailThreshold,
+				watchdog_security_alert: watchdogSecurityAlert,
+				watchdog_instruction_delay_minutes: watchdogInstructionDelayMinutes,
+				retention_audit_log_days: retentionAuditLogDays,
+				retention_system_task_days: retentionSystemTaskDays,
+				retention_session_history_days: retentionSessionHistoryDays,
+				retention_redis_dynamic_hours: retentionRedisDynamicHours
+			};
 		} catch (e) {
-			console.error('Failed to load settings:', e);
-			// Optionally, show an alert
-			alert('설정을 불러오는데 실패했습니다.');
+			console.error('❌ [Config] 설정 불러오기 실패:', e);
+			toast.error('환경설정 정보를 불러오는데 실패했습니다.');
+		} finally {
+			isLoading = false;
 		}
 	}
 
-	// Function to save settings to backend
+	/**
+	 * 💾 설정 일괄 저장 (Batch Save)
+	 */
 	async function saveSettings() {
+		if (isSaving) return;
+		isSaving = true;
+
 		try {
-			// Collect changes and send only changed values
-			// Backend expects PUT /v1/admin/config/{key} with {value: ...}
+			/** @type {Record<string, any>} */
+			const changedConfigs = {};
 
-			if (topTitle !== originalSettings.site_title) {
-				await fastApi('PUT', '/api/v1/admin/config/site_title', { value: topTitle });
-				originalSettings.site_title = topTitle;
+			if (siteTitle !== originalSettings.site_title) {
+				changedConfigs.site_title = siteTitle;
 			}
-			/* 다크모드 임시 사용 중지
-			if ((darkMode ? 'dark' : 'light') !== originalSettings.theme_mode) {
-				await fastApi('PUT', '/api/v1/admin/config/theme_mode', {
-					value: darkMode ? 'dark' : 'light'
-				});
-				originalSettings.theme_mode = darkMode ? 'dark' : 'light';
-			}
-			*/
 			if (landingPage !== originalSettings.landing_page) {
-				await fastApi('PUT', '/api/v1/admin/config/landing_page', { value: landingPage });
-				originalSettings.landing_page = landingPage;
+				changedConfigs.landing_page = landingPage;
 			}
-			/* 랭킹별 리다이렉트 임시 삭제
-			if (redirectRank1 !== originalSettings.redirect_rank1_to_profile) {
-				await fastApi('PUT', '/api/v1/admin/config/redirect_rank1_to_profile', { value: redirectRank1 });
-				originalSettings.redirect_rank1_to_profile = redirectRank1;
-			}
-			*/
-
-			// ⚡ Watchdog 설정 저장
 			if (watchdogEnabled !== originalSettings.watchdog_enabled) {
-				await fastApi('PUT', '/api/v1/admin/config/watchdog_enabled', { value: watchdogEnabled });
-				originalSettings.watchdog_enabled = watchdogEnabled;
+				changedConfigs.watchdog_enabled = watchdogEnabled;
 			}
 			if (watchdogFailThreshold !== originalSettings.watchdog_fail_threshold) {
-				await fastApi('PUT', '/api/v1/admin/config/watchdog_fail_threshold', { value: Number(watchdogFailThreshold) });
-				originalSettings.watchdog_fail_threshold = watchdogFailThreshold;
+				changedConfigs.watchdog_fail_threshold = Number(watchdogFailThreshold);
 			}
 			if (watchdogSecurityAlert !== originalSettings.watchdog_security_alert) {
-				await fastApi('PUT', '/api/v1/admin/config/watchdog_security_alert', { value: watchdogSecurityAlert });
-				originalSettings.watchdog_security_alert = watchdogSecurityAlert;
+				changedConfigs.watchdog_security_alert = watchdogSecurityAlert;
 			}
 			if (watchdogInstructionDelayMinutes !== originalSettings.watchdog_instruction_delay_minutes) {
-				await fastApi('PUT', '/api/v1/admin/config/watchdog_instruction_delay_minutes', { value: Number(watchdogInstructionDelayMinutes) });
-				originalSettings.watchdog_instruction_delay_minutes = watchdogInstructionDelayMinutes;
+				changedConfigs.watchdog_instruction_delay_minutes = Number(watchdogInstructionDelayMinutes);
 			}
-
-			// 🗑️ Data Retention 설정 저장
 			if (retentionAuditLogDays !== originalSettings.retention_audit_log_days) {
-				await fastApi('PUT', '/api/v1/admin/config/retention_audit_log_days', { value: Number(retentionAuditLogDays) });
-				originalSettings.retention_audit_log_days = retentionAuditLogDays;
+				changedConfigs.retention_audit_log_days = Number(retentionAuditLogDays);
 			}
 			if (retentionSystemTaskDays !== originalSettings.retention_system_task_days) {
-				await fastApi('PUT', '/api/v1/admin/config/retention_system_task_days', { value: Number(retentionSystemTaskDays) });
-				originalSettings.retention_system_task_days = retentionSystemTaskDays;
+				changedConfigs.retention_system_task_days = Number(retentionSystemTaskDays);
 			}
 			if (retentionSessionHistoryDays !== originalSettings.retention_session_history_days) {
-				await fastApi('PUT', '/api/v1/admin/config/retention_session_history_days', { value: Number(retentionSessionHistoryDays) });
-				originalSettings.retention_session_history_days = retentionSessionHistoryDays;
+				changedConfigs.retention_session_history_days = Number(retentionSessionHistoryDays);
 			}
 			if (retentionRedisDynamicHours !== originalSettings.retention_redis_dynamic_hours) {
-				await fastApi('PUT', '/api/v1/admin/config/retention_redis_dynamic_hours', { value: Number(retentionRedisDynamicHours) });
-				originalSettings.retention_redis_dynamic_hours = retentionRedisDynamicHours;
+				changedConfigs.retention_redis_dynamic_hours = Number(retentionRedisDynamicHours);
 			}
 
-			alert('설정이 저장되었습니다.');
-			// Reload the page to ensure all UI elements reflect the updated configuration
-			window.location.reload();
-		} catch (e) {
-			console.error('Failed to save settings:', e);
-			// Optionally, show an alert
-			alert('설정 저장에 실패했습니다.');
+			// 1. 가입 정책 모드 변경 시 저장
+			if (registerMode !== originalSettings.register_mode) {
+				await api.adminUpdateRegisterMode(registerMode);
+				originalSettings.register_mode = registerMode;
+			}
+
+			// 2. 변경된 시스템 환경설정 일괄 원자적 저장 (단 1회의 HTTP 요청)
+			if (Object.keys(changedConfigs).length > 0) {
+				await api.adminUpdateConfigsBatch(changedConfigs);
+				Object.assign(originalSettings, changedConfigs);
+			}
+
+			toast.success('전사 시스템 환경설정이 성공적으로 저장되었습니다.');
+		} catch (/** @type {any} */ e) {
+			console.error('❌ [Config] 설정 저장 실패:', e);
+			toast.error('설정 저장 중 오류가 발생했습니다: ' + (e.message || '서버 응답 오류'));
+		} finally {
+			isSaving = false;
 		}
 	}
 
-	// 🧹 수동 가비지 컬렉션(GC) 즉시 실행 함수
+	/**
+	 * 🧹 수동 가비지 컬렉션(GC) 즉시 실행
+	 */
 	async function runGcNow() {
 		if (isGcRunning) return;
-		if (!confirm('보존 기간을 초과한 DB 이력 데이터와 Redis 만료/고아 키를 지금 즉시 정리하시겠습니까?')) return;
+		if (!confirm('보존 기간을 초과한 DB 이력 데이터와 Redis 만료/고아 키를 지금 즉시 정리하시겠습니까?\n작업 이력은 보안 감사로그에 안전하게 기록됩니다.')) {
+			return;
+		}
 
 		isGcRunning = true;
 		try {
-			const res = await fastApi('POST', '/api/v1/admin/system/gc/run');
+			const res = await api.adminRunSystemGc();
 			lastGcResult = res;
-			alert(
-				`가비지 컬렉션(GC) 완료!\n` +
-				`- 만료 태스크 삭제: ${res.deleted_tasks}건\n` +
-				`- 만료 세션 이력 삭제: ${res.deleted_sessions}건\n` +
-				`- 만료 감사로그 삭제: ${res.deleted_audit_logs}건\n` +
-				`- Redis TTL 강제 적용: ${res.redis_ttl_enforced}건\n` +
-				`- Redis 고아 키 삭제: ${res.redis_orphans_removed}건`
+			toast.success(
+				`가비지 컬렉션 완료! (태스크: ${res.deleted_tasks || 0}건, 세션: ${res.deleted_sessions || 0}건, 감사로그: ${res.deleted_audit_logs || 0}건 정리)`
 			);
-		} catch (e) {
-			console.error('Failed to run GC:', e);
-			alert('가비지 컬렉션(GC) 실행에 실패했습니다.');
+		} catch (/** @type {any} */ e) {
+			console.error('❌ [Config] GC 실행 실패:', e);
+			toast.error('가비지 컬렉션(GC) 실행 실패: ' + (e.message || '서버 오류'));
 		} finally {
 			isGcRunning = false;
 		}
 	}
 
-	// Function to send push notification to all users
-	async function sendPushNotificationToAll() {
-		try {
-			await fastApi('POST', '/push/send-to-all');
-			alert('모든 사용자에게 푸시 알림을 전송했습니다.');
-		} catch (e) {
-			console.error('Failed to send push notification:', e);
-			alert('푸시 알림 전송에 실패했습니다.');
-		}
-	}
-
-	// Load settings when the component mounts
 	onMount(() => {
 		loadSettings();
 	});
@@ -226,340 +222,430 @@
 	<title>환경설정 | jeju.live Core</title>
 </svelte:head>
 
-<div
-	class="animate-fade-in mx-auto max-w-7xl space-y-6 px-4 pb-20 font-['Noto_Sans_KR','Outfit'] md:space-y-10 md:px-6 md:pb-40 lg:px-8"
->
-	<!-- 페이지 헤더 -->
-	<div
-		class="flex flex-col items-start justify-between gap-4 border-b-2 border-slate-900 pb-6 md:flex-row md:items-end md:gap-6 md:border-b-4 md:pb-8"
-	>
+<div class="mx-auto max-w-7xl space-y-6 px-4 py-8 font-['Noto_Sans_KR','Outfit'] md:space-y-8 md:px-6 lg:px-8">
+	<!-- ===================================================================== -->
+	<!-- 1. 페이지 헤더 & 액션 바 -->
+	<!-- ===================================================================== -->
+	<div class="flex flex-col gap-4 border-b-2 border-slate-900 pb-6 md:flex-row md:items-end md:justify-between md:border-b-4">
 		<div>
-			<span
-				class="mb-1 block text-[8px] font-black tracking-[0.2em] text-slate-400 uppercase md:mb-2 md:text-[10px] md:tracking-[0.4em]"
-				>System Administration</span
-			>
-			<h1 class="text-3xl font-black tracking-tighter text-black uppercase italic md:text-5xl">
-				<span class="NOT-ITALIC text-blue-600"
-					>환경설정 <Icon
-						icon="mdi:tune-vertical"
-						class="ml-1 inline-block align-text-bottom text-blue-600"
-					/></span
-				>
+			<div class="flex items-center gap-2">
+				<span class="inline-flex items-center gap-1.5 rounded-full bg-slate-900 px-3 py-1 text-[11px] font-black tracking-widest text-emerald-400 uppercase">
+					<span class="h-2 w-2 rounded-full bg-emerald-400 animate-ping"></span>
+					Enterprise Configuration
+				</span>
+				<span class="text-xs font-bold text-slate-400">v1/admin/config</span>
+			</div>
+			<h1 class="mt-2 text-3xl font-black tracking-tight text-slate-900 uppercase italic md:text-4xl">
+				환경설정 <span class="not-italic text-blue-600">시스템 총괄</span>
 			</h1>
-			<p class="mt-2 text-xs font-bold text-slate-500 md:mt-3 md:text-sm">
-				시스템 전반에 걸친 기본 설정을 관리합니다.
+			<p class="mt-1 text-sm font-medium text-slate-500">
+				글로벌 기본값, 회원 가입 정책, 자율 Watchdog 이상 징후 감시 및 데이터 보존(GC) 수명 주기 총괄 관리
 			</p>
 		</div>
-		<div class="flex gap-2 md:gap-4">
+
+		<!-- 상단 버튼 그룹 -->
+		<div class="flex flex-wrap items-center gap-3">
 			<a
 				href="/v1/admin"
-				class="btn rounded-lg border-none bg-slate-200 px-4 font-black text-slate-700 shadow-md transition-all btn-sm hover:bg-slate-300 md:rounded-2xl md:px-8 md:shadow-xl md:btn-lg"
+				class="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 active:scale-95"
 			>
-				<Icon icon="mdi:home-outline" class="h-4 w-4 md:h-6 md:w-6" />
-				관리자 홈
+				<Icon icon="solar:home-smile-angle-bold-duotone" class="text-base text-slate-500" />
+				<span>관리자 홈</span>
 			</a>
-			<button
-				onclick={sendPushNotificationToAll}
-				class="btn rounded-lg border-none bg-purple-600 px-4 font-black text-white shadow-md transition-all btn-sm hover:bg-purple-700 md:rounded-2xl md:px-8 md:shadow-xl md:btn-lg"
-			>
-				<Icon icon="mdi:bell-outline" class="h-4 w-4 md:h-6 md:w-6" />
-				푸시 알림 전송
-			</button>
+
 			<button
 				onclick={saveSettings}
-				class="btn rounded-lg border-none bg-blue-600 px-4 font-black text-white shadow-md transition-all btn-sm hover:bg-blue-700 md:rounded-2xl md:px-8 md:shadow-xl md:btn-lg"
+				disabled={isSaving || isLoading}
+				class="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2 text-xs font-black text-white shadow-md transition hover:bg-blue-700 active:scale-95 disabled:opacity-50"
 			>
-				<Icon icon="mdi:content-save-outline" class="h-4 w-4 md:h-6 md:w-6" />
-				설정 저장
+				{#if isSaving}
+					<Icon icon="solar:refresh-circle-bold-duotone" class="h-4 w-4 animate-spin text-white" />
+					<span>저장하는 중...</span>
+				{:else}
+					<Icon icon="solar:diskette-bold" class="text-base" />
+					<span>설정 전체 저장</span>
+				{/if}
 			</button>
 		</div>
 	</div>
 
-	<!-- 설정 폼 카드 -->
-	<div class="card mb-8 border border-base-300 bg-base-100 shadow-md">
-		<div class="card-body space-y-4 rounded-b-xl bg-base-200 p-5 md:p-8">
-			<div class="form-control w-full">
-				<label class="label" for="topTitleInput"
-					><span class="label-text font-bold text-black">상단 타이틀</span></label
-				>
-				<input
-					type="text"
-					id="topTitleInput"
-					class="input-bordered input w-full bg-white text-black"
-					bind:value={topTitle}
-					placeholder="웹사이트 상단에 표시될 타이틀"
-				/>
-			</div>
-
-			<!-- 다크모드 임시 사용 중지 
-			<div class="form-control w-full">
-				<label class="label cursor-pointer justify-start gap-3">
-					<span class="label-text font-bold text-base-content">다크 모드 활성화</span>
-					<input type="checkbox" class="toggle toggle-primary" bind:checked={darkMode} />
-				</label>
-			</div>
-			-->
-
-			<div class="form-control w-full">
-				<label class="label" for="landingPageInput"
-					><span class="label-text font-bold text-base-content">기본 랜딩 페이지</span></label
-				>
-				<input
-					type="text"
-					id="landingPageInput"
-					class="input-bordered input w-full"
-					bind:value={landingPage}
-					placeholder="로그인 후 이동할 기본 페이지 경로"
-				/>
-			</div>
-
-			<!-- 랭킹별 리다이렉트 임시 삭제
-			<div class="form-control w-full">
-				<label class="label cursor-pointer justify-start gap-3">
-					<span class="label-text font-bold text-base-content">최소 권한 유저(Rank 1) 프로필 리다이렉트</span>
-					<input type="checkbox" class="toggle toggle-warning" bind:checked={redirectRank1} />
-				</label>
-				<span class="px-1 text-[10px] text-slate-500">활성화 시 Rank 1 유저는 접속 시 프로필 페이지로 강제 이동합니다.</span>
-			</div>
-			-->
+	{#if isLoading}
+		<div class="flex flex-col items-center justify-center py-20 text-slate-400">
+			<Icon icon="solar:refresh-circle-bold-duotone" class="h-10 w-10 animate-spin text-blue-600" />
+			<span class="mt-3 text-xs font-bold">시스템 환경설정 정보를 불러오는 중입니다...</span>
 		</div>
-	</div>
-
-	<!-- ⚡ 구분선: 자율 이상 징후 감지 및 경보 (System Watchdog) -->
-	<div class="divider my-8 font-black text-slate-500 uppercase tracking-widest text-xs md:text-sm">
-		<Icon icon="mdi:shield-alert-outline" class="inline-block text-amber-500 h-5 w-5 mr-1 align-text-bottom" />
-		자율 이상 징후 감지 및 경보 (System Watchdog)
-	</div>
-
-	<!-- Watchdog 설정 카드 -->
-	<div class="card mb-8 border border-base-300 bg-base-100 shadow-md">
-		<div class="card-body space-y-6 rounded-b-xl bg-base-200 p-5 md:p-8">
-			<!-- 카드 헤더 및 전체 활성화 토글 -->
-			<div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-slate-300 pb-4">
-				<div>
-					<h3 class="text-lg font-black text-slate-800 flex items-center gap-2">
-						<Icon icon="mdi:radar" class="text-blue-600 h-5 w-5" />
-						자율신경계 Watchdog 실시간 모니터링 정책
-					</h3>
-					<p class="text-xs font-semibold text-slate-500 mt-1">
-						워커 연속 실패, 비인가 보안 침해, 긴급 지시 미확인 지연 감지 시 최고 관리자에게 L4 경보를 자동 발송합니다.
-					</p>
+	{:else}
+		<!-- ===================================================================== -->
+		<!-- 2. 카드 1: 사이트 기본 설정 (Global Basics) -->
+		<!-- ===================================================================== -->
+		<div class="rounded-2xl border-2 border-slate-200 bg-white p-6 shadow-sm md:p-8">
+			<div class="flex items-center gap-2.5 border-b border-slate-100 pb-4">
+				<div class="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
+					<Icon icon="solar:widget-5-bold-duotone" class="text-xl" />
 				</div>
-				<label class="label cursor-pointer gap-3 bg-white px-4 py-2 rounded-xl shadow-xs border border-slate-200 shrink-0">
-					<span class="label-text font-black text-sm text-slate-800">Watchdog 활성화</span>
-					<input type="checkbox" class="toggle toggle-primary toggle-sm md:toggle-md" bind:checked={watchdogEnabled} />
+				<div>
+					<h2 class="text-base font-black text-slate-900">글로벌 사이트 기본 설정</h2>
+					<p class="text-xs text-slate-400 font-medium">웹 애플리케이션 상단 브랜드 타이틀 및 로그인 직후 이동할 랜딩 경로</p>
+				</div>
+			</div>
+
+			<div class="mt-6 grid grid-cols-1 gap-6 md:grid-cols-2">
+				<div>
+					<label for="siteTitleInput" class="block text-xs font-black text-slate-700">
+						상단 브랜드 타이틀
+					</label>
+					<input
+						type="text"
+						id="siteTitleInput"
+						bind:value={siteTitle}
+						placeholder="웹사이트 상단에 표시될 타이틀"
+						class="mt-2 w-full rounded-xl border border-slate-300 bg-slate-50 px-4 py-2.5 text-xs font-bold text-slate-900 transition focus:border-blue-500 focus:bg-white focus:outline-none"
+					/>
+					<span class="mt-1 block text-[11px] text-slate-400">브라우저 탭 및 상단 헤더에 표기되는 메인 명칭입니다.</span>
+				</div>
+
+				<div>
+					<label for="landingPageInput" class="block text-xs font-black text-slate-700">
+						기본 랜딩 페이지 경로
+					</label>
+					<input
+						type="text"
+						id="landingPageInput"
+						bind:value={landingPage}
+						placeholder="예: / 또는 /v1/admin"
+						class="mt-2 w-full rounded-xl border border-slate-300 bg-slate-50 px-4 py-2.5 text-xs font-bold text-slate-900 transition focus:border-blue-500 focus:bg-white focus:outline-none"
+					/>
+					<span class="mt-1 block text-[11px] text-slate-400">사용자가 로그인 완료 후 가장 먼저 진입하게 될 기본 URL 경로입니다.</span>
+				</div>
+			</div>
+		</div>
+
+		<!-- ===================================================================== -->
+		<!-- 3. 카드 2: 회원 가입 정책 모드 (Register Governance) -->
+		<!-- ===================================================================== -->
+		<div class="rounded-2xl border-2 border-slate-200 bg-white p-6 shadow-sm md:p-8">
+			<div class="flex items-center gap-2.5 border-b border-slate-100 pb-4">
+				<div class="flex h-9 w-9 items-center justify-center rounded-xl bg-purple-50 text-purple-600">
+					<Icon icon="solar:user-check-bold-duotone" class="text-xl" />
+				</div>
+				<div>
+					<h2 class="text-base font-black text-slate-900">회원 가입 및 로그인 거버넌스 정책</h2>
+					<p class="text-xs text-slate-400 font-medium">신규 사용자의 가입 진입 장벽 및 관리자 승인 절차 통제</p>
+				</div>
+			</div>
+
+			<div class="mt-6 grid grid-cols-1 gap-4 md:grid-cols-3">
+				<!-- 모드 1: ADMIN_ONLY -->
+				<label
+					class="relative flex cursor-pointer flex-col justify-between rounded-xl border-2 p-5 transition {registerMode === 'ADMIN_ONLY' ? 'border-blue-600 bg-blue-50/40 shadow-sm ring-2 ring-blue-500/20' : 'border-slate-200 bg-slate-50/50 hover:border-slate-300'}"
+				>
+					<div>
+						<div class="flex items-center justify-between">
+							<span class="rounded-md bg-slate-900 px-2 py-0.5 text-[10px] font-black text-white">가장 안전</span>
+							<input
+								type="radio"
+								name="register_mode"
+								value="ADMIN_ONLY"
+								bind:group={registerMode}
+								class="h-4 w-4 text-blue-600 focus:ring-blue-500"
+							/>
+						</div>
+						<div class="mt-3 text-sm font-black text-slate-900">🔒 관리자 직접 등록만 허용</div>
+						<p class="mt-1.5 text-xs text-slate-500 leading-relaxed">
+							외부 일반 가입 창구를 완전 차단하며, 관리자가 [사원 직접 등록]으로 생성한 계정만 로그인 가능합니다.
+						</p>
+					</div>
+				</label>
+
+				<!-- 모드 2: APPROVAL -->
+				<label
+					class="relative flex cursor-pointer flex-col justify-between rounded-xl border-2 p-5 transition {registerMode === 'APPROVAL' ? 'border-amber-600 bg-amber-50/40 shadow-sm ring-2 ring-amber-500/20' : 'border-slate-200 bg-slate-50/50 hover:border-slate-300'}"
+				>
+					<div>
+						<div class="flex items-center justify-between">
+							<span class="rounded-md bg-amber-600 px-2 py-0.5 text-[10px] font-black text-white">표준 승인제</span>
+							<input
+								type="radio"
+								name="register_mode"
+								value="APPROVAL"
+								bind:group={registerMode}
+								class="h-4 w-4 text-amber-600 focus:ring-amber-500"
+							/>
+						</div>
+						<div class="mt-3 text-sm font-black text-slate-900">⏳ 가입 승인 대기제</div>
+						<p class="mt-1.5 text-xs text-slate-500 leading-relaxed">
+							누구나 가입 신청할 수 있으나, 관리자가 승인(Rank 부여)하기 전까지는 로그인이 제한됩니다.
+						</p>
+					</div>
+				</label>
+
+				<!-- 모드 3: OPEN -->
+				<label
+					class="relative flex cursor-pointer flex-col justify-between rounded-xl border-2 p-5 transition {registerMode === 'OPEN' ? 'border-emerald-600 bg-emerald-50/40 shadow-sm ring-2 ring-emerald-500/20' : 'border-slate-200 bg-slate-50/50 hover:border-slate-300'}"
+				>
+					<div>
+						<div class="flex items-center justify-between">
+							<span class="rounded-md bg-emerald-600 px-2 py-0.5 text-[10px] font-black text-white">완전 공개</span>
+							<input
+								type="radio"
+								name="register_mode"
+								value="OPEN"
+								bind:group={registerMode}
+								class="h-4 w-4 text-emerald-600 focus:ring-emerald-500"
+							/>
+						</div>
+						<div class="mt-3 text-sm font-black text-slate-900">✨ 자유 즉시 가입</div>
+						<p class="mt-1.5 text-xs text-slate-500 leading-relaxed">
+							가입 완료 즉시 기본 Rank 1 권한이 부여되어 승인 절차 없이 즉시 시스템에 로그인할 수 있습니다.
+						</p>
+					</div>
+				</label>
+			</div>
+		</div>
+
+		<!-- ===================================================================== -->
+		<!-- 4. 카드 3: 자율 이상 징후 감지 및 경보 (System Watchdog) -->
+		<!-- ===================================================================== -->
+		<div class="rounded-2xl border-2 border-slate-200 bg-white p-6 shadow-sm md:p-8">
+			<div class="flex flex-col gap-4 border-b border-slate-100 pb-4 sm:flex-row sm:items-center sm:justify-between">
+				<div class="flex items-center gap-2.5">
+					<div class="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
+						<Icon icon="solar:shield-warning-bold-duotone" class="text-xl" />
+					</div>
+					<div>
+						<h2 class="text-base font-black text-slate-900">자율신경계 Watchdog 실시간 모니터링 정책</h2>
+						<p class="text-xs text-slate-400 font-medium">워커 연속 실패, 비인가 보안 침해, 긴급 지시 미확인 지연 감지 시 관리자 자동 경보</p>
+					</div>
+				</div>
+
+				<!-- Watchdog 활성화 토글 스위치 -->
+				<label class="flex cursor-pointer items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 shadow-xs transition hover:bg-slate-100">
+					<span class="text-xs font-black text-slate-800">Watchdog 활성화</span>
+					<input type="checkbox" bind:checked={watchdogEnabled} class="h-4 w-4 rounded text-blue-600 focus:ring-blue-500" />
 				</label>
 			</div>
 
-			<!-- 설정 항목 그리드 -->
-			<div class="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2" class:opacity-50={!watchdogEnabled}>
-				<!-- 1. 태스크 연속 실패 임계치 -->
-				<div class="form-control w-full bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
-					<label class="label pb-1" for="taskFailThresholdInput">
-						<span class="label-text font-black text-slate-800 flex items-center gap-1.5">
-							<Icon icon="mdi:alert-circle-outline" class="text-rose-500 h-4 w-4" />
-							워커 연속 실패(FAILED) 경보 임계치
-						</span>
+			<div class="mt-6 grid grid-cols-1 gap-6 md:grid-cols-2 {watchdogEnabled ? '' : 'opacity-40 pointer-events-none'}">
+				<!-- 항목 1: 태스크 연속 실패 임계치 -->
+				<div class="rounded-xl border border-slate-200 bg-slate-50/50 p-5">
+					<label for="taskFailThresholdInput" class="block text-xs font-black text-slate-800">
+						워커 연속 실패(FAILED) 경보 임계치
 					</label>
-					<span class="text-[11px] text-slate-500 mb-2 font-medium">최근 1시간 내 태스크가 지정 횟수 이상 영구 실패 시 즉각 관리자 L4 알림을 발송합니다.</span>
-					<div class="flex items-center gap-3">
+					<span class="mt-1 block text-[11px] text-slate-500 font-medium">
+						최근 1시간 내 백그라운드 태스크가 지정 횟수 이상 영구 실패 시 즉각 관리자 L4 알림을 자동 발송합니다.
+					</span>
+					<div class="mt-3 flex items-center gap-3">
 						<input
 							type="number"
 							id="taskFailThresholdInput"
-							class="input input-bordered w-32 font-black text-slate-900 bg-slate-50"
 							min="1"
 							max="10"
 							bind:value={watchdogFailThreshold}
-							disabled={!watchdogEnabled}
+							class="w-28 rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-black text-slate-900 text-center focus:border-blue-500 focus:outline-none"
 						/>
-						<span class="text-xs font-bold text-slate-600">회 연속 실패 시</span>
+						<span class="text-xs font-bold text-slate-700">회 연속 실패 시 경보</span>
 					</div>
 				</div>
 
-				<!-- 2. 보안 침해 감지 즉시 경보 -->
-				<div class="form-control w-full bg-white p-4 rounded-xl border border-slate-200 shadow-xs justify-between">
+				<!-- 항목 2: 보안 침해 감지 즉시 경보 -->
+				<div class="rounded-xl border border-slate-200 bg-slate-50/50 p-5 flex flex-col justify-between">
 					<div>
-						<label class="label pb-1 cursor-pointer justify-start gap-2">
-							<Icon icon="mdi:shield-lock-outline" class="text-amber-500 h-4 w-4" />
-							<span class="label-text font-black text-slate-800">보안 침해 시도 즉시 경보</span>
-						</label>
-						<span class="text-[11px] text-slate-500 mb-2 font-medium block">403 Forbidden 권한 침해 또는 위조 토큰 감지 시 즉각 관리자 L4 알림을 발송합니다.</span>
+						<span class="block text-xs font-black text-slate-800">
+							보안 침해 시도 즉시 경보
+						</span>
+						<span class="mt-1 block text-[11px] text-slate-500 font-medium">
+							403 Forbidden 권한 침해 또는 위조 토큰 감지 시 즉각 관리자 L4 알림을 발송합니다.
+						</span>
 					</div>
-					<div class="pt-2">
-						<label class="label cursor-pointer justify-start gap-3">
+					<div class="mt-4">
+						<label class="inline-flex cursor-pointer items-center gap-2">
 							<input
 								type="checkbox"
-								class="toggle toggle-warning"
 								bind:checked={watchdogSecurityAlert}
-								disabled={!watchdogEnabled}
+								class="h-4 w-4 rounded text-amber-600 focus:ring-amber-500"
 							/>
-							<span class="text-xs font-bold text-slate-700">{watchdogSecurityAlert ? '즉시 발송 활성화됨' : '비활성화됨'}</span>
+							<span class="text-xs font-bold text-slate-800">
+								{watchdogSecurityAlert ? '즉시 발송 활성화됨' : '비활성화됨'}
+							</span>
 						</label>
 					</div>
 				</div>
 
-				<!-- 3. 현장 지시사항 미확인 지연 기준 시간 -->
-				<div class="form-control w-full bg-white p-4 rounded-xl border border-slate-200 shadow-xs md:col-span-2">
-					<label class="label pb-1" for="instructionDelayInput">
-						<span class="label-text font-black text-slate-800 flex items-center gap-1.5">
-							<Icon icon="mdi:clock-alert-outline" class="text-blue-600 h-4 w-4" />
-							현장 지시사항 미확인 인지 지연 감시 기준
-						</span>
+				<!-- 항목 3: 현장 지시사항 미확인 인지 지연 감시 -->
+				<div class="rounded-xl border border-slate-200 bg-slate-50/50 p-5 md:col-span-2">
+					<label for="instructionDelayInput" class="block text-xs font-black text-slate-800">
+						현장 지시사항 미확인 인지 지연 감시 기준
 					</label>
-					<span class="text-[11px] text-slate-500 mb-2 font-medium">긴급 지시사항 발행 후 지정 시간이 경과했음에도 미확인율이 50% 이상 지속될 때 관제탑 경보를 발송합니다.</span>
-					<div class="flex items-center gap-3">
+					<span class="mt-1 block text-[11px] text-slate-500 font-medium">
+						긴급 지시사항 발행 후 지정 시간이 경과했음에도 미확인율이 50% 이상 지속될 때 관제탑 경보를 발송합니다.
+					</span>
+					<div class="mt-3 flex items-center gap-3">
 						<input
 							type="number"
 							id="instructionDelayInput"
-							class="input input-bordered w-32 font-black text-slate-900 bg-slate-50"
 							min="5"
 							max="180"
 							step="5"
 							bind:value={watchdogInstructionDelayMinutes}
-							disabled={!watchdogEnabled}
+							class="w-28 rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-black text-slate-900 text-center focus:border-blue-500 focus:outline-none"
 						/>
-						<span class="text-xs font-bold text-slate-600">분 경과 후 미확인율 점검</span>
+						<span class="text-xs font-bold text-slate-700">분 경과 후 미확인율 점검</span>
 					</div>
 				</div>
 			</div>
 		</div>
-	</div>
 
-	<!-- 🗑️ 구분선: 시스템 데이터 보존 및 가비지 컬렉션 (Data Retention & GC) -->
-	<div class="divider my-8 font-black text-slate-500 uppercase tracking-widest text-xs md:text-sm">
-		<Icon icon="mdi:database-clock-outline" class="inline-block text-emerald-500 h-5 w-5 mr-1 align-text-bottom" />
-		데이터 보존 주기 및 메모리 관리 (Data Retention & GC)
-	</div>
-
-	<!-- Data Retention 설정 카드 -->
-	<div class="card mb-8 border border-base-300 bg-base-100 shadow-md">
-		<div class="card-body space-y-6 rounded-b-xl bg-base-200 p-5 md:p-8">
-			<!-- 카드 헤더 및 즉시 GC 실행 버튼 -->
-			<div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-slate-300 pb-4">
-				<div>
-					<h3 class="text-lg font-black text-slate-800 flex items-center gap-2">
-						<Icon icon="mdi:broom" class="text-emerald-600 h-5 w-5" />
-						자율 가비지 컬렉션(GC) 및 저장소 수명 주기 정책
-					</h3>
-					<p class="text-xs font-semibold text-slate-500 mt-1">
-						Redis 만료 기한(TTL)을 강제하고, DB에 누적된 감사로그/세션/태스크 이력을 자동 정리하여 용량을 보존합니다.
-					</p>
+		<!-- ===================================================================== -->
+		<!-- 5. 카드 4: 데이터 보존 주기 및 가비지 컬렉션 (Data Retention & GC) -->
+		<!-- ===================================================================== -->
+		<div class="rounded-2xl border-2 border-slate-200 bg-white p-6 shadow-sm md:p-8">
+			<div class="flex flex-col gap-4 border-b border-slate-100 pb-4 sm:flex-row sm:items-center sm:justify-between">
+				<div class="flex items-center gap-2.5">
+					<div class="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
+						<Icon icon="solar:broom-bold-duotone" class="text-xl" />
+					</div>
+					<div>
+						<h2 class="text-base font-black text-slate-900">데이터 보존 수명 주기 및 자율 가비지 컬렉션(GC)</h2>
+						<p class="text-xs text-slate-400 font-medium">Redis 만료 기한(TTL) 강제 및 DB 누적 감사로그/세션/태스크 이력 자동 정리</p>
+					</div>
 				</div>
+
+				<!-- 수동 GC 즉시 실행 버튼 -->
 				<button
 					onclick={runGcNow}
 					disabled={isGcRunning}
-					class="btn rounded-xl border-none bg-emerald-600 px-5 font-black text-white shadow-md transition-all hover:bg-emerald-700 btn-sm md:btn-md shrink-0 flex items-center gap-2"
+					class="inline-flex items-center gap-2 rounded-xl border border-emerald-300 bg-emerald-50 px-4 py-2 text-xs font-black text-emerald-800 shadow-sm transition hover:bg-emerald-600 hover:text-white active:scale-95 disabled:opacity-50"
 				>
-					<Icon icon={isGcRunning ? "mdi:loading" : "mdi:play-circle-outline"} class={`h-4 w-4 md:h-5 md:w-5 ${isGcRunning ? 'animate-spin' : ''}`} />
-					{isGcRunning ? '정리 수행 중...' : '지금 즉시 정리 (Run GC Now)'}
+					<Icon icon={isGcRunning ? "solar:refresh-circle-bold-duotone" : "solar:play-bold"} class="text-base {isGcRunning ? 'animate-spin' : ''}" />
+					<span>{isGcRunning ? '정리 수행 중...' : '지금 즉시 정리 (Run GC)'}</span>
 				</button>
 			</div>
 
-			<!-- 설정 항목 그리드 -->
-			<div class="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
-				<!-- 1. 감사로그 보존 기간 -->
-				<div class="form-control w-full bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
-					<label class="label pb-1" for="auditLogRetentionInput">
-						<span class="label-text font-black text-slate-800 flex items-center gap-1.5">
-							<Icon icon="mdi:file-document-outline" class="text-blue-500 h-4 w-4" />
-							감사로그 (Audit Log) 보존 기간
-						</span>
+			<!-- 최근 실행 결과 배너 (실행 시에만 표시) -->
+			{#if lastGcResult}
+				<div class="mt-4 rounded-xl border border-emerald-200 bg-emerald-50/50 p-4 text-xs font-medium text-emerald-900">
+					<div class="font-black flex items-center gap-1.5 mb-1 text-emerald-700">
+						<Icon icon="solar:check-circle-bold" class="text-base" />
+						최근 가비지 컬렉션 수행 결과
+					</div>
+					<div class="flex flex-wrap gap-4 text-[11px] text-slate-600">
+						<span>태스크 삭제: <b>{lastGcResult.deleted_tasks || 0}</b>건</span>
+						<span>세션 이력 삭제: <b>{lastGcResult.deleted_sessions || 0}</b>건</span>
+						<span>감사로그 삭제: <b>{lastGcResult.deleted_audit_logs || 0}</b>건</span>
+						<span>Redis TTL 주입: <b>{lastGcResult.redis_ttl_enforced || 0}</b>건</span>
+						<span>Redis 고아키 수거: <b>{lastGcResult.redis_orphans_removed || 0}</b>건</span>
+					</div>
+				</div>
+			{/if}
+
+			<div class="mt-6 grid grid-cols-1 gap-6 md:grid-cols-2">
+				<!-- 보존 1: 감사로그 보존 기간 -->
+				<div class="rounded-xl border border-slate-200 bg-slate-50/50 p-5">
+					<label for="auditLogRetentionInput" class="block text-xs font-black text-slate-800">
+						감사로그 (Audit Log) 보존 기간
 					</label>
-					<span class="text-[11px] text-slate-500 mb-2 font-medium">법적 컴플라이언스 및 보안 감사 이력을 지정 일수 동안 보존 후 자동 파기합니다.</span>
-					<div class="flex items-center gap-3">
+					<span class="mt-1 block text-[11px] text-slate-500 font-medium">
+						보안 및 법적 컴플라이언스 이력을 지정 일수 동안 보존한 후 자동 영구 파기합니다.
+					</span>
+					<div class="mt-3 flex items-center gap-3">
 						<input
 							type="number"
 							id="auditLogRetentionInput"
-							class="input input-bordered w-32 font-black text-slate-900 bg-slate-50"
 							min="30"
 							max="730"
 							step="30"
 							bind:value={retentionAuditLogDays}
+							class="w-28 rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-black text-slate-900 text-center focus:border-blue-500 focus:outline-none"
 						/>
-						<span class="text-xs font-bold text-slate-600">일간 보존</span>
+						<span class="text-xs font-bold text-slate-700">일간 보존</span>
 					</div>
 				</div>
 
-				<!-- 2. 완료/실패 백그라운드 태스크 보존 기간 -->
-				<div class="form-control w-full bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
-					<label class="label pb-1" for="systemTaskRetentionInput">
-						<span class="label-text font-black text-slate-800 flex items-center gap-1.5">
-							<Icon icon="mdi:checkbox-marked-circle-outline" class="text-emerald-500 h-4 w-4" />
-							완료/실패 태스크 이력 보존 기간
-						</span>
+				<!-- 보존 2: 백그라운드 태스크 보존 기간 -->
+				<div class="rounded-xl border border-slate-200 bg-slate-50/50 p-5">
+					<label for="systemTaskRetentionInput" class="block text-xs font-black text-slate-800">
+						완료/실패 태스크 이력 보존 기간
 					</label>
-					<span class="text-[11px] text-slate-500 mb-2 font-medium">SUCCESS 또는 FAILED로 종료된 백그라운드 작업 이력을 지정 일수 후 자동 삭제합니다.</span>
-					<div class="flex items-center gap-3">
+					<span class="mt-1 block text-[11px] text-slate-500 font-medium">
+						SUCCESS 또는 FAILED로 종료된 백그라운드 작업 이력을 지정 일수 후 자동 정리합니다.
+					</span>
+					<div class="mt-3 flex items-center gap-3">
 						<input
 							type="number"
 							id="systemTaskRetentionInput"
-							class="input input-bordered w-32 font-black text-slate-900 bg-slate-50"
 							min="7"
 							max="180"
 							step="7"
 							bind:value={retentionSystemTaskDays}
+							class="w-28 rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-black text-slate-900 text-center focus:border-blue-500 focus:outline-none"
 						/>
-						<span class="text-xs font-bold text-slate-600">일간 보존</span>
+						<span class="text-xs font-bold text-slate-700">일간 보존</span>
 					</div>
 				</div>
 
-				<!-- 3. 만료 세션 이력 보존 기간 -->
-				<div class="form-control w-full bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
-					<label class="label pb-1" for="sessionHistoryRetentionInput">
-						<span class="label-text font-black text-slate-800 flex items-center gap-1.5">
-							<Icon icon="mdi:history" class="text-indigo-500 h-4 w-4" />
-							로그아웃/만료 세션 이력 보존 기간
-						</span>
+				<!-- 보존 3: 만료 세션 이력 보존 기간 -->
+				<div class="rounded-xl border border-slate-200 bg-slate-50/50 p-5">
+					<label for="sessionHistoryRetentionInput" class="block text-xs font-black text-slate-800">
+						로그아웃/만료 세션 이력 보존 기간
 					</label>
-					<span class="text-[11px] text-slate-500 mb-2 font-medium">로그아웃되거나 강제 추방(KICKED_OUT)된 세션 이력을 지정 일수 후 자동 정리합니다.</span>
-					<div class="flex items-center gap-3">
+					<span class="mt-1 block text-[11px] text-slate-500 font-medium">
+						로그아웃되거나 관리자에 의해 강제 추방(KICKED)된 세션 레코드를 자동 정리합니다.
+					</span>
+					<div class="mt-3 flex items-center gap-3">
 						<input
 							type="number"
 							id="sessionHistoryRetentionInput"
-							class="input input-bordered w-32 font-black text-slate-900 bg-slate-50"
 							min="7"
 							max="365"
 							step="7"
 							bind:value={retentionSessionHistoryDays}
+							class="w-28 rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-black text-slate-900 text-center focus:border-blue-500 focus:outline-none"
 						/>
-						<span class="text-xs font-bold text-slate-600">일간 보존</span>
+						<span class="text-xs font-bold text-slate-700">일간 보존</span>
 					</div>
 				</div>
 
-				<!-- 4. Redis 동적 타겟 그룹 만료 시간 (TTL) -->
-				<div class="form-control w-full bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
-					<label class="label pb-1" for="redisDynamicTtlInput">
-						<span class="label-text font-black text-slate-800 flex items-center gap-1.5">
-							<Icon icon="mdi:timer-outline" class="text-rose-500 h-4 w-4" />
-							Redis 동적 그룹 만료 기한 (TTL)
-						</span>
+				<!-- 보존 4: Redis 동적 타겟 그룹 만료 기한 -->
+				<div class="rounded-xl border border-slate-200 bg-slate-50/50 p-5">
+					<label for="redisDynamicTtlInput" class="block text-xs font-black text-slate-800">
+						Redis 동적 그룹 만료 기한 (TTL)
 					</label>
-					<span class="text-[11px] text-slate-500 mb-2 font-medium">일별 배차/휴무 동적 타겟 그룹 키가 메모리에 잔류할 수 있는 최대 수명(TTL)을 지정합니다.</span>
-					<div class="flex items-center gap-3">
+					<span class="mt-1 block text-[11px] text-slate-500 font-medium">
+						일별 배차/휴무 동적 타겟 그룹 키가 메모리에 잔류할 수 있는 최대 수명(TTL)을 지정합니다.
+					</span>
+					<div class="mt-3 flex items-center gap-3">
 						<input
 							type="number"
 							id="redisDynamicTtlInput"
-							class="input input-bordered w-32 font-black text-slate-900 bg-slate-50"
 							min="12"
 							max="168"
 							step="12"
 							bind:value={retentionRedisDynamicHours}
+							class="w-28 rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-black text-slate-900 text-center focus:border-blue-500 focus:outline-none"
 						/>
-						<span class="text-xs font-bold text-slate-600">시간 후 자동 소멸</span>
+						<span class="text-xs font-bold text-slate-700">시간 후 자동 소멸</span>
 					</div>
 				</div>
 			</div>
 		</div>
-	</div>
 
-	<!-- 하단 액션 바 -->
-	<div class="flex justify-end gap-3 pt-2">
-		<button
-			onclick={saveSettings}
-			class="btn rounded-xl border-none bg-blue-600 px-8 font-black text-white shadow-lg transition-all hover:bg-blue-700 btn-md md:btn-lg"
-		>
-			<Icon icon="mdi:content-save-outline" class="h-5 w-5" />
-			설정 전체 저장
-		</button>
-	</div>
+		<!-- ===================================================================== -->
+		<!-- 6. 하단 고정 액션 바 -->
+		<!-- ===================================================================== -->
+		<div class="flex items-center justify-end gap-3 pt-2">
+			<button
+				onclick={saveSettings}
+				disabled={isSaving}
+				class="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-8 py-3 text-sm font-black text-white shadow-lg transition hover:bg-blue-700 active:scale-95 disabled:opacity-50"
+			>
+				{#if isSaving}
+					<Icon icon="solar:refresh-circle-bold-duotone" class="h-4 w-4 animate-spin text-white" />
+					<span>저장하는 중...</span>
+				{:else}
+					<Icon icon="solar:diskette-bold" class="text-lg" />
+					<span>설정 전체 저장</span>
+				{/if}
+			</button>
+		</div>
+	{/if}
 </div>

@@ -209,6 +209,64 @@ export const adminGetLiveSessions = () =>
 export const adminKickLiveSession = (sessionId) =>
 	request(`/api/v1/admin/observability/sessions/kick/${encodeURIComponent(sessionId)}`, 'POST');
 
+/**
+ * @function adminGetAuditLogsExportUrl
+ * @description 현재 필터 조건에 맞춘 감사로그 CSV 다운로드 URL을 반환합니다.
+ * @param {Object} params - { app_id, log_type, severity, user_id, query, limit }
+ */
+export const adminGetAuditLogsExportUrl = (params = {}) => {
+	const query = new URLSearchParams();
+	Object.entries(params).forEach(([key, val]) => {
+		if (val !== undefined && val !== null && val !== '') {
+			query.append(key, val);
+		}
+	});
+	const qs = query.toString();
+	return `/api/v1/admin/observability/logs/export${qs ? `?${qs}` : ''}`;
+};
+
+/**
+ * @function adminGetSystemLogDownloadUrl
+ * @description 서버 시스템 원시 콘솔 로그(.log) 파일 다운로드 URL을 반환합니다.
+ */
+export const adminGetSystemLogDownloadUrl = () =>
+	'/api/v1/admin/observability/system-logs/download';
+
+// ============================================================================
+// ⚙️ [전사 환경설정 및 시스템 GC (System Config & GC) API]
+// ============================================================================
+
+/**
+ * @function adminGetConfigs
+ * @description 시스템 전역 환경설정 목록을 조회합니다.
+ */
+export const adminGetConfigs = () => request(`${BASE_URL}/config`);
+
+/**
+ * @function adminUpdateConfig
+ * @description 단일 환경설정 키-값을 수정합니다.
+ * @param {string} key
+ * @param {Object} data - { value, description }
+ */
+export const adminUpdateConfig = (key, data) =>
+	request(`${BASE_URL}/config/${encodeURIComponent(key)}`, 'PUT', data);
+
+/**
+ * @function adminUpdateConfigsBatch
+ * @description 변경된 시스템 환경설정들을 단일 트랜잭션으로 일괄 저장합니다.
+ * @param {Object} configsDict - { key: value, ... }
+ */
+export const adminUpdateConfigsBatch = (configsDict) =>
+	request(`${BASE_URL}/config/batch`, 'PUT', configsDict);
+
+/**
+ * @function adminRunSystemGc
+ * @description 데이터 보존 주기 초과 이력 및 Redis 메모리 GC를 즉시 수동 실행합니다.
+ */
+export const adminRunSystemGc = () => request(`${BASE_URL}/system/gc/run`, 'POST');
+
+
+
 
 
 

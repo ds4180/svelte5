@@ -51,17 +51,28 @@
 	let activeDiffLog = $state(/** @type {any} */ (null));
 	let activeErrorLog = $state(/** @type {any} */ (null));
 
-	// 🏷️ 공통 앱 목록 (필터 드롭다운용)
+	// 🏷️ 18종 공식 앱 목록 (필터 드롭다운용 - admin_* 레거시 접두사 완전 제거)
 	const APP_OPTIONS = [
 		{ id: '', label: '전체 앱 (All Apps)' },
-		{ id: 'dispatch', label: '🚐 배차 관리 (Dispatch)' },
-		{ id: 'vehicle', label: '🚗 차량 관리 (Vehicle)' },
-		{ id: 'dayoff', label: '🏖️ 휴무 관리 (DayOff)' },
-		{ id: 'board', label: '📝 게시판 (Board)' },
-		{ id: 'page', label: '📄 페이지 (Page)' },
-		{ id: 'auth', label: '🔐 인증 및 권한 (Auth)' },
-		{ id: 'admin_alerts', label: '🔔 알림·지시 관리 (Alerts)' },
-		{ id: 'system', label: '⚙️ 시스템 코어 (System)' }
+		{ id: 'system', label: '⚙️ 시스템 코어 (system)' },
+		{ id: 'dashboard', label: '📊 관리자 대시보드 (dashboard)' },
+		{ id: 'menu', label: '🌐 메뉴 관리 (menu)' },
+		{ id: 'user_manage', label: '👤 사용자 랭크 관리 (user_manage)' },
+		{ id: 'group_manage', label: '🏛️ 조직·권한 그룹 (group_manage)' },
+		{ id: 'observability', label: '👁️ 접속기록·감사로그 (observability)' },
+		{ id: 'task_manage', label: '⏱️ 백그라운드 태스크 (task_manage)' },
+		{ id: 'dispatch', label: '🚐 배차 관리 (dispatch)' },
+		{ id: 'vehicle', label: '🚗 차량 관리 (vehicle)' },
+		{ id: 'route_master', label: '🗺️ 노선 마스터 (route_master)' },
+		{ id: 'dayoff', label: '🏖️ 휴무 관리 (dayoff)' },
+		{ id: 'boards', label: '📝 게시판 마스터 (boards)' },
+		{ id: 'page', label: '📄 페이지 관리 (page)' },
+		{ id: 'custom', label: '🧩 커스텀 앱 (custom)' },
+		{ id: 'pushs', label: '🚀 푸시 알림 발송 (pushs)' },
+		{ id: 'alerts', label: '🔔 알림·지시 관리 (alerts)' },
+		{ id: 'target_groups', label: '🎯 발송 대상 그룹 (target_groups)' },
+		{ id: 'media', label: '🖼️ 미디어 라이브러리 (media)' },
+		{ id: 'auth', label: '🔐 사용자 인증 (auth)' }
 	];
 
 	// 🏷️ 탭 메타데이터 정의
@@ -93,6 +104,7 @@
 					log_type: currentTab,
 					app_id: appFilter || undefined,
 					severity: severityFilter || undefined,
+					query: searchKeyword.trim() || undefined,
 					page: currentPage,
 					page_size: pageSize,
 					skip: (currentPage - 1) * pageSize,
@@ -107,6 +119,48 @@
 		} finally {
 			if (!silent) loading = false;
 		}
+	}
+
+	/**
+	 * 🔍 검색 실행
+	 */
+	function handleSearch() {
+		currentPage = 1;
+		refreshData();
+	}
+
+	/**
+	 * 🧹 검색어 초기화
+	 */
+	function handleClearSearch() {
+		searchKeyword = '';
+		currentPage = 1;
+		refreshData();
+	}
+
+	/**
+	 * 📥 감사로그 CSV 다운로드
+	 */
+	function handleExportAuditCsv() {
+		const params = {
+			log_type: currentTab !== 'SESSIONS' ? currentTab : undefined,
+			app_id: appFilter || undefined,
+			severity: severityFilter || undefined,
+			query: searchKeyword.trim() || undefined,
+			limit: 5000
+		};
+		const url = api.adminGetAuditLogsExportUrl(params);
+		toast.info('감사로그 CSV 파일 다운로드를 시작합니다...');
+		window.location.href = url;
+	}
+
+	/**
+	 * 🖥️ 서버 시스템 원시 콘솔 로그(.log) 다운로드
+	 */
+	function handleDownloadSystemLog() {
+		const url = api.adminGetSystemLogDownloadUrl();
+		toast.info('서버 시스템 콘솔 로그(system.log) 다운로드를 시작합니다...');
+		window.location.href = url;
 	}
 
 	/**
@@ -242,7 +296,7 @@
 			</p>
 		</div>
 
-		<!-- 새로고침 및 자동갱신 토글 -->
+		<!-- 새로고침 및 다운로드 / 자동갱신 토글 -->
 		<div class="flex flex-wrap items-center gap-3">
 			<label class="flex cursor-pointer items-center gap-2 rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-slate-50">
 				<input type="checkbox" bind:checked={autoRefresh} class="h-4 w-4 rounded text-blue-600 focus:ring-blue-500" />
@@ -252,9 +306,19 @@
 				</span>
 			</label>
 
+			<!-- 🖥️ 시스템 콘솔 원시 로그 파일 다운로드 버튼 -->
+			<button
+				onclick={handleDownloadSystemLog}
+				class="flex items-center gap-1.5 rounded-xl border border-slate-700 bg-slate-800 px-3.5 py-2 text-xs font-black text-slate-100 shadow-sm transition hover:bg-slate-700 hover:text-white active:scale-95"
+				title="서버 런타임 콘솔 표준 출력 원시 로그 파일(system.log) 다운로드"
+			>
+				<Icon icon="solar:server-square-bold-duotone" class="text-base text-emerald-400" />
+				<span>시스템 콘솔 로그 (.log)</span>
+			</button>
+
 			<button
 				onclick={() => refreshData(false)}
-				class="flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-xs font-black text-white shadow-md transition hover:bg-blue-600 active:scale-95"
+				class="flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2 text-xs font-black text-white shadow-md transition hover:bg-blue-600 active:scale-95"
 			>
 				<Icon icon="solar:restart-bold" class="text-base {loading ? 'animate-spin' : ''}" />
 				<span>지금 새로고침</span>
@@ -419,11 +483,52 @@
 							<option value="CRITICAL">CRITICAL (치명)</option>
 						</select>
 					</div>
+
+					<!-- 🔍 검색창 (키워드/사용자/메시지 검색 및 엔터키 바인딩) -->
+					<div class="flex items-center gap-1.5">
+						<div class="relative flex items-center">
+							<Icon icon="solar:magnifer-linear" class="pointer-events-none absolute left-3 text-sm text-slate-400" />
+							<input
+								type="text"
+								bind:value={searchKeyword}
+								onkeydown={(e) => e.key === 'Enter' && handleSearch()}
+								placeholder="제목, 내용, 사용자 검색..."
+								class="w-44 rounded-xl border border-slate-300 bg-slate-50 py-1.5 pr-8 pl-8 text-xs font-medium text-slate-800 placeholder-slate-400 transition focus:border-blue-500 focus:bg-white focus:outline-none md:w-60"
+							/>
+							{#if searchKeyword}
+								<button
+									onclick={handleClearSearch}
+									class="absolute right-2 rounded-full p-0.5 text-slate-400 hover:text-slate-600"
+									title="검색어 지우기"
+								>
+									<Icon icon="solar:close-circle-bold" class="text-sm" />
+								</button>
+							{/if}
+						</div>
+						<button
+							onclick={handleSearch}
+							class="rounded-xl bg-slate-900 px-3 py-1.5 text-xs font-bold text-white shadow-sm transition hover:bg-blue-600 active:scale-95"
+						>
+							검색
+						</button>
+					</div>
 				</div>
 
-				<!-- 건수 표시 -->
-				<div class="text-xs font-bold text-slate-400">
-					총 <span class="text-blue-600 font-black">{totalCount.toLocaleString()}</span>건의 기록 보존 중
+				<!-- 우측 건수 표시 및 CSV 다운로드 버튼 -->
+				<div class="flex flex-wrap items-center gap-3">
+					<div class="text-xs font-bold text-slate-400">
+						총 <span class="font-black text-blue-600">{totalCount.toLocaleString()}</span>건의 기록 보존 중
+					</div>
+
+					<!-- 📥 감사로그 CSV 다운로드 버튼 -->
+					<button
+						onclick={handleExportAuditCsv}
+						class="inline-flex items-center gap-1.5 rounded-xl border border-emerald-300 bg-emerald-50 px-3.5 py-1.5 text-xs font-black text-emerald-800 shadow-sm transition hover:bg-emerald-600 hover:text-white active:scale-95"
+						title="현재 필터 조건에 부합하는 감사로그를 엑셀 호환 CSV 파일로 내보냅니다"
+					>
+						<Icon icon="solar:file-download-bold-duotone" class="text-base text-emerald-600 group-hover:text-white" />
+						<span>CSV 내보내기</span>
+					</button>
 				</div>
 			</div>
 		{/if}
