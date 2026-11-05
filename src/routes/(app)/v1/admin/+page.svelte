@@ -57,7 +57,7 @@
 		{
 			type: 'SYSTEM',
 			category: 'CORE',
-			appId: 'admin_apps',
+			appId: 'apps',
 			minRank: 9,
 			title: '앱 설치 등록',
 			desc: 'INSTANCE / CUSTOM / SYSTEM 앱 엔진 등록 및 메타데이터·권한 관리',
@@ -68,7 +68,7 @@
 		{
 			type: 'SYSTEM',
 			category: 'CORE',
-			appId: 'admin_menu',
+			appId: 'menu',
 			minRank: 8,
 			title: '메뉴 설정',
 			desc: '시스템 전체 내비게이션 트리 및 앱 연결·접근 권한 구조 편집',
@@ -79,7 +79,7 @@
 		{
 			type: 'SYSTEM',
 			category: 'CORE',
-			appId: 'admin_user_manage',
+			appId: 'user_manage',
 			minRank: 8,
 			title: '사용자 랭크 관리',
 			desc: '회원 권한 등급(rank_level 0~9) 조정 및 주그룹/부그룹 소속 관리',
@@ -90,7 +90,7 @@
 		{
 			type: 'SYSTEM',
 			category: 'CORE',
-			appId: 'admin_group_manage',
+			appId: 'group_manage',
 			minRank: 9,
 			title: '그룹·권한 관리',
 			desc: '주/부그룹 마스터 및 인스턴스/시스템 앱 독립 권한 배분 관제탑',
@@ -101,7 +101,7 @@
 		{
 			type: 'SYSTEM',
 			category: 'CORE',
-			appId: 'admin_observability',
+			appId: 'observability',
 			minRank: 8,
 			title: '접속 기록·감사 로그',
 			desc: '실시간 세션 추적·강제추방, 4대 감사로그(접근/도메인Diff/장애/보안) 전사 관제',
@@ -112,7 +112,7 @@
 		{
 			type: 'SYSTEM',
 			category: 'CORE',
-			appId: 'admin_config',
+			appId: 'config',
 			minRank: 8,
 			title: '환경설정',
 			desc: '글로벌 환경 변수, 데이터 보존 주기(GC) 및 Watchdog 이상 경보 제어',
@@ -123,7 +123,7 @@
 		{
 			type: 'SYSTEM',
 			category: 'CORE',
-			appId: 'admin_tasks',
+			appId: 'tasks',
 			minRank: 8,
 			title: '예약 작업 관리',
 			desc: '비동기 백그라운드 작업 큐 상태 모니터링 및 자율신경계 스케줄러 제어',
@@ -135,7 +135,7 @@
 		{
 			type: 'SYSTEM',
 			category: 'OPERATIONS',
-			appId: 'admin_alerts',
+			appId: 'alerts',
 			minRank: 4,
 			title: '알림·지시 관리',
 			desc: '전역/경로별 상단 공지 배너 및 중앙 모달 알림 생성·배포 (운영 위임 가능)',
@@ -146,7 +146,7 @@
 		{
 			type: 'SYSTEM',
 			category: 'OPERATIONS',
-			appId: 'admin_media',
+			appId: 'media',
 			minRank: 4,
 			title: '파일·사진 관리',
 			desc: '전체 업로드 파일 자산 모니터링 및 스토리지 용량 관리 (운영 위임 가능)',
@@ -157,7 +157,7 @@
 		{
 			type: 'SYSTEM',
 			category: 'OPERATIONS',
-			appId: 'admin_target_groups',
+			appId: 'target_groups',
 			minRank: 4,
 			title: '임시 그룹 관리',
 			desc: '알림·메시지 발송을 위한 기사 노선별/직급별 동적 그룹 필터링 및 연산',
@@ -168,7 +168,7 @@
 		{
 			type: 'SYSTEM',
 			category: 'OPERATIONS',
-			appId: 'admin_pushs',
+			appId: 'pushs',
 			minRank: 4,
 			title: '푸시·구독 관리',
 			desc: '모바일/PC Web Push 활성 구독 기기 현황 모니터링, 무효 구독 정리 및 전사 푸시 발송',
@@ -179,7 +179,7 @@
 		{
 			type: 'SYSTEM',
 			category: 'OPERATIONS',
-			appId: 'admin_sessions',
+			appId: 'observability',
 			minRank: 4,
 			title: '세션 모니터링 (구버전)',
 			desc: '실시간 멀티 디바이스 접속자(JTI) 확인 및 중복 세션 관리',
@@ -196,7 +196,7 @@
 	const appModules = [
 		{
 			type: 'CUSTOM',
-			appId: 'admin_dispatch',
+			appId: 'dispatch',
 			title: '차량 배차 관리',
 			desc: '실시간 노선별 차량 투입, 기사 배정 및 일일 운행 시간표 조율 (사용자: /v1/custom/dispatch)',
 			link: '/v1/admin/dispatch',
@@ -205,7 +205,7 @@
 		},
 		{
 			type: 'CUSTOM',
-			appId: 'admin_route_master',
+			appId: 'route_master',
 			title: '노선 마스터 관리',
 			desc: '정규 및 임시 노선의 기준 버전 도면 및 회차 시간표 통합 관리 (배차 앱 연동)',
 			link: '/v1/admin/route_master',
@@ -214,7 +214,7 @@
 		},
 		{
 			type: 'CUSTOM',
-			appId: 'admin_dayoff',
+			appId: 'dayoff',
 			title: '휴무(결근계) 관리',
 			desc: '직원 및 승무원의 연차/휴무 신청 내역 승인·반려 관제 (사용자: /v1/custom/dayoff)',
 			link: '/v1/admin/dayoff',
@@ -223,7 +223,7 @@
 		},
 		{
 			type: 'INSTANCE',
-			appId: 'admin_boards',
+			appId: 'boards',
 			title: '게시판 인스턴스 관리',
 			desc: '추상화 다중 게시판(공지, 자유 등) 슬러그 생성 및 레이아웃 정책 설정 (사용자: /v1/app/board/[slug])',
 			link: '/v1/admin/boards',
@@ -231,17 +231,17 @@
 			color: 'bg-orange-600'
 		},
 		{
-			type: 'INSTANCE',
-			appId: 'admin_pages',
+			type: 'CUSTOM',
+			appId: 'pages',
 			title: '페이지 엔진 관리',
-			desc: 'DB 기반 고정 콘텐츠 다중 페이지 인스턴스 생성 및 게시 기간 제어 (사용자: /v1/custom/page/[slug])',
+			desc: 'DB 기반 고정 콘텐츠 페이지 작성 및 게시 기간·권한 제어 (사용자: /v1/pages/[slug])',
 			link: '/v1/admin/page',
 			icon: 'mdi:file-document-edit-outline',
 			color: 'bg-sky-600'
 		},
 		{
 			type: 'SERVICE',
-			appId: 'admin_services',
+			appId: 'services',
 			title: '서비스 마스터 (Add-on)',
 			desc: 'INSTANCE 및 CUSTOM 앱에 애드온(Add-on) 결합하는 레고형 서비스(댓글, 업로드 등) 번들 관리',
 			link: '/v1/admin/services',
@@ -250,7 +250,7 @@
 		},
 		{
 			type: 'PAGES',
-			appId: 'admin_pages',
+			appId: 'pages',
 			title: '정적 페이지 탐색기',
 			desc: '순수 파일 시스템(/v1/pages/...) 매핑 정적 페이지 실시간 스캔 및 탐색',
 			link: '/v1/admin/pages',
