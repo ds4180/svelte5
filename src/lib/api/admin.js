@@ -104,6 +104,8 @@ export const adminDeleteAlert = (alertId) => request(`/api/alert/delete/${alertI
 export const adminToggleAlert = (alertId) => request(`/api/alert/toggle/${alertId}`, 'POST');
 export const adminUpdateAlert = (alertId, data) =>
 	request(`/api/alert/update/${alertId}`, 'PUT', data);
+export const adminGetAlertAcknowledgements = (alertId) =>
+	request(`/api/alert/${alertId}/acknowledgements`);
 
 // 📱 푸시 알림 관리 API (v2.0 리팩토링 버전)
 export const adminGetPushSubscriptions = () => request(`${BASE_URL}/push/subscriptions`);
@@ -319,6 +321,81 @@ export const adminRetryTask = (taskId) =>
  */
 export const adminCancelTask = (taskId) =>
 	request(`${BASE_URL}/tasks/${taskId}`, 'DELETE');
+
+// ============================================================================
+// 📁 [미디어 및 파일·사진 관리 (Media & File Master) API]
+// ============================================================================
+
+/**
+ * @function adminGetMediaStats
+ * @description 미디어 시스템 전역 통계(전체 개수, 누적 바이트, 티어별 요약)를 조회합니다.
+ */
+export const adminGetMediaStats = () => request('/api/media/admin/stats');
+
+/**
+ * @function adminGetMediaRecent
+ * @description 티어별 최근 업로드 미디어 목록을 조회합니다.
+ * @param {number} limit
+ */
+export const adminGetMediaRecent = (limit = 12) =>
+	request(`/api/media/admin/recent?limit=${limit}`);
+
+/**
+ * @function adminGetMediaList
+ * @description 계층(Tier) 및 하위 경로별 미디어 파일·폴더 목록을 조회합니다.
+ * @param {Object} params - { tier, sub_path, recursive, show_hidden }
+ */
+export const adminGetMediaList = (params = {}) => {
+	const query = new URLSearchParams();
+	Object.entries(params).forEach(([key, val]) => {
+		if (val !== undefined && val !== null && val !== '') {
+			query.append(key, String(val));
+		}
+	});
+	const qs = query.toString();
+	return request(`/api/media/admin/list${qs ? `?${qs}` : ''}`);
+};
+
+/**
+ * @function adminCreateMediaFolder
+ * @description 지정한 계층 및 하위 경로에 새 폴더를 생성합니다.
+ * @param {Object} data - { tier, sub_path, folder_name }
+ */
+export const adminCreateMediaFolder = (data) =>
+	request('/api/media/admin/folder/create', 'POST', data);
+
+/**
+ * @function adminBackupMedia
+ * @description 선택된 미디어 파일들의 압축 백업 태스크를 예약합니다.
+ * @param {Object} data - { asset_ids, folder_paths, tier }
+ */
+export const adminBackupMedia = (data) =>
+	request('/api/media/admin/backup', 'POST', data);
+
+/**
+ * @function adminBulkDeleteMedia
+ * @description 선택된 미디어 파일 및 폴더들을 일괄 소프트 삭제(격리)합니다.
+ * @param {Object} data - { asset_ids, folder_paths, tier }
+ */
+export const adminBulkDeleteMedia = (data) =>
+	request('/api/media/admin/bulk-delete', 'POST', data);
+
+/**
+ * @function adminRunMediaGC
+ * @description 미디어 스토리지 가비지 컬렉션(GC) 작업을 즉시 또는 예약 실행합니다.
+ * @param {Object} data - { indices, scheduled_at }
+ */
+export const adminRunMediaGC = (data) =>
+	request('/api/media/admin/gc', 'POST', data);
+
+/**
+ * @function adminDeleteMedia
+ * @description 단일 미디어 자산을 소프트 삭제(격리)합니다.
+ * @param {number|string} assetId
+ */
+export const adminDeleteMedia = (assetId) =>
+	request(`/api/media/delete/${assetId}`, 'POST');
+
 
 
 

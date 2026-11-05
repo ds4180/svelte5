@@ -1,6 +1,6 @@
 <script>
 	import Icon from '@iconify/svelte';
-	import { fastApi } from '$lib/api';
+	import * as api from '$lib/api/admin.js';
 	import { toast } from '$lib/runes/toast.svelte.js';
 
 	let {
@@ -18,7 +18,7 @@
 		ackStats = null;
 		ackTab = 'pending';
 		try {
-			ackStats = await fastApi('GET', `/api/alert/${alertItem.id}/acknowledgements`);
+			ackStats = await api.adminGetAlertAcknowledgements(alertItem.id);
 		} catch (e) {
 			toast.error('수신 현황 조회 실패: ' + (e.message || e));
 		} finally {

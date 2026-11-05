@@ -6,14 +6,12 @@
 	let {
 		alerts = [],
 		loading = false,
+		selectedCategory = $bindable('ALL'),
 		onToggle,
 		onEdit,
 		onDelete,
 		onOpenAck
 	} = $props();
-
-	// 🔍 카테고리 필터: 'ALL' | 'NOTICE' | 'URGENT_NOTICE' | 'INSTRUCTION'
-	let selectedCategory = $state('ALL');
 
 	// 카테고리별 카운트 계산
 	const countAll = $derived(alerts.length);
