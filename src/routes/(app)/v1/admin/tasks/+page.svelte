@@ -1,538 +1,883 @@
 <script>
-    /**
-     * @file (app)/v1/admin/tasks/+page.svelte
-     * @description 시스템 비동기 태스크 엔진 모니터링, 예약 스케줄러 및 수동 등록 페이지
-     */
-    import { onMount } from 'svelte';
-    import { fastApi } from '$lib/api';
-    import { fade } from 'svelte/transition';
-    import Icon from '@iconify/svelte';
+	/**
+	 * ============================================================================
+	 * [전사 비동기 태스크 및 자율신경계 스케줄러 관제 (+page.svelte)]
+	 * ============================================================================
+	 * 
+	 * 💡 이 페이지의 역할:
+	 * 1. 백그라운드 로봇 일꾼(워커)의 실시간 가동 상태 종합 모니터링
+	 * 2. 야간 청소, 기사 그룹 동기화, 사진 썸네일 생성 등 정기 예약 스케줄 총괄
+	 * 3. 실패한 작업의 원클릭 즉시 재시도 및 쉬운 작업 예약 등록
+	 */
 
-    // --- States ---
-    let activeTab = $state('monitor'); // monitor, schedule, register
-    let tasks = $state([]);
-    let taskTypes = $state([]); // 동적 로드용
-    let total = $state(0);
-    let isLoading = $state(true);
-    let selectedStatus = $state('');
-    let autoRefresh = $state(false);
-    let refreshTimer = null;
-    let selectedDetailTask = $state(null); // 에러 로그 및 상세 보기 모달용
+	import { onMount, onDestroy } from 'svelte';
+	import * as api from '$lib/api/admin.js';
+	import { toast } from '$lib/runes/toast.svelte.js';
+	import { formatDateTime, timeAgo } from '$lib/utils';
+	import Icon from '@iconify/svelte';
 
-    // --- Registration Form State ---
-    let scheduleType = $state('none'); // none, cron, interval
-    let newTask = $state({
-        task_type: '',
-        payload_str: '{}',
-        priority: 5,
-        unique_key: '',
-        scheduled_at: '',
-        cron_expression: '',
-        repeat_interval: null,
-        max_retries: 3,
-        timeout_sec: 300,
-        tags_str: ''
-    });
+	// 📑 3대 직관적 탭: 'monitor' (실시간 작업) | 'schedule' (정기 예약 일정) | 'register' (작업 등록)
+	let activeTab = $state('monitor');
 
-    // 선택된 태스크 유형에 따라 예시 페이로드 자동 반영
-    function updatePayloadExample(type) {
-        const found = taskTypes.find(t => t.type === type);
-        if (found) {
-            newTask.payload_str = JSON.stringify(found.example, null, 4);
-        }
-    }
+	// 📊 상단 4대 로봇 일꾼 상태 요약
+	let summary = $state({
+		worker_status: 'ONLINE',
+		pending_count: 0,
+		running_count: 0,
+		failed_count: 0,
+		scheduler_count: 0
+	});
 
-    // --- Functions ---
-    async function loadTaskTypes() {
-        try {
-            taskTypes = await fastApi('GET', '/api/v1/admin/tasks/types');
-        } catch (err) {
-            console.error('태스크 유형 조회 실패:', err);
-        }
-    }
+	// 📋 태스크 목록 및 메타데이터
+	let tasks = $state(/** @type {any[]} */ ([]));
+	let taskTypes = $state(/** @type {any[]} */ ([]));
+	let total = $state(0);
+	let isLoading = $state(true);
+	let selectedStatus = $state('');
+	let autoRefresh = $state(true);
+	let refreshTimer = /** @type {any} */ (null);
 
-    async function loadTasks() {
-        isLoading = true;
-        try {
-            // 필터링 기준: 
-            // 1. monitor: 반복/예약 설정이 없는 일반 작업 + 과거/진행중인 작업
-            // 2. schedule: 반복 작업(Cron/Interval) 또는 미래 시점으로 예약된 작업
-            let url = `/api/v1/admin/tasks?limit=50&is_scheduler=${activeTab === 'schedule'}`;
-            if (selectedStatus) url += `&status=${selectedStatus}`;
-            
-            const res = await fastApi('GET', url);
-            tasks = res.tasks;
-            total = res.total;
-        } catch (err) {
-            console.error('태스크 목록 조회 실패:', err);
-        } finally {
-            isLoading = false;
-        }
-    }
+	// 🔍 상세 보기 모달 상태
+	let selectedDetailTask = $state(/** @type {any} */ (null));
 
-    // ... (기존 registerTask, retryTask, cancelTask 함수는 그대로 유지)
+	// ➕ 쉬운 작업 등록 폼 상태
+	let scheduleMode = $state('once_now'); // 'once_now' | 'daily' | 'interval' | 'specific_time'
+	let selectedTypeItem = $state(/** @type {any} */ (null));
+	let showAdvancedOptions = $state(false);
 
-    // 탭 변경 시 데이터 로드
-    $effect(() => {
-        if (activeTab !== 'register') {
-            loadTasks();
-        }
-    });
+	let newTask = $state({
+		task_type: '',
+		payload_str: '{}',
+		priority: 5,
+		unique_key: '',
+		scheduled_at: '',
+		cron_expression: '',
+		repeat_interval: /** @type {number|null} */ (null),
+		max_retries: 3,
+		timeout_sec: 300,
+		tags_str: ''
+	});
 
-    onMount(() => {
-        loadTasks();
-        loadTaskTypes();
-    });
+	// 원클릭 시간표 프리셋 정의
+	const CRON_PRESETS = [
+		{ label: '매일 새벽 3시 (야간 청소)', cron: '0 3 * * *', desc: '이용자가 적은 새벽에 시스템 정리' },
+		{ label: '매일 아침 7시 (출근 전 준비)', cron: '0 7 * * *', desc: '오늘 운행 기사님 단체방 준비' },
+		{ label: '매 시간 정각마다', cron: '0 * * * *', desc: '1시간 주기 상태 점검' },
+		{ label: '10분마다 주기적 반복', cron: '*/10 * * * *', desc: '실시간에 준하는 고빈도 동기화' }
+	];
 
-    async function registerTask() {
-        try {
-            const payload = JSON.parse(newTask.payload_str);
-            const tags = newTask.tags_str.split(',').map(t => t.trim()).filter(t => t);
-            
-            // 선택된 스케줄 타입에 따라 값 조정
-            const finalCron = scheduleType === 'cron' ? newTask.cron_expression : null;
-            const finalInterval = scheduleType === 'interval' ? newTask.repeat_interval : null;
+	/**
+	 * 🔄 상단 요약 통계 및 태스크 목록 통합 로드
+	 */
+	async function loadAllData(silent = false) {
+		if (!silent) isLoading = true;
+		try {
+			// 1. 요약 통계 로드
+			const sumRes = await api.adminGetTasksSummary().catch(() => null);
+			if (sumRes) summary = sumRes;
 
-            const body = {
-                ...newTask,
-                payload,
-                tags,
-                scheduled_at: newTask.scheduled_at || null,
-                repeat_interval: finalInterval,
-                cron_expression: finalCron,
-                unique_key: newTask.unique_key || null
-            };
-            delete body.payload_str;
-            delete body.tags_str;
+			// 2. 태스크 유형 메타데이터 로드 (처음 1회)
+			if (taskTypes.length === 0) {
+				taskTypes = await api.adminGetTaskTypes().catch(() => []);
+				if (taskTypes.length > 0 && !newTask.task_type) {
+					selectTaskType(taskTypes[0]);
+				}
+			}
 
-            await fastApi('POST', '/api/v1/admin/tasks', body);
-            alert('태스크가 성공적으로 등록되었습니다.');
-            activeTab = body.cron_expression || body.repeat_interval ? 'schedule' : 'monitor';
-            loadTasks();
-            
-            // Reset form
-            scheduleType = 'none';
-            newTask = {
-                task_type: '',
-                payload_str: '{}',
-                priority: 5,
-                unique_key: '',
-                scheduled_at: '',
-                cron_expression: '',
-                repeat_interval: null,
-                max_retries: 3,
-                timeout_sec: 300,
-                tags_str: ''
-            };
-        } catch (err) {
-            alert('등록 실패: ' + err.message);
-        }
-    }
+			// 3. 현재 탭에 맞는 작업 목록 로드
+			if (activeTab !== 'register') {
+				const params = {
+					limit: 50,
+					offset: 0,
+					is_scheduler: activeTab === 'schedule' ? true : false,
+					status: selectedStatus || undefined
+				};
+				const res = await api.adminGetTasks(params);
+				tasks = res.tasks || [];
+				total = res.total || 0;
+			}
+		} catch (e) {
+			console.error('❌ [Tasks] 데이터 로딩 실패:', e);
+		} finally {
+			if (!silent) isLoading = false;
+		}
+	}
 
-    async function retryTask(id) {
-        if (!confirm('정말 이 작업을 다시 실행하시겠습니까?')) return;
-        try {
-            await fastApi('POST', `/api/v1/admin/tasks/${id}/retry`);
-            await loadTasks();
-        } catch (err) {
-            alert('재시도 실패: ' + err.message);
-        }
-    }
+	/**
+	 * 🎯 태스크 유형 선택 시 예시 페이로드 자동 주입
+	 * @param {any} item
+	 */
+	function selectTaskType(item) {
+		selectedTypeItem = item;
+		newTask.task_type = item.type;
+		newTask.payload_str = JSON.stringify(item.example || {}, null, 2);
+	}
 
-    async function cancelTask(id) {
-        if (!confirm('이 작업을 취소하시겠습니까?')) return;
-        try {
-            await fastApi('DELETE', `/api/v1/admin/tasks/${id}`);
-            await loadTasks();
-        } catch (err) {
-            alert('취소 실패: ' + err.message);
-        }
-    }
+	/**
+	 * ⏰ 프리셋 Cron 적용
+	 * @param {string} cron
+	 */
+	function applyCronPreset(cron) {
+		scheduleMode = 'daily';
+		newTask.cron_expression = cron;
+		toast.info(`스케줄이 '${cron}'으로 자동 설정되었습니다.`);
+	}
 
-    // 탭 변경 시 데이터 로드
-    $effect(() => {
-        if (activeTab !== 'register') {
-            loadTasks();
-        }
-    });
+	/**
+	 * ➕ 쉬운 작업 등록 실행
+	 */
+	async function handleRegisterTask() {
+		if (!newTask.task_type) {
+			toast.error('수행할 작업의 종류를 선택해 주세요.');
+			return;
+		}
 
-    // 자동 새로고침 관리 (5초 주기)
-    $effect(() => {
-        if (autoRefresh && activeTab !== 'register') {
-            refreshTimer = setInterval(() => {
-                loadTasks();
-            }, 5000);
-        } else if (refreshTimer) {
-            clearInterval(refreshTimer);
-            refreshTimer = null;
-        }
+		try {
+			let parsedPayload = {};
+			try {
+				parsedPayload = JSON.parse(newTask.payload_str || '{}');
+			} catch (jsonErr) {
+				toast.error('입력값(Payload)이 올바른 JSON 형식이 아닙니다. 형식을 확인해 주세요.');
+				return;
+			}
 
-        return () => {
-            if (refreshTimer) {
-                clearInterval(refreshTimer);
-                refreshTimer = null;
-            }
-        };
-    });
+			const tags = newTask.tags_str.split(',').map((t) => t.trim()).filter(Boolean);
 
-    onMount(() => {
-        loadTasks();
-        loadTaskTypes();
-    });
+			// 스케줄 모드에 따른 시점 정리
+			let finalCron = null;
+			let finalInterval = null;
+			let finalScheduledAt = null;
+
+			if (scheduleMode === 'daily') {
+				finalCron = newTask.cron_expression || '0 3 * * *';
+			} else if (scheduleMode === 'interval') {
+				finalInterval = Number(newTask.repeat_interval) || 3600;
+			} else if (scheduleMode === 'specific_time') {
+				finalScheduledAt = newTask.scheduled_at || null;
+			}
+
+			const body = {
+				task_type: newTask.task_type,
+				payload: parsedPayload,
+				priority: Number(newTask.priority) || 5,
+				unique_key: newTask.unique_key ? newTask.unique_key.trim() : null,
+				scheduled_at: finalScheduledAt,
+				cron_expression: finalCron,
+				repeat_interval: finalInterval,
+				max_retries: Number(newTask.max_retries) || 3,
+				timeout_sec: Number(newTask.timeout_sec) || 300,
+				tags
+			};
+
+			await api.adminCreateTask(body);
+			toast.success(`새로운 작업 '${selectedTypeItem?.label || newTask.task_type}'이(가) 성공적으로 예약 등록되었습니다.`);
+
+			// 등록 후 해당 탭으로 자동 이동
+			activeTab = finalCron || finalInterval ? 'schedule' : 'monitor';
+			await loadAllData(false);
+
+			// 폼 초기화
+			scheduleMode = 'once_now';
+			newTask.cron_expression = '';
+			newTask.repeat_interval = null;
+			newTask.scheduled_at = '';
+			newTask.unique_key = '';
+		} catch (/** @type {any} */ err) {
+			toast.error('작업 등록 실패: ' + (err.message || '서버 오류'));
+		}
+	}
+
+	/**
+	 * 🔄 실패 작업 즉시 재실행
+	 * @param {number} taskId
+	 */
+	async function handleRetryTask(taskId) {
+		if (!confirm(`실패했던 작업 #${taskId}을(를) 지금 즉시 다시 실행하시겠습니까?`)) return;
+		try {
+			await api.adminRetryTask(taskId);
+			toast.success(`작업 #${taskId}이(가) 다시 실행 대기(PENDING) 큐에 투입되었습니다.`);
+			if (selectedDetailTask && selectedDetailTask.id === taskId) {
+				selectedDetailTask = null;
+			}
+			await loadAllData(false);
+		} catch (/** @type {any} */ err) {
+			toast.error('작업 재실행 실패: ' + (err.message || '서버 오류'));
+		}
+	}
+
+	/**
+	 * 🚫 대기 중인 작업 취소
+	 * @param {number} taskId
+	 */
+	async function handleCancelTask(taskId) {
+		if (!confirm(`대기 중인 작업 #${taskId}을(를) 취소하시겠습니까?`)) return;
+		try {
+			await api.adminCancelTask(taskId);
+			toast.info(`작업 #${taskId}이(가) 취소되었습니다.`);
+			await loadAllData(false);
+		} catch (/** @type {any} */ err) {
+			toast.error('작업 취소 실패: ' + (err.message || '서버 오류'));
+		}
+	}
+
+	/**
+	 * 상태 뱃지 스타일 매핑
+	 * @param {string} status
+	 */
+	function getStatusBadge(status) {
+		switch (status) {
+			case 'SUCCESS':
+				return { label: '성공', color: 'bg-emerald-50 text-emerald-700 border-emerald-300' };
+			case 'RUNNING':
+				return { label: '실행 중', color: 'bg-blue-50 text-blue-700 border-blue-300 animate-pulse font-bold' };
+			case 'FAILED':
+				return { label: '실패 (확인 필요)', color: 'bg-rose-50 text-rose-700 border-rose-300 font-bold' };
+			case 'CANCELLED':
+				return { label: '취소됨', color: 'bg-slate-100 text-slate-500 border-slate-300' };
+			default:
+				return { label: '실행 대기', color: 'bg-amber-50 text-amber-700 border-amber-300' };
+		}
+	}
+
+	/**
+	 * 태스크 유형에 맞는 친절한 한글 정보 반환
+	 * @param {string} typeName
+	 */
+	function getTaskTypeInfo(typeName) {
+		const found = taskTypes.find((t) => t.type === typeName);
+		if (found) return found;
+		return {
+			type: typeName,
+			label: typeName,
+			description: '시스템 백그라운드 작업',
+			icon: 'solar:cpu-bolt-bold-duotone'
+		};
+	}
+
+	onMount(() => {
+		loadAllData();
+
+		// 10초 주기 안전한 자동 새로고침 타이머
+		refreshTimer = setInterval(() => {
+			if (autoRefresh && activeTab !== 'register') {
+				loadAllData(true);
+			}
+		}, 10000);
+	});
+
+	onDestroy(() => {
+		if (refreshTimer) clearInterval(refreshTimer);
+	});
 </script>
 
 <svelte:head>
-    <title>예약 작업 관리 | jeju.live Core</title>
+	<title>예약 작업 관리 | jeju.live Core</title>
 </svelte:head>
 
-<div class="p-6">
-    <div class="flex justify-between items-center mb-6">
-        <h1 class="text-2xl font-bold flex items-center gap-2">
-            <Icon icon="mdi:robot-industrial" class="text-primary" /> 예약 작업 관리
-        </h1>
-        <div class="flex items-center gap-3">
-            <label class="label cursor-pointer gap-2 bg-base-200 px-3 py-1.5 rounded-lg border border-base-300">
-                <span class="label-text text-xs font-semibold">자동 갱신 (5초)</span>
-                <input type="checkbox" bind:checked={autoRefresh} class="toggle toggle-primary toggle-xs" />
-            </label>
-            <button onclick={loadTasks} class="btn btn-sm btn-outline" disabled={activeTab === 'register'}>
-                <Icon icon="mdi:refresh" /> 새로고침
-            </button>
-        </div>
-    </div>
+<div class="mx-auto max-w-7xl space-y-6 px-4 py-8 font-['Noto_Sans_KR','Outfit'] md:space-y-8 md:px-6 lg:px-8">
+	<!-- ===================================================================== -->
+	<!-- 1. 페이지 헤더 & 실시간 컨트롤 바 -->
+	<!-- ===================================================================== -->
+	<div class="flex flex-col gap-4 border-b-2 border-slate-900 pb-6 md:flex-row md:items-end md:justify-between md:border-b-4">
+		<div>
+			<div class="flex items-center gap-2">
+				<span class="inline-flex items-center gap-1.5 rounded-full bg-slate-900 px-3 py-1 text-[11px] font-black tracking-widest text-emerald-400 uppercase">
+					<span class="h-2 w-2 rounded-full bg-emerald-400 animate-ping"></span>
+					Autonomous Background Worker
+				</span>
+				<span class="text-xs font-bold text-slate-400">v1/admin/tasks</span>
+			</div>
+			<h1 class="mt-2 text-3xl font-black tracking-tight text-slate-900 uppercase italic md:text-4xl">
+				예약 작업 관리 <span class="not-italic text-blue-600">자율신경계 워커</span>
+			</h1>
+			<p class="mt-1 text-sm font-medium text-slate-500">
+				새벽 자동 청소, 기사 그룹 동기화, 사진 축소판 생성 등 24시간 뒤에서 일하는 로봇 일꾼 관리탑
+			</p>
+		</div>
 
-    <!-- 탭 메뉴 -->
-    <div class="tabs tabs-boxed mb-6 bg-slate-100 p-1 w-fit">
-        <button class="tab {activeTab === 'monitor' ? 'tab-active bg-white' : ''}" onclick={() => activeTab = 'monitor'}>
-            <Icon icon="mdi:monitor-dashboard" class="mr-2"/> 작업 관제탑
-        </button>
-        <button class="tab {activeTab === 'schedule' ? 'tab-active bg-white' : ''}" onclick={() => activeTab = 'schedule'}>
-            <Icon icon="mdi:calendar-clock" class="mr-2"/> 예약 스케줄러
-        </button>
-        <button class="tab {activeTab === 'register' ? 'tab-active bg-white' : ''}" onclick={() => activeTab = 'register'}>
-            <Icon icon="mdi:plus-circle" class="mr-2"/> 태스크 등록
-        </button>
-    </div>
+		<!-- 자동갱신 및 새로고침 버튼 -->
+		<div class="flex flex-wrap items-center gap-3">
+			<label class="flex cursor-pointer items-center gap-2 rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-slate-50">
+				<input type="checkbox" bind:checked={autoRefresh} class="h-4 w-4 rounded text-blue-600 focus:ring-blue-500" />
+				<span class="flex items-center gap-1.5">
+					<Icon icon="solar:refresh-circle-bold-duotone" class="text-base text-blue-600 {autoRefresh ? 'animate-spin' : ''}" />
+					10초 자동 갱신
+				</span>
+			</label>
 
-    {#if activeTab === 'monitor' || activeTab === 'schedule'}
-        <div transition:fade>
-            <!-- 필터 영역 -->
-            <div class="flex gap-4 mb-6 bg-base-200 p-4 rounded-lg">
-                <select bind:value={selectedStatus} onchange={loadTasks} class="select select-sm">
-                    <option value="">모든 상태</option>
-                    <option value="PENDING">대기중</option>
-                    <option value="RUNNING">실행중</option>
-                    <option value="SUCCESS">성공</option>
-                    <option value="FAILED">실패</option>
-                    <option value="CANCELLED">취소됨</option>
-                </select>
-                <span class="text-sm self-center">전체 {total}개 {activeTab === 'monitor' ? '실행' : '예약'}</span>
-            </div>
+			<button
+				onclick={() => loadAllData(false)}
+				class="flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2 text-xs font-black text-white shadow-md transition hover:bg-blue-600 active:scale-95"
+			>
+				<Icon icon="solar:restart-bold" class="text-base {isLoading ? 'animate-spin' : ''}" />
+				<span>지금 새로고침</span>
+			</button>
+		</div>
+	</div>
 
-            <!-- 테이블 영역 -->
-            <div class="overflow-x-auto bg-base-100 rounded-box shadow">
-                <table class="table w-full">
-                    <thead>
-                        <tr>
-                            <th>ID</th>
-                            <th>유형</th>
-                            <th>상태</th>
-                            {#if activeTab === 'schedule'}
-                                <th>스케줄</th>
-                            {:else}
-                                <th>진행률</th>
-                            {/if}
-                            <th>재시도</th>
-                            <th>{activeTab === 'schedule' ? '예약시각' : '생성일'}</th>
-                            <th>관리</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {#each tasks as task}
-                            <tr>
-                                <td>{task.id}</td>
-                                <td class="font-mono text-xs">
-                                    <div class="font-bold">{task.task_type}</div>
-                                    <div class="text-[10px] opacity-50">{task.unique_key || ''}</div>
-                                </td>
-                                <td>
-                                    <span class="badge badge-sm {task.status === 'SUCCESS' ? 'badge-success' : task.status === 'FAILED' ? 'badge-error' : task.status === 'RUNNING' ? 'badge-info' : 'badge-warning'}">
-                                        {task.status}
-                                    </span>
-                                </td>
-                                <td>
-                                    {#if activeTab === 'schedule'}
-                                        <div class="text-xs">
-                                            {#if task.cron_expression}
-                                                <div class="badge badge-outline badge-xs">Cron: {task.cron_expression}</div>
-                                            {/if}
-                                            {#if task.repeat_interval}
-                                                <div class="badge badge-outline badge-xs">Interval: {task.repeat_interval}s</div>
-                                            {/if}
-                                        </div>
-                                    {:else}
-                                        <div class="flex items-center gap-2">
-                                            <progress class="progress progress-primary w-16" value={task.progress_pct} max="100"></progress>
-                                            <span class="text-[10px]">{task.progress_pct}%</span>
-                                        </div>
-                                    {/if}
-                                </td>
-                                <td>{task.retry_count}/{task.max_retries}</td>
-                                <td class="text-xs">
-                                    {#if activeTab === 'schedule'}
-                                        {task.scheduled_at ? task.scheduled_at.substring(0, 19).replace('T', ' ') : '-'}
-                                    {:else}
-                                        {task.created_at.substring(0, 19).replace('T', ' ')}
-                                    {/if}
-                                </td>
-                                <td>
-                                    <div class="flex gap-1 items-center">
-                                        <button onclick={() => selectedDetailTask = task} class="btn btn-xs btn-outline">상세</button>
-                                        {#if task.status === 'FAILED'}
-                                            <button onclick={() => retryTask(task.id)} class="btn btn-xs btn-primary">재시도</button>
-                                        {/if}
-                                        {#if task.status === 'PENDING' || task.status === 'RUNNING'}
-                                            <button onclick={() => cancelTask(task.id)} class="btn btn-xs btn-ghost text-error" disabled={task.status === 'RUNNING'}>취소</button>
-                                        {/if}
-                                    </div>
-                                </td>
-                            </tr>
-                        {:else}
-                            <tr><td colspan="7" class="text-center py-10 text-slate-400">조회된 데이터가 없습니다.</td></tr>
-                        {/each}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    {:else if activeTab === 'register'}
-        <div transition:fade class="bg-base-100 p-8 rounded-box shadow border border-base-200 max-w-4xl">
-            <h2 class="text-xl font-bold mb-6 flex items-center gap-2">
-                <Icon icon="mdi:plus-circle" class="text-primary" /> 신규 태스크 수동 등록
-            </h2>
-            
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <!-- 필수 정보 -->
-                <div class="space-y-4">
-                    <div class="form-control">
-                        <label class="label"><span class="label-text font-semibold">태스크 유형 (Task Type) *</span></label>
-                        <select 
-                            bind:value={newTask.task_type} 
-                            onchange={() => updatePayloadExample(newTask.task_type)}
-                            class="select select-bordered w-full"
-                        >
-                            <option value="" disabled selected>작업 유형을 선택하세요</option>
-                            {#each taskTypes as item}
-                                <option value={item.type}>{item.type}</option>
-                            {/each}
-                        </select>
-                    </div>
-                    
-                    <div class="form-control">
-                        <label class="label"><span class="label-text font-semibold">고유 키 (Unique Key)</span></label>
-                        <input type="text" bind:value={newTask.unique_key} placeholder="중복 생성 방지용 (선택사항)" class="input input-bordered w-full" />
-                    </div>
+	<!-- ===================================================================== -->
+	<!-- 2. 상단 4대 로봇 일꾼 상태 요약 카드 (Status Cards) -->
+	<!-- ===================================================================== -->
+	<div class="grid grid-cols-2 gap-4 md:grid-cols-4 md:gap-5">
+		<!-- 카드 1: 워커 가동 상태 -->
+		<div class="flex flex-col justify-between rounded-2xl border-2 border-slate-200 bg-white p-5 shadow-sm">
+			<div class="flex items-center justify-between">
+				<span class="text-xs font-black tracking-wider text-slate-400 uppercase">Worker Engine</span>
+				<div class="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-100 text-emerald-600">
+					<Icon icon="solar:robot-2-bold-duotone" class="text-xl" />
+				</div>
+			</div>
+			<div class="mt-4">
+				<div class="text-2xl font-black text-slate-900">
+					1대 가동 중
+				</div>
+				<div class="mt-1 flex items-center gap-1.5 text-xs font-semibold text-emerald-600">
+					<span class="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
+					24시간 자율 가동 (정상)
+				</div>
+			</div>
+		</div>
 
-                    <div class="grid grid-cols-2 gap-4">
-                        <div class="form-control">
-                            <label class="label"><span class="label-text font-semibold">우선순위 (1~10)</span></label>
-                            <input type="number" bind:value={newTask.priority} class="input input-bordered w-full" />
-                        </div>
-                        <div class="form-control">
-                            <label class="label"><span class="label-text font-semibold">최대 재시도</span></label>
-                            <input type="number" bind:value={newTask.max_retries} class="input input-bordered w-full" />
-                        </div>
-                    </div>
+		<!-- 카드 2: 밀린 할 일 (대기중) -->
+		<button
+			onclick={() => { activeTab = 'monitor'; selectedStatus = 'PENDING'; loadAllData(); }}
+			class="group flex flex-col justify-between rounded-2xl border-2 p-5 text-left transition {activeTab === 'monitor' && selectedStatus === 'PENDING' ? 'border-amber-500 bg-amber-50/50 shadow-md ring-2 ring-amber-500/20' : 'border-slate-200 bg-white hover:border-slate-300'}"
+		>
+			<div class="flex items-center justify-between">
+				<span class="text-xs font-black tracking-wider text-slate-400 uppercase">Pending Queue</span>
+				<div class="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-100 text-amber-600">
+					<Icon icon="solar:clock-circle-bold-duotone" class="text-xl" />
+				</div>
+			</div>
+			<div class="mt-4">
+				<div class="text-2xl font-black text-slate-900 group-hover:text-amber-600 transition">
+					{summary.pending_count}
+					<span class="text-xs font-normal text-slate-500">건 대기 중</span>
+				</div>
+				<div class="mt-1 text-xs font-semibold text-slate-400">
+					{summary.pending_count === 0 ? '밀린 작업 없음 (원활)' : '차례대로 처리 진행 중'}
+				</div>
+			</div>
+		</button>
 
-                    <div class="form-control">
-                        <label class="label"><span class="label-text font-semibold">태그 (Tags)</span></label>
-                        <input type="text" bind:value={newTask.tags_str} placeholder="쉼표로 구분" class="input input-bordered w-full" />
-                    </div>
-                </div>
+		<!-- 카드 3: 매일 정기 작업 (Cron) -->
+		<button
+			onclick={() => { activeTab = 'schedule'; selectedStatus = ''; loadAllData(); }}
+			class="group flex flex-col justify-between rounded-2xl border-2 p-5 text-left transition {activeTab === 'schedule' ? 'border-blue-600 bg-blue-50/50 shadow-md ring-2 ring-blue-500/20' : 'border-slate-200 bg-white hover:border-slate-300'}"
+		>
+			<div class="flex items-center justify-between">
+				<span class="text-xs font-black tracking-wider text-slate-400 uppercase">Scheduled Cron</span>
+				<div class="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-100 text-blue-600">
+					<Icon icon="solar:calendar-date-bold-duotone" class="text-xl" />
+				</div>
+			</div>
+			<div class="mt-4">
+				<div class="text-2xl font-black text-slate-900 group-hover:text-blue-600 transition">
+					{summary.scheduler_count}
+					<span class="text-xs font-normal text-slate-500">개 등록됨</span>
+				</div>
+				<div class="mt-1 text-xs font-semibold text-blue-600">
+					새벽 청소 / 정기 점검 일정
+				</div>
+			</div>
+		</button>
 
-                <!-- 스케줄 및 상세 설정 -->
-                <div class="space-y-4">
-                    <div class="form-control">
-                        <label class="label"><span class="label-text font-semibold">예약 실행 시각</span></label>
-                        <input type="datetime-local" bind:value={newTask.scheduled_at} class="input input-bordered w-full" />
-                    </div>
+		<!-- 카드 4: 실패한 작업 (오류) -->
+		<button
+			onclick={() => { activeTab = 'monitor'; selectedStatus = 'FAILED'; loadAllData(); }}
+			class="group flex flex-col justify-between rounded-2xl border-2 p-5 text-left transition {summary.failed_count > 0 ? 'border-rose-500 bg-rose-50/50 shadow-md ring-2 ring-rose-500/20' : 'border-slate-200 bg-white hover:border-slate-300'}"
+		>
+			<div class="flex items-center justify-between">
+				<span class="text-xs font-black tracking-wider text-slate-400 uppercase">Failed Tasks</span>
+				<div class="flex h-9 w-9 items-center justify-center rounded-xl bg-rose-100 text-rose-600">
+					<Icon icon="solar:danger-triangle-bold-duotone" class="text-xl" />
+				</div>
+			</div>
+			<div class="mt-4">
+				<div class="text-2xl font-black text-slate-900 group-hover:text-rose-600 transition">
+					{summary.failed_count}
+					<span class="text-xs font-normal text-slate-500">건 오류</span>
+				</div>
+				<div class="mt-1 text-xs font-semibold {summary.failed_count > 0 ? 'text-rose-600 font-black animate-pulse' : 'text-slate-400'}">
+					{summary.failed_count > 0 ? '확인 및 재시도 필요' : '모든 작업 정상 완료'}
+				</div>
+			</div>
+		</button>
+	</div>
 
-                    <div class="bg-base-200 p-4 rounded-lg space-y-4">
-                        <label class="label-text font-bold block mb-2">반복 실행 설정</label>
-                        
-                        <div class="flex gap-4 mb-4">
-                            <label class="flex items-center gap-2 cursor-pointer">
-                                <input type="radio" name="scheduleType" value="none" bind:group={scheduleType} class="radio radio-primary radio-sm" />
-                                <span class="text-sm">사용 안함</span>
-                            </label>
-                            <label class="flex items-center gap-2 cursor-pointer">
-                                <input type="radio" name="scheduleType" value="cron" bind:group={scheduleType} class="radio radio-primary radio-sm" />
-                                <span class="text-sm">Cron 표현식</span>
-                            </label>
-                            <label class="flex items-center gap-2 cursor-pointer">
-                                <input type="radio" name="scheduleType" value="interval" bind:group={scheduleType} class="radio radio-primary radio-sm" />
-                                <span class="text-sm">반복 간격</span>
-                            </label>
-                        </div>
+	<!-- ===================================================================== -->
+	<!-- 3. 관제 탭 & 툴바 -->
+	<!-- ===================================================================== -->
+	<div class="rounded-2xl border-2 border-slate-200 bg-white shadow-sm overflow-hidden">
+		<!-- 3대 직관적 탭 헤더 -->
+		<div class="flex border-b border-slate-200 bg-slate-50/70 overflow-x-auto">
+			<button
+				onclick={() => { activeTab = 'monitor'; loadAllData(); }}
+				class="flex items-center gap-2 border-b-2 px-6 py-4 text-xs font-black tracking-wide transition whitespace-nowrap {activeTab === 'monitor' ? 'border-blue-600 bg-white text-blue-600 shadow-xs' : 'border-transparent text-slate-600 hover:bg-slate-100'}"
+			>
+				<Icon icon="solar:monitor-smartphone-bold-duotone" class="text-lg" />
+				<span>📋 실시간 작업 목록 (지금 처리 중인 일)</span>
+			</button>
 
-                        {#if scheduleType === 'cron'}
-                            <div class="form-control" transition:fade>
-                                <label class="label"><span class="label-text font-semibold">Cron 표현식</span></label>
-                                <input type="text" bind:value={newTask.cron_expression} placeholder="0 3 * * *" class="input input-bordered w-full" />
-                                <label class="label"><span class="label-text-alt text-slate-500">예: 0 3 * * * (매일 새벽 3시)</span></label>
-                            </div>
-                        {:else if scheduleType === 'interval'}
-                            <div class="form-control" transition:fade>
-                                <label class="label"><span class="label-text font-semibold">반복 간격 (초)</span></label>
-                                <input type="number" bind:value={newTask.repeat_interval} placeholder="60" class="input input-bordered w-full" />
-                                <label class="label"><span class="label-text-alt text-slate-500">예: 3600 (1시간 마다)</span></label>
-                            </div>
-                        {/if}
-                    </div>
+			<button
+				onclick={() => { activeTab = 'schedule'; loadAllData(); }}
+				class="flex items-center gap-2 border-b-2 px-6 py-4 text-xs font-black tracking-wide transition whitespace-nowrap {activeTab === 'schedule' ? 'border-blue-600 bg-white text-blue-600 shadow-xs' : 'border-transparent text-slate-600 hover:bg-slate-100'}"
+			>
+				<Icon icon="solar:calendar-mark-bold-duotone" class="text-lg" />
+				<span>⏰ 정기 예약 일정표 (새벽 청소 / 정기 점검)</span>
+				<span class="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-black text-blue-700">
+					{summary.scheduler_count}
+				</span>
+			</button>
 
-                    <div class="form-control">
-                        <label class="label"><span class="label-text font-semibold">제한 시간 (초)</span></label>
-                        <input type="number" bind:value={newTask.timeout_sec} class="input input-bordered w-full" />
-                    </div>
+			<button
+				onclick={() => { activeTab = 'register'; }}
+				class="flex items-center gap-2 border-b-2 px-6 py-4 text-xs font-black tracking-wide transition whitespace-nowrap {activeTab === 'register' ? 'border-blue-600 bg-white text-blue-600 shadow-xs' : 'border-transparent text-slate-600 hover:bg-slate-100'}"
+			>
+				<Icon icon="solar:add-circle-bold-duotone" class="text-lg text-emerald-600" />
+				<span class="text-emerald-700 font-black">➕ 쉬운 작업 예약 등록</span>
+			</button>
+		</div>
 
-                    <div class="form-control">
-                        <label class="label"><span class="label-text font-semibold">Payload (JSON)</span></label>
-                        <textarea bind:value={newTask.payload_str} class="textarea textarea-bordered h-24 font-mono text-xs"></textarea>
-                    </div>
-                </div>
-            </div>
+		<!-- 필터 컨트롤 바 (목록/스케줄 탭일 때만 표기) -->
+		{#if activeTab !== 'register'}
+			<div class="flex flex-col gap-3 border-b border-slate-100 bg-white p-4 sm:flex-row sm:items-center sm:justify-between">
+				<div class="flex flex-wrap items-center gap-3">
+					<span class="text-xs font-bold text-slate-500">상태 필터:</span>
+					<select
+						bind:value={selectedStatus}
+						onchange={() => loadAllData()}
+						class="rounded-xl border border-slate-300 bg-slate-50 px-3 py-1.5 text-xs font-bold text-slate-800 focus:border-blue-500 focus:bg-white focus:outline-none"
+					>
+						<option value="">모든 상태 보기</option>
+						<option value="PENDING">대기중 (PENDING)</option>
+						<option value="RUNNING">실행중 (RUNNING)</option>
+						<option value="SUCCESS">성공 (SUCCESS)</option>
+						<option value="FAILED">실패 (FAILED)</option>
+						<option value="CANCELLED">취소됨 (CANCELLED)</option>
+					</select>
+				</div>
 
-            <div class="mt-8 flex justify-end gap-3">
-                <button onclick={() => activeTab = 'monitor'} class="btn btn-ghost">취소</button>
-                <button onclick={registerTask} class="btn btn-primary px-8">
-                    <Icon icon="mdi:check" /> 태스크 등록하기
-                </button>
-            </div>
-            </div>
-            {/if}
+				<div class="text-xs font-bold text-slate-400">
+					총 <span class="text-blue-600 font-black">{total.toLocaleString()}</span>건의 작업 내역
+				</div>
+			</div>
+		{/if}
 
-            <!-- 필드 상세 가이드 (하단 도움말) -->
-            <div class="mt-12 bg-slate-50 border border-slate-200 rounded-2xl p-8">
-            <h3 class="text-lg font-bold mb-6 flex items-center gap-2 text-slate-700">
-            <Icon icon="mdi:information-outline" class="text-info" /> 시스템 태스크 필드 상세 가이드
-            </h3>
+		<!-- ================================================================= -->
+		<!-- 4. 탭별 화면 렌더링 -->
+		<!-- ================================================================= -->
+		{#if isLoading}
+			<div class="flex flex-col items-center justify-center py-20 text-slate-400">
+				<Icon icon="solar:refresh-circle-bold-duotone" class="h-10 w-10 animate-spin text-blue-600" />
+				<span class="mt-3 text-xs font-bold">로봇 일꾼의 작업 목록을 불러오는 중입니다...</span>
+			</div>
+		{:else if activeTab === 'monitor' || activeTab === 'schedule'}
+			<!-- ------------------------------------------------------------- -->
+			<!-- TAB 1 & 2: 실시간 작업 목록 & 정기 예약 일정표 -->
+			<!-- ------------------------------------------------------------- -->
+			{#if tasks.length === 0}
+				<div class="py-20 text-center text-slate-400">
+					<Icon icon="solar:box-minimalistic-broken" class="mx-auto h-12 w-12 text-slate-300" />
+					<p class="mt-2 text-sm font-bold">
+						{activeTab === 'schedule' ? '등록된 정기 예약 일정이 없습니다.' : '현재 조건에 해당하는 작업이 없습니다.'}
+					</p>
+				</div>
+			{:else}
+				<div class="overflow-x-auto">
+					<table class="w-full text-left text-xs">
+						<thead class="border-b border-slate-200 bg-slate-50/80 font-black text-slate-500 uppercase tracking-wider">
+							<tr>
+								<th class="px-5 py-3.5">작업 ID</th>
+								<th class="px-4 py-3.5">어떤 작업인가요?</th>
+								<th class="px-4 py-3.5">진행 상태</th>
+								<th class="px-4 py-3.5">{activeTab === 'schedule' ? '정기 반복 주기' : '진행률'}</th>
+								<th class="px-4 py-3.5">재시도</th>
+								<th class="px-4 py-3.5">{activeTab === 'schedule' ? '다음 실행 예약' : '등록 시각'}</th>
+								<th class="px-5 py-3.5 text-right">관리 제어</th>
+							</tr>
+						</thead>
+						<tbody class="divide-y divide-slate-100 font-medium text-slate-700">
+							{#each tasks as task}
+								{@const typeInfo = getTaskTypeInfo(task.task_type)}
+								{@const statusBadge = getStatusBadge(task.status)}
+								<tr class="hover:bg-slate-50/80 transition {task.status === 'FAILED' ? 'bg-rose-50/30' : ''}">
+									<!-- 작업 ID -->
+									<td class="px-5 py-4 font-mono font-bold text-slate-500">
+										#{task.id}
+									</td>
 
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-8 text-sm">
-            <div>
-                <h4 class="font-bold text-primary mb-3 border-b border-primary/20 pb-1">기본 제어 정보</h4>
-                <ul class="space-y-4">
-                    <li>
-                        <span class="badge badge-sm badge-outline font-mono">task_type</span>
-                        <p class="mt-1 text-slate-600">작업의 성격을 정의하는 식별자입니다. 워커(Worker)는 이 이름을 보고 어떤 함수를 실행할지 결정합니다. <br/><span class="text-[11px] text-slate-400">(예: MEDIA_GC, PUSH_SEND, BACKUP_DB)</span></p>
-                    </li>
-                    <li>
-                        <span class="badge badge-sm badge-outline font-mono">payload (JSON)</span>
-                        <p class="mt-1 text-slate-600">작업에 필요한 구체적인 매개변수입니다. JSON 형식으로 입력해야 하며, 파일 ID나 유저 ID 등을 포함합니다. <br/><span class="text-[11px] text-slate-400">(예: &#123;"file_id": 123, "target": "admin"&#125;)</span></p>
-                    </li>
-                    <li>
-                        <span class="badge badge-sm badge-outline font-mono">unique_key</span>
-                        <p class="mt-1 text-slate-600">작업의 중복 방지를 위한 고유값입니다. 동일한 키를 가진 작업이 이미 대기 중이면 새로 등록되지 않습니다.</p>
-                    </li>
-                    <li>
-                        <span class="badge badge-sm badge-outline font-mono">priority</span>
-                        <p class="mt-1 text-slate-600">작업 우선순위입니다. 숫자가 **낮을수록(1)** 더 먼저 실행됩니다. 기본값은 5입니다.</p>
-                    </li>
-                </ul>
-            </div>
+									<!-- 작업 유형 & 친절한 한글 라벨 -->
+									<td class="px-4 py-4">
+										<div class="flex items-center gap-2.5">
+											<div class="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50 text-blue-600 shrink-0">
+												<Icon icon={typeInfo.icon} class="text-base" />
+											</div>
+											<div>
+												<div class="font-black text-slate-900 text-xs">
+													{typeInfo.label}
+												</div>
+												<div class="text-[10px] font-mono text-slate-400 mt-0.5">
+													{task.task_type}
+													{#if task.unique_key}
+														· <span class="text-slate-500">{task.unique_key}</span>
+													{/if}
+												</div>
+											</div>
+										</div>
+									</td>
 
-            <div>
-                <h4 class="font-bold text-secondary mb-3 border-b border-secondary/20 pb-1">스케줄 및 실행 정책</h4>
-                <ul class="space-y-4">
-                    <li>
-                        <span class="badge badge-sm badge-outline font-mono">scheduled_at</span>
-                        <p class="mt-1 text-slate-600">작업이 실행될 특정 미래 시점입니다. 비워두면 워커가 확인하는 즉시 실행됩니다.</p>
-                    </li>
-                    <li>
-                        <span class="badge badge-sm badge-outline font-mono">cron_expression</span>
-                        <p class="mt-1 text-slate-600">Linux Cron 표현식을 사용하여 주기적 반복 작업을 설정합니다. <br/><span class="text-[11px] text-slate-400">(예: '0 3 * * *' -> 매일 새벽 3시 실행)</span></p>
-                    </li>
-                    <li>
-                        <span class="badge badge-sm badge-outline font-mono">repeat_interval (초)</span>
-                        <p class="mt-1 text-slate-600">작업 종료 후 다음 실행까지의 간격을 초 단위로 설정합니다. Cron보다 단순한 반복에 사용됩니다.</p>
-                    </li>
-                    <li>
-                        <span class="badge badge-sm badge-outline font-mono">max_retries / timeout</span>
-                        <p class="mt-1 text-slate-600">실패 시 최대 재시도 횟수와 작업 강제 종료 시간(초)을 설정하여 무한 루프나 자원 독점을 방지합니다.</p>
-                    </li>
-                </ul>
-            </div>
-            </div>
+									<!-- 상태 뱃지 -->
+									<td class="px-4 py-4 whitespace-nowrap">
+										<span class="inline-block rounded-md border px-2.5 py-1 text-[11px] font-black {statusBadge.color}">
+											{statusBadge.label}
+										</span>
+									</td>
 
-            <div class="mt-8 p-4 bg-blue-50 border border-blue-100 rounded-lg text-[13px] text-blue-800">
-            <p class="flex items-center gap-2">
-                <Icon icon="mdi:lightbulb-on" />
-                <strong>Tip:</strong> 등록된 작업이 '예약 스케줄러' 탭에 나타나게 하려면 <strong>Cron 표현식</strong>이나 <strong>반복 간격</strong> 중 하나를 반드시 입력해야 합니다.
-            </p>
-            </div>
-            </div>
-            </div>
+									<!-- 스케줄 주기 / 진행률 -->
+									<td class="px-4 py-4">
+										{#if activeTab === 'schedule'}
+											<div class="space-y-1">
+												{#if task.cron_expression}
+													<span class="inline-flex items-center gap-1 rounded bg-blue-50 px-2 py-0.5 font-mono text-[11px] font-black text-blue-700">
+														<Icon icon="solar:clock-circle-bold" class="text-xs" />
+														Cron: {task.cron_expression}
+													</span>
+												{/if}
+												{#if task.repeat_interval}
+													<span class="inline-flex items-center gap-1 rounded bg-slate-100 px-2 py-0.5 text-[11px] font-bold text-slate-700">
+														매 {task.repeat_interval}초마다
+													</span>
+												{/if}
+											</div>
+										{:else}
+											<div class="flex items-center gap-2 max-w-[120px]">
+												<div class="h-2 w-full rounded-full bg-slate-200 overflow-hidden">
+													<div class="h-full bg-blue-600 transition-all" style="width: {task.progress_pct || 0}%"></div>
+												</div>
+												<span class="text-[10px] font-bold text-slate-600 whitespace-nowrap">{task.progress_pct || 0}%</span>
+											</div>
+										{/if}
+									</td>
 
-<!-- 태스크 상세 및 에러 로그 모달 -->
+									<!-- 재시도 -->
+									<td class="px-4 py-4 font-mono text-xs">
+										<span class={task.retry_count > 0 ? 'text-amber-600 font-bold' : 'text-slate-400'}>
+											{task.retry_count}
+										</span>
+										<span class="text-slate-400">/{task.max_retries}</span>
+									</td>
+
+									<!-- 시간 -->
+									<td class="px-4 py-4 whitespace-nowrap">
+										{#if activeTab === 'schedule' && task.scheduled_at}
+											<div class="font-bold text-blue-700">{formatDateTime(task.scheduled_at)}</div>
+											<div class="text-[10px] text-slate-400">{timeAgo(task.scheduled_at)}</div>
+										{:else}
+											<div class="font-bold text-slate-900">{timeAgo(task.created_at)}</div>
+											<div class="text-[10px] text-slate-400">{formatDateTime(task.created_at)}</div>
+										{/if}
+									</td>
+
+									<!-- 관리 제어 액션 -->
+									<td class="px-5 py-4 text-right whitespace-nowrap">
+										<div class="inline-flex items-center gap-1.5">
+											<button
+												onclick={() => (selectedDetailTask = task)}
+												class="rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-bold text-slate-700 transition hover:bg-slate-100"
+											>
+												상세보기
+											</button>
+
+											{#if task.status === 'FAILED'}
+												<button
+													onclick={() => handleRetryTask(task.id)}
+													class="inline-flex items-center gap-1 rounded-lg bg-rose-600 px-3 py-1 text-xs font-black text-white shadow-sm transition hover:bg-rose-700 active:scale-95"
+												>
+													<Icon icon="solar:restart-bold" class="text-xs" />
+													<span>즉시 다시 실행</span>
+												</button>
+											{/if}
+
+											{#if task.status === 'PENDING'}
+												<button
+													onclick={() => handleCancelTask(task.id)}
+													class="rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-bold text-rose-600 transition hover:bg-rose-50"
+												>
+													취소
+												</button>
+											{/if}
+										</div>
+									</td>
+								</tr>
+							{/each}
+						</tbody>
+					</table>
+				</div>
+			{/if}
+
+		<!-- ------------------------------------------------------------- -->
+		<!-- TAB 3: 쉬운 작업 예약 등록 -->
+		<!-- ------------------------------------------------------------- -->
+		{:else if activeTab === 'register'}
+			<div class="p-6 md:p-8 space-y-8 max-w-4xl">
+				<!-- 안내 문구 -->
+				<div class="rounded-xl border border-blue-200 bg-blue-50/50 p-4 text-xs font-medium text-blue-900">
+					<div class="flex items-center gap-2 font-black text-sm text-blue-700">
+						<Icon icon="solar:info-circle-bold" class="text-lg" />
+						로봇 일꾼에게 시킬 작업을 직관적으로 선택하세요
+					</div>
+					<p class="mt-1 text-slate-600">
+						복잡한 프로그래밍 코드를 짤 필요 없이, 아래에서 시킬 작업 종류와 실행 시간을 선택하기만 하면 로봇 일꾼이 자동으로 실행합니다.
+					</p>
+				</div>
+
+				<!-- 1단계: 작업 종류 선택 -->
+				<div>
+					<h3 class="text-sm font-black text-slate-900 flex items-center gap-2">
+						<span class="flex h-5 w-5 items-center justify-center rounded-full bg-blue-600 text-[11px] font-black text-white">1</span>
+						어떤 작업을 시키시겠습니까? (작업 종류 선택)
+					</h3>
+
+					<div class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+						{#each taskTypes as item}
+							<button
+								type="button"
+								onclick={() => selectTaskType(item)}
+								class="flex items-start gap-3 rounded-xl border-2 p-4 text-left transition {newTask.task_type === item.type ? 'border-blue-600 bg-blue-50/40 shadow-sm ring-2 ring-blue-500/20' : 'border-slate-200 bg-white hover:border-slate-300'}"
+							>
+								<div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
+									<Icon icon={item.icon} class="text-xl" />
+								</div>
+								<div>
+									<div class="text-xs font-black text-slate-900">{item.label}</div>
+									<p class="mt-1 text-[11px] text-slate-500 leading-relaxed">{item.description}</p>
+									<span class="mt-2 inline-block rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] text-slate-500">
+										{item.type}
+									</span>
+								</div>
+							</button>
+						{/each}
+					</div>
+				</div>
+
+				<!-- 2단계: 언제 실행할까요? -->
+				<div>
+					<h3 class="text-sm font-black text-slate-900 flex items-center gap-2">
+						<span class="flex h-5 w-5 items-center justify-center rounded-full bg-blue-600 text-[11px] font-black text-white">2</span>
+						언제 실행할까요? (실행 주기 및 시간 선택)
+					</h3>
+
+					<div class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+						<label class="flex cursor-pointer items-center gap-3 rounded-xl border-2 p-4 transition {scheduleMode === 'once_now' ? 'border-blue-600 bg-blue-50/40 shadow-xs' : 'border-slate-200 bg-white'}">
+							<input type="radio" bind:group={scheduleMode} value="once_now" class="h-4 w-4 text-blue-600" />
+							<div>
+								<div class="text-xs font-black text-slate-900">⚡ 지금 즉시 1번만 실행</div>
+								<span class="text-[10px] text-slate-400">등록 즉시 큐에 진입하여 처리</span>
+							</div>
+						</label>
+
+						<label class="flex cursor-pointer items-center gap-3 rounded-xl border-2 p-4 transition {scheduleMode === 'daily' ? 'border-blue-600 bg-blue-50/40 shadow-xs' : 'border-slate-200 bg-white'}">
+							<input type="radio" bind:group={scheduleMode} value="daily" class="h-4 w-4 text-blue-600" />
+							<div>
+								<div class="text-xs font-black text-slate-900">⏰ 정해진 시간에 매일 반복</div>
+								<span class="text-[10px] text-slate-400">새벽 청소 등 정기 스케줄</span>
+							</div>
+						</label>
+
+						<label class="flex cursor-pointer items-center gap-3 rounded-xl border-2 p-4 transition {scheduleMode === 'specific_time' ? 'border-blue-600 bg-blue-50/40 shadow-xs' : 'border-slate-200 bg-white'}">
+							<input type="radio" bind:group={scheduleMode} value="specific_time" class="h-4 w-4 text-blue-600" />
+							<div>
+								<div class="text-xs font-black text-slate-900">📅 특정 날짜/시간에 예약</div>
+								<span class="text-[10px] text-slate-400">지정된 미래 시점에 1회 실행</span>
+							</div>
+						</label>
+					</div>
+
+					<!-- 정기 반복 스케줄 선택 시 프리셋 버튼들 -->
+					{#if scheduleMode === 'daily'}
+						<div class="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+							<span class="block text-xs font-black text-slate-700 mb-2">자주 쓰는 정기 시간표 (원클릭 선택):</span>
+							<div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
+								{#each CRON_PRESETS as preset}
+									<button
+										type="button"
+										onclick={() => applyCronPreset(preset.cron)}
+										class="flex flex-col rounded-lg border bg-white p-3 text-left transition hover:border-blue-500 {newTask.cron_expression === preset.cron ? 'border-blue-600 bg-blue-50/30' : 'border-slate-200'}"
+									>
+										<div class="text-xs font-bold text-slate-900">{preset.label}</div>
+										<span class="text-[10px] text-slate-400 mt-0.5">{preset.desc} (Cron: <code>{preset.cron}</code>)</span>
+									</button>
+								{/each}
+							</div>
+						</div>
+					{:else if scheduleMode === 'specific_time'}
+						<div class="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+							<label for="schedAtInput" class="block text-xs font-black text-slate-700 mb-1">예약 실행 일시:</label>
+							<input
+								type="datetime-local"
+								id="schedAtInput"
+								bind:value={newTask.scheduled_at}
+								class="rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-800 focus:border-blue-500 focus:outline-none"
+							/>
+						</div>
+					{/if}
+				</div>
+
+				<!-- 3단계: 고급 옵션 (접기/펼치기) -->
+				<div class="border-t border-slate-200 pt-4">
+					<button
+						type="button"
+						onclick={() => (showAdvancedOptions = !showAdvancedOptions)}
+						class="flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-slate-800"
+					>
+						<Icon icon={showAdvancedOptions ? "solar:alt-arrow-up-bold" : "solar:alt-arrow-down-bold"} />
+						<span>고급 엔지니어링 옵션 (JSON 매개변수, 재시도 횟수 등) {showAdvancedOptions ? '접기' : '펼치기'}</span>
+					</button>
+
+					{#if showAdvancedOptions}
+						<div class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 rounded-xl bg-slate-50 p-5 border border-slate-200">
+							<div>
+								<label for="uniqKeyInput" class="block text-xs font-bold text-slate-700 mb-1">중복 방지 고유키 (Unique Key):</label>
+								<input
+									type="text"
+									id="uniqKeyInput"
+									bind:value={newTask.unique_key}
+									placeholder="동일 작업 중복 대기 방지용"
+									class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-800 focus:outline-none"
+								/>
+							</div>
+
+							<div>
+								<label for="maxRetriesInput" class="block text-xs font-bold text-slate-700 mb-1">실패 시 최대 재시도 횟수:</label>
+								<input
+									type="number"
+									id="maxRetriesInput"
+									min="1"
+									max="10"
+									bind:value={newTask.max_retries}
+									class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-800 focus:outline-none"
+								/>
+							</div>
+
+							<div class="sm:col-span-2">
+								<label for="payloadInput" class="block text-xs font-bold text-slate-700 mb-1">전달 매개변수 (JSON Payload):</label>
+								<textarea
+									id="payloadInput"
+									bind:value={newTask.payload_str}
+									rows="3"
+									class="w-full rounded-xl border border-slate-300 bg-slate-900 p-3 font-mono text-xs text-emerald-400 focus:outline-none"
+								></textarea>
+							</div>
+						</div>
+					{/if}
+				</div>
+
+				<!-- 제출 버튼 바 -->
+				<div class="flex items-center justify-end gap-3 pt-4 border-t border-slate-200">
+					<button
+						type="button"
+						onclick={() => (activeTab = 'monitor')}
+						class="rounded-xl border border-slate-300 px-5 py-2.5 text-xs font-bold text-slate-600 transition hover:bg-slate-100"
+					>
+						취소
+					</button>
+
+					<button
+						type="button"
+						onclick={handleRegisterTask}
+						class="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-6 py-2.5 text-xs font-black text-white shadow-md transition hover:bg-blue-700 active:scale-95"
+					>
+						<Icon icon="solar:check-circle-bold" class="text-base" />
+						<span>로봇 일꾼에게 작업 지시하기</span>
+					</button>
+				</div>
+			</div>
+		{/if}
+	</div>
+</div>
+
+<!-- ========================================================================= -->
+<!-- 5. 태스크 상세 정보 및 에러 원인 확인 모달 -->
+<!-- ========================================================================= -->
 {#if selectedDetailTask}
-    <div class="modal modal-open">
-        <div class="modal-box max-w-3xl">
-            <h3 class="font-bold text-lg flex items-center justify-between border-b pb-3 mb-4">
-                <span class="flex items-center gap-2">
-                    <Icon icon="mdi:information-box" class="text-primary text-xl" />
-                    태스크 상세 정보 #{selectedDetailTask.id}
-                </span>
-                <span class="badge {selectedDetailTask.status === 'SUCCESS' ? 'badge-success' : selectedDetailTask.status === 'FAILED' ? 'badge-error' : selectedDetailTask.status === 'RUNNING' ? 'badge-info' : 'badge-warning'}">
-                    {selectedDetailTask.status}
-                </span>
-            </h3>
+	<div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-xs">
+		<div class="relative w-full max-w-2xl rounded-2xl bg-white shadow-2xl overflow-hidden border border-slate-200">
+			<!-- 모달 헤더 -->
+			<div class="flex items-center justify-between border-b border-slate-100 bg-slate-50 px-6 py-4">
+				<div class="flex items-center gap-2.5">
+					<div class="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-100 text-blue-700">
+						<Icon icon="solar:info-circle-bold" class="text-lg" />
+					</div>
+					<div>
+						<h3 class="text-sm font-black text-slate-900">작업 상세 정보 #{selectedDetailTask.id}</h3>
+						<span class="text-[11px] text-slate-400 font-mono">{selectedDetailTask.task_type}</span>
+					</div>
+				</div>
 
-            <div class="grid grid-cols-2 gap-4 text-xs mb-4 bg-base-200 p-4 rounded-lg">
-                <div><strong>작업 유형:</strong> {selectedDetailTask.task_type}</div>
-                <div><strong>워커 ID:</strong> {selectedDetailTask.worker_id || '(미할당)'}</div>
-                <div><strong>우선순위:</strong> {selectedDetailTask.priority}</div>
-                <div><strong>재시도:</strong> {selectedDetailTask.retry_count} / {selectedDetailTask.max_retries}</div>
-                <div><strong>예약 시각:</strong> {selectedDetailTask.scheduled_at ? selectedDetailTask.scheduled_at.substring(0, 19).replace('T', ' ') : '-'}</div>
-                <div><strong>등록 시각:</strong> {selectedDetailTask.created_at ? selectedDetailTask.created_at.substring(0, 19).replace('T', ' ') : '-'}</div>
-                {#if selectedDetailTask.cron_expression}
-                    <div class="col-span-2"><strong>Cron 표현식:</strong> <code>{selectedDetailTask.cron_expression}</code></div>
-                {/if}
-                {#if selectedDetailTask.repeat_interval}
-                    <div class="col-span-2"><strong>반복 간격:</strong> {selectedDetailTask.repeat_interval}초</div>
-                {/if}
-            </div>
+				<button
+					onclick={() => (selectedDetailTask = null)}
+					class="rounded-lg p-1 text-slate-400 hover:bg-slate-200 hover:text-slate-700"
+				>
+					<Icon icon="solar:close-circle-bold" class="text-xl" />
+				</button>
+			</div>
 
-            <!-- 에러 로그가 있는 경우 -->
-            {#if selectedDetailTask.error_log}
-                <div class="mb-4">
-                    <div class="font-bold text-xs text-error mb-1 flex items-center gap-1">
-                        <Icon icon="mdi:alert-circle" /> 실패 에러 로그
-                    </div>
-                    <pre class="bg-error/10 text-error p-3 rounded text-[11px] font-mono whitespace-pre-wrap max-h-48 overflow-y-auto border border-error/20">{selectedDetailTask.error_log}</pre>
-                </div>
-            {/if}
+			<!-- 모달 본문 -->
+			<div class="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
+				<!-- 상태 요약 -->
+				<div class="grid grid-cols-2 gap-3 text-xs bg-slate-50 p-4 rounded-xl border border-slate-200">
+					<div><strong>진행 상태:</strong> <span class="font-black text-blue-700">{selectedDetailTask.status}</span></div>
+					<div><strong>재시도:</strong> {selectedDetailTask.retry_count} / {selectedDetailTask.max_retries}회</div>
+					<div><strong>워커 식별자:</strong> <span class="font-mono">{selectedDetailTask.worker_id || '(미할당)'}</span></div>
+					<div><strong>등록 시각:</strong> {formatDateTime(selectedDetailTask.created_at)}</div>
+					{#if selectedDetailTask.cron_expression}
+						<div class="col-span-2"><strong>정기 Cron:</strong> <code>{selectedDetailTask.cron_expression}</code></div>
+					{/if}
+				</div>
 
-            <!-- Payload 및 Result -->
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                    <div class="font-bold text-xs mb-1">Payload (입력값)</div>
-                    <pre class="bg-slate-900 text-slate-100 p-3 rounded text-[11px] font-mono max-h-40 overflow-y-auto">{JSON.stringify(selectedDetailTask.payload, null, 2)}</pre>
-                </div>
-                <div>
-                    <div class="font-bold text-xs mb-1">Result (산출물)</div>
-                    <pre class="bg-slate-900 text-slate-100 p-3 rounded text-[11px] font-mono max-h-40 overflow-y-auto">{JSON.stringify(selectedDetailTask.result, null, 2)}</pre>
-                </div>
-            </div>
+				<!-- 에러 로그가 있는 경우 -->
+				{#if selectedDetailTask.error_log}
+					<div>
+						<div class="text-xs font-black text-rose-600 flex items-center gap-1.5 mb-1.5">
+							<Icon icon="solar:danger-triangle-bold" />
+							실패 원인 및 에러 로그:
+						</div>
+						<pre class="rounded-xl border border-rose-200 bg-rose-50 p-4 text-[11px] font-mono text-rose-800 whitespace-pre-wrap max-h-40 overflow-y-auto">{selectedDetailTask.error_log}</pre>
+					</div>
+				{/if}
 
-            <div class="modal-action mt-6">
-                {#if selectedDetailTask.status === 'FAILED'}
-                    <button onclick={() => { retryTask(selectedDetailTask.id); selectedDetailTask = null; }} class="btn btn-primary btn-sm">
-                        <Icon icon="mdi:reload" /> 즉시 재시도
-                    </button>
-                {/if}
-                <button onclick={() => selectedDetailTask = null} class="btn btn-ghost btn-sm">닫기</button>
-            </div>
-        </div>
-        <div class="modal-backdrop" onclick={() => selectedDetailTask = null}></div>
-    </div>
+				<!-- 매개변수 & 결과 -->
+				<div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+					<div>
+						<span class="block text-xs font-bold text-slate-700 mb-1">입력값 (Payload):</span>
+						<pre class="rounded-xl bg-slate-900 p-3 text-[11px] font-mono text-emerald-400 max-h-36 overflow-y-auto">{JSON.stringify(selectedDetailTask.payload, null, 2)}</pre>
+					</div>
+					<div>
+						<span class="block text-xs font-bold text-slate-700 mb-1">처리 결과 (Result):</span>
+						<pre class="rounded-xl bg-slate-900 p-3 text-[11px] font-mono text-slate-300 max-h-36 overflow-y-auto">{JSON.stringify(selectedDetailTask.result || '(결과 대기 중)', null, 2)}</pre>
+					</div>
+				</div>
+			</div>
+
+			<!-- 모달 푸터 -->
+			<div class="flex items-center justify-end gap-2 border-t border-slate-100 bg-slate-50 px-6 py-3">
+				{#if selectedDetailTask.status === 'FAILED'}
+					<button
+						onclick={() => handleRetryTask(selectedDetailTask.id)}
+						class="inline-flex items-center gap-1.5 rounded-xl bg-rose-600 px-4 py-2 text-xs font-black text-white shadow-sm transition hover:bg-rose-700"
+					>
+						<Icon icon="solar:restart-bold" class="text-sm" />
+						<span>원클릭 다시 실행</span>
+					</button>
+				{/if}
+				<button
+					onclick={() => (selectedDetailTask = null)}
+					class="rounded-xl border border-slate-300 bg-white px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-100"
+				>
+					닫기
+				</button>
+			</div>
+		</div>
+	</div>
 {/if}
-
-

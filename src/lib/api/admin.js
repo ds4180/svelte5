@@ -265,6 +265,62 @@ export const adminUpdateConfigsBatch = (configsDict) =>
  */
 export const adminRunSystemGc = () => request(`${BASE_URL}/system/gc/run`, 'POST');
 
+// ============================================================================
+// 🤖 [시스템 비동기 태스크 및 스케줄러 (System Tasks & Scheduler) API]
+// ============================================================================
+
+/**
+ * @function adminGetTasksSummary
+ * @description 로봇 일꾼(워커) 상태 및 4대 핵심 지표(대기/실행/실패/정기예약) 요약을 조회합니다.
+ */
+export const adminGetTasksSummary = () => request(`${BASE_URL}/tasks/summary`);
+
+/**
+ * @function adminGetTaskTypes
+ * @description 지원되는 태스크 유형 목록 및 친절한 한글 메타데이터를 조회합니다.
+ */
+export const adminGetTaskTypes = () => request(`${BASE_URL}/tasks/types`);
+
+/**
+ * @function adminGetTasks
+ * @description 비동기 및 정기 스케줄 태스크 목록을 조회합니다.
+ * @param {Object} params - { status, task_type, is_scheduler, limit, offset }
+ */
+export const adminGetTasks = (params = {}) => {
+	const query = new URLSearchParams();
+	Object.entries(params).forEach(([key, val]) => {
+		if (val !== undefined && val !== null && val !== '') {
+			query.append(key, String(val));
+		}
+	});
+	const qs = query.toString();
+	return request(`${BASE_URL}/tasks${qs ? `?${qs}` : ''}`);
+};
+
+/**
+ * @function adminCreateTask
+ * @description 신규 비동기/예약 태스크를 등록합니다.
+ * @param {Object} data
+ */
+export const adminCreateTask = (data) => request(`${BASE_URL}/tasks`, 'POST', data);
+
+/**
+ * @function adminRetryTask
+ * @description 실패한 태스크를 즉시 다시 실행 큐에 투입합니다.
+ * @param {number|string} taskId
+ */
+export const adminRetryTask = (taskId) =>
+	request(`${BASE_URL}/tasks/${taskId}/retry`, 'POST');
+
+/**
+ * @function adminCancelTask
+ * @description 대기 중인 태스크를 취소합니다.
+ * @param {number|string} taskId
+ */
+export const adminCancelTask = (taskId) =>
+	request(`${BASE_URL}/tasks/${taskId}`, 'DELETE');
+
+
 
 
 
