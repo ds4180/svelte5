@@ -477,18 +477,20 @@
 									</span>
 								</button>
 
-								<!-- 🔄 PWA 캐시 강제 초기화 및 최신 동기화 -->
-								<button
-									type="button"
-									onclick={() => { isUserMenuOpen = false; handleHardRefresh(); }}
+								<!-- 📷 웹카메라 실행 (WebCam Studio) -->
+								<a
+									href="/v1/pages/camera"
+									onclick={() => (isUserMenuOpen = false)}
 									class="flex w-full items-center justify-between px-3 py-2 font-bold text-slate-700 hover:bg-slate-100 transition rounded"
 								>
 									<span class="flex items-center gap-2">
-										<Icon icon="ph:arrow-clockwise-bold" class="text-base text-blue-600" />
-										최신 캐시 동기화
+										<Icon icon="ph:camera-bold" class="text-base text-rose-600" />
+										웹카메라 실행
 									</span>
-									<span class="text-[10px] text-slate-400 font-normal">Hard Refresh</span>
-								</button>
+									<span class="rounded bg-rose-50 px-1.5 py-0.5 text-[10px] font-black text-rose-600 border border-rose-200">
+										WebCam
+									</span>
+								</a>
 
 								<!-- 👤 내 프로필 정보 -->
 								<a

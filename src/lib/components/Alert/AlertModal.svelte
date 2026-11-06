@@ -5,13 +5,20 @@
 	 * - 레벨 4: 징벌적 타이머 (조기 클릭 시 초기화)
 	 * - 레벨 5: 시스템 락 스타일링
 	 */
+	import { onMount } from 'svelte';
 	import { alertState } from '$lib/runes/alert.svelte.js';
+	import { notifyAlert } from '$lib/utils/sound';
 	import { fade } from 'svelte/transition';
 	import { goto } from '$app/navigation';
 	import Icon from '@iconify/svelte';
 
 	let { alert } = $props();
 	let penaltyMsg = $state('');
+
+	// 🔔 모달 팝업 시 L3~L5 사운드 및 햅틱 진동 즉시 트리거
+	onMount(() => {
+		notifyAlert(alert.level || 3);
+	});
 
 	// 레벨 4, 5 전용 타이머 시작 (alertState 내 메서드 호출)
 	$effect(() => {

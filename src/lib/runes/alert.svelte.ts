@@ -16,6 +16,7 @@
 
 import { browser } from '$app/environment';
 import { isExpired } from '$lib/utils.js';
+import { notifyAlert } from '$lib/utils/sound';
 
 export interface AlertData {
 	id: string | number;
@@ -107,8 +108,10 @@ export class AlertState {
 		if (currentAll.length > 50) currentAll = currentAll.slice(-50);
 		this.all = currentAll;
 
-		// 🚀 [Auto-Dismiss] 레벨 1(Toast)인 경우 10초 뒤 자동 소멸 예약
+		// 🔊 L1, L2 알림 발행 시 사운드/진동 트리거 (L3 이상은 모달 마운트 시 실시간 반응)
 		if (newAlert.level < 3) {
+			notifyAlert(newAlert.level as any);
+			// 🚀 [Auto-Dismiss] 레벨 1(Toast)인 경우 10초 뒤 자동 소멸 예약
 			setTimeout(() => this.dismiss(id), 10000);
 		}
 	}

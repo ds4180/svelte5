@@ -1,6 +1,7 @@
 <script>
 	import Icon from '@iconify/svelte';
 	import { toLocalISOString } from '$lib/utils';
+	import { notifyAlert } from '$lib/utils/sound';
 
 	let {
 		isOpen = $bindable(false),
@@ -166,7 +167,7 @@
 						>
 							<option value="1">L1 (일반 알림 - Toast)</option>
 							<option value="2">L2 (상태 배너 - Banner)</option>
-							<option value="3">L3 (일반 확인 - Modal)</option>
+							<option value="3">L3 (업무 지시 - Modal 챠임벨)</option>
 							<option value="4">L4 (강제 지시 - 5초 정독)</option>
 							<option value="5">L5 (시스템 락 - 5초 정독)</option>
 						</select>
@@ -206,6 +207,32 @@
 						{/if}
 					</div>
 				</div>
+
+				<!-- 🎵 L3 업무 지시 오디오 챠임벨 및 진동 모터 연동 알림 배너 -->
+				{#if parseInt(String(editingAlert.level)) === 3}
+					<div class="flex items-center justify-between rounded-2xl bg-purple-50 p-3 border-2 border-purple-200">
+						<div class="flex items-center gap-2.5">
+							<div class="flex h-8 w-8 items-center justify-center rounded-xl bg-purple-200 text-purple-700">
+								<Icon icon="mdi:volume-high" class="text-lg" />
+							</div>
+							<div>
+								<h5 class="text-xs font-black text-purple-950 flex items-center gap-1">
+									<span>L3 업무 지시 사운드 & 햅틱 진동 탑재</span>
+									<span class="badge badge-xs bg-purple-700 text-white font-bold">Web Audio + Vibration</span>
+								</h5>
+								<p class="text-[11px] text-purple-700 mt-0.5">사원 화면에 모달이 열릴 때 맑은 2단 챠임벨("딩~동~")과 모바일 진동이 울립니다.</p>
+							</div>
+						</div>
+						<button
+							type="button"
+							class="btn btn-xs rounded-xl bg-purple-700 text-white font-black hover:bg-purple-800 active:scale-95 shadow-sm px-3 py-1.5 flex items-center gap-1 shrink-0"
+							onclick={() => notifyAlert(3)}
+						>
+							<Icon icon="mdi:play-circle-outline" class="text-sm" />
+							<span>미리듣기</span>
+						</button>
+					</div>
+				{/if}
 
 				<!-- 시작일시 / 종료일시 -->
 				<div class="grid grid-cols-1 gap-4 md:grid-cols-2">
