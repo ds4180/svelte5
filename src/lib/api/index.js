@@ -1,7 +1,59 @@
 import { env } from '$env/dynamic/public';
 import { auth } from '$lib/runes/auth.svelte.js';
 import { toast } from '$lib/runes/toast.svelte.js';
+import { offlineSync } from '$lib/runes/offlineSync.svelte.js';
 import { browser } from '$app/environment';
+
+/**
+ * @typedef {Object} FastApiOptions
+ * @property {boolean} [offline=true] - false 이면 오프라인 시 우체통 적재/GET 캐시 복원을 하지 않음
+ * @property {string} [offlineLabel] - 우체통 대기 목록에 표시할 작업 이름
+ */
+
+const WRITE_METHODS = ['post', 'put', 'delete', 'patch'];
+// 보안 가드레일: 인증/세션 엔드포인트는 호출부 옵션과 무관하게 절대 오프라인 우체통(IndexedDB)에 평문 적재하지 않음
+const AUTH_PATH_PATTERNS = ['/users/login', '/users/logout', '/logout'];
+
+/**
+ * 오프라인 폴백 처리 (선제 오프라인 감지 / 네트워크 실패 공통)
+ * - GET: IndexedDB 에 기억된 마지막 응답 반환
+ * - 쓰기: 임시 우체통(Outbox)에 보관 후 queued 결과 반환
+ * @param {{ method: string, url: string, params: any, offlineEnabled: boolean, offlineLabel?: string, onSuccess?: Function }} ctx
+ * @param {{ allowQueue: boolean }} opts
+ * @returns {Promise<{ handled: boolean, result?: any }>}
+ */
+async function tryOfflineFallback(ctx, { allowQueue }) {
+	const { method, url, params, offlineEnabled, offlineLabel, onSuccess } = ctx;
+	if (!offlineEnabled || AUTH_PATH_PATTERNS.some((p) => url.includes(p))) {
+		return { handled: false };
+	}
+	const lowerMethod = method.toLowerCase();
+
+	if (lowerMethod === 'get') {
+		const cachedData = await offlineSync.loadGetCache(url);
+		if (cachedData === null || cachedData === undefined) return { handled: false };
+		console.log(`📂 [API Offline Cache Hit] 오프라인 기억 데이터 복원: ${url}`);
+		if (onSuccess) onSuccess(cachedData);
+		return { handled: true, result: cachedData };
+	}
+
+	if (allowQueue && WRITE_METHODS.includes(lowerMethod)) {
+		const queued = await offlineSync.enqueue(method, url, params, offlineLabel);
+		if (!queued) return { handled: false };
+		console.log(`📮 [API Offline Outbox] 임시 우체통 보관 완료: ${method} ${url}`);
+		toast.info('📮 오프라인 우체통에 안전하게 보관되었습니다! (인터넷 연결 시 자동 등록됩니다)', 4500);
+		const queuedResult = {
+			offline_queued: true,
+			id: `offline_${Date.now()}`,
+			status: 'queued',
+			message: '오프라인 임시 우체통 보관 완료'
+		};
+		if (onSuccess) onSuccess(queuedResult);
+		return { handled: true, result: queuedResult };
+	}
+
+	return { handled: false };
+}
 
 /**
  * ============================================================================
@@ -20,11 +72,32 @@ import { browser } from '$app/environment';
  * @param {string} method - HTTP 메서드 (GET, POST, PUT, DELETE 등)
  * @param {string} url - 요청 주소 (예: '/api/v1/app/board/list')
  * @param {Object} [params] - 요청 본문 데이터 또는 쿼리 파라미터
- * @param {Function} [success_callback] - 성공 시 실행할 콜백 (Legacy 호환용)
+ * @param {Function | FastApiOptions} [success_callback] - 성공 시 실행할 콜백 (Legacy 호환용) 또는 옵션 객체
  * @param {Function} [failure_callback] - 실패 시 실행할 콜백 (Legacy 호환용)
+ * @param {FastApiOptions} [apiOptions] - 요청 옵션 (콜백을 쓰는 레거시 호출용 6번째 인자)
  * @returns {Promise<any>} - 서버 응답 데이터
+ *
+ * @example
+ * // 오프라인 우체통 적재 제외 (예: 서버 즉시 확인이 필요한 요청)
+ * await fastApi('POST', '/api/media/admin/folder/create', data, { offline: false });
+ * // 우체통 대기 목록에 표시할 작업 이름 지정
+ * await fastApi('POST', url, formData, { offlineLabel: '📷 내 파일함 업로드' });
  */
-export const fastApi = async (method, url, params = {}, success_callback, failure_callback) => {
+export const fastApi = async (
+	method,
+	url,
+	params = {},
+	success_callback,
+	failure_callback,
+	apiOptions = {}
+) => {
+	// 4번째 인자로 옵션 객체를 넘긴 경우 (콜백 없는 신규 호출 방식)
+	if (success_callback && typeof success_callback === 'object') {
+		apiOptions = /** @type {FastApiOptions} */ (success_callback);
+		success_callback = undefined;
+	}
+	const { offline: offlineEnabled = true, offlineLabel } = /** @type {FastApiOptions} */ (apiOptions);
+	const onSuccess = /** @type {Function | undefined} */ (success_callback);
 	const PUBLIC_SERVER_URL = env.PUBLIC_SERVER_URL || '';
 
 	// 🛡️ [안전장치 1] Trailing Slash(/) 자동 제거 (307 Temporary Redirect 원천 차단)
@@ -74,6 +147,16 @@ export const fastApi = async (method, url, params = {}, success_callback, failur
 		signal: controller.signal
 	};
 
+	const lowerMethod = method.toLowerCase();
+	const offlineCtx = { method, url: _url, params, offlineEnabled, offlineLabel, onSuccess };
+
+	// 🌟 [선제 오프라인 게이트웨이]: 단말기가 이미 오프라인(!navigator.onLine)인 경우 불필요한 네트워크 에러 없이 즉시 우체통/캐시로 직행
+	if (browser && !navigator.onLine) {
+		clearTimeout(timeoutId);
+		const fallback = await tryOfflineFallback(offlineCtx, { allowQueue: true });
+		if (fallback.handled) return fallback.result;
+	}
+
 	try {
 		console.log(`[API Request] ${method} ${_url}`);
 		const response = await fetch(_url, options);
@@ -116,7 +199,11 @@ export const fastApi = async (method, url, params = {}, success_callback, failur
 		}
 
 		if (response.ok) {
-			if (success_callback) success_callback(data);
+			// 💾 [안전장치 4: 오프라인 읽기 기억소] 온라인 GET 조회 성공 시 자동으로 IndexedDB에 캐싱
+			if (browser && lowerMethod === 'get') {
+				offlineSync.saveGetCache(_url, data);
+			}
+			if (onSuccess) onSuccess(data);
 			return data;
 		} else {
 			// [403 권한 거부]: 모든 시스템 앱에서 복잡한 내부 사유 대신 '접근 권한이 없습니다.' 단일 통일
@@ -159,6 +246,16 @@ export const fastApi = async (method, url, params = {}, success_callback, failur
 	} catch (rawError) {
 		const error = /** @type {any} */ (rawError);
 		const isTimeout = error && error.name === 'AbortError';
+		// fetch() 자체가 네트워크 단절로 실패하면 TypeError 를 던짐 (응답 파싱 오류 등과 구분)
+		const isNetworkError = error && error.name === 'TypeError';
+
+		// 🌟 [안전장치 5: 오프라인 게이트웨이] 네트워크 단절/타임아웃 시 캐시 복원 / 우체통 보관
+		// ⚠️ 타임아웃(AbortError)은 서버가 이미 처리했을 수 있으므로 쓰기 요청을 우체통에 넣지 않음 (중복 등록 방지)
+		if (browser && (isNetworkError || isTimeout)) {
+			const fallback = await tryOfflineFallback(offlineCtx, { allowQueue: isNetworkError });
+			if (fallback.handled) return fallback.result;
+		}
+
 		const errorMessage = isTimeout
 			? '서버 응답 시간이 초과되었습니다. 네트워크 상태를 확인해 주세요.'
 			: (error && error.message) || '서버와의 통신에 실패했습니다.';

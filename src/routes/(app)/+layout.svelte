@@ -20,6 +20,8 @@
 	import { navState } from '$lib/runes/nav.svelte.js';
 	import { miniappStore } from '$lib/runes/miniapps.svelte.js';
 	import { websocket } from '$lib/runes/websocket.svelte.js';
+	import { offlineSync } from '$lib/runes/offlineSync.svelte.js';
+	import { hardReset } from '$lib/pwa/serviceWorker.js';
 	import { toast } from '$lib/runes/toast.svelte.js';
 	import DynamicSidebar from '$lib/components/Nav/DynamicSidebar.svelte';
 	import '../layout.css';
@@ -53,9 +55,9 @@
 	let isMobile = $state(false);
 
 	// 🌐 우측 상단 헤더 개편 상태 (사용자 팝업 메뉴, 실시간 네트워크/소켓 듀얼 감지, 풀스크린)
+	// 💡 네트워크 온라인/오프라인 상태 및 토스트 알림은 offlineSync.isOnline 단일 엔진에서 통합 관리합니다.
 	let isUserMenuOpen = $state(false);
 	let isWsMenuOpen = $state(false);
-	let isOnline = $state(true);
 	let isFullscreen = $state(false);
 
 	/**
@@ -88,14 +90,13 @@
 
 	/**
 	 * 서비스 워커 캐시 강제 초기화 및 최신 동기화 (Hard Refresh)
+	 * 💡 모바일에서는 Ctrl+Shift+R 이 불가능하므로 CacheStorage 삭제 + SW 등록 해제 후 새로고침합니다.
+	 *    (빌드 파일명이 해시 기반이므로 HTTP 디스크 캐시는 별도로 갱신할 필요가 없습니다.)
 	 */
 	async function handleHardRefresh() {
 		toast.info('캐시를 초기화하고 최신 버전을 동기화합니다...');
 		try {
-			if (typeof window !== 'undefined' && 'caches' in window) {
-				const keys = await caches.keys();
-				await Promise.all(keys.map(k => caches.delete(k)));
-			}
+			await hardReset();
 		} catch (e) {
 			console.warn('캐시 삭제 중 오류:', e);
 		}
@@ -106,25 +107,13 @@
 		// 🛡️ [뷰포트 안전 보증] 브라우저 스크롤 좌표를 (0, 0) 원점으로 강제 고정
 		if (typeof window !== 'undefined') {
 			window.scrollTo(0, 0);
-			isOnline = navigator.onLine;
 			isFullscreen = !!document.fullscreenElement;
 		}
 
-		const handleOnline = () => {
-			isOnline = true;
-			websocket.init();
-			toast.success('네트워크가 복구되었습니다. 실시간 동기화를 재개합니다.');
-		};
-		const handleOffline = () => {
-			isOnline = false;
-			toast.warning('인터넷 연결이 끊어졌습니다. (오프라인 캐시 모드)');
-		};
 		const handleFullscreenChange = () => {
 			isFullscreen = !!document.fullscreenElement;
 		};
 
-		window.addEventListener('online', handleOnline);
-		window.addEventListener('offline', handleOffline);
 		document.addEventListener('fullscreenchange', handleFullscreenChange);
 
 		const updateMedia = () => {
@@ -156,8 +145,6 @@
 		return () => {
 			window.removeEventListener('scroll', handleScroll);
 			window.removeEventListener('resize', updateMedia);
-			window.removeEventListener('online', handleOnline);
-			window.removeEventListener('offline', handleOffline);
 			document.removeEventListener('fullscreenchange', handleFullscreenChange);
 		};
 	});
@@ -244,14 +231,14 @@
 					<!-- 상태 아이콘 & 펄스 박스 (H-7 W-7 사용자 아바타와 규격 통일) -->
 					<div
 						class="flex h-7 w-7 items-center justify-center rounded border {
-							!isOnline
+							!offlineSync.isOnline
 								? 'bg-rose-50 border-rose-200 text-rose-600'
 								: websocket.status === 'connected'
 									? 'bg-emerald-50 border-emerald-200 text-emerald-600'
 									: 'bg-amber-50 border-amber-200 text-amber-600'
 						}"
 					>
-						{#if !isOnline}
+						{#if !offlineSync.isOnline}
 							<Icon icon="ph:wifi-slash-bold" class="text-sm" />
 						{:else if websocket.status === 'connected'}
 							<span class="relative flex h-2.5 w-2.5">
@@ -266,18 +253,29 @@
 					<!-- 2줄 텍스트 구조 (사용자 프로필 뱃지와 동일 위계) -->
 					<div class="hidden flex-col md:flex">
 						<span class="text-xs font-black leading-none {
-							!isOnline
+							!offlineSync.isOnline
 								? 'text-rose-700'
 								: websocket.status === 'connected'
 									? 'text-emerald-700'
 									: 'text-amber-700'
 						}">
-							{!isOnline ? 'OFFLINE' : websocket.status === 'connected' ? 'LIVE (실시간)' : 'CACHED (캐시)'}
+							{!offlineSync.isOnline ? 'OFFLINE' : websocket.status === 'connected' ? 'LIVE (실시간)' : 'CACHED (캐시)'}
 						</span>
 						<span class="mt-0.5 text-[10px] font-bold text-slate-400 leading-none">
-							{!isOnline ? '인터넷 단절' : websocket.status === 'connected' ? '소켓 실시간 동기화' : '소켓 재연결 중...'}
+							{#if offlineSync.pendingCount > 0}
+								<span class="text-blue-600 font-black">📮 우체통 대기 {offlineSync.pendingCount}건</span>
+							{:else}
+								{!offlineSync.isOnline ? '인터넷 단절' : websocket.status === 'connected' ? '소켓 실시간 동기화' : '소켓 재연결 중...'}
+							{/if}
 						</span>
 					</div>
+
+					<!-- 📮 오프라인 임시 우체통 대기 건수 실시간 배지 -->
+					{#if offlineSync.pendingCount > 0}
+						<span class="inline-flex items-center gap-0.5 rounded bg-blue-600 px-1.5 py-0.5 text-[10px] font-black text-white shadow-xs animate-pulse">
+							📮 {offlineSync.pendingCount}
+						</span>
+					{/if}
 
 					<Icon icon="ph:caret-down-bold" class="text-xs text-slate-500 transition-transform {isWsMenuOpen ? 'rotate-180' : ''}" />
 				</button>
@@ -300,20 +298,20 @@
 							<div class="flex items-center justify-between">
 								<span class="text-[9px] font-black tracking-widest text-slate-400 uppercase">Live Channel Monitor</span>
 								<span class="inline-flex items-center gap-1.5 text-[10px] font-black {
-									!isOnline
+									!offlineSync.isOnline
 										? 'text-rose-600'
 										: websocket.status === 'connected'
 											? 'text-emerald-600'
 											: 'text-amber-600'
 								}">
 									<span class="h-1.5 w-1.5 rounded-full {
-										!isOnline
+										!offlineSync.isOnline
 											? 'bg-rose-500'
 											: websocket.status === 'connected'
 												? 'bg-emerald-500'
 												: 'bg-amber-500 animate-pulse'
 									}"></span>
-									{!isOnline ? '인터넷 단절' : websocket.status === 'connected' ? '동기화 연결됨' : '재연결 대기'}
+									{!offlineSync.isOnline ? '인터넷 단절' : websocket.status === 'connected' ? '동기화 연결됨' : '재연결 대기'}
 								</span>
 							</div>
 							<div class="mt-1 font-mono text-xs font-bold text-slate-800 break-all">
@@ -324,8 +322,8 @@
 						<div class="space-y-2 py-1 text-xs">
 							<div class="flex items-center justify-between text-slate-600">
 								<span>단말기 네트워크:</span>
-								<span class="font-bold {isOnline ? 'text-emerald-600' : 'text-rose-600'}">
-									{isOnline ? '온라인 (Connected)' : '오프라인 (Disconnected)'}
+								<span class="font-bold {offlineSync.isOnline ? 'text-emerald-600' : 'text-rose-600'}">
+									{offlineSync.isOnline ? '온라인 (Connected)' : '오프라인 (Disconnected)'}
 								</span>
 							</div>
 							<div class="flex items-center justify-between text-slate-600">
@@ -336,9 +334,38 @@
 									{websocket.status}
 								</span>
 							</div>
+							<div class="flex items-center justify-between text-slate-600">
+								<span>오프라인 우체통:</span>
+								<span class="font-bold {offlineSync.pendingCount > 0 ? 'text-blue-600' : 'text-slate-500'}">
+									{offlineSync.pendingCount > 0 ? `📮 대기 ${offlineSync.pendingCount}건` : '비어 있음 (0건)'}
+								</span>
+							</div>
+
+							<!-- 📮 대기 중인 우체통 항목 상세 리스트 -->
+							{#if offlineSync.pendingCount > 0}
+								<div class="mt-2 rounded border border-blue-200 bg-blue-50/70 p-2 space-y-1 max-h-28 overflow-y-auto">
+									<div class="flex items-center justify-between text-[10px] font-black text-blue-800">
+										<span>📮 자동 전송 대기 목록</span>
+										<button
+											type="button"
+											onclick={() => offlineSync.clearOutbox()}
+											class="text-rose-600 hover:underline font-bold"
+										>
+											비우기
+										</button>
+									</div>
+									{#each offlineSync.pendingItems as item}
+										<div class="flex items-center justify-between rounded bg-white px-2 py-1 text-[10px] border border-blue-100">
+											<span class="font-bold text-slate-700 truncate">{item.label}</span>
+											<span class="text-[9px] text-slate-400 font-mono shrink-0 ml-1">{item.createdAt}</span>
+										</div>
+									{/each}
+								</div>
+							{/if}
+
 							<div class="rounded bg-slate-50 p-2 text-[11px] text-slate-500 leading-relaxed border border-slate-100">
-								{#if !isOnline}
-									단말기 인터넷 연결이 끊겨 오프라인 상태입니다. 기존 캐싱된 데이터가 표출됩니다.
+								{#if !offlineSync.isOnline}
+									단말기 인터넷 연결이 끊겨 오프라인 상태입니다. 작성한 글과 사진은 우체통에 보관 후 연결 시 자동 등록됩니다.
 								{:else if websocket.status === 'connected'}
 									실시간 웹소켓이 안정적으로 연결되어 사내 공지 및 변경사항이 0.1초 이내로 동기화됩니다.
 								{:else}
@@ -348,11 +375,22 @@
 						</div>
 
 						<div class="mt-3 pt-2 border-t border-slate-100 flex flex-col gap-1.5">
+							{#if offlineSync.pendingCount > 0}
+								<button
+									type="button"
+									onclick={() => offlineSync.syncAll()}
+									disabled={offlineSync.isSyncing || !offlineSync.isOnline}
+									class="flex items-center justify-center gap-2 rounded bg-blue-600 py-2 text-xs font-black text-white hover:bg-blue-700 transition disabled:opacity-50"
+								>
+									<Icon icon="ph:cloud-arrow-up-bold" class="text-sm" />
+									{offlineSync.isSyncing ? '우체통 전송 중...' : `우체통 즉시 전송 (${offlineSync.pendingCount}건)`}
+								</button>
+							{/if}
 							<button
 								type="button"
 								onclick={() => {
 									isWsMenuOpen = false;
-									if (!isOnline) {
+									if (!offlineSync.isOnline) {
 										toast.warning('인터넷 연결이 필요합니다.');
 									} else {
 										websocket.init();

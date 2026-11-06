@@ -21,6 +21,7 @@
 	import { goto } from '$app/navigation';
 	import { toast } from '$lib/runes/toast.svelte.js';
 	import { getAuthContext } from '$lib/runes/auth.svelte.js';
+	import { offlineSync } from '$lib/runes/offlineSync.svelte.js';
 	import { uploadFiles, createUserFolder } from '$lib/services/mediaService';
 	import Icon from '@iconify/svelte';
 
@@ -55,8 +56,10 @@
 
 	/**
 	 * 🌟 [정책 통일] 개인 폴더(USERS/{userId}) 하위에 'WEBCAM' 전용 폴더를 자동 보장/생성
+	 * (오프라인 상태에서는 불필요하게 우체통 대기열에 들어가지 않도록 온라인일 때만 호출)
 	 */
 	async function ensureWebcamFolder() {
+		if (typeof navigator !== 'undefined' && !navigator.onLine) return;
 		const user = auth.user;
 		if (!user || !user.id) return;
 		try {
@@ -246,14 +249,24 @@
 			if (selectedCameraId) {
 				videoConstraints.deviceId = { exact: selectedCameraId };
 			} else {
-				videoConstraints.facingMode = facingMode;
+				videoConstraints.facingMode = { ideal: facingMode };
 			}
 
-			mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
+			try {
+				mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
+			} catch (firstErr) {
+				console.warn('기본 해상도/렌즈 제약 조건 연결 실패 -> 범용 비디오 모드로 자동 폴백 재시도:', firstErr);
+				mediaStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+			}
 
 			if (videoElement) {
+				videoElement.muted = true;
 				videoElement.srcObject = mediaStream;
-				await videoElement.play();
+				try {
+					await videoElement.play();
+				} catch (playErr) {
+					console.warn('비디오 자동 재생 경고 (무시 가능):', playErr);
+				}
 			}
 
 			isCameraOn = true;
@@ -366,12 +379,21 @@
 	// 5. 웹페이지(서버) 업로드 코어 엔진
 	// ============================================================================
 	/**
-	 * DataURL(Base64)을 전송 가능한 File 객체로 변환
+	 * DataURL(Base64)을 전송 가능한 File 객체로 변환 (네트워크 fetch 없이 순수 메모리 변환으로 오프라인 100% 호환)
+	 * @param {string} dataUrl
+	 * @param {string} filename
 	 */
-	async function dataUrlToFile(dataUrl, filename) {
-		const res = await fetch(dataUrl);
-		const blob = await res.blob();
-		return new File([blob], filename, { type: 'image/jpeg' });
+	function dataUrlToFile(dataUrl, filename) {
+		const arr = dataUrl.split(',');
+		const mimeMatch = arr[0].match(/:(.*?);/);
+		const mime = mimeMatch ? mimeMatch[1] : 'image/jpeg';
+		const bstr = atob(arr[1]);
+		let n = bstr.length;
+		const u8arr = new Uint8Array(n);
+		while (n--) {
+			u8arr[n] = bstr.charCodeAt(n);
+		}
+		return new File([u8arr], filename, { type: mime });
 	}
 
 	/**
@@ -402,6 +424,19 @@
 				sub_path: targetSubPath
 			});
 
+			// 📮 [오프라인 우체통 연동]: 인터넷 단절 시 fastApi 코어가 IndexedDB 우체통에 원본 JPEG 파일을 자동 보관함
+			if (newAssets && (/** @type {any} */ (newAssets)).offline_queued) {
+				const pendingPath = `PRIVATE/${targetSubPath}/${name} (동기화 대기중)`;
+				capturedGallery = capturedGallery.map((item) => {
+					if (item.url === photoUrl) {
+						return { ...item, uploaded: false, queued: true, serverUrl: pendingPath };
+					}
+					return item;
+				});
+				triggerHaptic([50, 50]);
+				return { id: String((/** @type {any} */ (newAssets)).queue_id || 'queued'), name, serverPath: pendingPath, time: new Date().toLocaleTimeString('ko-KR'), thumbUrl: photoUrl };
+			}
+
 			const uploadedItem = Array.isArray(newAssets) ? newAssets[0] : newAssets;
 			const serverPath = uploadedItem?.file_path || `PRIVATE/${targetSubPath}/${name}`;
 			const assetId = uploadedItem?.id;
@@ -409,7 +444,7 @@
 			// 갤러리 내 상태 업데이트
 			capturedGallery = capturedGallery.map((item) => {
 				if (item.url === photoUrl) {
-					return { ...item, uploaded: true, serverUrl: serverPath, assetId };
+					return { ...item, uploaded: true, queued: false, serverUrl: serverPath, assetId };
 				}
 				return item;
 			});
@@ -587,11 +622,22 @@
 	// ============================================================================
 	// 8. 마운트 및 언마운트
 	// ============================================================================
+	function handleOfflineSynced() {
+		// 오프라인 우체통 전송이 완료되면 대기 중이던 사진 배지를 CLOUD 완료로 갱신
+		capturedGallery = capturedGallery.map((item) => {
+			if (/** @type {any} */ (item).queued) {
+				return { ...item, uploaded: true, queued: false };
+			}
+			return item;
+		});
+	}
+
 	onMount(() => {
 		checkOrientation();
 		if (typeof window !== 'undefined') {
 			window.addEventListener('resize', checkOrientation);
 			window.addEventListener('orientationchange', checkOrientation);
+			window.addEventListener('jeju:offline-synced', handleOfflineSynced);
 		}
 		ensureWebcamFolder();
 		initCameras();
@@ -601,6 +647,7 @@
 		if (typeof window !== 'undefined') {
 			window.removeEventListener('resize', checkOrientation);
 			window.removeEventListener('orientationchange', checkOrientation);
+			window.removeEventListener('jeju:offline-synced', handleOfflineSynced);
 		}
 		stopCamera();
 	});
@@ -624,6 +671,7 @@
 			bind:this={videoElement}
 			playsinline
 			autoplay
+			muted
 			class="h-full w-full transition-all {fitMode === 'cover' ? 'object-cover' : 'object-contain'}"
 			style:filter={filterStyles[selectedFilter] || 'none'}
 		></video>
@@ -786,17 +834,22 @@
 				<Icon icon="ph:qr-code-bold" class="text-lg sm:text-xl" />
 			</button>
 
-			<!-- ☁️ 내 파일함 업로드 자동 옵션 토글 버튼 -->
+			<!-- ☁️ 내 파일함 업로드 자동 옵션 토글 버튼 (오프라인 우체통 대기 건수 표시 포함) -->
 			<button
 				onclick={() => {
 					autoUpload = !autoUpload;
 					triggerHaptic(50);
 					toast.info(autoUpload ? '📁 촬영 즉시 내 파일함(WEBCAM) 자동 업로드 ON' : '내 파일함 자동 업로드 OFF');
 				}}
-				class="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-xl transition active:scale-90 {autoUpload ? 'text-sky-300 bg-sky-500/25 ring-1.5 ring-sky-400 shadow-[0_0_10px_#38bdf8]' : 'text-white/50 hover:text-white hover:bg-white/10'}"
+				class="relative flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-xl transition active:scale-90 {autoUpload ? 'text-sky-300 bg-sky-500/25 ring-1.5 ring-sky-400 shadow-[0_0_10px_#38bdf8]' : 'text-white/50 hover:text-white hover:bg-white/10'}"
 				title="내 파일함(WEBCAM) 자동 업로드 (ON/OFF)"
 			>
 				<Icon icon={autoUpload ? "ph:cloud-arrow-up-fill" : "ph:cloud-arrow-up-bold"} class="text-lg sm:text-xl" />
+				{#if offlineSync.pendingCount > 0}
+					<span class="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-500 px-1 text-[9px] font-black text-black shadow">
+						{offlineSync.pendingCount}
+					</span>
+				{/if}
 			</button>
 		</div>
 
@@ -876,6 +929,10 @@
 						{#if capturedGallery[0].uploaded}
 							<div class="absolute bottom-0 inset-x-0 bg-sky-500/90 text-[8px] font-black text-center text-white py-0.2">
 								CLOUD
+							</div>
+						{:else if /** @type {any} */ (capturedGallery[0]).queued}
+							<div class="absolute bottom-0 inset-x-0 bg-amber-500/95 text-[8px] font-black text-center text-black py-0.2">
+								우체통
 							</div>
 						{/if}
 					</button>

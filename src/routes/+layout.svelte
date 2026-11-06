@@ -13,10 +13,14 @@
 	 */
 	import { onMount } from 'svelte';
 	import { browser } from '$app/environment';
+	import { beforeNavigate } from '$app/navigation';
+	import { updated } from '$app/state';
+	import { registerServiceWorker, clearSwUserCache } from '$lib/pwa/serviceWorker.js';
 	import { setAuthContext } from '$lib/runes/auth.svelte.js';
 	import { alertState } from '$lib/runes/alert.svelte.js';
 	import { toast } from '$lib/runes/toast.svelte.js';
 	import { websocket } from '$lib/runes/websocket.svelte.js';
+	import { offlineSync } from '$lib/runes/offlineSync.svelte.js';
 	import Alert from '$lib/components/Alert.svelte';
 	import Toast from '$lib/components/Toast.svelte';
 	import './layout.css';
@@ -55,11 +59,34 @@
 	});
 
 	// ----------------------------------------------------------------------------
+	// [1-2단계: 비로그인/로그아웃 상태 → 기기에 남은 사용자 데이터 정리]
+	// ----------------------------------------------------------------------------
+	// 공용 기기에서 이전 사용자의 오프라인 캐시(GET 응답, 우체통, SW 페이지 캐시)가 노출되지 않도록 비웁니다.
+	$effect(() => {
+		if (browser && !auth.isAuthenticated) {
+			offlineSync.clearUserData();
+			clearSwUserCache();
+		}
+	});
+
+	// ----------------------------------------------------------------------------
+	// [1-3단계: 새 버전 배포 감지 → 다음 페이지 이동 시 전체 새로고침 (SvelteKit 공식 패턴)]
+	// ----------------------------------------------------------------------------
+	// kit.version.pollInterval 로 서버의 새 빌드를 감지하면, 구버전 청크 로드 실패를 예방하기 위해
+	// 클라이언트 라우팅 대신 전체 페이지 이동을 수행합니다.
+	beforeNavigate(({ willUnload, to }) => {
+		if (updated.current && !willUnload && to?.url) {
+			location.href = to.url.href;
+		}
+	});
+
+	// ----------------------------------------------------------------------------
 	// [2단계: 브라우저 환경 마운트 후 전역 알림 및 PWA 인프라 기동]
 	// ----------------------------------------------------------------------------
 	onMount(() => {
-		// [2-1] 전역 알림(토스트/모달) 엔진 초기화
+		// [2-1] 전역 알림(토스트/모달) 엔진 및 오프라인 우체통(Outbox) 동기화 엔진 초기화
 		alertState.init();
+		offlineSync.init();
 
 		// [2-2] 🌐 실시간 WebSocket 시스템 토스트 리스너 장착 (작업 실패 등 시스템 경보 수신)
 		const unsubscribeWs = websocket.addMessageListener((msg) => {
@@ -78,14 +105,8 @@
 			}
 		});
 
-		// [2-3] PWA (Progressive Web App) 서비스 워커 상태 점검
-		if (browser && 'serviceWorker' in navigator) {
-			navigator.serviceWorker.ready.then(() => {
-				console.log('📱 [Root Layout] PWA Service Worker 준비 완료');
-			}).catch((err) => {
-				console.warn('⚠️ [Root Layout] PWA Service Worker 확인 실패:', err);
-			});
-		}
+		// [2-3] PWA 서비스 워커 등록 (운영: /service-worker.js 등록, dev: 기존 SW 정리)
+		registerServiceWorker();
 
 		return () => {
 			unsubscribeWs();
