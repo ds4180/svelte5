@@ -189,6 +189,14 @@
 			</button>
 
 			<a
+				href="/v1/admin/pushs"
+				class="inline-flex items-center gap-2 rounded-xl border border-pink-200 bg-pink-50 px-4 py-2 text-xs font-black text-pink-700 shadow-sm transition hover:bg-pink-100 active:scale-95"
+			>
+				<Icon icon="solar:bell-bing-bold" class="text-base text-pink-600" />
+				<span>푸시 구독자 관리 (/v1/admin/pushs)</span>
+			</a>
+
+			<a
 				href="/v1/admin"
 				class="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 active:scale-95"
 			>

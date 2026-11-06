@@ -31,9 +31,10 @@ const STORE_OUTBOX = 'outbox_queue';
 const ASSETS = ['/', ...build, ...files.filter((f) => !f.endsWith('/sw.js'))];
 const ASSET_SET = new Set(ASSETS);
 
-// 1. 설치(Install): 빌드된 모든 페이지 청크와 정적 자산을 캐시에 일괄 적재
+// 1. 설치(Install): 빌드된 모든 페이지 청크와 정적 자산을 캐시에 일괄 적재 (dev 환경에서는 캐싱 생략)
 sw.addEventListener('install', (event) => {
 	async function addFilesToCache() {
+		if (build.length === 0) return;
 		const cache = await caches.open(CACHE);
 		if (ASSETS.length > 0) {
 			await cache.addAll(ASSETS);
@@ -58,73 +59,74 @@ sw.addEventListener('activate', (event) => {
 });
 
 // 3. 네트워크 요청 제어(Fetch): SvelteKit 공식 표준 전략
-sw.addEventListener('fetch', (event) => {
-	// Vite 개발 서버(dev) 환경에서는 build 배열이 비어 있으므로, 실시간 모듈 변환과 충돌하지 않도록 통과시킴
-	// (프로덕션 빌드 환경에서는 build.length > 0 이므로 전체 App Shell 캐싱이 자동 가동됨)
-	if (build.length === 0) return;
+// 💡 [정석 아키텍처] Vite 개발 서버(dev) 환경에서는 build 배열이 비어 있으므로,
+// fetch 이벤트 리스너 자체를 등록하지 않아 브라우저가 일반 네트워크/HMR 요청 시 서비스 워커를 아예 거치지 않도록 보장합니다.
+// (프로덕션 빌드 환경에서는 build.length > 0 이므로 전체 App Shell 캐싱이 자동 가동되며, dev 모드에서도 push/notificationclick은 100% 정상 작동함)
+if (build.length > 0) {
+	sw.addEventListener('fetch', (event) => {
+		if (event.request.method !== 'GET') return;
 
-	if (event.request.method !== 'GET') return;
+		const url = new URL(event.request.url);
 
-	const url = new URL(event.request.url);
-
-	// 동일 출처가 아니거나, 백엔드 API(/api) 및 실시간 웹소켓(/ws)은 서비스 워커 캐시에서 제외
-	// (API 데이터 캐싱과 오프라인 우체통은 fastApi 게이트웨이와 IndexedDB가 전담)
-	if (
-		url.origin !== sw.location.origin ||
-		url.pathname.startsWith('/api') ||
-		url.pathname.startsWith('/ws')
-	) {
-		return;
-	}
-
-	async function respond() {
-		const cache = await caches.open(CACHE);
-
-		// [A] 빌드된 정적 자산(build + files)은 설치 시 이미 캐싱되었으므로 Cache-First로 즉시 반환
-		if (url.pathname !== '/' && ASSET_SET.has(url.pathname)) {
-			const cachedAsset = await cache.match(url.pathname);
-			if (cachedAsset) {
-				return cachedAsset;
-			}
+		// 동일 출처가 아니거나, 백엔드 API(/api) 및 실시간 웹소켓(/ws)은 서비스 워커 캐시에서 제외
+		// (API 데이터 캐싱과 오프라인 우체통은 fastApi 게이트웨이와 IndexedDB가 전담)
+		if (
+			url.origin !== sw.location.origin ||
+			url.pathname.startsWith('/api') ||
+			url.pathname.startsWith('/ws')
+		) {
+			return;
 		}
 
-		// [B] 그 외 페이지/데이터 요청은 Network-First 수행 후 오프라인 시 캐시 반환
-		try {
-			const response = await fetch(event.request);
+		async function respond() {
+			const cache = await caches.open(CACHE);
 
-			if (!(response instanceof Response)) {
-				throw new Error('Invalid response from fetch');
-			}
-
-			if (response.status === 200) {
-				cache.put(event.request, response.clone());
-			}
-
-			return response;
-		} catch (err) {
-			const cachedResponse =
-				(await cache.match(event.request)) ||
-				(await cache.match(event.request, { ignoreSearch: true }));
-
-			if (cachedResponse) {
-				return cachedResponse;
-			}
-
-			// [C] 오프라인 상태에서 주소창 직접 입력/새로고침(navigate) 시 루트 App Shell('/')로 폴백하여
-			// SvelteKit 클라이언트 라우터가 사전 캐싱된 JS 번들(build)로 해당 페이지를 렌더링하도록 보장
-			if (event.request.mode === 'navigate') {
-				const rootShell = await cache.match('/');
-				if (rootShell) {
-					return rootShell;
+			// [A] 빌드된 정적 자산(build + files)은 설치 시 이미 캐싱되었으므로 Cache-First로 즉시 반환
+			if (url.pathname !== '/' && ASSET_SET.has(url.pathname)) {
+				const cachedAsset = await cache.match(url.pathname);
+				if (cachedAsset) {
+					return cachedAsset;
 				}
 			}
 
-			throw err;
-		}
-	}
+			// [B] 그 외 페이지/데이터 요청은 Network-First 수행 후 오프라인 시 캐시 반환
+			try {
+				const response = await fetch(event.request);
 
-	event.respondWith(respond());
-});
+				if (!(response instanceof Response)) {
+					throw new Error('Invalid response from fetch');
+				}
+
+				if (response.status === 200) {
+					cache.put(event.request, response.clone());
+				}
+
+				return response;
+			} catch (err) {
+				const cachedResponse =
+					(await cache.match(event.request)) ||
+					(await cache.match(event.request, { ignoreSearch: true }));
+
+				if (cachedResponse) {
+					return cachedResponse;
+				}
+
+				// [C] 오프라인 상태에서 주소창 직접 입력/새로고침(navigate) 시 루트 App Shell('/')로 폴백하여
+				// SvelteKit 클라이언트 라우터가 사전 캐싱된 JS 번들(build)로 해당 페이지를 렌더링하도록 보장
+				if (event.request.mode === 'navigate') {
+					const rootShell = await cache.match('/');
+					if (rootShell) {
+						return rootShell;
+					}
+				}
+
+				throw err;
+			}
+		}
+
+		event.respondWith(respond());
+	});
+}
 
 // 3-1. 클라이언트 메시지 처리
 // - CLEAR_USER_CACHE: 로그아웃/비로그인 시 사용자별 런타임 캐시(페이지 HTML, __data.json 등) 삭제

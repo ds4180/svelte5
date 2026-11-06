@@ -6,8 +6,8 @@ import { fastApi } from '$lib/api';
  *              AbortController 타임아웃 제어, 401 세션 만료 및 403/500 에러 토스트를 보장하는
  *              전사 통합 관리자 API 요청 함수
  */
-async function request(url, method = 'GET', body = null) {
-	return fastApi(method, url, body || undefined);
+async function request(url, method = 'GET', body = null, options = {}) {
+	return fastApi(method, url, body || undefined, options);
 }
 
 const BASE_URL = '/api/v1/admin';
@@ -111,6 +111,7 @@ export const adminGetAlertAcknowledgements = (alertId) =>
 export const adminGetPushSubscriptions = () => request(`${BASE_URL}/push/subscriptions`);
 export const adminSendPush = (data) => request(`${BASE_URL}/push/send`, 'POST', data);
 export const adminDeletePushSubscription = (id) => request(`${BASE_URL}/push/subscriptions/${id}`, 'DELETE');
+export const adminDeleteAllPushSubscriptions = () => request(`${BASE_URL}/push/subscriptions`, 'DELETE');
 
 // 👥 그룹 관리 API (Redis 기반)
 export const adminGetGroups = () => request('/api/v1/admin/groups');
@@ -381,7 +382,7 @@ export const adminGetMediaList = (params = {}) => {
  * @param {Object} data - { tier, sub_path, folder_name }
  */
 export const adminCreateMediaFolder = (data) =>
-	request('/api/media/admin/folder/create', 'POST', data);
+	request('/api/media/admin/folder/create', 'POST', data, { offline: false }); // 즉시 결과 확인 필요 → 오프라인 우체통 제외
 
 /**
  * @function adminBackupMedia

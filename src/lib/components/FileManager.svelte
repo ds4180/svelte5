@@ -107,7 +107,7 @@
 				tier,
 				sub_path: currentSubPath,
 				folder_name: name
-			});
+			}, { offline: false }); // 즉시 결과 확인이 필요하므로 오프라인 우체통 제외
 			await loadMedia();
 		} catch (err) {
 			alert('폴더 생성 실패: ' + (err.detail || '오류'));

@@ -7,6 +7,7 @@
 	 */
 	import { alertState } from '$lib/runes/alert.svelte.js';
 	import { websocket } from '$lib/runes/websocket.svelte.js';
+	import { notifyAlert } from '$lib/utils/sound';
 	import { page } from '$app/state';
 	import { onMount } from 'svelte';
 	
@@ -17,6 +18,7 @@
 
 	/** @type {{ positionFilter: 'top' | 'bottom' | 'modal' }} */
 	let { positionFilter } = $props();
+	let initializedFirstLoad = false;
 
 	// 실시간 데이터 동기화 (Polling)
 	async function fetchActiveAlerts() {
@@ -24,6 +26,7 @@
 			const response = await fetch('/api/alert/active');
 			if (response.ok) {
 				const serverAlerts = await response.json();
+				const existingIds = new Set(alertState.all.map(oldA => oldA.id));
 				
 				// 🛡️ [데이터 병합] 서버 데이터를 돌면서 기존 로컬 상태 보존
 				const mergedAlerts = serverAlerts.map(newA => {
@@ -34,6 +37,18 @@
 					}
 					return newA;
 				});
+
+				// 🔊 최초 페이지 로드 이후 웹소켓/폴링으로 새로 도착한 L1, L2 알림에 대해 사운드/진동 트리거
+				// (L3~L5는 AlertModal.svelte 마운트 시 자동 트리거됨)
+				if (initializedFirstLoad) {
+					for (const newA of serverAlerts) {
+						if (!existingIds.has(newA.id) && (newA.level === 1 || newA.level === 2)) {
+							notifyAlert(newA.level);
+							break;
+						}
+					}
+				}
+				initializedFirstLoad = true;
 
 				// 최종적으로 데이터가 변경되었을 때만 업데이트
 				if (JSON.stringify(alertState.all) !== JSON.stringify(mergedAlerts)) {

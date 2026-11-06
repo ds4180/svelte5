@@ -146,6 +146,17 @@
 		{
 			type: 'SYSTEM',
 			category: 'OPERATIONS',
+			appId: 'pushs',
+			minRank: 4,
+			title: '푸시·구독 관리',
+			desc: '사원 기기별 Web Push 활성 구독자 명단 조회, 만료 기기 정리 및 전체 푸시 즉시 발송',
+			link: '/v1/admin/pushs',
+			icon: 'mdi:bell-ring-outline',
+			color: 'bg-pink-600'
+		},
+		{
+			type: 'SYSTEM',
+			category: 'OPERATIONS',
 			appId: 'media',
 			minRank: 4,
 			title: '파일·사진 관리',

@@ -13,14 +13,20 @@
 	 */
 	import { onMount } from 'svelte';
 	import { browser } from '$app/environment';
-	import { beforeNavigate } from '$app/navigation';
+	import { beforeNavigate, goto } from '$app/navigation';
 	import { updated } from '$app/state';
-	import { registerServiceWorker, clearSwUserCache } from '$lib/pwa/serviceWorker.js';
+	import {
+		registerServiceWorker,
+		clearSwUserCache,
+		syncPushSubscription,
+		unsubscribePushOnLogout
+	} from '$lib/pwa/serviceWorker.js';
 	import { setAuthContext } from '$lib/runes/auth.svelte.js';
 	import { alertState } from '$lib/runes/alert.svelte.js';
 	import { toast } from '$lib/runes/toast.svelte.js';
 	import { websocket } from '$lib/runes/websocket.svelte.js';
 	import { offlineSync } from '$lib/runes/offlineSync.svelte.js';
+	import { initAudioUnlocker } from '$lib/utils/sound';
 	import Alert from '$lib/components/Alert.svelte';
 	import Toast from '$lib/components/Toast.svelte';
 	import './layout.css';
@@ -49,11 +55,13 @@
 	$effect(() => {
 		if (browser) {
 			if (auth.isAuthenticated) {
-				console.log('🌐 [Root Layout] 유저 세션 확인 -> 실시간 웹소켓 채널 연결 (/ws)');
+				console.log('🌐 [Root Layout] 유저 세션 확인 -> 실시간 웹소켓 채널 연결 (/ws) 및 푸시 구독 1회 동기화');
 				websocket.init();
+				syncPushSubscription({ userId: auth.user?.id });
 			} else {
-				console.log('🔒 [Root Layout] 비로그인/세션종료 -> 웹소켓 안전 연결 해제');
+				console.log('🔒 [Root Layout] 비로그인/세션종료 -> 웹소켓 안전 연결 해제 및 푸시 구독 해제');
 				websocket.disconnect();
+				unsubscribePushOnLogout();
 			}
 		}
 	});
@@ -84,6 +92,9 @@
 	// [2단계: 브라우저 환경 마운트 후 전역 알림 및 PWA 인프라 기동]
 	// ----------------------------------------------------------------------------
 	onMount(() => {
+		// [2-0] 🔓 첫 터치/클릭 시 오디오 · TTS · 진동 자동재생 차단(Autoplay Policy)을 즉시 해제하는 전역 데몬 가동
+		initAudioUnlocker();
+
 		// [2-1] 전역 알림(토스트/모달) 엔진 및 오프라인 우체통(Outbox) 동기화 엔진 초기화
 		alertState.init();
 		offlineSync.init();
@@ -102,6 +113,18 @@
 				} else {
 					toast.info(text, 5000);
 				}
+			}
+
+			// 📱 모바일 PWA 앱이 다른 화면(/v1 등)에 열려 있을 때 데스크톱 지문 승인 요청이 오면 즉시 시험 센터 모달로 이동
+			if (
+				msg &&
+				msg.type === 'BIOMETRIC_COOP_REQUEST' &&
+				typeof navigator !== 'undefined' &&
+				/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) &&
+				window.location.pathname !== '/v1/pages/device-test'
+			) {
+				toast.info('📲 데스크톱에서 중요 문서 지문 승인을 요청했습니다! 승인 화면으로 이동합니다.');
+				goto('/v1/pages/device-test');
 			}
 		});
 

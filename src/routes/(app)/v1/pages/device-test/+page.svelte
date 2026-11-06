@@ -11,6 +11,27 @@
 
 	import { onMount, onDestroy } from 'svelte';
 	import { toast } from '$lib/runes/toast.svelte.js';
+	import { websocket } from '$lib/runes/websocket.svelte.js';
+	import {
+		initAudioUnlocker,
+		unlockAudioNow,
+		isAudioUnlocked,
+		onAudioUnlockChange,
+		getSoundBoost,
+		setSoundBoost,
+		isCompressorEnabled,
+		setCompressorEnabled,
+		isClarityFilterEnabled,
+		setClarityFilterEnabled,
+		getVibrationBoost,
+		setVibrationBoost,
+		playTone,
+		playAlertSound,
+		playSoundSample,
+		triggerVibration,
+		speakTTS,
+		notifyAlert
+	} from '$lib/utils/sound';
 	import Icon from '@iconify/svelte';
 
 	// ============================================================================
@@ -351,55 +372,99 @@
 	}
 
 	// ============================================================================
-	// 3. 🔊 스피커 사운드 합성 & 한국어 TTS 음성 방송
+	// 3. 🔊 스피커 사운드 합성 (100%~400% 증폭) & 한국어 TTS 음성 방송
 	// ============================================================================
-	let audioCtx = /** @type {AudioContext | null} */ (null);
 	let ttsText = $state('안전 운행 하십시오. 3분 후 제주공항 방면으로 출발합니다.');
 	let isSpeaking = $state(false);
+	let audioUnlocked = $state(false);
+	let soundBoost = $state(1.8); // 1.0 (100%) ~ 4.0 (400%)
+	let compressorOn = $state(true);
+	let clarityFilterOn = $state(true);
+	let ttsPreChime = $state(true);
+	let ttsPitch = $state(1.08);
+	let ttsRate = $state(0.96);
+	let delayedTestCountdown = $state(0);
+	let delayedTestTimer = /** @type {any} */ (null);
+	let unsubscribeAudioUnlock = /** @type {(() => void) | null} */ (null);
+	let activeSampleId = $state('l3_chime');
+
+	// 🎹 11종 사운드 샘플 뱅크 목록
+	const soundSamples = [
+		{ id: 'l1_toast', label: '🔔 L1 토스트 팝', desc: '단발 880Hz 알림' },
+		{ id: 'l2_banner', label: '✨ L2 배너 상승음', desc: '부드러운 2단 음' },
+		{ id: 'l3_chime', label: '🛎️ L3 딩동 차임', desc: '업무지시 표준벨' },
+		{ id: 'l4_warning', label: '⚠️ L4 긴급 3단비프', desc: '주의환기 삐삐삐' },
+		{ id: 'l5_siren', label: '🚨 L5 경보 사이렌', desc: '시스템락 위잉~' },
+		{ id: 'airport_chime', label: '✈️ 공항 4단 차임', desc: '딩-동-댕-동 방송벨' },
+		{ id: 'dispatch_fanfare', label: '🚌 신규배차 팡파레', desc: '경쾌한 배차도착음' },
+		{ id: 'task_complete', label: '✅ 승차/작업 완료', desc: '밝은 확인 멜로디' },
+		{ id: 'error_buzzer', label: '❌ 오류/거부 버저', desc: '저음 띡-띡 경고음' },
+		{ id: 'qr_beep', label: '🔳 QR 스캔 삐빅', desc: '고주파 스캐너음' },
+		{ id: 'camera_shutter', label: '📷 카메라 셔터음', desc: '기계식 찰칵 효과음' }
+	];
+
+	// 🗣️ 한국어 TTS 안내방송 문구 샘플 프리셋
+	const ttsPresets = [
+		{ label: '🚌 출발안내', text: '안전 운행 하십시오. 3분 후 제주공항 방면으로 출발합니다.' },
+		{ label: '📋 배차도착', text: '신규 배차 지시가 도착했습니다. 화면의 배차 내역을 확인해 주십시오.' },
+		{ label: '🚨 기상특보', text: '긴급 공지입니다. 현재 한라산 횡단도로 폭설로 인해 우회 운행 바랍니다.' },
+		{ label: '🎫 탑승완료', text: '탑승권 QR 확인이 완료되었습니다. 즐거운 제주 여행 되십시오.' }
+	];
+
+	/**
+	 * @param {any} sample
+	 */
+	function triggerSample(sample) {
+		activeSampleId = sample.id;
+		playSoundSample(sample.id, { boostOverride: soundBoost, forceUnmute: true });
+		toast.info(`${sample.label} 재생 (증폭: ${Math.round(soundBoost * 100)}%)`);
+	}
+
+	function initSoundLabState() {
+		initAudioUnlocker();
+		soundBoost = getSoundBoost();
+		compressorOn = isCompressorEnabled();
+		clarityFilterOn = isClarityFilterEnabled();
+		vibrationBoost = getVibrationBoost();
+		unsubscribeAudioUnlock = onAudioUnlockChange((state) => {
+			audioUnlocked = state;
+		});
+	}
+
+	/**
+	 * @param {number} val
+	 */
+	function updateSoundBoost(val) {
+		soundBoost = setSoundBoost(val);
+	}
+
+	function toggleCompressor() {
+		compressorOn = !compressorOn;
+		setCompressorEnabled(compressorOn);
+		toast.info(`스피커 찢어짐 방지 리미터(Compressor): ${compressorOn ? 'ON' : 'OFF'}`);
+	}
+
+	function toggleClarityFilter() {
+		clarityFilterOn = !clarityFilterOn;
+		setClarityFilterEnabled(clarityFilterOn);
+		toast.info(`2.4kHz 차량 소음 관통 명료도 필터: ${clarityFilterOn ? 'ON' : 'OFF'}`);
+	}
 
 	function playBeepSound(freq = 880, duration = 0.2, type = 'sine') {
-		try {
-			const AudioContextClass = window.AudioContext || (/** @type {any} */ (window)).webkitAudioContext;
-			if (!AudioContextClass) {
-				toast.error('오디오 엔진을 지원하지 않습니다.');
-				return;
-			}
-			if (!audioCtx || audioCtx.state === 'closed') {
-				audioCtx = new AudioContextClass();
-			}
-			if (audioCtx.state === 'suspended') {
-				audioCtx.resume();
-			}
+		playTone(freq, duration, /** @type {OscillatorType} */ (type), 0.35, 0, {
+			boostOverride: soundBoost,
+			forceUnmute: true
+		});
+	}
 
-			const osc = audioCtx.createOscillator();
-			const gain = audioCtx.createGain();
-
-			osc.type = /** @type {OscillatorType} */ (type);
-			osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
-
-			gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
-			gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
-
-			osc.connect(gain);
-			gain.connect(audioCtx.destination);
-
-			osc.start();
-			osc.stop(audioCtx.currentTime + duration);
-		} catch (e) {
-			console.warn('사운드 출력 오류:', e);
-		}
+	function playChimeSound() {
+		playAlertSound(3, { boostOverride: soundBoost, forceUnmute: true });
+		toast.success(`L3 업무지시 차임벨 출력 (증폭: ${Math.round(soundBoost * 100)}%)`);
 	}
 
 	function playSirenSound() {
-		try {
-			playBeepSound(900, 0.15, 'sawtooth');
-			setTimeout(() => playBeepSound(1200, 0.15, 'sawtooth'), 150);
-			setTimeout(() => playBeepSound(900, 0.15, 'sawtooth'), 300);
-			setTimeout(() => playBeepSound(1200, 0.25, 'sawtooth'), 450);
-			toast.warning('긴급 경보 사이렌 사운드를 출력했습니다.');
-		} catch (e) {
-			toast.error('오디오 출력 실패');
-		}
+		playAlertSound(5, { boostOverride: soundBoost, forceUnmute: true });
+		toast.warning(`L5 긴급 경보 사이렌 출력 (증폭: ${Math.round(soundBoost * 100)}%)`);
 	}
 
 	function speakText() {
@@ -409,27 +474,77 @@
 		}
 		if (!ttsText.trim()) return;
 
-		window.speechSynthesis.cancel();
-		const utter = new SpeechSynthesisUtterance(ttsText);
-		utter.lang = 'ko-KR';
-		utter.rate = 1.0;
-		utter.pitch = 1.0;
+		isSpeaking = true;
+		const ok = speakTTS(ttsText, {
+			preChime: ttsPreChime,
+			pitch: ttsPitch,
+			rate: ttsRate,
+			onStart: () => {
+				isSpeaking = true;
+			},
+			onEnd: () => {
+				isSpeaking = false;
+			},
+			onError: () => {
+				isSpeaking = false;
+				toast.error('음성 합성 오류 발생');
+			}
+		});
+		if (ok) {
+			toast.info(
+				`한국어 TTS 방송 출력 (${ttsPreChime ? '선행 앰프 차임벨 포함' : '음성 단독'}, 증폭 ${Math.round(soundBoost * 100)}%)`
+			);
+		}
+	}
 
-		utter.onstart = () => { isSpeaking = true; };
-		utter.onend = () => { isSpeaking = false; };
-		utter.onerror = () => { isSpeaking = false; toast.error('음성 합성 오류 발생'); };
+	/**
+	 * ⏱️ [핵심 검증] 3초 뒤 무터치(웹소켓 수신 시뮬레이션) 자동 발사 테스트
+	 * 버튼을 누른 뒤 손을 완전히 떼고 있어도 3초 후 비동기 콜백에서 차임벨 + TTS + 진동이 차단 없이 터지는지 검증
+	 */
+	function startDelayedNoTouchTest() {
+		if (delayedTestCountdown > 0) return;
+		unlockAudioNow();
+		delayedTestCountdown = 3;
+		toast.info('⏱️ 스마트폰/마우스에서 손을 떼세요! 3초 뒤 웹소켓 가상 신호로 소리와 진동이 발사됩니다.');
 
-		window.speechSynthesis.speak(utter);
-		toast.info('한국어 음성 안내 방송을 스피커로 출력합니다.');
+		delayedTestTimer = setInterval(() => {
+			delayedTestCountdown -= 1;
+			if (delayedTestCountdown <= 0) {
+				clearInterval(delayedTestTimer);
+				delayedTestTimer = null;
+				// 사용자 이벤트가 전혀 없는 순수 비동기 시점(웹소켓 수신과 동일 조건)에서 발사!
+				notifyAlert(3, { boostOverride: soundBoost, forceUnmute: true });
+				speakTTS(ttsText, {
+					preChime: false,
+					pitch: ttsPitch,
+					rate: ttsRate,
+					onStart: () => {
+						isSpeaking = true;
+					},
+					onEnd: () => {
+						isSpeaking = false;
+					}
+				});
+				toast.success('🚀 [무터치 발사 성공!] 사용자 이벤트 없이 차임벨 + TTS + 진동이 출력되었습니다.');
+			}
+		}, 1000);
 	}
 
 	// ============================================================================
-	// 4. 📳 진동 모터 (Vibration)
+	// 4. 📳 진동 모터 (Vibration & 증폭 배율)
 	// ============================================================================
 	let vibrationSupported = $state(false);
+	let vibrationBoost = $state(1.5); // 1.0 (100%) ~ 3.0 (300%)
 
 	function checkVibrationSupport() {
 		vibrationSupported = typeof navigator !== 'undefined' && 'vibrate' in navigator;
+	}
+
+	/**
+	 * @param {number} val
+	 */
+	function updateVibrationBoost(val) {
+		vibrationBoost = setVibrationBoost(val);
 	}
 
 	/**
@@ -441,9 +556,14 @@
 			toast.error('이 스마트폰은 진동 모터(Vibration API)를 지원하지 않거나 권한이 없습니다. (iOS 사파리는 진동 미지원)');
 			return;
 		}
-		const success = navigator.vibrate(pattern);
+		const success = triggerVibration(pattern, {
+			boostOverride: vibrationBoost,
+			forceUnmute: true
+		});
 		if (success) {
-			toast.success(`[${label}] 스마트폰 진동 모터를 작동시켰습니다.`);
+			toast.success(
+				`[${label}] 진동 모터 작동 완료! (강도 배율: ${Math.round(vibrationBoost * 100)}%)`
+			);
 		} else {
 			toast.warning('기기에서 진동 작동을 거부했습니다.');
 		}
@@ -724,68 +844,555 @@
 
 	let biometricsLoading = $state(false);
 	let lastBioResult = $state(/** @type {string | null} */ (null));
+	let lastBioStatus = $state(/** @type {'success' | 'error' | null} */ (null));
+	let bioAccountName = $state('driver_kim (김기사)');
+	let registeredPasskey = $state(
+		/** @type {{ credentialId: string; rawIdBase64: string; ownerAccount: string; registeredAt: string; verifyCount: number } | null} */ (
+			null
+		)
+	);
+
+	const PASSKEY_STORAGE_KEY = 'jeju_biometric_passkey_v1';
 
 	/**
-	 * 🖐️ 스마트폰 네이티브 지문인식 / 보안 패턴 팝업 호출
+	 * ArrayBuffer -> Base64 변환
+	 * @param {ArrayBuffer} buffer
 	 */
-	async function testBiometricAuth() {
+	function bufferToBase64(buffer) {
+		const bytes = new Uint8Array(buffer);
+		let binary = '';
+		for (let i = 0; i < bytes.byteLength; i++) {
+			binary += String.fromCharCode(bytes[i]);
+		}
+		return btoa(binary);
+	}
+
+	/**
+	 * Base64 -> Uint8Array 변환
+	 * @param {string} base64
+	 */
+	function base64ToUint8Array(base64) {
+		const binary = atob(base64);
+		const bytes = new Uint8Array(binary.length);
+		for (let i = 0; i < binary.length; i++) {
+			bytes[i] = binary.charCodeAt(i);
+		}
+		return bytes;
+	}
+
+	function loadSavedPasskey() {
+		if (typeof window === 'undefined') return;
+		try {
+			const raw = localStorage.getItem(PASSKEY_STORAGE_KEY);
+			if (raw) {
+				registeredPasskey = JSON.parse(raw);
+			}
+		} catch {
+			registeredPasskey = null;
+		}
+	}
+
+	function clearSavedPasskey() {
+		if (typeof window !== 'undefined') {
+			localStorage.removeItem(PASSKEY_STORAGE_KEY);
+		}
+		registeredPasskey = null;
+		lastBioResult = null;
+		lastBioStatus = null;
+		toast.info('등록된 생체 인증 열쇠(Passkey) 정보가 초기화되었습니다.');
+	}
+
+	/**
+	 * 🔑 [1단계: 등록 (create)] 현재 선택된 계정에 이 스마트폰의 지문/생체 보안 열쇠를 발급 및 귀속
+	 */
+	async function registerBiometricKey() {
 		if (typeof window === 'undefined' || !window.PublicKeyCredential) {
 			toast.error('이 브라우저는 생체 인증(WebAuthn)을 지원하지 않습니다.');
 			return;
 		}
 		biometricsLoading = true;
 		lastBioResult = null;
-		toast.info('스마트폰 화면에 지문 / 보안 패턴 인증 창을 호출합니다...');
+		lastBioStatus = null;
+		toast.info(`[1단계 등록] '${bioAccountName}' 계정에 귀속할 지문/패턴을 인증해 주세요...`);
 
 		try {
-			// 32바이트 랜덤 챌린지 생성
 			const challenge = new Uint8Array(32);
 			window.crypto.getRandomValues(challenge);
 
-			// 플랫폼 인증기 (스마트폰 기기 내장 지문센서 또는 Face ID) 호출
-			const credential = await navigator.credentials.create({
-				publicKey: {
-					challenge: challenge,
-					rp: {
-						name: 'jeju.live Core Test',
-						id: window.location.hostname
-					},
-					user: {
-						id: new Uint8Array([1, 2, 3, 4, 5]),
-						name: 'driver@jeju.live',
-						displayName: '테스트 승무원'
-					},
-					pubKeyCredParams: [
-						{ type: 'public-key', alg: -7 },  // ES256
-						{ type: 'public-key', alg: -257 } // RS256
-					],
-					authenticatorSelection: {
-						authenticatorAttachment: 'platform', // 스마트폰 내장 지문/얼굴 센서 지정
-						userVerification: 'required'         // 생체 검증 필수
-					},
-					timeout: 60000
-				}
-			});
+			const userBytes = new TextEncoder().encode(bioAccountName);
+
+			const credential = /** @type {PublicKeyCredential | null} */ (
+				await navigator.credentials.create({
+					publicKey: {
+						challenge,
+						rp: {
+							name: 'jeju.live Passkey Auth',
+							id: window.location.hostname
+						},
+						user: {
+							id: userBytes,
+							name: bioAccountName,
+							displayName: bioAccountName
+						},
+						pubKeyCredParams: [
+							{ type: 'public-key', alg: -7 }, // ES256
+							{ type: 'public-key', alg: -257 } // RS256
+						],
+						authenticatorSelection: {
+							authenticatorAttachment: 'platform',
+							userVerification: 'required'
+						},
+						timeout: 60000
+					}
+				})
+			);
 
 			biometricsLoading = false;
-			if (credential) {
-				playBeepSound(1320, 0.15, 'sine');
-				setTimeout(() => playBeepSound(1760, 0.2, 'sine'), 120);
-				if (vibrationSupported) navigator.vibrate([120, 60, 120]);
+			if (credential && credential.rawId) {
+				const rawIdBase64 = bufferToBase64(credential.rawId);
+				const saved = {
+					credentialId: credential.id,
+					rawIdBase64,
+					ownerAccount: bioAccountName,
+					registeredAt: new Date().toLocaleTimeString('ko-KR'),
+					verifyCount: 0
+				};
+				registeredPasskey = saved;
+				localStorage.setItem(PASSKEY_STORAGE_KEY, JSON.stringify(saved));
 
-				const rawId = credential.id || 'AUTH-SUCCESS';
-				lastBioResult = `인증 성공! (보안 키: ${rawId.substring(0, 18)}...)`;
-				toast.success('🎉 지문/생체 인증 성공! 본인 확인이 완료되었습니다.');
+				playSoundSample('task_complete', { boostOverride: soundBoost, forceUnmute: true });
+				if (vibrationSupported) triggerVibration([120, 60, 150], { forceUnmute: true });
+
+				lastBioStatus = 'success';
+				lastBioResult = `✅ [1단계 등록 완료] '${bioAccountName}' 계정에 이 휴대폰의 전용 지문 열쇠(${credential.id.substring(0, 14)}...)가 발급·귀속되었습니다!`;
+				toast.success(`🎉 1단계 지문 열쇠 등록 완료! 이제 2단계 검증 버튼을 눌러보세요.`);
 			}
 		} catch (e) {
 			biometricsLoading = false;
 			const err = /** @type {any} */ (e);
+			lastBioStatus = 'error';
 			if (err.name === 'NotAllowedError') {
-				toast.info('생체 인증이 사용자에 의해 취소되었거나 지문이 일치하지 않습니다.');
+				lastBioResult = '❌ 지문 등록이 취소되었거나 생체 정보가 일치하지 않습니다.';
+				toast.info(lastBioResult);
 			} else {
-				toast.error(`생체 인증 오류: ${err.message}`);
+				lastBioResult = `❌ 등록 오류: ${err.message}`;
+				toast.error(lastBioResult);
 			}
 		}
+	}
+
+	/**
+	 * 🛡️ [2단계: 검증 (get)] 휴대폰 지문 일치 + 계정에 등록된 열쇠 번호(Credential ID) 일치 2중 대조
+	 */
+	async function verifyBiometricKey() {
+		if (typeof window === 'undefined' || !window.PublicKeyCredential) {
+			toast.error('이 브라우저는 생체 인증(WebAuthn)을 지원하지 않습니다.');
+			return;
+		}
+		if (!registeredPasskey) {
+			toast.warning('먼저 [1단계: 지문 열쇠 등록]을 실행하여 계정에 기기를 등록해 주세요!');
+			return;
+		}
+
+		biometricsLoading = true;
+		lastBioResult = null;
+		lastBioStatus = null;
+		toast.info(`[2단계 검증] '${bioAccountName}' 계정 본인 확인을 위해 지문을 스캔해 주세요...`);
+
+		try {
+			const challenge = new Uint8Array(32);
+			window.crypto.getRandomValues(challenge);
+			const allowedIdBytes = base64ToUint8Array(registeredPasskey.rawIdBase64);
+
+			// 등록된 고유 열쇠 번호(allowCredentials)만 허용하여 하드웨어 서명 요청
+			const assertion = /** @type {PublicKeyCredential | null} */ (
+				await navigator.credentials.get({
+					publicKey: {
+						challenge,
+						rpId: window.location.hostname,
+						allowCredentials: [
+							{
+								type: 'public-key',
+								id: allowedIdBytes
+							}
+						],
+						userVerification: 'required',
+						timeout: 60000
+					}
+				})
+			);
+
+			biometricsLoading = false;
+			if (assertion) {
+				// 1) 하드웨어 열쇠 ID 대조 + 2) 요청 계정과 열쇠 소유 계정 일치 대조
+				if (assertion.id !== registeredPasskey.credentialId) {
+					playSoundSample('error_buzzer', { boostOverride: soundBoost, forceUnmute: true });
+					lastBioStatus = 'error';
+					lastBioResult = `🚨 [열쇠 불일치 차단] 등록된 기기 열쇠 번호와 일치하지 않습니다!`;
+					toast.error(lastBioResult);
+					return;
+				}
+
+				if (bioAccountName !== registeredPasskey.ownerAccount) {
+					playSoundSample('error_buzzer', { boostOverride: soundBoost, forceUnmute: true });
+					if (vibrationSupported) triggerVibration([250, 80, 250], { forceUnmute: true });
+					lastBioStatus = 'error';
+					lastBioResult = `🚨 [계정 도용 차단!] 휴대폰 지문은 통과했으나, 이 기기 열쇠는 '${registeredPasskey.ownerAccount}' 계정 소유입니다. 현재 선택된 '${bioAccountName}' 계정으로는 인증할 수 없습니다!`;
+					toast.error('계정 주인과 기기 소유자가 불일치하여 차단되었습니다!');
+					return;
+				}
+
+				// 휴대폰 소유자 지문 + 계정 주인 열쇠 100% 일치!
+				registeredPasskey.verifyCount += 1;
+				localStorage.setItem(PASSKEY_STORAGE_KEY, JSON.stringify(registeredPasskey));
+
+				playSoundSample('dispatch_fanfare', { boostOverride: soundBoost, forceUnmute: true });
+				if (vibrationSupported) triggerVibration([120, 60, 180], { forceUnmute: true });
+
+				lastBioStatus = 'success';
+				lastBioResult = `🎉 [2단계 완벽 일치 (누적 ${registeredPasskey.verifyCount}회)] 휴대폰 지문 + '${bioAccountName}' 계정의 등록 열쇠(${assertion.id.substring(0, 12)}...)가 100% 일치합니다!`;
+				toast.success('휴대폰 소유자 및 계정 주인 2중 검증 통과!');
+			}
+		} catch (e) {
+			biometricsLoading = false;
+			const err = /** @type {any} */ (e);
+			lastBioStatus = 'error';
+			if (err.name === 'NotAllowedError') {
+				lastBioResult = '❌ 지문 검증이 취소되었거나 이 기기에 해당 계정의 열쇠가 없습니다.';
+				toast.info(lastBioResult);
+			} else {
+				lastBioResult = `❌ 검증 오류: ${err.message}`;
+				toast.error(lastBioResult);
+			}
+		}
+	}
+
+	// ============================================================================
+	// 10-B. 💻 데스크톱 ↔ 📱 모바일 실시간 원격 지문 공조 (대외비 문서 열람 승인)
+	// ============================================================================
+	const clientTabId = Math.random().toString(36).substring(2, 9);
+	const COOP_DEVICE_ID_KEY = 'jeju_coop_device_id_v1';
+
+	function getMyCoopDeviceId() {
+		if (typeof window === 'undefined') return clientTabId;
+		let id = localStorage.getItem(COOP_DEVICE_ID_KEY);
+		if (!id) {
+			id = 'dev_' + Math.random().toString(36).substring(2, 11) + '_' + Date.now().toString(36);
+			localStorage.setItem(COOP_DEVICE_ID_KEY, id);
+		}
+		return id;
+	}
+
+	let coopDocUnlocked = $state(false);
+	let coopWaiting = $state(false);
+	let coopCountdown = $state(0);
+	let coopTimer = /** @type {any} */ (null);
+	let activeCoopRequestId = $state(/** @type {string | null} */ (null));
+	let handledCoopRequestId = /** @type {string | null} */ (null);
+	let coopApprovalInfo = $state(
+		/** @type {{ verifiedAccount: string; credentialId: string; verifiedAt: string; status: string; reason?: string } | null} */ (
+			null
+		)
+	);
+	// 모바일(수신측)에 팝업될 원격 승인 요청 데이터
+	let incomingCoopRequest = $state(
+		/** @type {{ requestId: string; docTitle: string; targetAccount: string; requestedAt: string; senderTabId: string } | null} */ (
+			null
+		)
+	);
+	let unsubscribeCoopWs = /** @type {(() => void) | null} */ (null);
+
+	/**
+	 * 📱 [모바일 수신 처리] 백엔드가 요청자 본인의 MOBILE 기기로만 타겟 전송한 지문 승인 요청 처리
+	 * @param {any} msg
+	 */
+	function handleIncomingCoopRequest(msg) {
+		if (!msg || !msg.requestId) return;
+		const myDeviceId = getMyCoopDeviceId();
+
+		// 방어적 검증: 만약 동일 기기/탭에서 발신한 요청이면 무시
+		if (
+			coopWaiting ||
+			activeCoopRequestId === msg.requestId ||
+			(msg.senderDeviceId && msg.senderDeviceId === myDeviceId) ||
+			(msg.senderTabId && msg.senderTabId === clientTabId)
+		) {
+			return;
+		}
+
+		// 이미 모달에 띄운 동일 요청이면 중복 알림 생략
+		if (handledCoopRequestId === msg.requestId && incomingCoopRequest?.requestId === msg.requestId) {
+			return;
+		}
+		handledCoopRequestId = msg.requestId;
+
+		incomingCoopRequest = {
+			requestId: msg.requestId,
+			docTitle: msg.docTitle || '[대외비] 2026년 제주공항 리무진 배차 정산 기밀 보고서',
+			targetAccount: msg.targetAccount || 'driver_kim (김기사)',
+			requestedAt: msg.requestedAt || new Date().toLocaleTimeString('ko-KR'),
+			senderTabId: msg.senderTabId || ''
+		};
+
+		// 🔊 스마트폰 차임벨 + 진동 + TTS 즉시 발사
+		notifyAlert(3, { boostOverride: soundBoost, forceUnmute: true });
+		speakTTS('데스크톱에서 중요 문서 열람 지문 승인을 요청했습니다. 지문을 인증해 주십시오.', {
+			preChime: false,
+			pitch: ttsPitch,
+			rate: ttsRate
+		});
+		toast.info('📲 [데스크톱 공조 요청] 중요 문서 열람을 위해 스마트폰 지문 승인이 요청되었습니다!');
+	}
+
+	/**
+	 * 💻 [데스크톱 수신 처리] 스마트폰에서 보낸 지문 인증 결과(APPROVED / REJECTED) 반영
+	 * @param {any} msg
+	 */
+	function handleIncomingCoopResult(msg) {
+		if (!msg || !msg.requestId) return;
+		if (activeCoopRequestId && msg.requestId === activeCoopRequestId && coopWaiting) {
+			stopCoopWaitingTimer();
+			if (msg.status === 'APPROVED') {
+				coopDocUnlocked = true;
+				coopApprovalInfo = {
+					status: 'APPROVED',
+					verifiedAccount: msg.verifiedAccount,
+					credentialId: msg.credentialId || 'MOBILE-PASSKEY',
+					verifiedAt: msg.verifiedAt || new Date().toLocaleTimeString('ko-KR')
+				};
+				playSoundSample('dispatch_fanfare', { boostOverride: soundBoost, forceUnmute: true });
+				toast.success('🔓 스마트폰 지문 승인 완료! 데스크톱 대외비 문서 잠금이 즉시 해제되었습니다.');
+			} else {
+				coopDocUnlocked = false;
+				coopApprovalInfo = {
+					status: 'REJECTED',
+					verifiedAccount: msg.verifiedAccount || '-',
+					credentialId: '-',
+					verifiedAt: new Date().toLocaleTimeString('ko-KR'),
+					reason: msg.reason || '스마트폰에서 지문 승인을 거부했거나 계정이 일치하지 않습니다.'
+				};
+				playSoundSample('error_buzzer', { boostOverride: soundBoost, forceUnmute: true });
+				toast.error(`🚨 원격 승인 실패: ${coopApprovalInfo.reason}`);
+			}
+		}
+		if (incomingCoopRequest && incomingCoopRequest.requestId === msg.requestId) {
+			incomingCoopRequest = null;
+		}
+	}
+
+	function initBiometricCoopWs() {
+		if (unsubscribeCoopWs) {
+			unsubscribeCoopWs();
+			unsubscribeCoopWs = null;
+		}
+
+		// 웹소켓 연결 보장 (이미 연결되어 있으면 유지, 끊어져 있으면 즉시 연결)
+		websocket.init();
+
+		unsubscribeCoopWs = websocket.addMessageListener((msg) => {
+			if (!msg || !msg.type) return;
+
+			if (msg.type === 'BIOMETRIC_COOP_REQUEST') {
+				handleIncomingCoopRequest(msg);
+			} else if (msg.type === 'BIOMETRIC_COOP_RESULT') {
+				handleIncomingCoopResult(msg);
+			} else if (msg.type === 'BIOMETRIC_COOP_CANCEL') {
+				if (incomingCoopRequest && incomingCoopRequest.requestId === msg.requestId) {
+					incomingCoopRequest = null;
+					toast.info('데스크톱에서 지문 승인 요청을 취소했습니다.');
+				}
+			}
+		}, 'biometric_coop');
+
+		// 📱 모바일 기기에서 페이지 진입 시 대기 중인 본인 요청이 있는지 1회 동기화 요청
+		// (소켓이 CONNECTING 상태여도 websocket.#sendQueue에 의해 연결 즉시 자동 발송됨)
+		websocket.send({ type: 'BIOMETRIC_COOP_SYNC' });
+	}
+
+	function stopCoopWaitingTimer() {
+		coopWaiting = false;
+		coopCountdown = 0;
+		if (coopTimer) {
+			clearInterval(coopTimer);
+			coopTimer = null;
+		}
+	}
+
+	/**
+	 * 💻 [데스크톱 -> 모바일] 대외비 문서 열람을 위한 원격 스마트폰 지문 승인 요청 발송
+	 */
+	async function requestRemoteBiometricUnlock() {
+		const reqId = 'coop_' + Math.random().toString(36).substring(2, 10);
+		const myDeviceId = getMyCoopDeviceId();
+
+		activeCoopRequestId = reqId;
+		handledCoopRequestId = reqId;
+		incomingCoopRequest = null;
+
+		coopDocUnlocked = false;
+		coopApprovalInfo = null;
+		coopWaiting = true;
+		coopCountdown = 60;
+
+		const payload = {
+			type: 'BIOMETRIC_COOP_REQUEST',
+			requestId: reqId,
+			senderDeviceId: myDeviceId,
+			senderTabId: clientTabId,
+			docTitle: '[대외비] 2026년 제주공항 리무진 배차 정산 및 임원 기밀 보고서.pdf',
+			targetAccount: bioAccountName,
+			requestedAt: new Date().toLocaleTimeString('ko-KR')
+		};
+
+		// 단일 웹소켓 채널로 정석 발송 (CONNECTING 상태여도 #sendQueue가 100% 보장)
+		websocket.send(payload);
+
+		playSoundSample('l2_banner', { boostOverride: soundBoost, forceUnmute: true });
+		toast.info(`📲 스마트폰으로 지문 승인 요청을 발송했습니다! 스마트폰 화면을 확인해 주세요.`);
+
+		if (coopTimer) clearInterval(coopTimer);
+		coopTimer = setInterval(() => {
+			coopCountdown -= 1;
+			if (coopCountdown <= 0) {
+				stopCoopWaitingTimer();
+				toast.warning('⏱️ 지문 승인 대기 시간(60초)이 만료되었습니다.');
+			}
+		}, 1000);
+	}
+
+	function cancelRemoteBiometricUnlock() {
+		if (activeCoopRequestId) {
+			websocket.send({
+				type: 'BIOMETRIC_COOP_CANCEL',
+				requestId: activeCoopRequestId
+			});
+		}
+		stopCoopWaitingTimer();
+		activeCoopRequestId = null;
+		toast.info('원격 지문 승인 요청을 취소했습니다.');
+	}
+
+	/**
+	 * 📱 [모바일 -> 데스크톱] 수신된 문서 열람 요청에 대해 스마트폰 지문을 찍어 승인 응답 전송
+	 */
+	async function approveIncomingCoopWithBiometrics() {
+		if (!incomingCoopRequest) return;
+		const req = incomingCoopRequest;
+
+		if (typeof window === 'undefined' || !window.PublicKeyCredential) {
+			toast.error('이 기기는 생체 인증(WebAuthn)을 지원하지 않습니다.');
+			return;
+		}
+
+		// 만약 모바일에 이미 등록된 열쇠가 있는데, 데스크톱이 요청한 계정과 모바일 열쇠 주인이 다르면 즉시 도용 차단!
+		if (registeredPasskey && registeredPasskey.ownerAccount !== req.targetAccount) {
+			playSoundSample('error_buzzer', { boostOverride: soundBoost, forceUnmute: true });
+			if (vibrationSupported) triggerVibration([250, 80, 250], { forceUnmute: true });
+			websocket.send({
+				type: 'BIOMETRIC_COOP_RESULT',
+				requestId: req.requestId,
+				status: 'REJECTED',
+				verifiedAccount: registeredPasskey.ownerAccount,
+				reason: `계정 불일치 차단! 데스크톱 요청 계정(${req.targetAccount})과 스마트폰 등록 열쇠 주인(${registeredPasskey.ownerAccount})이 다릅니다.`
+			});
+			incomingCoopRequest = null;
+			toast.error('🚨 데스크톱 요청 계정과 스마트폰 열쇠 소유주가 달라 자동 차단했습니다!');
+			return;
+		}
+
+		biometricsLoading = true;
+		try {
+			const challenge = new Uint8Array(32);
+			window.crypto.getRandomValues(challenge);
+			let verifiedCredId = 'PASSKEY-VERIFIED';
+
+			if (registeredPasskey) {
+				// 등록된 열쇠로 정밀 검증 (get)
+				const allowedIdBytes = base64ToUint8Array(registeredPasskey.rawIdBase64);
+				const assertion = /** @type {PublicKeyCredential | null} */ (
+					await navigator.credentials.get({
+						publicKey: {
+							challenge,
+							rpId: window.location.hostname,
+							allowCredentials: [{ type: 'public-key', id: allowedIdBytes }],
+							userVerification: 'required',
+							timeout: 60000
+						}
+					})
+				);
+				if (assertion) {
+					verifiedCredId = assertion.id;
+					registeredPasskey.verifyCount += 1;
+					localStorage.setItem(PASSKEY_STORAGE_KEY, JSON.stringify(registeredPasskey));
+				}
+			} else {
+				// 아직 1단계 등록 전인 기기에서도 즉시 테스트할 수 있도록 플랫폼 지문 확인 수행 후 자동 등록
+				const userBytes = new TextEncoder().encode(req.targetAccount);
+				const credential = /** @type {PublicKeyCredential | null} */ (
+					await navigator.credentials.create({
+						publicKey: {
+							challenge,
+							rp: { name: 'jeju.live Co-op Auth', id: window.location.hostname },
+							user: { id: userBytes, name: req.targetAccount, displayName: req.targetAccount },
+							pubKeyCredParams: [
+								{ type: 'public-key', alg: -7 },
+								{ type: 'public-key', alg: -257 }
+							],
+							authenticatorSelection: {
+								authenticatorAttachment: 'platform',
+								userVerification: 'required'
+							},
+							timeout: 60000
+						}
+					})
+				);
+				if (credential && credential.rawId) {
+					verifiedCredId = credential.id;
+					const saved = {
+						credentialId: credential.id,
+						rawIdBase64: bufferToBase64(credential.rawId),
+						ownerAccount: req.targetAccount,
+						registeredAt: new Date().toLocaleTimeString('ko-KR'),
+						verifyCount: 1
+					};
+					registeredPasskey = saved;
+					localStorage.setItem(PASSKEY_STORAGE_KEY, JSON.stringify(saved));
+				}
+			}
+
+			biometricsLoading = false;
+			playSoundSample('task_complete', { boostOverride: soundBoost, forceUnmute: true });
+			if (vibrationSupported) triggerVibration([120, 60, 180], { forceUnmute: true });
+
+			// 데스크톱으로 승인 완료 신호 전송
+			websocket.send({
+				type: 'BIOMETRIC_COOP_RESULT',
+				requestId: req.requestId,
+				status: 'APPROVED',
+				verifiedAccount: req.targetAccount,
+				credentialId: verifiedCredId,
+				verifiedAt: new Date().toLocaleTimeString('ko-KR')
+			});
+
+			incomingCoopRequest = null;
+			toast.success('🎉 스마트폰 지문 승인 성공! 데스크톱 화면의 문서 잠금이 해제되었습니다.');
+		} catch (e) {
+			biometricsLoading = false;
+			toast.error('지문 인증이 취소되었거나 실패했습니다.');
+		}
+	}
+
+	function rejectIncomingCoop() {
+		if (!incomingCoopRequest) return;
+		websocket.send({
+			type: 'BIOMETRIC_COOP_RESULT',
+			requestId: incomingCoopRequest.requestId,
+			status: 'REJECTED',
+			verifiedAccount: bioAccountName,
+			reason: '스마트폰 사용자가 문서 열람 승인을 직접 거부했습니다.'
+		});
+		incomingCoopRequest = null;
+		toast.warning('데스크톱 문서 열람 요청을 거부했습니다.');
 	}
 
 	// ============================================================================
@@ -949,6 +1556,7 @@
 	}
 
 	onMount(() => {
+		initSoundLabState();
 		checkGpsSupport();
 		checkCameraSupport();
 		checkVibrationSupport();
@@ -958,6 +1566,8 @@
 		checkShareSupport();
 		checkNetworkStatus();
 		checkBiometricsSupport();
+		loadSavedPasskey();
+		initBiometricCoopWs();
 		checkNfcSupport();
 		checkBluetoothSupport();
 		checkBadgingSupport();
@@ -969,6 +1579,10 @@
 	});
 
 	onDestroy(() => {
+		if (unsubscribeAudioUnlock) unsubscribeAudioUnlock();
+		if (unsubscribeCoopWs) unsubscribeCoopWs();
+		if (delayedTestTimer) clearInterval(delayedTestTimer);
+		if (coopTimer) clearInterval(coopTimer);
 		if (gpsWatchId !== null && typeof navigator !== 'undefined') {
 			navigator.geolocation.clearWatch(gpsWatchId);
 		}
@@ -1311,7 +1925,7 @@
 		</div>
 
 		<!-- ----------------------------------------------------------------- -->
-		<!-- [모듈 3] 🔊 스피커 사운드 합성 & 한국어 TTS 방송 -->
+		<!-- [모듈 3] 🔊 스피커 사운드 합성 (400% 증폭) & 한국어 TTS 방송 -->
 		<!-- ----------------------------------------------------------------- -->
 		<div class="flex flex-col justify-between rounded-2xl border-2 border-slate-900 bg-white p-5 shadow-[4px_4px_0_0_#0f172a]">
 			<div>
@@ -1321,61 +1935,217 @@
 							<Icon icon="ph:speaker-high-fill" class="text-xl" />
 						</div>
 						<div>
-							<h3 class="font-black text-slate-900 text-sm">🔊 스피커 & TTS 음성 방송</h3>
-							<span class="text-[10px] font-bold text-slate-400 uppercase">Web Audio & SpeechSynthesis</span>
+							<h3 class="font-black text-slate-900 text-sm">🔊 스피커 앰프 증폭 & TTS 방송</h3>
+							<span class="text-[10px] font-bold text-slate-400 uppercase">400% Gain Boost + Autoplay Unlocker</span>
 						</div>
 					</div>
-					<span class="rounded px-2 py-0.5 text-[10px] font-black bg-emerald-50 text-emerald-700 border border-emerald-200">
-						지원됨
-					</span>
+					<!-- 첫 터치 잠금 해제 실시간 상태 배지 -->
+					<button
+						onclick={() => {
+							unlockAudioNow();
+							toast.success('오디오 · TTS · 진동 잠금이 수동 개통되었습니다!');
+						}}
+						class="rounded-lg px-2.5 py-1 text-[10px] font-black transition flex items-center gap-1 {audioUnlocked ? 'bg-emerald-50 text-emerald-700 border border-emerald-300' : 'bg-amber-100 text-amber-800 border border-amber-300 animate-pulse'}"
+						title="첫 터치 시 자동 개통됩니다"
+					>
+						<Icon icon={audioUnlocked ? 'ph:lock-key-open-fill' : 'ph:lock-key-fill'} class="text-xs" />
+						<span>{audioUnlocked ? '개통 완료 (무효화 무력화됨)' : '잠김 (아무 곳이나 터치)'}</span>
+					</button>
 				</div>
 
-				<!-- 한국어 TTS 텍스트 입력 필드 -->
-				<div class="mt-4 space-y-2">
-					<label class="block text-[11px] font-bold text-slate-500">
-						한국어 안내 음성 방송 문구 입력:
-					</label>
+				<!-- 🎚️ 1. 하드웨어 사운드 증폭 배율 (100% ~ 400%) 컨트롤 박스 -->
+				<div class="mt-3.5 rounded-xl border border-amber-200 bg-amber-50/60 p-3 space-y-2.5">
+					<div class="flex items-center justify-between">
+						<span class="text-[11px] font-black text-slate-800 flex items-center gap-1">
+							<Icon icon="ph:Sliders-horizontal-bold" class="text-amber-600" />
+							사운드 앰프 증폭 배율 (Gain Boost)
+						</span>
+						<span class="rounded-md bg-slate-900 px-2 py-0.5 font-mono text-xs font-black text-amber-300">
+							{Math.round(soundBoost * 100)}% ({soundBoost.toFixed(1)}x)
+						</span>
+					</div>
+
 					<input
+						type="range"
+						min="0.5"
+						max="4.0"
+						step="0.1"
+						value={soundBoost}
+						oninput={(e) => updateSoundBoost(parseFloat(/** @type {HTMLInputElement} */ (e.currentTarget).value))}
+						class="w-full accent-amber-600 cursor-pointer h-2 rounded-lg bg-amber-200"
+					/>
+
+					<!-- 원터치 증폭 프리셋 버튼 -->
+					<div class="grid grid-cols-4 gap-1.5">
+						{#each [
+							{ val: 1.0, label: '100% 기본' },
+							{ val: 2.0, label: '200% 2배' },
+							{ val: 3.0, label: '300% 현장' },
+							{ val: 4.0, label: '400% MAX' }
+						] as preset}
+							<button
+								type="button"
+								onclick={() => {
+									updateSoundBoost(preset.val);
+									playBeepSound(1046, 0.12);
+								}}
+								class="rounded-lg py-1.5 text-[10px] font-black transition {Math.abs(soundBoost - preset.val) < 0.05 ? 'bg-slate-900 text-amber-300 shadow-xs' : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'}"
+							>
+								{preset.label}
+							</button>
+						{/each}
+					</div>
+
+					<!-- DSP 음질 보호 & 소음 관통 옵션 토글 -->
+					<div class="grid grid-cols-2 gap-1.5 pt-1">
+						<button
+							type="button"
+							onclick={toggleCompressor}
+							class="rounded-lg border px-2.5 py-1.5 text-[10px] font-black transition flex items-center justify-between {compressorOn ? 'border-emerald-400 bg-emerald-50 text-emerald-800' : 'border-slate-200 bg-white text-slate-500'}"
+						>
+							<span>🛡️ 리미터(찢어짐방지)</span>
+							<span>{compressorOn ? 'ON' : 'OFF'}</span>
+						</button>
+						<button
+							type="button"
+							onclick={toggleClarityFilter}
+							class="rounded-lg border px-2.5 py-1.5 text-[10px] font-black transition flex items-center justify-between {clarityFilterOn ? 'border-blue-400 bg-blue-50 text-blue-800' : 'border-slate-200 bg-white text-slate-500'}"
+						>
+							<span>📡 2.4kHz 소음관통</span>
+							<span>{clarityFilterOn ? 'ON' : 'OFF'}</span>
+						</button>
+					</div>
+				</div>
+
+				<!-- 🎹 2. 사운드 샘플 뱅크 (11종 원터치 비교 청취) -->
+				<div class="mt-3 rounded-xl border border-slate-200 bg-slate-50/80 p-3 space-y-2">
+					<div class="flex items-center justify-between">
+						<span class="text-[11px] font-black text-slate-800 flex items-center gap-1">
+							<Icon icon="ph:music-notes-fill" class="text-amber-600" />
+							사운드 샘플 뱅크 (클릭 시 현재 증폭 배율로 즉시 재생)
+						</span>
+						<span class="text-[10px] font-bold text-slate-400">총 {soundSamples.length}종</span>
+					</div>
+
+					<div class="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+						{#each soundSamples as sample}
+							<button
+								type="button"
+								onclick={() => triggerSample(sample)}
+								class="rounded-xl border px-2.5 py-2 text-left transition active:scale-95 flex flex-col justify-between {activeSampleId === sample.id ? 'border-slate-900 bg-slate-900 text-white shadow-sm' : 'border-slate-200 bg-white text-slate-800 hover:border-amber-400 hover:bg-amber-50/40'}"
+							>
+								<div class="text-[11px] font-black leading-tight truncate">{sample.label}</div>
+								<div class="mt-0.5 text-[9px] font-medium truncate {activeSampleId === sample.id ? 'text-amber-300' : 'text-slate-400'}">
+									{sample.desc}
+								</div>
+							</button>
+						{/each}
+					</div>
+				</div>
+
+				<!-- 🗣️ 3. 한국어 TTS 안내 방송 & 문구 샘플 프리셋 -->
+				<div class="mt-3 space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
+					<div class="flex items-center justify-between">
+						<label for="tts-input" class="block text-[11px] font-black text-slate-700">
+							🗣️ 한국어 안내 음성 방송 (TTS):
+						</label>
+						<button
+							type="button"
+							onclick={() => (ttsPreChime = !ttsPreChime)}
+							class="rounded-md px-2 py-0.5 text-[10px] font-black transition {ttsPreChime ? 'bg-indigo-600 text-white' : 'bg-slate-200 text-slate-600'}"
+						>
+							{ttsPreChime ? '🔔 선행 앰프차임벨 ON' : '선행 차임벨 OFF'}
+						</button>
+					</div>
+
+					<!-- TTS 문구 샘플 원터치 프리셋 -->
+					<div class="grid grid-cols-4 gap-1">
+						{#each ttsPresets as preset}
+							<button
+								type="button"
+								onclick={() => {
+									ttsText = preset.text;
+									speakText();
+								}}
+								class="rounded-lg border border-indigo-200 bg-indigo-50/70 py-1.5 px-1 text-[10px] font-black text-indigo-800 hover:bg-indigo-100 active:scale-95 transition truncate"
+								title={preset.text}
+							>
+								{preset.label}
+							</button>
+						{/each}
+					</div>
+
+					<input
+						id="tts-input"
 						type="text"
 						bind:value={ttsText}
 						placeholder="스피커로 방송할 문구를 입력하세요..."
-						class="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-xs font-bold text-slate-800 focus:border-blue-500 focus:bg-white focus:outline-none"
+						class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-800 focus:border-blue-500 focus:outline-none"
 					/>
+
+					<!-- TTS 음높이(Pitch) & 속도(Rate) 미세 튜닝 -->
+					<div class="grid grid-cols-2 gap-3 pt-1 text-[10px] font-bold text-slate-600">
+						<div>
+							<div class="flex justify-between">
+								<span>음높이(Pitch)</span>
+								<span class="font-mono font-black text-slate-900">{ttsPitch.toFixed(2)}</span>
+							</div>
+							<input
+								type="range"
+								min="0.7"
+								max="1.4"
+								step="0.02"
+								bind:value={ttsPitch}
+								class="w-full accent-indigo-600 cursor-pointer h-1.5 mt-1"
+							/>
+						</div>
+						<div>
+							<div class="flex justify-between">
+								<span>말하기 속도(Rate)</span>
+								<span class="font-mono font-black text-slate-900">{ttsRate.toFixed(2)}</span>
+							</div>
+							<input
+								type="range"
+								min="0.7"
+								max="1.4"
+								step="0.02"
+								bind:value={ttsRate}
+								class="w-full accent-indigo-600 cursor-pointer h-1.5 mt-1"
+							/>
+						</div>
+					</div>
 				</div>
 			</div>
 
 			<!-- 오디오 및 TTS 실행 버튼들 -->
-			<div class="mt-5 flex flex-col gap-2">
+			<div class="mt-4 flex flex-col gap-2">
 				<button
 					onclick={speakText}
 					disabled={isSpeaking}
 					class="w-full rounded-xl bg-blue-600 py-2.5 text-xs font-black text-white shadow-sm transition hover:bg-blue-700 active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2"
 				>
 					<Icon icon="ph:megaphone-simple-fill" class="text-base" />
-					<span>{isSpeaking ? '음성 방송 출력 중...' : '한국어 음성 방송 실행 (TTS)'}</span>
+					<span>{isSpeaking ? '음성 방송 출력 중...' : '🗣️ 입력한 문구로 한국어 음성 방송 실행 (TTS)'}</span>
 				</button>
 
-				<div class="grid grid-cols-2 gap-2">
-					<button
-						onclick={() => playBeepSound(880, 0.2)}
-						class="rounded-xl border border-slate-300 bg-slate-50 py-2 text-xs font-black text-slate-700 hover:bg-slate-100 active:scale-95 flex items-center justify-center gap-1.5"
-					>
-						<Icon icon="ph:bell-simple-fill" class="text-sm text-amber-500" />
-						알림 비프음 (880Hz)
-					</button>
-					<button
-						onclick={playSirenSound}
-						class="rounded-xl border border-rose-200 bg-rose-50 py-2 text-xs font-black text-rose-700 hover:bg-rose-100 active:scale-95 flex items-center justify-center gap-1.5"
-					>
-						<Icon icon="ph:warning-octagon-fill" class="text-sm text-rose-600" />
-						긴급 사이렌 (4연속)
-					</button>
-				</div>
+				<!-- ⏱️ 3초 뒤 무터치(웹소켓 시뮬레이션) 자동 발사 검증 버튼 -->
+				<button
+					onclick={startDelayedNoTouchTest}
+					disabled={delayedTestCountdown > 0}
+					class="w-full rounded-xl border-2 border-slate-900 bg-amber-300 py-2.5 text-xs font-black text-slate-950 shadow-[2px_2px_0_0_#0f172a] transition hover:bg-amber-400 active:scale-95 disabled:opacity-70 flex items-center justify-center gap-1.5"
+				>
+					<Icon icon="ph:timer-fill" class="text-base" />
+					<span>
+						{delayedTestCountdown > 0
+							? `손을 떼세요! ${delayedTestCountdown}초 뒤 무터치 자동 발사...`
+							: '⏱️ 3초 뒤 무터치 자동 발사 테스트 (웹소켓 시뮬레이션)'}
+					</span>
+				</button>
 			</div>
 		</div>
 
 		<!-- ----------------------------------------------------------------- -->
-		<!-- [모듈 4] 📳 진동 모터 (Vibration API) -->
+		<!-- [모듈 4] 📳 진동 모터 (Vibration API & 강도 증폭) -->
 		<!-- ----------------------------------------------------------------- -->
 		<div class="flex flex-col justify-between rounded-2xl border-2 border-slate-900 bg-white p-5 shadow-[4px_4px_0_0_#0f172a]">
 			<div>
@@ -1385,7 +2155,7 @@
 							<Icon icon="ph:vibrate-fill" class="text-xl" />
 						</div>
 						<div>
-							<h3 class="font-black text-slate-900 text-sm">📳 진동 모터</h3>
+							<h3 class="font-black text-slate-900 text-sm">📳 진동 모터 & 지속시간 증폭</h3>
 							<span class="text-[10px] font-bold text-slate-400 uppercase">Vibration API (Android/PWA)</span>
 						</div>
 					</div>
@@ -1395,29 +2165,72 @@
 				</div>
 
 				<p class="mt-3 text-xs leading-relaxed text-slate-500 font-medium">
-					스마트폰 내부 물리 진동 모터를 직접 구동합니다. 안드로이드 크롬 및 설치된 PWA 환경에서 완벽 작동합니다.
+					첫 터치 시 1ms 신호로 진동 잠금이 자동 해제되며, 진동 시간 배율을 높이면 모터가 최대 회전수(RPM)에 도달해 체감 진동이 강력해집니다.
 				</p>
+
+				<!-- 📳 진동 증폭 배율 (100% ~ 300%) 컨트롤 -->
+				<div class="mt-3.5 rounded-xl border border-rose-200 bg-rose-50/60 p-3 space-y-2.5">
+					<div class="flex items-center justify-between">
+						<span class="text-[11px] font-black text-slate-800 flex items-center gap-1">
+							<Icon icon="ph:wave-sine-bold" class="text-rose-600" />
+							진동 모터 지속시간 증폭 (Pulse Boost)
+						</span>
+						<span class="rounded-md bg-slate-900 px-2 py-0.5 font-mono text-xs font-black text-rose-300">
+							{Math.round(vibrationBoost * 100)}% ({vibrationBoost.toFixed(1)}x)
+						</span>
+					</div>
+
+					<input
+						type="range"
+						min="0.5"
+						max="3.0"
+						step="0.1"
+						value={vibrationBoost}
+						oninput={(e) => updateVibrationBoost(parseFloat(/** @type {HTMLInputElement} */ (e.currentTarget).value))}
+						class="w-full accent-rose-600 cursor-pointer h-2 rounded-lg bg-rose-200"
+					/>
+
+					<div class="grid grid-cols-4 gap-1.5">
+						{#each [
+							{ val: 1.0, label: '100% 기본' },
+							{ val: 1.5, label: '150% 표준' },
+							{ val: 2.0, label: '200% 강하게' },
+							{ val: 3.0, label: '300% MAX' }
+						] as preset}
+							<button
+								type="button"
+								onclick={() => {
+									updateVibrationBoost(preset.val);
+									triggerVibrate(120, `${Math.round(preset.val * 100)}% 진동`);
+								}}
+								class="rounded-lg py-1.5 text-[10px] font-black transition {Math.abs(vibrationBoost - preset.val) < 0.05 ? 'bg-slate-900 text-rose-300 shadow-xs' : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'}"
+							>
+								{preset.label}
+							</button>
+						{/each}
+					</div>
+				</div>
 			</div>
 
 			<!-- 진동 패턴 버튼 목록 -->
-			<div class="mt-5 grid grid-cols-3 gap-2">
+			<div class="mt-4 grid grid-cols-3 gap-2">
 				<button
 					onclick={() => triggerVibrate(150, '단일 진동')}
 					class="rounded-xl border-2 border-slate-900 bg-white py-3 text-xs font-black text-slate-900 shadow-[2px_2px_0_0_#0f172a] transition hover:bg-slate-100 active:scale-95"
 				>
-					짧은 진동 (0.15초)
+					짧은 진동
 				</button>
 				<button
-					onclick={() => triggerVibrate([200, 100, 200, 100, 300], '경고 진동')}
+					onclick={() => triggerVibrate([200, 90, 200, 90, 300], '경고 진동')}
 					class="rounded-xl border-2 border-slate-900 bg-amber-50 py-3 text-xs font-black text-amber-900 shadow-[2px_2px_0_0_#0f172a] transition hover:bg-amber-100 active:scale-95"
 				>
-					경고 3연속 진동
+					경고 3연속
 				</button>
 				<button
-					onclick={() => triggerVibrate([100, 100, 100, 100, 100, 300, 300, 100, 300, 100, 300, 300, 100, 100, 100], 'SOS 진동')}
+					onclick={() => triggerVibrate([100, 80, 100, 80, 100, 220, 300, 80, 300, 80, 300, 220, 100, 80, 100], 'SOS 진동')}
 					class="rounded-xl border-2 border-slate-900 bg-rose-50 py-3 text-xs font-black text-rose-900 shadow-[2px_2px_0_0_#0f172a] transition hover:bg-rose-100 active:scale-95"
 				>
-					SOS 모스부호 진동
+					SOS 모스진동
 				</button>
 			</div>
 		</div>
@@ -1748,46 +2561,287 @@
 						</div>
 					</div>
 
-					<!-- 생체 인증 지원 여부 및 실제 지문 팝업 테스트 -->
+					<!-- 생체 인증 2단계 (1단계 계정 열쇠 등록 create -> 2단계 계정+기기 검증 get) -->
 					<div class="rounded-xl bg-slate-50 p-4 border border-slate-100 space-y-3">
 						<div class="flex items-center justify-between">
-							<span class="text-[10px] font-bold text-slate-400 uppercase">보안 인증 하드웨어 (Passkey)</span>
+							<span class="text-[10px] font-bold text-slate-400 uppercase">보안 인증 하드웨어 (2단계 Passkey)</span>
 							<span class="rounded px-2 py-0.5 text-[10px] font-black {biometricsSupported ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-600'}">
 								{biometricsSupported ? '지문/패턴 센서 감지됨' : '미지원/단말 없음'}
 							</span>
 						</div>
-						<div class="rounded-lg bg-white p-3 border border-slate-200 flex items-center gap-3">
-							<Icon icon="ph:fingerprint-bold" class="text-3xl {biometricsSupported ? 'text-emerald-500' : 'text-slate-400'}" />
-							<div>
-								<div class="font-black text-slate-900 text-xs">{biometricsStatusText}</div>
-								<p class="text-[10px] text-slate-400 mt-0.5">
-									{biometricsSupported
-										? '스마트폰 지문 센서 터치 또는 화면 잠금 패턴으로 비밀번호 없는 초고속 로그인이 가능합니다.'
-										: '단말기에 등록된 생체/패턴 인증 수단이 없거나 브라우저에서 차단되었습니다.'}
-								</p>
+
+						<!-- 테스트할 로그인 계정 선택 (김기사 vs 박기사 타인 계정 도용 시뮬레이션) -->
+						<div class="rounded-lg bg-white p-2.5 border border-slate-200 space-y-2">
+							<div class="flex items-center justify-between">
+								<span class="text-[10px] font-black text-slate-600">👤 현재 테스트 중인 계정 선택:</span>
+								<span class="font-mono text-[10px] font-black text-violet-700">{bioAccountName}</span>
+							</div>
+							<div class="grid grid-cols-2 gap-1.5">
+								<button
+									type="button"
+									onclick={() => (bioAccountName = 'driver_kim (김기사)')}
+									class="rounded-lg py-1.5 px-2 text-[10px] font-black transition {bioAccountName.includes('kim') ? 'bg-slate-900 text-white shadow-xs' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}"
+								>
+									👤 김기사 (본인 계정)
+								</button>
+								<button
+									type="button"
+									onclick={() => (bioAccountName = 'driver_park (박기사-타인)')}
+									class="rounded-lg py-1.5 px-2 text-[10px] font-black transition {bioAccountName.includes('park') ? 'bg-rose-600 text-white shadow-xs' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}"
+								>
+									🕵️ 박기사 (타인 계정 테스트)
+								</button>
 							</div>
 						</div>
 
-						<!-- 지문/패턴 네이티브 팝업 호출 버튼 -->
-						<button
-							onclick={testBiometricAuth}
-							disabled={biometricsLoading}
-							class="w-full rounded-xl bg-violet-600 py-2.5 text-xs font-black text-white hover:bg-violet-700 active:scale-95 transition shadow-sm flex items-center justify-center gap-1.5 disabled:opacity-50"
-						>
-							<Icon icon="ph:fingerprint-simple-bold" class="text-base text-violet-200" />
-							<span>{biometricsLoading ? '스마트폰 지문/패턴 인증 진행 중...' : '🖐️ 스마트폰 지문 / 패턴 인증 팝업 띄우기'}</span>
-						</button>
+						<!-- 현재 등록된 열쇠(Credential) 상태 표시 -->
+						{#if registeredPasskey}
+							<div class="rounded-lg bg-violet-50/80 p-2.5 border border-violet-200 flex items-center justify-between text-[11px]">
+								<div class="space-y-0.5">
+									<div class="font-black text-violet-900 flex items-center gap-1">
+										<Icon icon="ph:key-fill" class="text-violet-600" />
+										<span>등록된 열쇠 주인: {registeredPasskey.ownerAccount}</span>
+									</div>
+									<div class="font-mono text-[10px] text-violet-600">
+										열쇠ID: {registeredPasskey.credentialId.substring(0, 16)}... (검증 {registeredPasskey.verifyCount}회)
+									</div>
+								</div>
+								<button
+									type="button"
+									onclick={clearSavedPasskey}
+									class="rounded-lg bg-white border border-violet-200 px-2 py-1 text-[10px] font-black text-slate-500 hover:text-rose-600 hover:border-rose-300 transition"
+								>
+									초기화
+								</button>
+							</div>
+						{:else}
+							<div class="rounded-lg bg-white p-2.5 border border-dashed border-slate-300 text-[11px] font-bold text-slate-400 text-center">
+								아직 등록된 지문 열쇠가 없습니다. 아래 [1단계 등록]을 먼저 눌러주세요.
+							</div>
+						{/if}
+
+						<!-- 1단계(등록 create) & 2단계(검증 get) 액션 버튼 -->
+						<div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+							<button
+								onclick={registerBiometricKey}
+								disabled={biometricsLoading}
+								class="rounded-xl border-2 border-violet-600 bg-white py-2.5 px-3 text-xs font-black text-violet-700 hover:bg-violet-50 active:scale-95 transition flex items-center justify-center gap-1.5 disabled:opacity-50"
+							>
+								<Icon icon="ph:key-bold" class="text-base" />
+								<span>① 1단계: 현재 계정에 지문 등록</span>
+							</button>
+							<button
+								onclick={verifyBiometricKey}
+								disabled={biometricsLoading}
+								class="rounded-xl bg-violet-600 py-2.5 px-3 text-xs font-black text-white hover:bg-violet-700 active:scale-95 transition shadow-sm flex items-center justify-center gap-1.5 disabled:opacity-50"
+							>
+								<Icon icon="ph:fingerprint-simple-bold" class="text-base text-violet-200" />
+								<span>② 2단계: 지문 + 계정주인 검증</span>
+							</button>
+						</div>
 
 						{#if lastBioResult}
-							<div class="rounded-lg bg-emerald-50 p-2.5 text-[11px] font-black text-emerald-800 border border-emerald-200 flex items-center gap-1.5">
-								<Icon icon="ph:check-circle-fill" class="text-base text-emerald-600" />
-								<span>{lastBioResult}</span>
+							<div class="rounded-lg p-2.5 text-[11px] font-black border flex items-start gap-1.5 {lastBioStatus === 'error' ? 'bg-rose-50 text-rose-800 border-rose-300' : 'bg-emerald-50 text-emerald-800 border-emerald-200'}">
+								<Icon icon={lastBioStatus === 'error' ? 'ph:warning-octagon-fill' : 'ph:check-circle-fill'} class="text-base shrink-0 mt-0.5 {lastBioStatus === 'error' ? 'text-rose-600' : 'text-emerald-600'}" />
+								<span class="leading-relaxed">{lastBioResult}</span>
+							</div>
+						{/if}
+					</div>
+				</div>
+
+				<!-- =============================================================== -->
+				<!-- 💻 데스크톱 ↔ 📱 모바일 실시간 원격 지문 공조 (대외비 문서 열람 금고) -->
+				<!-- =============================================================== -->
+				<div class="mt-4 rounded-2xl border-2 border-indigo-900 bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 p-4 text-white shadow-lg space-y-3">
+					<div class="flex flex-wrap items-center justify-between gap-2 border-b border-white/10 pb-2.5">
+						<div class="flex items-center gap-2">
+							<span class="flex h-8 w-8 items-center justify-center rounded-xl bg-indigo-500/30 text-indigo-300 border border-indigo-400/30">
+								<Icon icon="ph:devices-bold" class="text-lg" />
+							</span>
+							<div>
+								<h4 class="text-xs font-black text-white flex items-center gap-1.5">
+									<span>💻 데스크톱 ↔ 📱 스마트폰 실시간 지문 공조 (대외비 문서 금고)</span>
+								</h4>
+								<p class="text-[10px] text-indigo-200/80">
+									데스크톱에서 문서 열람을 요청하면 웹소켓(/ws)을 통해 스마트폰에서 알림음과 함께 지문 승인 창이 즉시 열립니다.
+								</p>
+							</div>
+						</div>
+						<div class="flex items-center gap-2">
+							<button
+								type="button"
+								onclick={() => window.location.reload()}
+								class="rounded-full bg-white/10 border border-white/20 px-2.5 py-0.5 text-[10px] font-black text-indigo-100 hover:bg-white/20 active:scale-95 transition flex items-center gap-1"
+								title="주소창이 없는 PWA 앱 환경에서 최신 코드를 즉시 반영합니다"
+							>
+								<Icon icon="ph:arrows-clockwise-bold" class="text-xs" />
+								<span>PWA 새로고침</span>
+							</button>
+							<span class="rounded-full px-2.5 py-0.5 text-[10px] font-black {coopDocUnlocked ? 'bg-emerald-400 text-slate-950' : coopWaiting ? 'bg-amber-400 text-slate-950 animate-pulse' : 'bg-rose-500/30 text-rose-200 border border-rose-400/40'}">
+								{coopDocUnlocked ? '🔓 지문 승인 완료 (열람 허가됨)' : coopWaiting ? `⏳ 스마트폰 지문 대기 중 (${coopCountdown}초)` : '🔒 1급 대외비 잠김'}
+							</span>
+						</div>
+					</div>
+
+					<!-- 대외비 문서 미리보기 박스 (잠김 vs 해제) -->
+					<div class="rounded-xl border {coopDocUnlocked ? 'border-emerald-400/60 bg-emerald-950/40' : 'border-white/15 bg-black/40'} p-3.5 transition-all">
+						<div class="flex items-center justify-between text-xs font-black">
+							<span class="flex items-center gap-1.5 text-amber-300">
+								<Icon icon={coopDocUnlocked ? 'ph:file-lock-fill' : 'ph:lock-key-fill'} class="text-base" />
+								<span>[대외비] 2026년 제주공항 리무진 배차 정산 및 임원 기밀 보고서.pdf</span>
+							</span>
+							{#if coopDocUnlocked}
+								<button
+									type="button"
+									onclick={() => {
+										coopDocUnlocked = false;
+										coopApprovalInfo = null;
+									}}
+									class="rounded-lg bg-white/10 px-2 py-0.5 text-[10px] font-bold text-slate-200 hover:bg-white/20"
+								>
+									다시 잠그기
+								</button>
+							{/if}
+						</div>
+
+						{#if coopDocUnlocked && coopApprovalInfo}
+							<!-- 🔓 잠금 해제된 대외비 문서 본문 -->
+							<div class="mt-3 rounded-lg bg-white p-3 text-slate-900 space-y-2 shadow-inner">
+								<div class="flex items-center justify-between border-b border-slate-200 pb-1.5 text-[11px] font-black text-emerald-700">
+									<span>✅ 스마트폰 생체 인증 전자서명 검증 통과</span>
+									<span class="font-mono text-[10px]">{coopApprovalInfo.verifiedAt}</span>
+								</div>
+								<p class="text-xs font-bold leading-relaxed text-slate-800">
+									1. 금월 제주공항 노선(701~705번) 총 운송 수입 정산액: <span class="text-indigo-700 font-black">₩482,900,000</span><br />
+									2. 우수 무사고 승무원 특별 성과급 지급 승인 코드: <span class="font-mono bg-amber-100 px-1.5 py-0.5 rounded text-slate-900 font-black">JEJU-VIP-2026-PASS</span><br />
+									3. 승인 계정: <span class="font-mono text-violet-700">{coopApprovalInfo.verifiedAccount}</span> (열쇠: {coopApprovalInfo.credentialId.substring(0, 14)}...)
+								</p>
+							</div>
+						{:else}
+							<!-- 🔒 잠긴 상태 (블러 처리 및 대기/거부 상태 표시) -->
+							<div class="mt-2.5 flex flex-col items-center justify-center rounded-lg border border-dashed border-white/15 bg-slate-950/60 py-5 px-4 text-center">
+								{#if coopWaiting}
+									<Icon icon="ph:device-mobile-speaker-fill" class="text-3xl text-amber-300 animate-bounce" />
+									<div class="mt-2 text-xs font-black text-amber-200">
+										📱 지금 스마트폰 화면에 뜬 [지문 승인] 버튼을 눌러 손가락을 대주세요! ({coopCountdown}초)
+									</div>
+									<p class="mt-1 text-[10px] text-slate-400">
+										스마트폰과 데스크톱이 모두 이 페이지(또는 시스템)에 접속되어 있으면 웹소켓으로 0.1초 만에 연동됩니다.
+									</p>
+									<div class="mt-3 flex gap-2">
+										<button
+											type="button"
+											onclick={() => {
+												incomingCoopRequest = {
+													requestId: activeCoopRequestId || 'local_test',
+													docTitle: '[대외비] 2026년 제주공항 리무진 배차 정산 및 임원 기밀 보고서.pdf',
+													targetAccount: bioAccountName,
+													requestedAt: new Date().toLocaleTimeString('ko-KR'),
+													senderTabId: 'preview'
+												};
+											}}
+											class="rounded-lg bg-indigo-500/40 border border-indigo-400/50 px-3 py-1.5 text-[10px] font-black text-indigo-100 hover:bg-indigo-500/60"
+										>
+											📱 (단독 기기 테스트용) 모바일 승인 팝업 이 화면에 띄우기
+										</button>
+										<button
+											type="button"
+											onclick={cancelRemoteBiometricUnlock}
+											class="rounded-lg bg-rose-500/30 border border-rose-400/40 px-3 py-1.5 text-[10px] font-black text-rose-200 hover:bg-rose-500/50"
+										>
+											요청 취소
+										</button>
+									</div>
+								{:else}
+									<Icon icon="ph:shield-lock-fill" class="text-3xl text-slate-400" />
+									<div class="mt-1.5 text-xs font-bold text-slate-300">
+										이 문서는 1급 대외비입니다. 열람하려면 스마트폰 지문 승인이 필요합니다.
+									</div>
+									{#if coopApprovalInfo && coopApprovalInfo.status === 'REJECTED'}
+										<div class="mt-2 rounded-lg bg-rose-500/20 border border-rose-400/50 px-3 py-1.5 text-[11px] font-black text-rose-200">
+											🚨 {coopApprovalInfo.reason}
+										</div>
+									{/if}
+									<button
+										type="button"
+										onclick={requestRemoteBiometricUnlock}
+										class="mt-3 rounded-xl bg-amber-400 px-4 py-2.5 text-xs font-black text-slate-950 shadow-md hover:bg-amber-300 active:scale-95 transition flex items-center gap-1.5"
+									>
+										<Icon icon="ph:paper-plane-tilt-fill" class="text-base" />
+										<span>📲 내 스마트폰으로 지문 승인 요청 보내기 ('{bioAccountName}')</span>
+									</button>
+								{/if}
 							</div>
 						{/if}
 					</div>
 				</div>
 			</div>
 		</div>
+
+		<!-- 📱 [모바일 수신 전용 모달] 데스크톱에서 지문 승인 요청이 날아왔을 때 스마트폰 화면에 즉시 뜨는 팝업 -->
+		{#if incomingCoopRequest}
+			<div class="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4">
+				<div class="w-full max-w-md rounded-3xl border-2 border-slate-900 bg-white p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-200">
+					<div class="flex items-center justify-between border-b border-slate-100 pb-3">
+						<div class="flex items-center gap-2.5">
+							<div class="flex h-11 w-11 items-center justify-center rounded-2xl bg-violet-600 text-white shadow-md">
+								<Icon icon="ph:fingerprint-bold" class="text-2xl animate-pulse" />
+							</div>
+							<div>
+								<span class="rounded bg-amber-100 px-2 py-0.5 text-[10px] font-black text-amber-800">
+									💻 데스크톱 원격 공조 요청
+								</span>
+								<h3 class="mt-0.5 text-base font-black text-slate-900">중요 문서 열람 지문 승인</h3>
+							</div>
+						</div>
+						<span class="font-mono text-[10px] font-bold text-slate-400">{incomingCoopRequest.requestedAt}</span>
+					</div>
+
+					<div class="rounded-2xl bg-slate-50 p-4 border border-slate-200 space-y-2 text-xs">
+						<div class="flex items-start justify-between gap-2">
+							<span class="text-slate-400 font-bold shrink-0">열람 요청 문서:</span>
+							<span class="font-black text-slate-900 text-right">{incomingCoopRequest.docTitle}</span>
+						</div>
+						<div class="flex items-center justify-between border-t border-slate-200/70 pt-2">
+							<span class="text-slate-400 font-bold">요청 계정:</span>
+							<span class="font-mono font-black text-violet-700">{incomingCoopRequest.targetAccount}</span>
+						</div>
+						{#if registeredPasskey}
+							<div class="flex items-center justify-between border-t border-slate-200/70 pt-2">
+								<span class="text-slate-400 font-bold">내 폰 등록 열쇠 주인:</span>
+								<span class="font-mono font-black {registeredPasskey.ownerAccount === incomingCoopRequest.targetAccount ? 'text-emerald-600' : 'text-rose-600'}">
+									{registeredPasskey.ownerAccount}
+								</span>
+							</div>
+						{/if}
+					</div>
+
+					<p class="text-xs font-bold text-slate-600 text-center leading-relaxed">
+						본인이 데스크톱에서 요청한 작업이 맞다면 아래 버튼을 눌러<br />
+						<span class="text-violet-700 font-black">스마트폰 지문(또는 Face ID/패턴)</span>을 스캔해 주세요.
+					</p>
+
+					<div class="flex flex-col gap-2 pt-1">
+						<button
+							type="button"
+							onclick={approveIncomingCoopWithBiometrics}
+							disabled={biometricsLoading}
+							class="w-full rounded-2xl bg-violet-600 py-3.5 text-sm font-black text-white shadow-lg hover:bg-violet-700 active:scale-95 transition flex items-center justify-center gap-2 disabled:opacity-50"
+						>
+							<Icon icon="ph:fingerprint-simple-bold" class="text-xl" />
+							<span>{biometricsLoading ? '지문 확인 중...' : '🖐️ 지금 지문 찍어 데스크톱 문서 잠금 해제'}</span>
+						</button>
+						<button
+							type="button"
+							onclick={rejectIncomingCoop}
+							class="w-full rounded-2xl border border-rose-200 bg-rose-50 py-2.5 text-xs font-black text-rose-700 hover:bg-rose-100 active:scale-95 transition"
+						>
+							❌ 내가 요청한 게 아님 (열람 거부 및 차단)
+						</button>
+					</div>
+				</div>
+			</div>
+		{/if}
 
 		<!-- ----------------------------------------------------------------- -->
 		<!-- [모듈 11] 🏷️ Web NFC 실시간 태그 스캐너 & 라이터 (사원증 / 카드키) -->

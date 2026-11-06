@@ -21,7 +21,7 @@
 	import { miniappStore } from '$lib/runes/miniapps.svelte.js';
 	import { websocket } from '$lib/runes/websocket.svelte.js';
 	import { offlineSync } from '$lib/runes/offlineSync.svelte.js';
-	import { hardReset } from '$lib/pwa/serviceWorker.js';
+	import { hardReset, unsubscribePushOnLogout } from '$lib/pwa/serviceWorker.js';
 	import { toast } from '$lib/runes/toast.svelte.js';
 	import DynamicSidebar from '$lib/components/Nav/DynamicSidebar.svelte';
 	import '../layout.css';
@@ -557,6 +557,7 @@
 							<div class="border-t border-slate-200 pt-2">
 								<a
 									href="/logout"
+									onclick={() => unsubscribePushOnLogout()}
 									data-sveltekit-reload
 									class="flex w-full items-center justify-center gap-2 bg-rose-50 border border-rose-200 py-2 text-xs font-black text-rose-700 hover:bg-rose-600 hover:text-white transition rounded"
 								>

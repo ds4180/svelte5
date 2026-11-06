@@ -11,6 +11,10 @@
 
 	function handleSubmit() {
 		loading = true;
+		// 🔔 로그인 버튼 클릭(사용자 제스처)과 동시에 아직 푸시 권한이 'default'라면 즉시 허용 창 호출
+		if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') {
+			Notification.requestPermission().catch(() => {});
+		}
 		return async ({ result, update }) => {
 			await update();
 			loading = false;

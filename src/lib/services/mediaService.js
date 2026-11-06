@@ -14,7 +14,8 @@ export async function uploadFiles(files, { app_id, access_level, sub_path, targe
 	let url = `/api/media/upload?app_id=${app_id}&access_level=${access_level}&sub_path=${encodeURIComponent(sub_path)}`;
 	if (target_id) url += `&target_id=${target_id}`;
 
-	return await fastApi('POST', url, formData);
+	const names = files.map((/** @type {File} */ f) => f.name).join(', ');
+	return await fastApi('POST', url, formData, { offlineLabel: `📷 파일 업로드 (${names})` });
 }
 
 /**
@@ -57,7 +58,7 @@ export async function createUserFolder(sub_path, folder_name, tier = 'PRIVATE') 
 		tier,
 		sub_path,
 		folder_name
-	});
+	}, { offline: false }); // 폴더 생성은 즉시 결과 확인이 필요하므로 오프라인 우체통 제외
 }
 
 /**

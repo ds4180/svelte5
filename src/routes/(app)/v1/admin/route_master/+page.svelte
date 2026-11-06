@@ -345,10 +345,6 @@
 </script>
 
 <svelte:head>
-	<title>노선 마스터 및 로번 스케줄 제어기 (Admin)</title>
-</svelte:head>
-
-<svelte:head>
 	<title>노선 마스터 관리 | jeju.live Core</title>
 </svelte:head>
 

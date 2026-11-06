@@ -13,11 +13,13 @@
 	import { onMount } from 'svelte';
 	import { fade } from 'svelte/transition';
 	import * as api from '$lib/api/admin.js';
+	import { syncPushSubscription } from '$lib/pwa/serviceWorker.js';
 	import { toast } from '$lib/runes/toast.svelte.js';
 	import Icon from '@iconify/svelte';
 
 	let subscriptions = $state(/** @type {any[]} */ ([]));
 	let loading = $state(true);
+	let subscribing = $state(false);
 	let showSendModal = $state(false);
 	let searchKeyword = $state('');
 	let platformFilter = $state('');
@@ -77,6 +79,51 @@
 			await loadSubscriptions();
 		} catch (/** @type {any} */ e) {
 			toast.error('구독 삭제 실패: ' + e.message);
+		}
+	}
+
+	/**
+	 * 전체 구독 정보 일괄 삭제
+	 */
+	async function deleteAllSubscriptions() {
+		if (subscriptions.length === 0) {
+			toast.info('삭제할 구독 기기가 없습니다.');
+			return;
+		}
+		if (
+			!confirm(
+				`[경고] 현재 등록된 전체 ${subscriptions.length}대의 푸시 구독 기기를 모두 삭제(초기화)하시겠습니까?\n(사용자들이 다시 로그인하면 활성 기기만 깔끔하게 자동 재등록됩니다.)`
+			)
+		) {
+			return;
+		}
+		try {
+			const res = await api.adminDeleteAllPushSubscriptions();
+			toast.success(`전체 구독 기기(${res.deleted_count ?? subscriptions.length}대)가 일괄 삭제되었습니다.`);
+			await loadSubscriptions();
+		} catch (/** @type {any} */ e) {
+			toast.error('전체 구독 삭제 실패: ' + e.message);
+		}
+	}
+
+	/**
+	 * 현재 접속 중인 기기(브라우저) 즉시 푸시 구독 등록/복구
+	 */
+	async function subscribeCurrentDevice() {
+		if (subscribing) return;
+		subscribing = true;
+		try {
+			const ok = await syncPushSubscription({ forcePrompt: true });
+			if (ok) {
+				toast.success('현재 기기가 푸시 구독 목록에 정상 등록되었습니다.');
+				await loadSubscriptions();
+			} else {
+				toast.warning('푸시 구독에 실패했습니다. 브라우저의 알림 권한(허용) 상태를 확인해 주세요.');
+			}
+		} catch (/** @type {any} */ e) {
+			toast.error('현재 기기 구독 오류: ' + e.message);
+		} finally {
+			subscribing = false;
 		}
 	}
 
@@ -154,12 +201,38 @@
 			</button>
 
 			<button
+				onclick={subscribeCurrentDevice}
+				disabled={subscribing}
+				class="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-xs font-black text-emerald-700 shadow-sm transition hover:bg-emerald-600 hover:text-white active:scale-95 disabled:opacity-50"
+			>
+				<Icon icon="solar:bell-bing-bold" class="text-base" />
+				<span>{subscribing ? '구독 등록 중...' : '내 기기 구독 등록'}</span>
+			</button>
+
+			<button
 				onclick={() => (showSendModal = true)}
 				class="flex items-center gap-2 rounded-xl bg-pink-600 px-5 py-2.5 text-xs font-black text-white shadow-md shadow-pink-200 transition hover:bg-pink-700 active:scale-95"
 			>
 				<Icon icon="solar:plain-bold" class="text-base" />
 				<span>전체 푸시 즉시 발송</span>
 			</button>
+
+			<button
+				onclick={deleteAllSubscriptions}
+				disabled={subscriptions.length === 0}
+				class="flex items-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-4 py-2.5 text-xs font-black text-rose-700 shadow-sm transition hover:bg-rose-600 hover:text-white active:scale-95 disabled:opacity-40"
+			>
+				<Icon icon="solar:trash-bin-trash-bold" class="text-base" />
+				<span>구독 전체 삭제 ({subscriptions.length})</span>
+			</button>
+
+			<a
+				href="/v1/admin"
+				class="flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 active:scale-95"
+			>
+				<Icon icon="solar:home-smile-angle-bold-duotone" class="text-base text-slate-500" />
+				<span>관제탑 홈</span>
+			</a>
 		</div>
 	</div>
 
