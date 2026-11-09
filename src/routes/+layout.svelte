@@ -137,6 +137,13 @@
 	});
 </script>
 
+<svelte:head>
+	<!-- 🎨 도메인(dev/prod)별 동적 PWA 및 브라우저 테마/아이콘 -->
+	<meta name="theme-color" content={data.metaTheme?.themeColor || '#0f172a'} />
+	<link rel="icon" href={data.metaTheme?.favicon || '/favicon.png'} />
+	<link rel="apple-touch-icon" href={data.metaTheme?.appleTouchIcon || '/icons/icon-192.png'} />
+</svelte:head>
+
 <!-- 🔔 사내 업무 소통/공지 알림 레이어 (로그인한 임직원에게만 노출) -->
 <!-- 💡 비로그인 손님이나 로그인 화면에서는 사내 배차 공지나 업무 지시가 뜨지 않도록 완벽 격리합니다. -->
 {#if data.user}

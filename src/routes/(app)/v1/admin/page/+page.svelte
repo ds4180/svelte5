@@ -186,7 +186,9 @@
 								</span>
 							</td>
 							<td class="p-6">
-								<div class="text-lg font-black uppercase italic tracking-tight">{p.title}</div>
+								<a href="/v1/custom/page/{p.slug}" class="block hover:text-blue-600 transition-colors">
+									<div class="text-lg font-black uppercase italic tracking-tight">{p.title}</div>
+								</a>
 								<div class="font-mono text-[10px] opacity-30">/v1/custom/page/{p.slug}</div>
 							</td>
 							<td class="p-6">
@@ -200,7 +202,7 @@
 							</td>
 							<td class="p-6 text-right">
 								<div class="flex justify-end gap-3 transition-transform group-hover:scale-105">
-									<a href="/v1/custom/page/{p.slug}" target="_blank" class="btn btn-square btn-outline btn-sm rounded-none border-black hover:bg-emerald-500 hover:text-white" title="Live Preview">
+									<a href="/v1/custom/page/{p.slug}" class="btn btn-square btn-outline btn-sm rounded-none border-black hover:bg-emerald-500 hover:text-white" title="페이지 보기 (이동)">
 										<Icon icon="ph:eye-bold" class="h-4 w-4" />
 									</a>
 									<a href="/v1/custom/page/{p.slug}?edit=true" class="btn btn-square btn-outline btn-sm rounded-none border-black hover:bg-black" title="Edit Content">

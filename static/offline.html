@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>오프라인 모드 | jeju.live</title>
+  <meta name="theme-color" content="#0f172a" />
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans KR", sans-serif;
+      background-color: #0b0f19;
+      color: #f8fafc;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      padding: 24px;
+      text-align: center;
+      user-select: none;
+    }
+    .card {
+      background: #111827;
+      border: 2px solid #1f2937;
+      border-radius: 20px;
+      padding: 36px 28px;
+      max-width: 440px;
+      width: 100%;
+      box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.7);
+      animation: fadeIn 0.4s ease-out;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 14px;
+      border-radius: 9999px;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      margin-bottom: 24px;
+      background: rgba(239, 68, 68, 0.15);
+      color: #f87171;
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      transition: all 0.3s ease;
+    }
+    .status-badge.online {
+      background: rgba(34, 197, 94, 0.15);
+      color: #4ade80;
+      border-color: rgba(34, 197, 94, 0.3);
+    }
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #ef4444;
+      box-shadow: 0 0 10px #ef4444;
+      animation: pulse 1.8s infinite;
+    }
+    .status-badge.online .dot {
+      background: #22c55e;
+      box-shadow: 0 0 10px #22c55e;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.85); }
+    }
+    .icon-container {
+      font-size: 54px;
+      margin-bottom: 16px;
+      line-height: 1;
+    }
+    h1 {
+      font-size: 24px;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      margin-bottom: 10px;
+      color: #ffffff;
+    }
+    p.desc {
+      font-size: 14px;
+      color: #94a3b8;
+      line-height: 1.6;
+      margin-bottom: 24px;
+      word-break: keep-all;
+    }
+    .outbox-alert {
+      display: none;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      background: rgba(59, 130, 246, 0.1);
+      border: 1px solid rgba(59, 130, 246, 0.3);
+      border-radius: 12px;
+      padding: 12px;
+      font-size: 13px;
+      font-weight: 600;
+      color: #93c5fd;
+      margin-bottom: 24px;
+    }
+    .btn-group {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      width: 100%;
+    }
+    button, a.btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      width: 100%;
+      height: 52px;
+      border-radius: 14px;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      text-decoration: none;
+      transition: all 0.15s ease-in-out;
+      border: none;
+    }
+    .btn-primary {
+      background: #2563eb;
+      color: #ffffff;
+      box-shadow: 0 4px 14px rgba(37, 99, 235, 0.4);
+    }
+    .btn-primary:active {
+      transform: scale(0.98);
+      background: #1d4ed8;
+    }
+    .btn-secondary {
+      background: #1f2937;
+      color: #cbd5e1;
+      border: 1px solid #374151;
+    }
+    .btn-secondary:active {
+      transform: scale(0.98);
+      background: #374151;
+    }
+    .btn-row {
+      display: flex;
+      gap: 10px;
+      width: 100%;
+    }
+    .btn-row button, .btn-row a {
+      flex: 1;
+    }
+    .auto-retry-text {
+      margin-top: 20px;
+      font-size: 12px;
+      color: #64748b;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+    .spinner {
+      width: 12px;
+      height: 12px;
+      border: 2px solid #64748b;
+      border-top-color: transparent;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div id="statusBadge" class="status-badge">
+      <span class="dot"></span>
+      <span id="statusText">네트워크 연결 끊김</span>
+    </div>
+
+    <div class="icon-container">📡</div>
+    <h1 id="titleText">오프라인 상태입니다</h1>
+    <p id="descText" class="desc">
+      인터넷 연결이 원활하지 않습니다.<br />
+      연결이 복구되면 <strong>자동으로 원래 화면으로 복귀</strong>합니다.
+    </p>
+
+    <div id="outboxNotice" class="outbox-alert">
+      <span>📮</span>
+      <span id="outboxCountText">임시 우체통에 대기 중인 작업이 안전하게 보관 중입니다.</span>
+    </div>
+
+    <div class="btn-group">
+      <button type="button" class="btn-primary" onclick="handleManualRetry()">
+        <span>🔄 지금 다시 시도</span>
+      </button>
+
+      <div class="btn-row">
+        <button type="button" class="btn-secondary" onclick="handleGoBack()">
+          <span>← 이전 화면</span>
+        </button>
+        <a href="/" class="btn btn-secondary">
+          <span>🏠 홈으로</span>
+        </a>
+      </div>
+    </div>
+
+    <div class="auto-retry-text">
+      <div class="spinner"></div>
+      <span id="retryIndicator">인터넷 신호 감지 중 (자동 복구)...</span>
+    </div>
+  </div>
+
+  <script>
+    const statusBadge = document.getElementById('statusBadge');
+    const statusText = document.getElementById('statusText');
+    const titleText = document.getElementById('titleText');
+    const descText = document.getElementById('descText');
+    const outboxNotice = document.getElementById('outboxNotice');
+    const outboxCountText = document.getElementById('outboxCountText');
+    const retryIndicator = document.getElementById('retryIndicator');
+
+    let isRecovering = false;
+
+    // 1. 온라인 복구 시 즉시 자동 새로고침
+    function triggerOnlineRecovery() {
+      if (isRecovering) return;
+      isRecovering = true;
+
+      statusBadge.classList.add('online');
+      statusText.textContent = '네트워크 연결됨!';
+      titleText.textContent = '인터넷 연결 복구 완료';
+      descText.innerHTML = '네트워크가 감지되었습니다.<br /><strong>잠시 후 원래 화면으로 자동 이동합니다...</strong>';
+      retryIndicator.textContent = '화면 동기화 중...';
+
+      setTimeout(() => {
+        window.location.reload();
+      }, 700);
+    }
+
+    // 2. 브라우저 이벤트 감지
+    window.addEventListener('online', triggerOnlineRecovery);
+
+    // 3. 주기적 능동 핑 (Active Ping) - 포털 와이파이 / 실제 인터넷 패킷 확인
+    setInterval(async () => {
+      if (isRecovering) return;
+      if (navigator.onLine) {
+        try {
+          const res = await fetch('/favicon.png?_ping=' + Date.now(), { method: 'HEAD', cache: 'no-store' });
+          if (res.ok) {
+            triggerOnlineRecovery();
+          }
+        } catch (e) {
+          // 아직 실제 패킷 통신 불가
+        }
+      }
+    }, 2500);
+
+    // 4. 수동 재시도 버튼
+    function handleManualRetry() {
+      retryIndicator.textContent = '서버 연결 확인 중...';
+      fetch('/favicon.png?_ping=' + Date.now(), { method: 'HEAD', cache: 'no-store' })
+        .then((res) => {
+          if (res.ok) {
+            triggerOnlineRecovery();
+          } else {
+            alert('아직 인터넷에 연결되지 않았습니다. 잠시 후 다시 시도해 주세요.');
+            retryIndicator.textContent = '인터넷 신호 감지 중 (자동 복구)...';
+          }
+        })
+        .catch(() => {
+          alert('아직 인터넷에 연결되지 않았습니다. 네트워크 설정을 확인해 주세요.');
+          retryIndicator.textContent = '인터넷 신호 감지 중 (자동 복구)...';
+        });
+    }
+
+    // 5. 이전 화면 뒤로가기 (PWA 브라우저 뒤로가기 대체)
+    function handleGoBack() {
+      if (window.history.length > 1) {
+        window.history.back();
+      } else {
+        window.location.href = '/';
+      }
+    }
+
+    // 6. IndexedDB 임시 우체통 대기 건수 실시간 확인
+    try {
+      const req = indexedDB.open('jeju_offline_sync_db', 2);
+      req.onsuccess = (e) => {
+        const db = e.target.result;
+        if (db.objectStoreNames.contains('outbox_queue')) {
+          const tx = db.transaction('outbox_queue', 'readonly');
+          const countReq = tx.objectStore('outbox_queue').count();
+          countReq.onsuccess = () => {
+            const count = countReq.result;
+            if (count > 0) {
+              outboxCountText.textContent = `📮 작성한 ${count}건의 작업이 임시 우체통에 보관되어 있습니다.`;
+              outboxNotice.style.display = 'flex';
+            }
+          };
+        }
+      };
+    } catch (e) {
+      console.warn('IndexedDB outbox check error:', e);
+    }
+  </script>
+</body>
+</html>

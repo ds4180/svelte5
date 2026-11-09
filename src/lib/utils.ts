@@ -153,3 +153,26 @@ export function formatDDay(targetDate: DateInput): string {
 	if (days > 0) return `D-${days}`;
 	return `D+${Math.abs(days)}`;
 }
+
+/**
+ * 9. 파일명 및 로그 생성용 로컬 타임스탬프 (기본: YYYYMMDD_HHmmss)
+ * 🚨 toISOString()의 9시간 시차(UTC) 왜곡 없는 한국 표준시(KST) 기반 파일명 생성
+ * @param dateInput - 기준 일시 (기본값: 현재 시각)
+ * @param withUnderscore - 날짜와 시간 사이에 '_' 포함 여부 (기본값: true)
+ * @returns '20261109_090500' 또는 '20261109090500'
+ */
+export function getLocalFileTimestamp(dateInput: DateInput = new Date(), withUnderscore: boolean = true): string {
+	const date = dateInput instanceof Date ? dateInput : (dateInput ? new Date(dateInput) : new Date());
+	if (isNaN(date.getTime())) return '';
+
+	const year = date.getFullYear();
+	const month = String(date.getMonth() + 1).padStart(2, '0');
+	const day = String(date.getDate()).padStart(2, '0');
+	const hours = String(date.getHours()).padStart(2, '0');
+	const minutes = String(date.getMinutes()).padStart(2, '0');
+	const seconds = String(date.getSeconds()).padStart(2, '0');
+
+	const sep = withUnderscore ? '_' : '';
+	return `${year}${month}${day}${sep}${hours}${minutes}${seconds}`;
+}
+

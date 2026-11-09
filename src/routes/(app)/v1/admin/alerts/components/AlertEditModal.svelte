@@ -130,8 +130,8 @@
 								<Icon icon="mdi:target" class="text-amber-600" />
 								수신 대상 그룹 (Target Group)
 							</span></label>
-							<a href="/v1/admin/target-groups" target="_blank" class="text-[10px] text-blue-600 hover:underline flex items-center gap-0.5">
-								타겟그룹 관리 <Icon icon="mdi:open-in-new" class="text-xs" />
+							<a href="/v1/admin/target-groups" class="text-[10px] text-blue-600 hover:underline flex items-center gap-0.5">
+								타겟그룹 관리 <Icon icon="ph:arrow-right-bold" class="text-xs" />
 							</a>
 						</div>
 						<select

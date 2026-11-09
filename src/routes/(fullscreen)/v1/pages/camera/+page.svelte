@@ -23,6 +23,7 @@
 	import { getAuthContext } from '$lib/runes/auth.svelte.js';
 	import { offlineSync } from '$lib/runes/offlineSync.svelte.js';
 	import { uploadFiles, createUserFolder } from '$lib/services/mediaService';
+	import { getLocalFileTimestamp } from '$lib/utils';
 	import Icon from '@iconify/svelte';
 
 	// 사용자 인증 상태 (내 파일함 USERS/{id}/WEBCAM 경로 결정)
@@ -536,7 +537,7 @@
 		const photoDataUrl = canvas.toDataURL('image/jpeg', 0.95);
 		const now = new Date();
 		const timeStr = now.toLocaleTimeString('ko-KR');
-		const fileTimestamp = now.toISOString().replace(/[-:T.]/g, '').slice(0, 14);
+		const fileTimestamp = getLocalFileTimestamp(now);
 		const fileName = `jeju_camera_${fileTimestamp}.jpg`;
 
 		const newPhoto = {

@@ -27,8 +27,8 @@ const DB_NAME = 'jeju_offline_sync_db';
 const DB_VERSION = 2;
 const STORE_OUTBOX = 'outbox_queue';
 
-// 사전 캐싱할 전체 자산 목록 (레거시 수동 sw.js 제외 + 루트 App Shell '/' 포함)
-const ASSETS = ['/', ...build, ...files.filter((f) => !f.endsWith('/sw.js'))];
+// 사전 캐싱할 전체 자산 목록 (레거시 수동 sw.js 제외 + 루트 App Shell '/' 및 오프라인 폴백 페이지 포함)
+const ASSETS = ['/', '/offline.html', ...build, ...files.filter((f) => !f.endsWith('/sw.js'))];
 const ASSET_SET = new Set(ASSETS);
 
 // 1. 설치(Install): 빌드된 모든 페이지 청크와 정적 자산을 캐시에 일괄 적재 (dev 환경에서는 캐싱 생략)
@@ -111,12 +111,17 @@ if (build.length > 0) {
 					return cachedResponse;
 				}
 
-				// [C] 오프라인 상태에서 주소창 직접 입력/새로고침(navigate) 시 루트 App Shell('/')로 폴백하여
-				// SvelteKit 클라이언트 라우터가 사전 캐싱된 JS 번들(build)로 해당 페이지를 렌더링하도록 보장
+				// [C] 오프라인 상태에서 주소창 직접 입력/새로고침(navigate) 시:
+				// 1차: 캐시된 루트 App Shell('/')로 폴백하여 SvelteKit 클라이언트 라우터가 페이지를 렌더링하도록 유도
+				// 2차: 루트 셸이 없으면 사전 캐싱된 /offline.html로 최종 폴백하여 브라우저 공룡 화면 원천 차단
 				if (event.request.mode === 'navigate') {
 					const rootShell = await cache.match('/');
 					if (rootShell) {
 						return rootShell;
+					}
+					const offlinePage = await cache.match('/offline.html');
+					if (offlinePage) {
+						return offlinePage;
 					}
 				}
 

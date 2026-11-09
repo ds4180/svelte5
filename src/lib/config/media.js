@@ -35,11 +35,21 @@ export const getThumbnailUrl = (serverUrl, asset, size = 'MD') => {
 	
 	const targetSize = size.toLowerCase();
 	
+	// 1. 요청한 사이즈가 DB thumbs 맵에 있으면 즉시 반환
 	if (asset.meta_info?.thumbs && asset.meta_info.thumbs[targetSize]) {
 		return getMediaUrl(serverUrl, asset.meta_info.thumbs[targetSize]);
 	}
+
+	// 2. 요청한 사이즈가 없을 경우, 사용 가능한 대체 썸네일(lg -> md -> sm) 순차 탐색
+	if (asset.meta_info?.thumbs && typeof asset.meta_info.thumbs === 'object') {
+		for (const fallback of ['lg', 'md', 'sm']) {
+			if (asset.meta_info.thumbs[fallback]) {
+				return getMediaUrl(serverUrl, asset.meta_info.thumbs[fallback]);
+			}
+		}
+	}
 	
-	// [DB 불일치 대응] DB에 정보가 없더라도 디스크 규칙에 따라 존재할 가능성이 높으므로 예측 경로 반환
+	// 3. [DB 불일치 대응] DB에 정보가 없더라도 디스크 규칙에 따라 존재할 가능성이 높으므로 예측 경로 반환
 	if (asset.category === 'image' && asset.file_path) {
 		const filePath = asset.file_path;
 		const lastSlash = filePath.lastIndexOf('/');
@@ -50,25 +60,40 @@ export const getThumbnailUrl = (serverUrl, asset, size = 'MD') => {
 		return getMediaUrl(serverUrl, predicted);
 	}
 
-	// 특정 사이즈가 없으면 sm 재활용 없이 즉시 기본 이미지 반환
+	// 특정 사이즈가 없으면 기본 이미지 반환
 	return DEFAULT_THUMB;
 };
 
 /**
- * [v3.2 Secure Media Helper]
+ * [v3.5 Secure Media Helper]
+ * - 원본 파일이 시한부 파기/격리되었거나 복제본인 경우(has_original === false)
+ *   size가 지정되지 않았더라도 자동으로 최고화질 썸네일(LG)로 안전 폴백하여 엑스박스 방지
  */
 export const getSecureMediaUrl = (serverUrl, asset, size = null) => {
 	if (!asset) return '';
 	const tier = (asset.access_level || 'PUBLIC').toUpperCase();
+	const hasNoOriginal = asset.category === 'image' && asset.meta_info?.has_original === false;
 
-	// PUBLIC 계층은 썸네일 유틸리티 직접 활용
+	// PUBLIC 계층은 정적 파일 경로 직접 활용
 	if (tier === 'PUBLIC') {
-		return size ? getThumbnailUrl(serverUrl, asset, size) : getMediaUrl(serverUrl, asset.file_path);
+		if (size) {
+			return getThumbnailUrl(serverUrl, asset, size);
+		}
+		// 원본 요청이지만 원본이 격리/파기된 경우 -> 최고화질 썸네일(LG)로 즉시 폴백
+		if (hasNoOriginal) {
+			return getThumbnailUrl(serverUrl, asset, 'lg');
+		}
+		return getMediaUrl(serverUrl, asset.file_path);
 	}
 
-	// 보안 계층은 백엔드 서빙 API 활용
+	// 보안 계층(PRIVATE, PROTECTED, SYSTEM)은 백엔드 서빙 API 활용
 	const baseUrl = serverUrl.replace(/\/+$/, '');
 	let url = `${baseUrl}/media/serve/${asset.id}`;
-	if (size) url += `?size=${size.toUpperCase()}`;
+	if (size) {
+		url += `?size=${size.toUpperCase()}`;
+	} else if (hasNoOriginal) {
+		// 원본 부재 시 쿼리에 LG를 명시하여 썸네일 스트리밍 보장
+		url += `?size=LG`;
+	}
 	return url;
 };

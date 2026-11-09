@@ -149,10 +149,9 @@
 						</div>
 						<a
 							href={(appInfo?.frontend_route || '/v1/app/[appId]/[slug]').replace('[appId]', appId).replace('[slug]', ins.slug)}
-							target="_blank"
-							class="flex items-center gap-1 text-[9px] font-black text-black uppercase hover:underline"
+							class="flex items-center gap-1 text-[9px] font-black text-black uppercase hover:text-blue-600 hover:underline"
 						>
-							Visit <Icon icon="mdi:open-in-new" class="h-3 w-3" />
+							방문 <Icon icon="ph:arrow-right-bold" class="h-3 w-3" />
 						</a>
 					</div>
 				</div>

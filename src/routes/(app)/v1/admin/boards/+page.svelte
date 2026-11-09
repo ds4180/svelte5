@@ -112,14 +112,17 @@
 			{:else}
 				<div class="grid grid-cols-1 gap-4">
 					{#each boards as b}
-						<button
+						<div
 							class="group flex items-center justify-between border-2 border-black bg-white p-6 text-left transition-all hover:bg-slate-50 {editingBoard.id ===
 							b.id
 								? 'border-blue-600 ring-2 ring-blue-600'
 								: ''}"
-							onclick={() => startEdit(b)}
 						>
-							<div>
+							<button
+								type="button"
+								class="flex-1 text-left"
+								onclick={() => startEdit(b)}
+							>
 								<div class="mb-1 text-[9px] font-black tracking-widest uppercase italic opacity-30">
 									/{b.slug}
 								</div>
@@ -127,12 +130,24 @@
 								<p class="mt-1 text-[10px] font-bold opacity-40">
 									{b.description || '설명이 없습니다.'}
 								</p>
+							</button>
+							<div class="flex items-center gap-2">
+								<a
+									href="/v1/app/board/{b.slug}"
+									class="btn rounded-none border border-black/20 text-[9px] font-black uppercase btn-xs hover:bg-black hover:text-white"
+									title="게시판 보기"
+								>
+									열기 →
+								</a>
+								<button
+									type="button"
+									class="text-[11px] font-black text-blue-600 opacity-60 transition-opacity group-hover:opacity-100"
+									onclick={() => startEdit(b)}
+								>
+									수정
+								</button>
 							</div>
-							<span
-								class="font-black text-blue-600 opacity-0 transition-opacity group-hover:opacity-100"
-								>EDIT →</span
-							>
-						</button>
+						</div>
 					{/each}
 				</div>
 			{/if}
@@ -143,13 +158,23 @@
 			<div
 				class="sticky top-24 border-2 border-black bg-white p-10 shadow-[15px_15px_0_rgba(0,0,0,0.05)]"
 			>
-				<div class="mb-10 flex items-baseline justify-between border-b-2 border-black pb-4">
+				<div class="mb-10 flex flex-wrap items-baseline justify-between gap-2 border-b-2 border-black pb-4">
 					<h3 class="text-3xl font-black italic">
 						{editingBoard.id ? '게시판 엔진 수정' : '새 게시판 엔진 개발'}
 					</h3>
-					<span class="text-[9px] font-black tracking-widest uppercase italic opacity-40"
-						>Type: Board_v1.2</span
-					>
+					<div class="flex items-center gap-3">
+						{#if editingBoard.id && editingBoard.slug}
+							<a
+								href="/v1/app/board/{editingBoard.slug}"
+								class="btn rounded-none border border-black bg-blue-50 text-[10px] font-black text-blue-700 btn-xs hover:bg-blue-600 hover:text-white"
+							>
+								게시판 바로가기 →
+							</a>
+						{/if}
+						<span class="text-[9px] font-black tracking-widest uppercase italic opacity-40"
+							>Type: Board_v1.2</span
+						>
+					</div>
 				</div>
 
 				<div class="mb-8 grid grid-cols-1 gap-8 md:grid-cols-2">

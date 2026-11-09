@@ -682,7 +682,7 @@
 
 		<!-- 🚀 가운데 본문 영역 -->
 		<main
-			class="custom-scrollbar relative z-[100] flex flex-1 min-w-0 min-h-0 flex-col overflow-y-auto overflow-x-hidden bg-slate-50 transition-all"
+			class="custom-scrollbar relative flex flex-1 min-w-0 min-h-0 flex-col overflow-y-auto overflow-x-hidden bg-slate-50 transition-all"
 		>
 			<div class="mx-auto min-h-full w-full max-w-[1700px] p-4 sm:p-6 md:p-12 lg:p-20 min-w-0">
 				{@render children?.()}

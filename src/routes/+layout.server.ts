@@ -16,12 +16,23 @@ import type { LayoutServerLoad } from './$types';
  * 📌 이렇게 하면 하위의 모든 페이지(+page.svelte, (app)/+layout.svelte 등)에서
  *    별도의 복잡한 API 호출 없이 `data.user`로 로그인 유저 정보를 즉시 조회할 수 있습니다.
  */
-export const load: LayoutServerLoad = async ({ locals }) => {
+export const load: LayoutServerLoad = async ({ locals, url }) => {
 	// 서버 훅(hooks.server.js)에서 이미 검증해둔 로그인 사용자 정보를 꺼냅니다.
 	// 비로그인 상태라면 null이 전달되어 하위 화면에서 손쉽게 로그인 여부를 판단할 수 있습니다.
 	const currentUser = locals.user || null;
 
+	// 도메인(Host) 기반 개발/운영 환경 자동 감지 (PWA 아이콘 및 테마 분리)
+	const host = url.hostname.toLowerCase();
+	const isDev = host.includes('dev') || host === 'localhost' || host === '127.0.0.1';
+
 	return {
-		user: currentUser
+		user: currentUser,
+		isDev,
+		metaTheme: {
+			themeColor: isDev ? '#d97706' : '#0f172a',
+			favicon: isDev ? '/favicon-dev.png' : '/favicon.png',
+			appleTouchIcon: isDev ? '/icons/icon-dev-192.png' : '/icons/icon-192.png',
+			appName: isDev ? '[DEV] jeju.live' : 'jeju.live 통합운송관제'
+		}
 	};
 };

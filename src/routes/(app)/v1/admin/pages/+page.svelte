@@ -66,16 +66,17 @@
 					</div>
 					<a
 						href={page.url}
-						target="_blank"
 						class="btn rounded-none border-black text-[9px] font-black uppercase btn-outline btn-xs hover:bg-black hover:text-white"
 					>
-						Open Live
+						페이지 이동 →
 					</a>
 				</div>
 
-				<h3 class="mb-1 truncate text-2xl font-black tracking-tighter uppercase italic">
-					{page.slug}
-				</h3>
+				<a href={page.url} class="block group-hover:text-blue-600 transition-colors">
+					<h3 class="mb-1 truncate text-2xl font-black tracking-tighter uppercase italic">
+						{page.slug}
+					</h3>
+				</a>
 				<p class="mb-6 font-mono text-[10px] font-bold text-blue-600 opacity-60">{page.url}</p>
 
 				<div class="space-y-3 border-t border-black/5 pt-4">
