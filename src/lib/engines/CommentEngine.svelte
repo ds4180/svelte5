@@ -5,7 +5,7 @@
 	 * @prop {{ id: number }} post - 부모 게시물 객체 (id 필수)
 	 */
 	import { onMount } from 'svelte';
-	import * as commentApi from '$lib/api/comment.api';
+	import * as commentApi from '$lib/api/comment';
 	import Icon from '@iconify/svelte';
 
 	// --- [Svelte 5 Props] ---

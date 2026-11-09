@@ -13,9 +13,5 @@ export const createPost = (slug, data) => fastApi('POST', `/api/v1/board/create/
 export const updatePost = (postId, data) => fastApi('PUT', `/api/v1/board/update/${postId}`, data);
 export const deletePost = (postId) => fastApi('DELETE', `/api/v1/board/delete/${postId}`);
 
-// --- Comment (Lego Service) ---
-export const getComments = (postId) => fastApi('GET', `/api/v1/comment/${postId}`);
-export const createComment = (postId, data) => fastApi('POST', `/api/v1/comment/${postId}`, data);
-export const updateComment = (commentId, data) =>
-	fastApi('PUT', `/api/v1/comment/${commentId}`, data);
-export const deleteComment = (commentId) => fastApi('DELETE', `/api/v1/comment/${commentId}`);
+// --- Comment (Lego Service - $lib/api/comment 단일 위임) ---
+export { getComments, createComment, updateComment, deleteComment } from './comment';
