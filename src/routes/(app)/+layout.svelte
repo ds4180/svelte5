@@ -46,13 +46,14 @@
 	});
 
 	// --- [상태 관리] ---
-	let isLeftOpen = $state(true);
+	// 💡 [모바일 퍼스트] 초기 렌더링 시 모바일 환경에서는 닫힌 상태(w-0)로 시작하여 열린 채 로딩되는 현상을 방지
+	let isMobile = $state(typeof window !== 'undefined' ? window.innerWidth < 1200 : true);
+	let isLeftOpen = $state(typeof window !== 'undefined' ? window.innerWidth >= 1200 : false);
 	let isRightOpen = $state(false);
 	let isScrolled = $state(false);
 	/** @type {Record<string|number, boolean>} */
 	let openMenus = $state({});
 	let isMounted = $state(false);
-	let isMobile = $state(false);
 
 	// 🌐 우측 상단 헤더 개편 상태 (사용자 팝업 메뉴, 실시간 네트워크/소켓 듀얼 감지, 풀스크린)
 	// 💡 네트워크 온라인/오프라인 상태 및 토스트 알림은 offlineSync.isOnline 단일 엔진에서 통합 관리합니다.
@@ -126,15 +127,20 @@
 			isRightOpen = false;
 		};
 
-		setTimeout(() => {
-			isMounted = true;
-			updateMedia();
-			if (data.menus) {
-				data.menus.forEach((/** @type {any} */ m) => {
-					if (openMenus[m.id] === undefined) openMenus[m.id] = true;
-				});
-			}
-		}, 0);
+		// 🛡️ [초기 위치 즉시 동기화] 마운트 즉시 화면 크기에 맞게 초기 상태를 세팅
+		updateMedia();
+		if (data.menus) {
+			data.menus.forEach((/** @type {any} */ m) => {
+				if (openMenus[m.id] === undefined) openMenus[m.id] = true;
+			});
+		}
+
+		// 🚀 [초기 로딩 튐 방지] 첫 프레임이 그려진 후 transition을 활성화하여 로딩 시 애니메이션 차단
+		requestAnimationFrame(() => {
+			requestAnimationFrame(() => {
+				isMounted = true;
+			});
+		});
 
 		const handleScroll = () => {
 			isScrolled = window.scrollY > 10;
@@ -604,9 +610,10 @@
 	<div class="relative flex flex-1 w-full max-w-full min-w-0 min-h-0 overflow-hidden">
 		<!-- ⬅️ 왼쪽 네비게이션 사이드바 -->
 		<aside
-			class="z-[1000] flex-none h-full overflow-hidden bg-slate-900 text-slate-300 shadow-2xl transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]
+			class="z-[1000] flex-none h-full overflow-hidden bg-slate-900 text-slate-300 shadow-2xl
+                      {isMounted ? 'transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]' : 'transition-none'}
                       {isMobile ? 'absolute top-0 bottom-0 left-0 h-full' : ''} 
-                      {isLeftOpen ? 'w-72' : 'w-0'} border-r-4 border-black"
+                      {isLeftOpen ? 'w-72 border-r-4 border-black' : 'w-0 border-r-0'}"
 		>
 			<div class="custom-scrollbar-dark flex h-full w-72 flex-col overflow-y-auto px-4 pt-12 pb-32">
 				<div class="mb-2 ml-2 flex flex-col gap-1 border-l-4 border-blue-600 px-4">
@@ -682,7 +689,7 @@
 
 		<!-- 🚀 가운데 본문 영역 -->
 		<main
-			class="custom-scrollbar relative flex flex-1 min-w-0 min-h-0 flex-col overflow-y-auto overflow-x-hidden bg-slate-50 transition-all"
+			class="custom-scrollbar relative flex flex-1 min-w-0 min-h-0 flex-col overflow-y-auto overflow-x-hidden bg-slate-50 {isMounted ? 'transition-all duration-500' : 'transition-none'}"
 		>
 			<div class="mx-auto min-h-full w-full max-w-[1700px] p-4 sm:p-6 md:p-12 lg:p-20 min-w-0">
 				{@render children?.()}
@@ -692,7 +699,7 @@
 </div>
 
 <!-- 🍱 동적 폼 (독립 컴포넌트: Scrim 포함) -->
-<DynamicSidebar {isMobile} isOpen={isRightOpen} onClose={toggleRight} />
+<DynamicSidebar {isMobile} isOpen={isRightOpen} {isMounted} onClose={toggleRight} />
 
 <style>
 	:global(.btn) {

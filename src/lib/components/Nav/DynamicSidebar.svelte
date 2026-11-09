@@ -16,9 +16,10 @@
 	 * @typedef {Object} Props
 	 * @property {boolean} [isMobile] - 모바일 환경 여부
 	 * @property {boolean} [isOpen] - 사이드바 열림 상태
+	 * @property {boolean} [isMounted] - 초기 마운트 완료 여부 (초기 로딩 애니메이션 튐 방지)
 	 * @property {import('svelte/elements').MouseEventHandler<HTMLElement>} [onClose] - 닫기 이벤트 핸들러
 	 */
-	let { isMobile = false, isOpen = false, onClose = () => {} } = $props();
+	let { isMobile = false, isOpen = false, isMounted = false, onClose = () => {} } = $props();
 
 	function navigateTo(tab) {
 		goto(`/v1/pages/miniapps?tab=${tab}`);
@@ -46,21 +47,22 @@
 
 <!-- ➡️ 우측 동적 폼 사이드바 (분리 전 완벽 작동 로직 복원) -->
 <aside
-	class="fixed z-[9999] overflow-hidden bg-white text-slate-900 shadow-[-20px_0_60px_-15px_rgba(0,0,0,0.4)] transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]
+	class="fixed z-[9999] overflow-hidden bg-white text-slate-900
+          {isMounted ? 'transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]' : 'transition-none'}
           {isMobile
-		? 'top-0 right-0 bottom-0 left-0 h-full rounded-t-[3.5rem] border-t-8 border-slate-900 shadow-[0_-20px_50px_rgba(0,0,0,0.5)]'
+		? 'top-0 right-0 bottom-0 left-0 h-full rounded-t-[3.5rem] border-t-8 border-slate-900'
 		: 'top-20 right-0 bottom-0 w-[450px] border-l-4 border-slate-900'} 
           {isOpen
-		? 'translate-x-0 translate-y-0'
-		: isMobile ? 'translate-x-0 translate-y-full' : 'translate-x-full translate-y-0'}"
+		? 'translate-x-0 translate-y-0 ' + (isMobile ? 'shadow-[0_-20px_50px_rgba(0,0,0,0.5)]' : 'shadow-[-20px_0_60px_-15px_rgba(0,0,0,0.4)]')
+		: (isMobile ? 'translate-x-0 translate-y-[110%] shadow-none pointer-events-none' : 'translate-x-full translate-y-0 shadow-none pointer-events-none')}"
 	aria-label="동적 폼 사이드바 패널"
 >
 	<div
 		class="custom-scrollbar flex h-full w-full flex-col divide-y divide-slate-100 overflow-y-auto px-2 pb-40"
 	>
-		<!-- [0] 헤더 및 닫기 버튼 -->
+		<!-- [0] 헤더 및 닫기 버튼 (상단 20px 상향 조정, X 버튼 우측 10px 이동) -->
 		<header
-			class="sticky top-0 z-10 flex flex-none items-center justify-between border-b border-slate-100 bg-slate-50/50 p-8 backdrop-blur-md md:p-10"
+			class="sticky top-0 z-10 flex flex-none items-center justify-between border-b border-slate-100 bg-slate-50/50 pt-3 pb-6 px-6 backdrop-blur-md md:pt-5 md:pb-8 md:px-10"
 		>
 			<div class="flex flex-col">
 				<span
@@ -74,7 +76,7 @@
 				</h2>
 			</div>
 			<button
-				class="btn btn-circle transform border border-slate-200 bg-white shadow-sm btn-ghost transition-all btn-sm hover:bg-slate-900 hover:text-white active:scale-95"
+				class="btn btn-circle transform translate-x-[10px] border border-slate-200 bg-white shadow-sm btn-ghost transition-all btn-sm hover:bg-slate-900 hover:text-white active:scale-95"
 				onclick={onClose}
 				aria-label="사이드바 닫기"
 			>
