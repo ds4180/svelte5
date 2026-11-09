@@ -41,10 +41,10 @@
 	};
 </script>
 
-<!-- 🍞 화면 우측 하단 기본 토스트 컨테이너 (z-index 최상위) -->
+<!-- 🍞 화면 우측 하단 기본 토스트 컨테이너 (모바일 퀵메뉴 상단 안착 및 z-index 최상위 보장) -->
 {#if toast.items.length > 0}
 	<aside
-		class="toast toast-end toast-bottom z-[9999] mb-4 mr-4 flex max-w-sm flex-col gap-2 p-0"
+		class="toast toast-end toast-bottom z-[10002] mb-20 mr-2 flex max-w-sm flex-col gap-2 p-0 md:mb-4 md:mr-4"
 		aria-live="polite"
 		aria-label="시스템 알림"
 	>

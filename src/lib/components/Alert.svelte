@@ -91,11 +91,11 @@
 	const l2Alerts = $derived(visibleAlerts.filter(a => a.level === 2));
 </script>
 
-<!-- 🔔 Toast Layer (Lv.1: 2건 이상이어도 최신 1건만 단일 스택 큐로 우아하게 노출) -->
+<!-- 🔔 Toast Layer (Lv.1: 모바일 퀵메뉴 위 z-[10002] 및 bottom-20 안착) -->
 {#if positionFilter !== 'modal' && l1Alerts.length > 0}
 	{@const activeL1 = l1Alerts[l1Alerts.length - 1]}
 	<div 
-		class="toast toast-center z-[9999] pointer-events-auto gap-2 p-2 w-full max-w-[96vw] flex flex-col items-center !whitespace-normal {positionFilter === 'top' ? 'toast-top fixed top-24 bottom-auto left-1/2 -translate-x-1/2' : 'toast-bottom fixed bottom-6 top-auto left-1/2 -translate-x-1/2'}"
+		class="toast toast-center z-[10002] pointer-events-auto gap-2 p-2 w-full max-w-[96vw] flex flex-col items-center !whitespace-normal {positionFilter === 'top' ? 'toast-top fixed top-24 bottom-auto left-1/2 -translate-x-1/2' : 'toast-bottom fixed bottom-20 md:bottom-6 top-auto left-1/2 -translate-x-1/2'}"
 	>
 		<AlertToast 
 			alert={activeL1} 

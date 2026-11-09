@@ -34,20 +34,20 @@
 	}
 </script>
 
-<!-- 📱/💻 오버레이 차단 배경 (Root-level Scrim) -->
+<!-- 📱/💻 오버레이 차단 배경 (Root-level Scrim: 레이아웃 셸 계층 z-[1005]) -->
 {#if isOpen}
 	<!-- svelte-ignore a11y_click_events_have_key_events -->
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
 	<div
-		class="animate-fade-in fixed inset-0 z-[9998] bg-slate-950/40 backdrop-blur-[4px] transition-opacity"
+		class="animate-fade-in fixed inset-0 z-[1005] bg-slate-950/40 backdrop-blur-[4px] transition-opacity"
 		onclick={onClose}
 		aria-label="동적 폼 닫기 배경"
 	></div>
 {/if}
 
-<!-- ➡️ 우측 동적 폼 사이드바 (분리 전 완벽 작동 로직 복원) -->
+<!-- ➡️ 우측 동적 폼 사이드바 (레이아웃 셸 계층 z-[1010]: 하단 퀵메뉴 z-[1020] 아래, 포탈 모달 z-[9999] 아래) -->
 <aside
-	class="fixed z-[9999] overflow-hidden bg-white text-slate-900
+	class="fixed z-[1010] overflow-hidden bg-white text-slate-900
           {isMounted ? 'transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]' : 'transition-none'}
           {isMobile
 		? 'top-0 right-0 bottom-0 left-0 h-full rounded-t-[3.5rem] border-t-8 border-slate-900'
@@ -76,7 +76,7 @@
 				</h2>
 			</div>
 			<button
-				class="btn btn-circle transform translate-x-[10px] border border-slate-200 bg-white shadow-sm btn-ghost transition-all btn-sm hover:bg-slate-900 hover:text-white active:scale-95"
+				class="btn btn-circle transform translate-x-[20px] border border-slate-200 bg-white shadow-sm btn-ghost transition-all btn-sm hover:bg-slate-900 hover:text-white active:scale-95"
 				onclick={onClose}
 				aria-label="사이드바 닫기"
 			>

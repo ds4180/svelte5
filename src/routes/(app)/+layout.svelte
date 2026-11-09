@@ -195,11 +195,11 @@
 </script>
 
 <div
-	class="relative flex h-screen max-h-screen w-full max-w-full flex-col overflow-hidden bg-slate-50 font-['Noto_Sans_KR','Outfit'] text-slate-900 antialiased selection:bg-blue-100 selection:text-blue-700"
+	class="relative flex h-screen h-[100dvh] max-h-[100dvh] w-full max-w-full flex-col overflow-hidden bg-slate-50 font-['Noto_Sans_KR','Outfit'] text-slate-900 antialiased selection:bg-blue-100 selection:text-blue-700"
 >
 	<!-- 🌐 Premium Navbar (Global Header) -->
 	<header
-		class="navbar z-[1001] h-20 w-full max-w-full flex-none border-b-4 border-slate-900 bg-white px-2 transition-all md:px-6 {isScrolled
+		class="navbar z-[1000] h-20 w-full max-w-full flex-none border-b-4 border-slate-900 bg-white px-2 transition-all md:px-6 {isScrolled
 			? 'shadow-2xl'
 			: ''}"
 	>
@@ -608,9 +608,18 @@
 	</header>
 
 	<div class="relative flex flex-1 w-full max-w-full min-w-0 min-h-0 overflow-hidden">
-		<!-- ⬅️ 왼쪽 네비게이션 사이드바 -->
+		<!-- ⬅️ 왼쪽 네비게이션 사이드바 (모바일/태블릿 Scrim 백드롭 포함) -->
+		{#if isMobile && isLeftOpen}
+			<!-- svelte-ignore a11y_click_events_have_key_events -->
+			<!-- svelte-ignore a11y_no_static_element_interactions -->
+			<div
+				class="fixed inset-0 z-[990] bg-slate-950/40 backdrop-blur-[2px] transition-opacity"
+				onclick={toggleLeft}
+				aria-label="메뉴 닫기 배경"
+			></div>
+		{/if}
 		<aside
-			class="z-[1000] flex-none h-full overflow-hidden bg-slate-900 text-slate-300 shadow-2xl
+			class="z-[995] flex-none h-full overflow-hidden bg-slate-900 text-slate-300 shadow-2xl
                       {isMounted ? 'transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]' : 'transition-none'}
                       {isMobile ? 'absolute top-0 bottom-0 left-0 h-full' : ''} 
                       {isLeftOpen ? 'w-72 border-r-4 border-black' : 'w-0 border-r-0'}"
@@ -687,15 +696,113 @@
 			</div>
 		</aside>
 
-		<!-- 🚀 가운데 본문 영역 -->
+		<!-- 🚀 가운데 본문 영역 (가로 넘침 시 정상 스크롤바 지원 overflow-x-auto, 모바일 사이드바 오픈 시 배경 스크롤 잠금) -->
 		<main
-			class="custom-scrollbar relative flex flex-1 min-w-0 min-h-0 flex-col overflow-y-auto overflow-x-hidden bg-slate-50 {isMounted ? 'transition-all duration-500' : 'transition-none'}"
+			class="custom-scrollbar relative flex flex-1 min-w-0 min-h-0 flex-col bg-slate-50
+                   {isMounted ? 'transition-all duration-500' : 'transition-none'}
+                   {isMobile && isLeftOpen ? 'overflow-hidden pointer-events-none' : 'overflow-y-auto overflow-x-auto'}"
 		>
-			<div class="mx-auto min-h-full w-full max-w-[1700px] p-4 sm:p-6 md:p-12 lg:p-20 min-w-0">
+			<div class="mx-auto min-h-full w-full max-w-[1700px] p-4 pb-24 sm:p-6 sm:pb-24 md:p-8 md:pb-12 lg:p-10 lg:pb-16 min-w-0">
 				{@render children?.()}
 			</div>
 		</main>
 	</div>
+
+	<!-- 📱 모바일 세로 모드 전용 하단 퀵 내비게이션 바 (레이아웃 셸 z-[1020]: 동적 폼 z-1010 위, use:portal z-9999 아래 간섭 방지) -->
+	<nav
+		class="fixed bottom-0 left-0 right-0 z-[1020] flex h-16 w-full items-center justify-around border-t-2 border-slate-900 bg-white/95 backdrop-blur-md shadow-[0_-4px_16px_rgba(0,0,0,0.06)] pb-[env(safe-area-inset-bottom,0px)] md:hidden"
+		aria-label="모바일 하단 퀵 메뉴"
+	>
+		<!-- 1. 홈 (대시보드) -->
+		<a
+			href="/v1"
+			onclick={() => {
+				isRightOpen = false;
+				if (isMobile) isLeftOpen = false;
+			}}
+			class="group flex flex-1 flex-col items-center justify-center py-1 transition-colors {isActive('/v1')
+				? 'text-blue-600'
+				: 'text-slate-500 hover:text-slate-900'}"
+		>
+			<Icon icon={isActive('/v1') ? 'ph:house-fill' : 'ph:house-bold'} class="h-5 w-5 transition-transform group-active:scale-90" />
+			<span class="mt-1 text-[10px] font-black tracking-tighter">홈</span>
+		</a>
+
+		<!-- 2. 전체 메뉴 (좌측 사이드바 토글) -->
+		<button
+			type="button"
+			onclick={() => {
+				isRightOpen = false;
+				toggleLeft();
+			}}
+			class="group flex flex-1 flex-col items-center justify-center py-1 transition-colors {isLeftOpen
+				? 'text-blue-600'
+				: 'text-slate-500 hover:text-slate-900'}"
+			aria-label="전체 메뉴 열기"
+		>
+			<Icon icon="ph:list-bold" class="h-5 w-5 transition-transform group-active:scale-90" />
+			<span class="mt-1 text-[10px] font-black tracking-tighter">메뉴</span>
+		</button>
+
+		<!-- 3. 핵심 업무: 배차/스케줄 바로가기 -->
+		<a
+			href="/v1/pages/schedule"
+			onclick={() => {
+				isRightOpen = false;
+				if (isMobile) isLeftOpen = false;
+			}}
+			class="group flex flex-1 flex-col items-center justify-center py-1 transition-colors {isActive('/v1/pages/schedule')
+				? 'text-blue-600'
+				: 'text-slate-500 hover:text-slate-900'}"
+		>
+			<Icon icon={isActive('/v1/pages/schedule') ? 'ph:calendar-check-fill' : 'ph:calendar-check-bold'} class="h-5 w-5 transition-transform group-active:scale-90" />
+			<span class="mt-1 text-[10px] font-black tracking-tighter">스케줄</span>
+		</a>
+
+		<!-- 4. 동적 폼 / 워크스페이스 (한번 더 누르면 닫힘 토글) -->
+		<button
+			type="button"
+			onclick={() => {
+				if (isMobile) isLeftOpen = false;
+				toggleRight();
+			}}
+			class="group relative flex flex-1 flex-col items-center justify-center py-1 transition-colors {isRightOpen
+				? 'text-blue-600'
+				: 'text-slate-500 hover:text-slate-900'}"
+			aria-label={isRightOpen ? '동적 폼 닫기' : '동적 폼 열기'}
+		>
+			<div class="relative flex items-center justify-center">
+				<Icon icon="ph:magic-wand-fill" class="h-5 w-5 transition-transform group-active:scale-90" />
+				{#if miniappStore.counts.TOTAL > 0}
+					<span class="pointer-events-none absolute -top-1.5 -right-2.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-600 px-1 text-[9px] font-black text-white shadow-xs">
+						{miniappStore.counts.TOTAL > 99 ? '99+' : miniappStore.counts.TOTAL}
+					</span>
+				{/if}
+			</div>
+			<span class="mt-1 text-[10px] font-black tracking-tighter">동적 폼</span>
+		</button>
+
+		<!-- 5. 내 정보 (프로필 바로가기) -->
+		<a
+			href="/v1/pages/profile"
+			onclick={() => {
+				isRightOpen = false;
+				if (isMobile) isLeftOpen = false;
+			}}
+			class="group flex flex-1 flex-col items-center justify-center py-1 transition-colors {isActive('/v1/pages/profile')
+				? 'text-blue-600'
+				: 'text-slate-500 hover:text-slate-900'}"
+		>
+			{#if auth.user}
+				<div class="flex h-5 w-5 items-center justify-center rounded-full bg-slate-900 text-[10px] font-black text-white transition-transform group-active:scale-90">
+					{(auth.user.real_name || auth.user.username || '?')[0]}
+				</div>
+			{:else}
+				<Icon icon="ph:user-bold" class="h-5 w-5 transition-transform group-active:scale-90" />
+			{/if}
+			<span class="mt-1 text-[10px] font-black tracking-tighter">내 정보</span>
+		</a>
+	</nav>
 </div>
 
 <!-- 🍱 동적 폼 (독립 컴포넌트: Scrim 포함) -->
@@ -705,8 +812,23 @@
 	:global(.btn) {
 		border-radius: 0;
 	}
+	.custom-scrollbar {
+		scrollbar-width: thin;
+		scrollbar-color: rgba(15, 23, 42, 0.15) transparent;
+	}
 	.custom-scrollbar::-webkit-scrollbar {
 		width: 8px;
+		height: 8px;
+	}
+	.custom-scrollbar::-webkit-scrollbar-track {
+		background: transparent;
+	}
+	.custom-scrollbar::-webkit-scrollbar-thumb {
+		background: rgba(15, 23, 42, 0.15);
+		border-radius: 4px;
+	}
+	.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+		background: rgba(15, 23, 42, 0.3);
 	}
 	.custom-scrollbar-dark::-webkit-scrollbar-thumb {
 		background: rgba(255, 255, 255, 0.05);
