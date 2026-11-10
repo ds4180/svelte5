@@ -163,13 +163,6 @@
 			<Icon icon="solar:arrow-right-bold" class="text-sm" />
 		</a>
 	</div>
-			href="/v1/admin/observability?tab=SESSIONS"
-			class="inline-flex shrink-0 items-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-xs font-black text-white shadow-md transition hover:bg-slate-900 active:scale-95"
-		>
-			<span>통합 관제 센터로 이동</span>
-			<Icon icon="solar:arrow-right-bold" class="text-sm" />
-		</a>
-	</div>
 
 	<div
 		class="hidden overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg sm:block md:rounded-[2rem] md:shadow-2xl"
