@@ -6,6 +6,7 @@
     import { untrack } from 'svelte';
     import Icon from '@iconify/svelte';
     import { fade } from 'svelte/transition';
+    import { getSiteTitle } from '$lib/config/site';
     import {
         adminGetActiveRouteMasters,
         adminGetDailyDispatch,
@@ -65,6 +66,8 @@
                 ? [selectedRoute]
                 : []
     );
+    let assignedDriversCount = $derived(dispatchRows.filter(r => r.driver_name).length);
+    let assignRate = $derived(dispatchRows.length > 0 ? Math.round((assignedDriversCount / dispatchRows.length) * 100) : 0);
 
     function setDate(date) {
         selectedDate = new Date(date);
@@ -558,36 +561,134 @@
 </style>
 
 <svelte:head>
-    <title>차량 배차 관리 | jeju.live Core</title>
+    <title>{getSiteTitle('차량 배차 관리')}</title>
 </svelte:head>
 
-<div class="min-h-screen bg-slate-50 p-2 md:p-4 font-sans pb-12 font-['Noto_Sans_KR','Outfit']">
-    <!-- 헤더 영역 -->
-    <header class="mb-4 border-b-2 border-slate-900 pb-3">
-        <div class="flex justify-between items-end">
-            <div>
-                <div class="flex items-center gap-3 mb-1.5">
-                    <span class="badge bg-slate-900 text-white font-black uppercase text-[10px] px-3 py-1">Admin</span>
-                    {#if isLocked}
-                        <span class="badge badge-error text-white font-black uppercase text-[10px] animate-pulse">Lock by {lockedBy}</span>
-                    {:else}
-                        <span class="badge bg-emerald-100 text-emerald-700 font-black uppercase text-[10px]">Editing Mode</span>
-                    {/if}
-                </div>
-                <h1 class="text-2xl md:text-3xl font-black uppercase italic tracking-tighter text-slate-900 mb-0.5">
-                    차량 배차 <span class="text-blue-600 not-italic">관리</span> <span class="text-sm font-normal text-slate-400 not-italic">(Dispatch Canvas)</span>
-                </h1>
-                <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Global Fleet Management System</p>
+<div class="mx-auto max-w-7xl space-y-6 px-4 py-8 pb-24 font-['Noto_Sans_KR','Outfit'] md:space-y-8 md:px-6 lg:px-8">
+    <!-- ===================================================================== -->
+    <!-- 1. 페이지 헤더 & 액션 바 (기본값: 새로고침 + 관리자 홈) -->
+    <!-- ===================================================================== -->
+    <div class="flex flex-col gap-4 border-b-2 border-slate-900 pb-6 md:flex-row md:items-end md:justify-between md:border-b-4 md:pb-8">
+        <div>
+            <div class="flex items-center gap-2">
+                <span class="inline-flex items-center gap-1.5 rounded-full bg-slate-900 px-3 py-1 text-[11px] font-black tracking-widest text-emerald-400 uppercase">
+                    <span class="h-2 w-2 rounded-full bg-emerald-400 animate-ping"></span>
+                    Fleet Dispatch Canvas
+                </span>
+                <span class="text-xs font-bold text-slate-400">v1/admin/dispatch</span>
+                {#if isLocked}
+                    <span class="rounded-full bg-rose-100 text-rose-700 px-2 py-0.5 text-[10px] font-black uppercase animate-pulse">Lock by {lockedBy}</span>
+                {/if}
             </div>
-            
+            <h1 class="mt-2 text-3xl font-black tracking-tight text-slate-900 uppercase italic md:text-4xl">
+                차량 배차 <span class="not-italic text-blue-600">관리</span>
+            </h1>
+            <p class="mt-1 text-sm font-medium text-slate-500">
+                노선별 운행 시간표와 로번을 바탕으로 기사 및 차량을 배정하고 17시 확정 공지를 수행합니다.
+            </p>
+        </div>
+
+        <!-- 상단 버튼 그룹 (맨 우측 [관리자 홈], 그 좌측 [새로고침] 고정, 이후 버튼은 새로고침 좌측) -->
+        <div class="flex flex-wrap items-center gap-3">
             {#if selectedRoute}
-                <button class="btn btn-sm bg-blue-600 hover:bg-blue-700 text-white border-none font-black rounded-lg px-6 shadow-lg"
-                        onclick={() => saveDispatch('CONFIRMED')}>
-                    {isTomorrowAnnounced ? '17시 재공지 완료' : '17시 확정 공지'}
+                <button
+                    class="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2 text-xs font-black text-white shadow-md transition hover:bg-blue-700 active:scale-95"
+                    onclick={() => saveDispatch('CONFIRMED')}
+                >
+                    <Icon icon="solar:bell-bold" class="text-base" />
+                    <span>{isTomorrowAnnounced ? '17시 재공지 완료' : '17시 확정 공지'}</span>
                 </button>
             {/if}
+
+            <button
+                onclick={() => syncData(selectedDateKey, selectedRoute?.id)}
+                class="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 active:scale-95"
+            >
+                <Icon icon="solar:restart-bold" class="text-base" />
+                <span>새로고침</span>
+            </button>
+
+            <a
+                href="/v1/admin"
+                class="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 active:scale-95"
+            >
+                <Icon icon="solar:home-smile-angle-bold-duotone" class="text-base text-slate-500" />
+                <span>관리자 홈</span>
+            </a>
         </div>
-    </header>
+    </div>
+
+    <!-- ===================================================================== -->
+    <!-- 2. 상단 4대 관제 지표 요약 카드 (Status Cards: 1~4개) -->
+    <!-- ===================================================================== -->
+    <div class="grid grid-cols-2 gap-4 md:grid-cols-4 md:gap-5">
+        <div class="flex flex-col justify-between rounded-[1.75rem] border-2 border-slate-200 bg-white p-5 shadow-sm">
+            <div class="flex items-center justify-between">
+                <span class="text-xs font-black tracking-wider text-slate-400 uppercase">Target Routes</span>
+                <div class="flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
+                    <Icon icon="solar:route-bold-duotone" class="text-xl" />
+                </div>
+            </div>
+            <div class="mt-4">
+                <div class="text-3xl font-black text-slate-900">{routes.length} <span class="text-xs font-normal text-slate-500">개</span></div>
+                <div class="mt-1 text-xs font-bold text-indigo-600">운행 대상 노선</div>
+            </div>
+        </div>
+
+        <div class="flex flex-col justify-between rounded-[1.75rem] border-2 border-slate-200 bg-white p-5 shadow-sm">
+            <div class="flex items-center justify-between">
+                <span class="text-xs font-black tracking-wider text-slate-400 uppercase">Duty Slots</span>
+                <div class="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
+                    <Icon icon="solar:bus-bold-duotone" class="text-xl" />
+                </div>
+            </div>
+            <div class="mt-4">
+                <div class="text-3xl font-black text-blue-600">{dispatchRows.length} <span class="text-xs font-normal text-slate-500">개</span></div>
+                <div class="mt-1 text-xs font-bold text-slate-400">운행 로번 슬롯</div>
+            </div>
+        </div>
+
+        <div class="flex flex-col justify-between rounded-[1.75rem] border-2 border-slate-200 bg-white p-5 shadow-sm">
+            <div class="flex items-center justify-between">
+                <span class="text-xs font-black tracking-wider text-slate-400 uppercase">Assignment Rate</span>
+                <div class="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
+                    <Icon icon="solar:users-group-rounded-bold-duotone" class="text-xl" />
+                </div>
+            </div>
+            <div class="mt-4">
+                <div class="text-3xl font-black text-emerald-600">{assignRate}%</div>
+                <div class="mt-1 text-xs font-bold text-slate-400">기사 배정 완료 ({assignedDriversCount}/{dispatchRows.length || 0})</div>
+            </div>
+        </div>
+
+        <div class="flex flex-col justify-between rounded-[1.75rem] border-2 border-slate-200 bg-white p-5 shadow-sm">
+            <div class="flex items-center justify-between">
+                <span class="text-xs font-black tracking-wider text-slate-400 uppercase">Broadcast Status</span>
+                <div class="flex h-9 w-9 items-center justify-center rounded-xl {isTomorrowAnnounced ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'}">
+                    <Icon icon="solar:soundwave-bold-duotone" class="text-xl" />
+                </div>
+            </div>
+            <div class="mt-4">
+                <div class="text-xl font-black {isTomorrowAnnounced ? 'text-emerald-600' : 'text-amber-600'}">
+                    {isTomorrowAnnounced ? '17시 공지 완료' : '작성/미확정'}
+                </div>
+                <div class="mt-1 text-xs font-bold text-slate-400">기준일: {selectedDateKey}</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===================================================================== -->
+    <!-- 3. 전사 공통 탭 바 (최소 1개 일관성 및 확장성) -->
+    <!-- ===================================================================== -->
+    <div class="flex items-center border-b-2 border-slate-200">
+        <button
+            type="button"
+            class="flex items-center gap-2 border-b-4 border-blue-600 bg-blue-50/50 px-6 py-3 text-xs font-black text-blue-600 rounded-t-2xl transition"
+        >
+            <Icon icon="solar:calendar-bold-duotone" class="text-base" />
+            <span>일일 배차 캔버스 ({selectedDateKey})</span>
+        </button>
+    </div>
 
     <!-- 날짜 네비게이션 -->
     <div class="mb-4 flex items-center justify-between bg-white p-1.5 rounded-xl border-2 border-slate-900 shadow-[3px_3px_0_rgba(0,0,0,1)]">

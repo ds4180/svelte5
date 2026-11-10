@@ -5,7 +5,8 @@
    */
   import { onMount } from 'svelte';
   import Icon from '@iconify/svelte';
-  import { toast } from '$lib/runes/toast.svelte.ts';
+  import { toast } from '$lib/runes/toast.svelte.js';
+  import { getSiteTitle } from '$lib/config/site';
   import {
     adminGetAuthGroupsMaster,
     adminCreateAuthGroupMaster,
@@ -194,90 +195,152 @@
 </script>
 
 <svelte:head>
-  <title>그룹·권한 관리 | jeju.live Core</title>
+  <title>{getSiteTitle('그룹·권한 관리')}</title>
 </svelte:head>
 
-<div class="animate-fade-in mx-auto max-w-7xl space-y-6 px-4 pb-20 font-['Outfit','Noto_Sans_KR']">
+<div class="animate-fade-in mx-auto max-w-7xl space-y-8 px-4 py-8 pb-24 font-['Noto_Sans_KR','Outfit'] md:px-8">
 
-  <!-- 🧭 1. 상단 브레드크럼 & 헤더 -->
-  <div class="flex flex-col items-start justify-between gap-4 border-b-4 border-slate-900 pb-6 md:flex-row md:items-end">
+  <!-- 🏛️ 1. 모던 엔터프라이즈 통합 헤더 -->
+  <header class="flex flex-col items-start justify-between gap-6 border-b-4 border-slate-900 pb-8 md:flex-row md:items-end">
     <div>
       <div class="flex items-center gap-2 mb-2">
-        <a href="/v1/admin" class="flex items-center gap-1 text-xs font-black tracking-wider text-slate-400 uppercase hover:text-slate-700">
-          <Icon icon="mdi:view-dashboard" /> 관제탑
-        </a>
-        <span class="text-slate-300">/</span>
-        <span class="rounded-full bg-cyan-100 px-2.5 py-0.5 text-[11px] font-black tracking-widest text-cyan-800 border border-cyan-300">
-          ORGANIZATION & PERMISSION ENGINE
+        <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black uppercase tracking-widest bg-cyan-50 text-cyan-700 border border-cyan-200">
+          <Icon icon="ph:shield-check-bold" class="text-sm" />
+          SYSTEM GOVERNANCE • GROUP & PERMISSION
         </span>
+        <span class="text-xs font-bold text-slate-400 font-mono">v1/admin/group-manage</span>
       </div>
-      <h1 class="text-3xl font-black tracking-tight text-slate-900 uppercase italic md:text-5xl">
+      <h1 class="text-3xl sm:text-4xl font-black tracking-tighter text-slate-900 uppercase italic md:text-5xl">
         그룹·<span class="not-italic text-cyan-600">권한 관리</span>
       </h1>
-      <p class="mt-2 text-sm font-bold text-slate-500">
-        <strong class="text-slate-800">그룹 뷰</strong>(주/부그룹 정의), <strong class="text-slate-800">사용자 뷰</strong>(회원 매칭), <strong class="text-slate-800">인스턴스 뷰</strong>(게시판·페이지·단일앱 4단계 권한 통제)의 일체형 시스템
+      <p class="mt-2 text-xs sm:text-sm font-bold text-slate-500">
+        주/부그룹 정의, 사용자 회원 매칭 및 인스턴스/시스템 앱 독립 권한 통제 시스템
       </p>
     </div>
 
-    <!-- 신규 그룹 생성 버튼 -->
-    <button 
-      class="btn btn-sm rounded-xl bg-slate-900 text-white hover:bg-slate-800 shadow-md font-black gap-1.5"
-      onclick={() => isCreateModalOpen = true}
-    >
-      <Icon icon="mdi:plus-circle-outline" class="text-base text-cyan-400" /> 신규 그룹 생성
-    </button>
-  </div>
+    <!-- 우측 필수 기본 액션바 -->
+    <div class="flex flex-wrap items-center gap-2.5 w-full md:w-auto">
+      <button 
+        class="flex items-center gap-1.5 px-4 py-2.5 rounded-2xl border-2 border-cyan-600 bg-cyan-600 text-white font-black text-xs uppercase tracking-wider hover:bg-cyan-700 transition shadow-sm"
+        onclick={() => isCreateModalOpen = true}
+      >
+        <Icon icon="ph:plus-circle-bold" class="text-base" />
+        <span>새 그룹 생성</span>
+      </button>
 
-  <!-- 🎛️ 2. 메인 4대 뷰 내비게이션 탭 바 -->
-  <div class="tabs tabs-boxed bg-slate-200/80 p-1.5 rounded-2xl flex flex-wrap md:flex-nowrap border border-slate-300 shadow-inner gap-1">
-    <!-- 탭 1: 그룹 뷰 -->
-    <button 
-      class="tab flex-1 h-12 rounded-xl font-black text-xs md:text-sm transition-all flex items-center justify-center gap-2 {activeMainTab === 'group' ? 'bg-white shadow-md text-cyan-700' : 'text-slate-600 hover:text-slate-900'}"
-      onclick={() => activeMainTab = 'group'}
+      <button 
+        onclick={loadAllData} 
+        disabled={loading}
+        class="flex items-center gap-1.5 px-4 py-2.5 rounded-2xl border-2 border-slate-200 bg-white font-black text-xs uppercase tracking-wider text-slate-700 hover:border-slate-400 transition shadow-sm disabled:opacity-50"
+      >
+        <Icon icon="ph:arrows-clockwise-bold" class="text-base {loading ? 'animate-spin' : ''}" />
+        <span>새로고침</span>
+      </button>
+
+      <a
+        href="/v1/admin"
+        class="flex items-center gap-1.5 px-4 py-2.5 rounded-2xl border-2 border-slate-200 bg-white font-black text-xs uppercase tracking-wider text-slate-700 hover:border-slate-400 transition shadow-sm"
+      >
+        <Icon icon="ph:house-bold" class="text-base text-slate-500" />
+        <span>관리자 홈</span>
+      </a>
+    </div>
+  </header>
+
+  <!-- 📊 2. 알림/요약 지표 카드 4종 -->
+  <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-5">
+    <button
+      onclick={() => (activeMainTab = 'group')}
+      class="text-left relative overflow-hidden rounded-[1.75rem] border-2 bg-white p-5 shadow-sm transition group {activeMainTab === 'group' ? 'border-cyan-500 bg-cyan-50/20 ring-2 ring-cyan-500/20' : 'border-slate-100 hover:border-cyan-300'}"
     >
-      <Icon icon="mdi:folder-account-outline" class="text-xl" />
-      <span>1. 그룹 뷰</span>
-      <span class="rounded-full bg-cyan-100 text-cyan-800 px-2 py-0.5 text-[10px] font-bold">
-        {groups.length}개
-      </span>
+      <div class="flex items-center justify-between mb-3">
+        <span class="text-xs font-black uppercase tracking-wider text-slate-400 group-hover:text-cyan-600">Primary Groups</span>
+        <div class="flex h-10 w-10 items-center justify-center rounded-2xl bg-cyan-50 text-cyan-600 group-hover:scale-110 transition-transform">
+          <Icon icon="ph:folder-user-bold" class="text-2xl" />
+        </div>
+      </div>
+      <div class="text-3xl font-black text-slate-900 tracking-tight">{primaryGroups.length}<span class="text-sm font-bold text-slate-400 ml-1">개 주그룹</span></div>
+      <div class="mt-2 text-xs font-bold text-cyan-600">
+        <span class="rounded-lg bg-cyan-50 px-2 py-0.5 font-mono">기본 소속</span>
+      </div>
     </button>
 
-    <!-- 탭 2: 사용자 뷰 -->
-    <button 
-      class="tab flex-1 h-12 rounded-xl font-black text-xs md:text-sm transition-all flex items-center justify-center gap-2 {activeMainTab === 'user' ? 'bg-white shadow-md text-emerald-700' : 'text-slate-600 hover:text-slate-900'}"
-      onclick={() => activeMainTab = 'user'}
+    <button
+      onclick={() => (activeMainTab = 'group')}
+      class="text-left relative overflow-hidden rounded-[1.75rem] border-2 bg-white p-5 shadow-sm transition group border-slate-100 hover:border-purple-300"
     >
-      <Icon icon="mdi:account-details-outline" class="text-xl" />
-      <span>2. 사용자 뷰</span>
-      <span class="rounded-full bg-emerald-100 text-emerald-800 px-2 py-0.5 text-[10px] font-bold">
-        {users.length}명 매칭
-      </span>
+      <div class="flex items-center justify-between mb-3">
+        <span class="text-xs font-black uppercase tracking-wider text-purple-600">Secondary Groups</span>
+        <div class="flex h-10 w-10 items-center justify-center rounded-2xl bg-purple-50 text-purple-600 group-hover:scale-110 transition-transform">
+          <Icon icon="ph:folders-bold" class="text-2xl" />
+        </div>
+      </div>
+      <div class="text-3xl font-black text-purple-700 tracking-tight">{secondaryGroups.length}<span class="text-sm font-bold text-slate-400 ml-1">개 부그룹</span></div>
+      <div class="mt-2 text-xs font-bold text-purple-600">
+        <span class="rounded-lg bg-purple-50 px-2 py-0.5 font-mono">다중 배정</span>
+      </div>
     </button>
 
-    <!-- 탭 3: 업무 인스턴스 뷰 -->
-    <button 
-      class="tab flex-1 h-12 rounded-xl font-black text-xs md:text-sm transition-all flex items-center justify-center gap-2 {activeMainTab === 'instance' ? 'bg-white shadow-md text-indigo-700' : 'text-slate-600 hover:text-slate-900'}"
-      onclick={() => activeMainTab = 'instance'}
+    <button
+      onclick={() => (activeMainTab = 'user')}
+      class="text-left relative overflow-hidden rounded-[1.75rem] border-2 bg-white p-5 shadow-sm transition group {activeMainTab === 'user' ? 'border-emerald-500 bg-emerald-50/20 ring-2 ring-emerald-500/20' : 'border-slate-100 hover:border-emerald-300'}"
     >
-      <Icon icon="mdi:shield-lock-outline" class="text-xl" />
-      <span>3. 인스턴스 뷰</span>
-      <span class="rounded-full bg-indigo-100 text-indigo-800 px-2 py-0.5 text-[10px] font-bold">
-        {businessInstances.length}개
-      </span>
+      <div class="flex items-center justify-between mb-3">
+        <span class="text-xs font-black uppercase tracking-wider text-emerald-600">User Mappings</span>
+        <div class="flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600 group-hover:scale-110 transition-transform">
+          <Icon icon="ph:users-bold" class="text-2xl" />
+        </div>
+      </div>
+      <div class="text-3xl font-black text-emerald-600 tracking-tight">{users.length}<span class="text-sm font-bold text-slate-400 ml-1">명 매칭</span></div>
+      <div class="mt-2 text-xs font-bold text-emerald-600">
+        <span class="rounded-lg bg-emerald-50 px-2 py-0.5 font-mono">사원 권한</span>
+      </div>
     </button>
 
-    <!-- 탭 4: 시스템 앱 뷰 -->
-    <button 
-      class="tab flex-1 h-12 rounded-xl font-black text-xs md:text-sm transition-all flex items-center justify-center gap-2 {activeMainTab === 'system-app' ? 'bg-white shadow-md text-purple-700' : 'text-slate-600 hover:text-slate-900'}"
-      onclick={() => activeMainTab = 'system-app'}
+    <button
+      onclick={() => (activeMainTab = 'instance')}
+      class="text-left relative overflow-hidden rounded-[1.75rem] border-2 bg-white p-5 shadow-sm transition group {activeMainTab === 'instance' ? 'border-indigo-500 bg-indigo-50/20 ring-2 ring-indigo-500/20' : 'border-slate-100 hover:border-indigo-300'}"
     >
-      <Icon icon="mdi:shield-account-outline" class="text-xl text-purple-600" />
-      <span>4. 시스템 앱 뷰</span>
-      <span class="rounded-full bg-purple-100 text-purple-800 px-2 py-0.5 text-[10px] font-bold">
-        {adminApps.length}개 시스템 앱
-      </span>
+      <div class="flex items-center justify-between mb-3">
+        <span class="text-xs font-black uppercase tracking-wider text-indigo-600">Controlled Apps</span>
+        <div class="flex h-10 w-10 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600 group-hover:scale-110 transition-transform">
+          <Icon icon="ph:shield-lock-bold" class="text-2xl" />
+        </div>
+      </div>
+      <div class="text-3xl font-black text-indigo-700 tracking-tight">{instances.length}<span class="text-sm font-bold text-slate-400 ml-1">개 대상</span></div>
+      <div class="mt-2 text-xs font-bold text-indigo-600">
+        <span class="rounded-lg bg-indigo-50 px-2 py-0.5 font-mono">인스턴스 통제</span>
+      </div>
     </button>
-  </div>
+  </section>
+
+  <!-- 🎛️ 3. 메인 4대 뷰 내비게이션 탭 바 -->
+  <nav class="flex gap-2 border-b-2 border-slate-200 overflow-x-auto no-scrollbar">
+    <button 
+      class="px-6 py-3.5 text-xs font-black uppercase tracking-widest transition-all whitespace-nowrap {activeMainTab === 'group' ? 'border-b-4 border-cyan-600 text-cyan-700 bg-cyan-50/60 rounded-t-2xl' : 'text-slate-400 hover:text-slate-700'}"
+      onclick={() => (activeMainTab = 'group')}
+    >
+      1. 그룹 마스터 ({groups.length})
+    </button>
+    <button 
+      class="px-6 py-3.5 text-xs font-black uppercase tracking-widest transition-all whitespace-nowrap {activeMainTab === 'user' ? 'border-b-4 border-cyan-600 text-cyan-700 bg-cyan-50/60 rounded-t-2xl' : 'text-slate-400 hover:text-slate-700'}"
+      onclick={() => (activeMainTab = 'user')}
+    >
+      2. 사용자 권한 ({users.length})
+    </button>
+    <button 
+      class="px-6 py-3.5 text-xs font-black uppercase tracking-widest transition-all whitespace-nowrap {activeMainTab === 'instance' ? 'border-b-4 border-cyan-600 text-cyan-700 bg-cyan-50/60 rounded-t-2xl' : 'text-slate-400 hover:text-slate-700'}"
+      onclick={() => (activeMainTab = 'instance')}
+    >
+      3. 업무 인스턴스 ({businessInstances.length})
+    </button>
+    <button 
+      class="px-6 py-3.5 text-xs font-black uppercase tracking-widest transition-all whitespace-nowrap {activeMainTab === 'system-app' ? 'border-b-4 border-cyan-600 text-cyan-700 bg-cyan-50/60 rounded-t-2xl' : 'text-slate-400 hover:text-slate-700'}"
+      onclick={() => (activeMainTab = 'system-app')}
+    >
+      4. 시스템 앱 ({adminApps.length})
+    </button>
+  </nav>
 
   {#if loading}
     <div class="flex justify-center py-20">

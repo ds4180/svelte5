@@ -2,26 +2,45 @@
 	/**
 	 * @file (app)/v1/admin/apps/+page.svelte
 	 * @description 시스템 앱(App) 및 서비스(Service) 엔진 레지스트리 관리자 (Svelte 5)
-	 * @features 신규 앱 등록(POST), 기존 앱 수정(PATCH), 백엔드 스키마 완전 동기화
+	 *              - 전사 표준 모던 엔터프라이즈 헤더 & 4대 핵심 관제 지표 요약 카드
+	 *              - 반응형 카드 기반 본문 레이아웃 (모바일 세로/태블릿/데스크탑 최적화)
+	 *              - 브라우저 탭 단일 진실 공급원(SSOT) 환경설정 타이틀 연동
+	 *              - 탭 기반 네비게이션 (명부 조회 / 새 엔진 등록 및 설정)
 	 */
 	import { onMount } from 'svelte';
 	import * as api from '$lib/api/admin.js';
-	import { toast } from '$lib/runes/toast.svelte.ts';
-	import { fade, fly } from 'svelte/transition';
+	import { toast } from '$lib/runes/toast.svelte.js';
+	import { getSiteTitle } from '$lib/config/site';
 	import Icon from '@iconify/svelte';
 
-	let apps = $state([]);
+	let apps = $state(/** @type {any[]} */ ([]));
 	let loading = $state(true);
+	let activeTab = $state('list'); // 'list' | 'form'
 	let isEditMode = $state(false); // 등록/수정 모드 판별
-	let selectedTab = $state('ALL'); // 🏛️ 4대 분류 필터 탭 ('ALL' | 'SYSTEM' | 'CUSTOM' | 'INSTANCE' | 'STATIC')
+	let selectedFilter = $state('ALL'); // 'ALL' | 'SYSTEM' | 'CUSTOM' | 'INSTANCE' | 'STATIC'
 
-	// 🏛️ 4대 분류 파생 상태 (Runes $derived)
-	let systemApps = $derived(apps.filter((a) => a.app_type === 'SYSTEM'));
-	let customApps = $derived(apps.filter((a) => a.app_type === 'CUSTOM'));
-	let instanceApps = $derived(apps.filter((a) => a.app_type === 'INSTANCE' || a.app_type === 'APP'));
-	let staticApps = $derived(apps.filter((a) => a.app_type === 'STATIC'));
+	// 🏛️ 4대 분류 파생 상태
+	const systemApps = $derived(apps.filter((a) => a.app_type === 'SYSTEM'));
+	const customApps = $derived(apps.filter((a) => a.app_type === 'CUSTOM'));
+	const instanceApps = $derived(apps.filter((a) => a.app_type === 'INSTANCE' || a.app_type === 'APP'));
+	const staticApps = $derived(apps.filter((a) => a.app_type === 'STATIC'));
 
-	// 백엔드 admin_schema.py의 AppRegistryBase 및 AppRegistryUpdate 모델 필드 전체 반영
+	// 📊 4대 관제 지표 요약 수치
+	const countTotal = $derived(apps.length);
+	const countSystem = $derived(systemApps.length);
+	const countCustom = $derived(customApps.length);
+	const countInstance = $derived(instanceApps.length);
+
+	// 필터링된 앱 목록
+	const filteredApps = $derived(
+		selectedFilter === 'ALL'
+			? apps
+			: apps.filter((a) => {
+					if (selectedFilter === 'INSTANCE') return a.app_type === 'INSTANCE' || a.app_type === 'APP';
+					return a.app_type === selectedFilter;
+				})
+	);
+
 	let editingApp = $state({
 		app_id: '',
 		name: '',
@@ -30,77 +49,24 @@
 		app_type: 'INSTANCE',
 		frontend_route: '',
 		main_component: '',
-		icon_default: '🚀',
+		icon_default: 'mdi:apps',
 		min_read_rank: 0,
 		min_write_rank: 2,
 		is_active: true
 	});
 
-	/**
-	 * @function loadApps
-	 * @description DB로부터 등록된 앱 엔진 목록 로드
-	 */
 	async function loadApps() {
 		loading = true;
 		try {
 			apps = await api.adminGetApps();
-		} catch (e) {
-			toast.error(e.message);
+		} catch (/** @type {any} */ e) {
+			toast.error('앱 목록 로드 실패: ' + (e.message || '오류가 발생했습니다.'));
 		} finally {
 			loading = false;
 		}
 	}
 
 	onMount(loadApps);
-
-	/**
-	 * @function startCreate
-	 * @description 신규 등록 모드로 전환 (폼 초기화)
-	 */
-	function startCreate() {
-		isEditMode = false;
-		resetForm();
-		document.getElementById('form-anchor')?.scrollIntoView({ behavior: 'smooth' });
-	}
-
-	/**
-	 * @function startEdit
-	 * @description 특정 앱 수정 모드로 전환
-	 */
-	function startEdit(app) {
-		isEditMode = true;
-		editingApp = {
-			...app,
-			main_component: app.main_component || '',
-			app_type: app.app_type || 'INSTANCE',
-			min_read_rank: Number(app.min_read_rank ?? 0),
-			min_write_rank: Number(app.min_write_rank ?? 2)
-		};
-		document.getElementById('form-anchor')?.scrollIntoView({ behavior: 'smooth' });
-	}
-
-	/**
-	 * @function handleDelete
-	 * @description 앱 삭제 (SYSTEM 앱은 삭제 불가)
-	 */
-	async function handleDelete(app) {
-		if (app.app_type === 'SYSTEM') {
-			toast.warning('SYSTEM 앱은 시스템 필수 관제 앱이므로 삭제할 수 없습니다.');
-			return;
-		}
-		if (!confirm(`'${app.title || app.name || app.app_id}' 앱을 삭제하시겠습니까?`)) return;
-		try {
-			await api.adminDeleteApp(app.app_id);
-			toast.success('앱이 삭제되었습니다.');
-			if (editingApp.app_id === app.app_id) {
-				resetForm();
-				isEditMode = false;
-			}
-			await loadApps();
-		} catch (e) {
-			toast.error(e.message);
-		}
-	}
 
 	function resetForm() {
 		editingApp = {
@@ -111,618 +77,607 @@
 			app_type: 'INSTANCE',
 			frontend_route: '',
 			main_component: '',
-			icon_default: '🚀',
+			icon_default: 'mdi:apps',
 			min_read_rank: 0,
 			min_write_rank: 2,
 			is_active: true
 		};
 	}
 
+	function startCreate() {
+		isEditMode = false;
+		resetForm();
+		activeTab = 'form';
+	}
+
 	/**
-	 * @function handleSave
-	 * @description 모드에 따라 POST(신규) 또는 PATCH(수정) 호출
+	 * @param {any} app
 	 */
+	function startEdit(app) {
+		isEditMode = true;
+		editingApp = {
+			...app,
+			main_component: app.main_component || '',
+			app_type: app.app_type || 'INSTANCE',
+			min_read_rank: Number(app.min_read_rank ?? 0),
+			min_write_rank: Number(app.min_write_rank ?? 2)
+		};
+		activeTab = 'form';
+	}
+
+	/**
+	 * @param {any} app
+	 */
+	async function handleDelete(app) {
+		if (app.app_type === 'SYSTEM') {
+			toast.warning('SYSTEM 앱은 시스템 필수 관제 앱이므로 삭제할 수 없습니다.');
+			return;
+		}
+		if (!confirm(`'${app.title || app.name || app.app_id}' 앱을 삭제하시겠습니까?`)) return;
+		try {
+			await api.adminDeleteApp(app.app_id);
+			toast.success('앱 엔진이 삭제되었습니다.');
+			if (editingApp.app_id === app.app_id) {
+				resetForm();
+				isEditMode = false;
+				activeTab = 'list';
+			}
+			await loadApps();
+		} catch (/** @type {any} */ e) {
+			toast.error('삭제 실패: ' + (e.message || '오류가 발생했습니다.'));
+		}
+	}
+
 	async function handleSave() {
 		if (!editingApp.app_id || !editingApp.name) {
-			toast.warning('ID와 내부 이름은 필수 항목입니다.');
+			toast.warning('앱 식별자(ID)와 내부 이름은 필수 항목입니다.');
 			return;
 		}
 
 		try {
-			// 전송 전 데이터 정제
-			const { app_id, ...updateData } = editingApp; // 👈 app_id를 추출하여 분리
+			const { app_id, ...updateData } = editingApp;
 
 			const payload = {
-				...updateData, // 👈 수정 시에는 app_id 제외
+				...updateData,
 				min_read_rank: Number(editingApp.min_read_rank),
 				min_write_rank: Number(editingApp.min_write_rank)
 			};
 
 			if (isEditMode) {
-				// 기존 앱 수정 (PATCH) - URL에만 id가 들어가고 body에는 빠져야 함
 				await api.adminUpdateApp(app_id, payload);
-				toast.success('앱 엔진 설정이 업데이트되었습니다.');
+				toast.success(`[${editingApp.title || editingApp.name}] 설정이 성공적으로 갱신되었습니다.`);
 			} else {
-				// 신규 앱 등록 (POST) - 여기서는 app_id가 포함된 전체 데이터(editingApp) 필요
 				await api.adminCreateApp(editingApp);
-				toast.success('새로운 앱 엔진이 등록되었습니다.');
+				toast.success(`새로운 앱 [${editingApp.title || editingApp.name}]이 등록되었습니다.`);
 			}
 
 			resetForm();
 			isEditMode = false;
+			activeTab = 'list';
 			await loadApps();
-		} catch (e) {
-			toast.error(e.message);
+		} catch (/** @type {any} */ e) {
+			toast.error('저장 실패: ' + (e.message || '오류가 발생했습니다.'));
+		}
+	}
+
+	/**
+	 * @param {string} type
+	 */
+	function getAppTypeBadge(type) {
+		switch (type) {
+			case 'SYSTEM':
+				return { label: 'SYSTEM APP', class: 'bg-purple-50 text-purple-700 border-purple-200' };
+			case 'CUSTOM':
+				return { label: 'CUSTOM APP', class: 'bg-rose-50 text-rose-700 border-rose-200' };
+			case 'STATIC':
+				return { label: 'STATIC APP', class: 'bg-emerald-50 text-emerald-700 border-emerald-200' };
+			default:
+				return { label: 'INSTANCE APP', class: 'bg-blue-50 text-blue-700 border-blue-200' };
 		}
 	}
 </script>
 
 <svelte:head>
-	<title>앱 설치 등록 | jeju.live Core</title>
+	<title>{getSiteTitle('앱 설치 등록')}</title>
 </svelte:head>
 
-<div class="animate-fade-in mx-auto max-w-7xl space-y-12 px-4 pb-40 font-['Outfit','Noto_Sans_KR'] text-black">
-	<!-- 📄 Page Title -->
-	<div
-		class="flex flex-col items-start justify-between gap-6 border-b-4 border-black pb-8 md:flex-row md:items-end"
-	>
+<div class="animate-fade-in mx-auto max-w-7xl space-y-8 px-4 py-8 pb-24 font-['Noto_Sans_KR','Outfit'] md:px-8">
+	<!-- ===================================================================== -->
+	<!-- 1. 페이지 헤더 & 우측 컨트롤 바 -->
+	<!-- ===================================================================== -->
+	<header class="flex flex-col items-start justify-between gap-6 border-b-4 border-slate-900 pb-8 md:flex-row md:items-end">
 		<div>
-			<span class="mb-2 block text-[10px] font-black tracking-[0.4em] uppercase opacity-30"
-				>Engine Infrastructure Registry</span
-			>
-			<h1 class="text-5xl font-black tracking-tighter uppercase italic">
-				앱 <span class="NOT-ITALIC text-blue-600">설치 등록</span>
+			<div class="flex items-center gap-2 mb-2">
+				<span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black uppercase tracking-widest bg-purple-50 text-purple-700 border border-purple-200">
+					<Icon icon="ph:app-window-bold" class="text-sm" />
+					SYSTEM GOVERNANCE • APP REGISTRY
+				</span>
+				<span class="text-xs font-bold text-slate-400 font-mono">v1/admin/apps</span>
+			</div>
+			<h1 class="text-3xl sm:text-4xl font-black tracking-tighter text-slate-900 uppercase italic md:text-5xl">
+				앱 <span class="not-italic text-purple-600">설치 등록</span>
 			</h1>
-			<p class="mt-3 text-xs font-bold opacity-40">
-				시스템 엔진들의 메타데이터와 보안 등급을 관리합니다.
+			<p class="mt-2 text-xs sm:text-sm font-bold text-slate-500">
+				시스템 엔진들의 메타데이터와 권한 등급, 라우팅 경로를 일괄 관리하고 등록합니다.
 			</p>
 		</div>
-		<div class="flex gap-4">
+
+		<!-- 상단 액션 버튼 그룹 -->
+		<div class="flex flex-wrap items-center gap-2.5 w-full md:w-auto">
 			<button
-				class="btn-black btn h-14 rounded-none border-2 border-black px-8 font-black uppercase transition-all"
 				onclick={startCreate}
+				class="flex items-center gap-1.5 px-4 py-2.5 rounded-2xl border-2 border-purple-600 bg-purple-600 text-white font-black text-xs uppercase tracking-wider hover:bg-purple-700 transition shadow-sm"
 			>
-				+ 새 앱 등록
+				<Icon icon="ph:plus-circle-bold" class="text-base" />
+				<span>새 앱 등록</span>
 			</button>
+
 			<button
-				class="btn h-14 rounded-none border-2 border-black px-8 font-black uppercase transition-all btn-outline hover:bg-black hover:text-white"
 				onclick={loadApps}
+				disabled={loading}
+				class="flex items-center gap-1.5 px-4 py-2.5 rounded-2xl border-2 border-slate-200 bg-white font-black text-xs uppercase tracking-wider text-slate-700 hover:border-slate-400 transition shadow-sm disabled:opacity-50"
 			>
-				동기화
+				<Icon icon="ph:arrows-clockwise-bold" class="text-base {loading ? 'animate-spin' : ''}" />
+				<span>새로고침</span>
 			</button>
+
+			<a
+				href="/v1/admin"
+				class="flex items-center gap-1.5 px-4 py-2.5 rounded-2xl border-2 border-slate-200 bg-white font-black text-xs uppercase tracking-wider text-slate-700 hover:border-slate-400 transition shadow-sm"
+			>
+				<Icon icon="ph:house-bold" class="text-base text-slate-500" />
+				<span>관리자 홈</span>
+			</a>
 		</div>
-	</div>
+	</header>
 
-	<div class="grid grid-cols-1 items-start gap-10 lg:grid-cols-12">
-		<!-- 📦 등록된 앱 엔진 목록 (3대 분류 분할 뷰) -->
-		<div class="space-y-6 lg:col-span-7">
-			<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-				<h3 class="text-xl font-black tracking-tighter uppercase italic">
-					등록된 앱 목록
-				</h3>
-				<span class="text-xs font-bold opacity-40">총 {apps.length}개 앱 등록됨</span>
+	<!-- ===================================================================== -->
+	<!-- 2. 알림/요약 지표 카드 (최대 4개, 최소 1개 규격) -->
+	<!-- ===================================================================== -->
+	<section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-5">
+		<!-- 카드 1: 전체 등록 앱 -->
+		<button
+			onclick={() => { activeTab = 'list'; selectedFilter = 'ALL'; }}
+			class="text-left relative overflow-hidden rounded-[1.75rem] border-2 bg-white p-5 shadow-sm transition group {selectedFilter === 'ALL' ? 'border-purple-500 bg-purple-50/20 ring-2 ring-purple-500/20' : 'border-slate-100 hover:border-purple-300'}"
+		>
+			<div class="flex items-center justify-between mb-3">
+				<span class="text-xs font-black tracking-widest uppercase text-slate-400 group-hover:text-purple-600">Total Apps</span>
+				<div class="flex h-10 w-10 items-center justify-center rounded-2xl bg-purple-50 text-purple-600 group-hover:scale-110 transition-transform">
+					<Icon icon="ph:squares-four-bold" class="text-2xl" />
+				</div>
 			</div>
+			<div class="text-3xl font-black text-slate-900 tracking-tight">
+				{loading ? '...' : countTotal}
+				<span class="text-sm font-bold text-slate-400 ml-1">개 등록</span>
+			</div>
+			<div class="mt-2 flex items-center gap-2 text-xs font-bold text-purple-600">
+				<span class="rounded-lg bg-purple-50 px-2 py-0.5 font-mono">가동률 100%</span>
+				<span class="text-slate-400 font-normal">전체 엔진</span>
+			</div>
+		</button>
 
-			<!-- 🎛️ 3대 분류 필터 탭 -->
-			<div class="flex flex-wrap items-center gap-2 border-b-2 border-black pb-4">
+		<!-- 카드 2: 시스템 필수 관제 앱 (SYSTEM) -->
+		<button
+			onclick={() => { activeTab = 'list'; selectedFilter = 'SYSTEM'; }}
+			class="text-left relative overflow-hidden rounded-[1.75rem] border-2 bg-white p-5 shadow-sm transition group {selectedFilter === 'SYSTEM' ? 'border-purple-500 bg-purple-50/20 ring-2 ring-purple-500/20' : 'border-slate-100 hover:border-purple-300'}"
+		>
+			<div class="flex items-center justify-between mb-3">
+				<span class="text-xs font-black tracking-widest uppercase text-slate-400 group-hover:text-purple-600">System Core</span>
+				<div class="flex h-10 w-10 items-center justify-center rounded-2xl bg-purple-100 text-purple-700 group-hover:scale-110 transition-transform">
+					<Icon icon="ph:shield-star-bold" class="text-2xl" />
+				</div>
+			</div>
+			<div class="text-3xl font-black text-slate-900 tracking-tight">
+				{loading ? '...' : countSystem}
+				<span class="text-sm font-bold text-slate-400 ml-1">개 관제</span>
+			</div>
+			<div class="mt-2 flex items-center gap-2 text-xs font-bold text-purple-700">
+				<span class="rounded-lg bg-purple-100 px-2 py-0.5 font-mono">코어 보호</span>
+				<span class="text-slate-400 font-normal">삭제 불가</span>
+			</div>
+		</button>
+
+		<!-- 카드 3: 단독 도메인 비즈니스 (CUSTOM) -->
+		<button
+			onclick={() => { activeTab = 'list'; selectedFilter = 'CUSTOM'; }}
+			class="text-left relative overflow-hidden rounded-[1.75rem] border-2 bg-white p-5 shadow-sm transition group {selectedFilter === 'CUSTOM' ? 'border-rose-500 bg-rose-50/20 ring-2 ring-rose-500/20' : 'border-slate-100 hover:border-rose-300'}"
+		>
+			<div class="flex items-center justify-between mb-3">
+				<span class="text-xs font-black tracking-widest uppercase text-slate-400 group-hover:text-rose-600">Custom Domain</span>
+				<div class="flex h-10 w-10 items-center justify-center rounded-2xl bg-rose-50 text-rose-600 group-hover:scale-110 transition-transform">
+					<Icon icon="ph:bus-bold" class="text-2xl" />
+				</div>
+			</div>
+			<div class="text-3xl font-black text-slate-900 tracking-tight">
+				{loading ? '...' : countCustom}
+				<span class="text-sm font-bold text-slate-400 ml-1">개 도메인</span>
+			</div>
+			<div class="mt-2 flex items-center gap-2 text-xs font-bold text-rose-600">
+				<span class="rounded-lg bg-rose-50 px-2 py-0.5 font-mono">1:1 화면</span>
+				<span class="text-slate-400 font-normal">배차·휴무</span>
+			</div>
+		</button>
+
+		<!-- 카드 4: 다중 인스턴스 앱 (INSTANCE) -->
+		<button
+			onclick={() => { activeTab = 'list'; selectedFilter = 'INSTANCE'; }}
+			class="text-left relative overflow-hidden rounded-[1.75rem] border-2 bg-white p-5 shadow-sm transition group {selectedFilter === 'INSTANCE' ? 'border-blue-500 bg-blue-50/20 ring-2 ring-blue-500/20' : 'border-slate-100 hover:border-blue-300'}"
+		>
+			<div class="flex items-center justify-between mb-3">
+				<span class="text-xs font-black tracking-widest uppercase text-slate-400 group-hover:text-blue-600">Multi Instance</span>
+				<div class="flex h-10 w-10 items-center justify-center rounded-2xl bg-blue-50 text-blue-600 group-hover:scale-110 transition-transform">
+					<Icon icon="ph:stack-bold" class="text-2xl" />
+				</div>
+			</div>
+			<div class="text-3xl font-black text-slate-900 tracking-tight">
+				{loading ? '...' : countInstance}
+				<span class="text-sm font-bold text-slate-400 ml-1">개 허브</span>
+			</div>
+			<div class="mt-2 flex items-center gap-2 text-xs font-bold text-blue-600">
+				<span class="rounded-lg bg-blue-50 px-2 py-0.5 font-mono">슬러그 확장</span>
+				<span class="text-slate-400 font-normal">게시판 엔진</span>
+			</div>
+		</button>
+	</section>
+
+	<!-- ===================================================================== -->
+	<!-- 3. 모드 탭 바 (최소 1개, 일관성 및 확장성) -->
+	<!-- ===================================================================== -->
+	<nav class="flex gap-2 border-b-2 border-slate-200 overflow-x-auto no-scrollbar">
+		<button
+			onclick={() => (activeTab = 'list')}
+			class="px-6 py-3.5 text-xs font-black uppercase tracking-widest transition-all whitespace-nowrap {activeTab === 'list' ? 'border-b-4 border-purple-600 text-purple-700 bg-purple-50/60 rounded-t-2xl' : 'text-slate-400 hover:text-slate-700'}"
+		>
+			등록된 앱 명부 ({filteredApps.length})
+		</button>
+		<button
+			onclick={startCreate}
+			class="px-6 py-3.5 text-xs font-black uppercase tracking-widest transition-all whitespace-nowrap {activeTab === 'form' ? 'border-b-4 border-purple-600 text-purple-700 bg-purple-50/60 rounded-t-2xl' : 'text-slate-400 hover:text-slate-700'}"
+		>
+			{isEditMode ? `설정 수정: ${editingApp.title || editingApp.name}` : '새 앱 엔진 등록'}
+		</button>
+	</nav>
+
+	<!-- ===================================================================== -->
+	<!-- 4. 본문 컨텐츠 (반응형 카드 형식 위주) -->
+	<!-- ===================================================================== -->
+	{#if loading}
+		<div class="flex justify-center py-20">
+			<div class="flex flex-col items-center gap-3">
+				<div class="h-10 w-10 animate-spin rounded-full border-4 border-purple-600 border-t-transparent"></div>
+				<p class="text-xs font-bold text-slate-400 font-mono">앱 레지스트리 분석 중...</p>
+			</div>
+		</div>
+	{:else if activeTab === 'list'}
+		<!-- 탭 1: 등록된 앱 카드 목록 뷰 -->
+		<div class="space-y-6">
+			<!-- 서브 필터 버튼 바 -->
+			<div class="flex flex-wrap items-center gap-2">
 				<button
 					type="button"
-					class="btn h-9 rounded-none border-2 border-black px-3 text-xs font-black uppercase transition-all {selectedTab === 'ALL' ? 'bg-black text-white' : 'bg-white text-black hover:bg-slate-100'}"
-					onclick={() => selectedTab = 'ALL'}
+					onclick={() => (selectedFilter = 'ALL')}
+					class="px-4 py-2 rounded-xl text-xs font-black uppercase transition-all {selectedFilter === 'ALL' ? 'bg-slate-900 text-white shadow-sm' : 'bg-white border border-slate-200 text-slate-700 hover:border-slate-400'}"
 				>
 					전체 ({apps.length})
 				</button>
 				<button
 					type="button"
-					class="btn h-9 rounded-none border-2 border-purple-700 px-3 text-xs font-black uppercase transition-all {selectedTab === 'SYSTEM' ? 'bg-purple-700 text-white' : 'bg-purple-50 text-purple-700 hover:bg-purple-100'}"
-					onclick={() => selectedTab = 'SYSTEM'}
+					onclick={() => (selectedFilter = 'SYSTEM')}
+					class="px-4 py-2 rounded-xl text-xs font-black uppercase transition-all {selectedFilter === 'SYSTEM' ? 'bg-purple-600 text-white shadow-sm' : 'bg-purple-50 border border-purple-200 text-purple-700 hover:bg-purple-100'}"
 				>
 					🏛️ SYSTEM ({systemApps.length})
 				</button>
 				<button
 					type="button"
-					class="btn h-9 rounded-none border-2 border-rose-600 px-3 text-xs font-black uppercase transition-all {selectedTab === 'CUSTOM' ? 'bg-rose-600 text-white' : 'bg-rose-50 text-rose-600 hover:bg-rose-100'}"
-					onclick={() => selectedTab = 'CUSTOM'}
+					onclick={() => (selectedFilter = 'CUSTOM')}
+					class="px-4 py-2 rounded-xl text-xs font-black uppercase transition-all {selectedFilter === 'CUSTOM' ? 'bg-rose-600 text-white shadow-sm' : 'bg-rose-50 border border-rose-200 text-rose-700 hover:bg-rose-100'}"
 				>
 					🚐 CUSTOM ({customApps.length})
 				</button>
 				<button
 					type="button"
-					class="btn h-9 rounded-none border-2 border-blue-600 px-3 text-xs font-black uppercase transition-all {selectedTab === 'INSTANCE' ? 'bg-blue-600 text-white' : 'bg-blue-50 text-blue-600 hover:bg-blue-100'}"
-					onclick={() => selectedTab = 'INSTANCE'}
+					onclick={() => (selectedFilter = 'INSTANCE')}
+					class="px-4 py-2 rounded-xl text-xs font-black uppercase transition-all {selectedFilter === 'INSTANCE' ? 'bg-blue-600 text-white shadow-sm' : 'bg-blue-50 border border-blue-200 text-blue-700 hover:bg-blue-100'}"
 				>
 					🧩 INSTANCE ({instanceApps.length})
 				</button>
 				<button
 					type="button"
-					class="btn h-9 rounded-none border-2 border-emerald-600 px-3 text-xs font-black uppercase transition-all {selectedTab === 'STATIC' ? 'bg-emerald-600 text-white' : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100'}"
-					onclick={() => selectedTab = 'STATIC'}
+					onclick={() => (selectedFilter = 'STATIC')}
+					class="px-4 py-2 rounded-xl text-xs font-black uppercase transition-all {selectedFilter === 'STATIC' ? 'bg-emerald-600 text-white shadow-sm' : 'bg-emerald-50 border border-emerald-200 text-emerald-700 hover:bg-emerald-100'}"
 				>
 					📄 STATIC ({staticApps.length})
 				</button>
 			</div>
 
-			{#if loading}
-				<div
-					class="flex h-60 items-center justify-center border border-dashed border-black font-black uppercase italic opacity-20 grayscale"
-				>
-					앱 레지스트리 분석 중...
-				</div>
-			{:else}
-				{#snippet appCard(app)}
+			<!-- 반응형 카드 그리드: 모바일 세로 1열, 태블릿 2열, 데스크탑 3열 -->
+			<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+				{#each filteredApps as app (app.app_id)}
+					{@const badge = getAppTypeBadge(app.app_type)}
 					<div
-						class="group relative overflow-hidden border-2 bg-white p-5 transition-all hover:bg-slate-50 {app.app_type === 'SYSTEM' ? 'border-purple-600/50 hover:border-purple-700' : app.app_type === 'CUSTOM' ? 'border-rose-600/50 hover:border-rose-700' : app.app_type === 'STATIC' ? 'border-emerald-600/50 hover:border-emerald-700' : 'border-blue-600/50 hover:border-blue-700'}"
+						class="rounded-2xl border-2 bg-white p-6 shadow-sm hover:border-purple-400 transition-all flex flex-col justify-between {editingApp.app_id === app.app_id && isEditMode ? 'border-purple-600 ring-2 ring-purple-600/20' : 'border-slate-200'}"
 					>
-						{#if !app.is_active}
-							<div
-								class="absolute inset-0 z-10 flex items-center justify-center bg-white/80 text-sm font-black tracking-widest text-red-500 uppercase"
-							>
-								비활성화됨
-							</div>
-						{/if}
-						<div class="mb-3 flex items-start justify-between">
-							<div
-								class="flex h-10 w-10 items-center justify-center text-xl font-black text-white {app.app_type === 'SYSTEM' ? 'bg-purple-700' : app.app_type === 'CUSTOM' ? 'bg-rose-600' : app.app_type === 'STATIC' ? 'bg-emerald-600' : 'bg-blue-600'}"
-							>
-								{#if app.icon_default && app.icon_default.includes(':')}
-									<Icon icon={app.icon_default} class="text-2xl" />
-								{:else}
-									{app.icon_default || app.app_id.substring(0, 1).toUpperCase()}
-								{/if}
-							</div>
-							<div class="flex items-center gap-1">
-								<a
-									href={`/v1/admin/observability?app_id=${app.app_id}&tab=CHANGE`}
-									class="btn rounded-none border-blue-600 bg-blue-50 text-[9px] font-black text-blue-700 uppercase btn-outline btn-xs hover:bg-blue-600 hover:text-white"
-									title="해당 앱의 실시간 감사로그 및 변경 내역 관제"
-								>
-									로그 📜
-								</a>
-								<button
-									class="btn rounded-none border-black text-[9px] font-black uppercase btn-outline btn-xs hover:bg-black hover:text-white"
-									onclick={() => startEdit(app)}>수정</button
-								>
-								{#if app.app_type !== 'SYSTEM'}
-									<button
-										class="btn rounded-none border-rose-600 text-[9px] font-black text-rose-600 uppercase btn-outline btn-xs hover:bg-rose-600 hover:text-white"
-										onclick={() => handleDelete(app)}>삭제</button
-									>
-								{:else}
-									<span
-										class="border border-purple-600/40 bg-purple-50 px-1.5 py-0.5 text-[8px] font-black text-purple-700 uppercase"
-										title="SYSTEM 앱은 삭제할 수 없습니다">보호됨</span
-									>
-								{/if}
-							</div>
-						</div>
-						<h4 class="mb-1 text-base font-black tracking-tight uppercase italic">
-							{app.title || app.name || app.app_id}
-						</h4>
-						<div class="mb-2 flex items-center justify-between">
-							<span
-								class="border px-1.5 py-0.5 text-[8px] font-black uppercase {app.app_type === 'SYSTEM'
-									? 'border-purple-600 bg-purple-50 text-purple-700'
-									: app.app_type === 'CUSTOM'
-										? 'border-rose-600 bg-rose-50 text-rose-700'
-										: app.app_type === 'STATIC'
-											? 'border-emerald-600 bg-emerald-50 text-emerald-700'
-											: 'border-blue-600 bg-blue-50 text-blue-700'}"
-							>
-								{app.app_type} APP
-							</span>
-							{#if app.app_type === 'INSTANCE'}
-								<a
-									href={app.frontend_route || `/v1/admin/${app.app_id.replace('admin_', '')}`}
-									class="flex items-center gap-1 text-[9px] font-black tracking-tighter text-blue-600 uppercase hover:underline"
-								>
-									<Icon icon="mdi:layers-plus" class="h-3.5 w-3.5" />
-									인스턴스 설정
-								</a>
-							{:else if app.app_type === 'CUSTOM'}
-								<a
-									href={`/v1/custom/${app.app_id}`}
-									class="flex items-center gap-1 text-[9px] font-black tracking-tighter text-rose-600 uppercase hover:underline"
-									title="현장 사용자 화면 바로가기"
-								>
-									<Icon icon="mdi:cellphone" class="h-3.5 w-3.5" />
-									사용자 화면
-								</a>
-							{:else if app.app_type === 'STATIC'}
-								<a
-									href={app.frontend_route || `/v1/pages/${app.app_id}`}
-									class="flex items-center gap-1 text-[9px] font-black tracking-tighter text-emerald-600 uppercase hover:underline"
-									title="정적 페이지 바로가기"
-								>
-									<Icon icon="mdi:file-document-outline" class="h-3.5 w-3.5" />
-									페이지 보기
-								</a>
-							{/if}
-						</div>
-						<p
-							class="mb-3 line-clamp-2 h-8 overflow-hidden text-[10px] leading-relaxed font-bold opacity-50"
-						>
-							{app.description || '등록된 설명이 없습니다.'}
-						</p>
-
-						<div class="space-y-1.5 border-t border-black/5 pt-2.5">
-							<div class="flex items-center justify-between text-[10px] font-bold">
-								<span class="text-[8px] uppercase opacity-30">관리자 경로</span>
-								{#if app.app_type === 'STATIC'}
-									<span class="font-mono text-[9px] text-gray-400 italic">관리자 화면 없음</span>
-								{:else}
-									<a
-										href={app.frontend_route || `/v1/admin/${app.app_id}`}
-										class="font-mono text-[9px] text-purple-700 hover:underline flex items-center gap-1"
-										title="관리자 화면으로 바로 이동"
-									>
-										{app.frontend_route || `/v1/admin/${app.app_id}`}
-										<Icon icon="mdi:arrow-top-right-bold-box-outline" class="h-3 w-3" />
-									</a>
-								{/if}
-							</div>
-							{#if app.app_type === 'CUSTOM'}
-								<div class="flex items-center justify-between text-[10px] font-bold">
-									<span class="text-[8px] uppercase opacity-30">사용자 경로</span>
-									<a
-										href={`/v1/custom/${app.app_id}`}
-										class="font-mono text-[9px] text-rose-600 hover:underline flex items-center gap-1"
-										title="사용자 화면으로 바로 이동"
-									>
-										/v1/custom/{app.app_id}
-										<Icon icon="mdi:open-in-new" class="h-3 w-3" />
-									</a>
-								</div>
-							{:else if app.app_type === 'INSTANCE'}
-								<div class="flex items-center justify-between text-[10px] font-bold">
-									<span class="text-[8px] uppercase opacity-30">개별 인스턴스</span>
-									<span class="font-mono text-[9px] text-blue-600">
-										/v1/app/{app.app_id.replace(/s$/, '')}/[slug]
-									</span>
-								</div>
-								<div class="flex items-center justify-between text-[10px] font-bold">
-									<span class="text-[8px] uppercase opacity-30">인스턴스 허브</span>
-									<a
-										href={`/v1/app/${app.app_id}`}
-										class="font-mono text-[9px] text-blue-700 hover:underline flex items-center gap-1"
-										title="전체 인스턴스 목록 허브 바로가기"
-									>
-										/v1/app/{app.app_id}
-										<Icon icon="mdi:open-in-new" class="h-3 w-3" />
-									</a>
-								</div>
-								{#if app.main_component}
-									<div class="flex items-center justify-between text-[10px] font-bold">
-										<span class="text-[8px] uppercase opacity-30">엔진 컴포넌트</span>
-										<span class="font-mono text-[9px] font-black text-blue-700 bg-blue-50 px-1 py-0.5 border border-blue-200">
-											{app.main_component}
+						<div>
+							<div class="flex items-start justify-between mb-3">
+								<div class="flex items-center gap-3">
+									<div class="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-100 text-slate-800 text-2xl shadow-inner">
+										{#if app.icon_default && app.icon_default.includes(':')}
+											<Icon icon={app.icon_default} />
+										{:else}
+											<span class="text-xl">{app.icon_default || '🚀'}</span>
+										{/if}
+									</div>
+									<div>
+										<h3 class="text-lg font-black text-slate-900 tracking-tight leading-snug">
+											{app.title || app.name || app.app_id}
+										</h3>
+										<span class="font-mono text-xs font-bold text-slate-400">
+											id: {app.app_id}
 										</span>
 									</div>
-								{/if}
-							{:else if app.app_type === 'STATIC'}
-								<div class="flex items-center justify-between text-[10px] font-bold">
-									<span class="text-[8px] uppercase opacity-30">사용자 경로</span>
-									<a
-										href={app.frontend_route || `/v1/pages/${app.app_id}`}
-										class="font-mono text-[9px] text-emerald-600 hover:underline flex items-center gap-1"
-										title="정적 페이지 화면으로 이동"
-									>
-										{app.frontend_route || `/v1/pages/${app.app_id}`}
-										<Icon icon="mdi:open-in-new" class="h-3 w-3" />
-									</a>
 								</div>
-							{/if}
-							<div class="flex gap-2 pt-1">
-								<span class="badge h-4 rounded-none badge-outline px-1 text-[8px] font-black"
-									>읽기 R{app.min_read_rank}</span
+
+								<span class="px-2.5 py-0.5 rounded-md text-[10px] font-bold border {badge.class}">
+									{badge.label}
+								</span>
+							</div>
+
+							<p class="text-xs text-slate-500 mt-2 line-clamp-2 leading-relaxed">
+								{app.description || '등록된 앱 설명이 없습니다.'}
+							</p>
+
+							<!-- 경로 및 랭크 스펙 -->
+							<div class="mt-4 pt-3 border-t border-slate-100 space-y-1.5 text-xs">
+								<div class="flex items-center justify-between">
+									<span class="text-[11px] font-bold text-slate-400">관리자 경로</span>
+									<span class="font-mono text-[11px] font-bold text-purple-700">
+										{app.frontend_route || `/v1/admin/${app.app_id}`}
+									</span>
+								</div>
+								{#if app.app_type === 'CUSTOM'}
+									<div class="flex items-center justify-between">
+										<span class="text-[11px] font-bold text-slate-400">사용자 경로</span>
+										<a
+											href={`/v1/custom/${app.app_id}`}
+											class="font-mono text-[11px] font-bold text-rose-600 hover:underline flex items-center gap-1"
+										>
+											<span>/v1/custom/{app.app_id}</span>
+											<Icon icon="ph:arrow-square-out-bold" class="text-xs" />
+										</a>
+									</div>
+								{:else if app.app_type === 'INSTANCE'}
+									<div class="flex items-center justify-between">
+										<span class="text-[11px] font-bold text-slate-400">인스턴스 허브</span>
+										<a
+											href={`/v1/app/${app.app_id}`}
+											class="font-mono text-[11px] font-bold text-blue-600 hover:underline flex items-center gap-1"
+										>
+											<span>/v1/app/{app.app_id}</span>
+											<Icon icon="ph:arrow-square-out-bold" class="text-xs" />
+										</a>
+									</div>
+								{/if}
+							</div>
+						</div>
+
+						<div class="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between">
+							<div class="flex items-center gap-1.5">
+								<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-600">
+									R{app.min_read_rank ?? 0} 읽기
+								</span>
+								<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-600">
+									R{app.min_write_rank ?? 2} 쓰기
+								</span>
+							</div>
+
+							<div class="flex items-center gap-2">
+								<a
+									href={`/v1/admin/observability?app_id=${app.app_id}&tab=CHANGE`}
+									class="px-2.5 py-1 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-lg transition"
+									title="감사로그 확인"
 								>
-								<span class="badge h-4 rounded-none badge-outline px-1 text-[8px] font-black"
-									>쓰기 R{app.min_write_rank}</span
+									로그
+								</a>
+								<button
+									type="button"
+									onclick={() => startEdit(app)}
+									class="px-3 py-1 text-xs font-black text-purple-600 hover:bg-purple-50 rounded-xl transition"
 								>
+									수정
+								</button>
+								{#if app.app_type !== 'SYSTEM'}
+									<button
+										type="button"
+										onclick={() => handleDelete(app)}
+										class="px-2 py-1 text-xs font-bold text-rose-500 hover:bg-rose-50 rounded-lg transition"
+									>
+										삭제
+									</button>
+								{/if}
 							</div>
 						</div>
 					</div>
-				{/snippet}
-
-				<!-- 🏛️ 1. SYSTEM 앱 섹션 -->
-				{#if selectedTab === 'ALL' || selectedTab === 'SYSTEM'}
-					<div class="space-y-3">
-						<div class="flex items-center justify-between border-l-4 border-purple-700 bg-purple-50 px-4 py-2">
-							<div>
-								<h4 class="text-sm font-black tracking-tight text-purple-950 uppercase">
-									🏛️ SYSTEM — 시스템 필수 관제 앱 ({systemApps.length})
-								</h4>
-								<p class="text-[10px] font-bold text-purple-700/70">
-									사용자 화면이 없으며 코어와 직결된 시스템 필수 운영 관제탑 (삭제 불가)
-								</p>
-							</div>
-						</div>
-						<div class="grid grid-cols-1 gap-4 md:grid-cols-2">
-							{#each systemApps as app (app.app_id)}
-								{@render appCard(app)}
-							{/each}
-						</div>
-					</div>
-				{/if}
-
-				<!-- 🚐 2. CUSTOM 앱 섹션 -->
-				{#if selectedTab === 'ALL' || selectedTab === 'CUSTOM'}
-					<div class="space-y-3 {selectedTab === 'ALL' ? 'pt-6' : ''}">
-						<div class="flex items-center justify-between border-l-4 border-rose-600 bg-rose-50 px-4 py-2">
-							<div>
-								<h4 class="text-sm font-black tracking-tight text-rose-950 uppercase">
-									🚐 CUSTOM — 단독 도메인 비즈니스 앱 ({customApps.length})
-								</h4>
-								<p class="text-[10px] font-bold text-rose-700/70">
-									현장 사용자 화면(/v1/custom/*)과 관리자 화면이 1:1로 대응하는 버스 운송 도메인 업무 앱
-								</p>
-							</div>
-						</div>
-						<div class="grid grid-cols-1 gap-4 md:grid-cols-2">
-							{#each customApps as app (app.app_id)}
-								{@render appCard(app)}
-							{/each}
-						</div>
-					</div>
-				{/if}
-
-				<!-- 🧩 3. INSTANCE 앱 섹션 -->
-				{#if selectedTab === 'ALL' || selectedTab === 'INSTANCE'}
-					<div class="space-y-3 {selectedTab === 'ALL' ? 'pt-6' : ''}">
-						<div class="flex items-center justify-between border-l-4 border-blue-600 bg-blue-50 px-4 py-2">
-							<div>
-								<h4 class="text-sm font-black tracking-tight text-blue-950 uppercase">
-									🧩 INSTANCE — 추상화 다중 인스턴스 앱 ({instanceApps.length})
-								</h4>
-								<p class="text-[10px] font-bold text-blue-700/70">
-									하나의 소스 엔진으로 슬러그(slug)별 다중 공간을 생성하는 기본형 앱
-								</p>
-							</div>
-						</div>
-						<div class="grid grid-cols-1 gap-4 md:grid-cols-2">
-							{#each instanceApps as app (app.app_id)}
-								{@render appCard(app)}
-							{/each}
-						</div>
-					</div>
-				{/if}
-
-				<!-- 📄 4. STATIC 앱 섹션 -->
-				{#if selectedTab === 'ALL' || selectedTab === 'STATIC'}
-					<div class="space-y-3 {selectedTab === 'ALL' ? 'pt-6' : ''}">
-						<div class="flex items-center justify-between border-l-4 border-emerald-600 bg-emerald-50 px-4 py-2">
-							<div>
-								<h4 class="text-sm font-black tracking-tight text-emerald-950 uppercase">
-									📄 STATIC — 관리자 화면 없는 정적 페이지 ({staticApps.length})
-								</h4>
-								<p class="text-[10px] font-bold text-emerald-700/70">
-									관리자 기능 없이 정적 콘텐츠만 제공하는 프론트엔드 라우트 (/v1/pages/*)
-								</p>
-							</div>
-						</div>
-						<div class="grid grid-cols-1 gap-4 md:grid-cols-2">
-							{#each staticApps as app (app.app_id)}
-								{@render appCard(app)}
-							{/each}
-						</div>
-					</div>
-				{/if}
-			{/if}
+				{/each}
+			</div>
 		</div>
-
-		<!-- 📝 앱 설정 폼 (POST/PATCH 공용) -->
-		<div class="lg:col-span-5" id="form-anchor">
-			<div
-				class="sticky top-24 border-2 border-black bg-white p-8 shadow-[15px_15px_0_rgba(0,0,0,0.05)] md:p-10"
-			>
-				<div class="mb-10 flex items-baseline justify-between border-b-2 border-black pb-4">
-					<h3 class="text-2xl font-black tracking-tighter uppercase italic">
-						{isEditMode ? '앱 엔진 정보 수정' : '신규 앱 엔진 등록'}
+	{:else}
+		<!-- 탭 2: 등록/수정 폼 카드 -->
+		<div class="rounded-3xl border-2 border-slate-200 bg-white p-6 sm:p-10 shadow-sm max-w-4xl">
+			<div class="mb-8 flex flex-wrap items-baseline justify-between gap-3 border-b-2 border-slate-100 pb-4">
+				<div>
+					<h3 class="text-2xl font-black text-slate-900 tracking-tight">
+						{isEditMode ? `앱 엔진 정보 수정: ${editingApp.title || editingApp.name}` : '신규 앱 엔진 등록'}
 					</h3>
-					<span class="text-[9px] font-black uppercase italic opacity-40"
-						>{isEditMode ? 'Update' : 'New'} Core v5.1</span
-					>
+					<p class="text-xs font-bold text-slate-400 mt-1">
+						식별자(app_id), 4대 분류, 관리자 경로 및 보안 랭크를 설정합니다.
+					</p>
+				</div>
+				<span class="text-xs font-mono font-bold text-purple-600 bg-purple-50 px-2.5 py-1 rounded-lg border border-purple-200">
+					{isEditMode ? 'MODE: UPDATE' : 'MODE: CREATE'}
+				</span>
+			</div>
+
+			<div class="space-y-6">
+				<div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+					<div class="space-y-1.5">
+						<label for="app-id-input" class="block text-xs font-black text-slate-700 tracking-wide">
+							앱 식별자 (app_id) <span class="text-rose-500">*</span>
+						</label>
+						<input
+							id="app-id-input"
+							type="text"
+							bind:value={editingApp.app_id}
+							readonly={isEditMode}
+							class="w-full px-4 py-3 rounded-2xl border-2 border-slate-200 text-xs font-bold font-mono text-purple-600 bg-slate-50 focus:bg-white focus:border-purple-600 focus:outline-none transition {isEditMode ? 'opacity-60 cursor-not-allowed' : ''}"
+							placeholder="예: board, dispatch, page"
+						/>
+						<p class="text-[11px] text-slate-400">시스템 전체에서 단 하나만 존재하는 고유 ID입니다.</p>
+					</div>
+
+					<div class="space-y-1.5">
+						<label for="app-name-input" class="block text-xs font-black text-slate-700 tracking-wide">
+							내부 명칭 (name) <span class="text-rose-500">*</span>
+						</label>
+						<input
+							id="app-name-input"
+							type="text"
+							bind:value={editingApp.name}
+							class="w-full px-4 py-3 rounded-2xl border-2 border-slate-200 text-xs font-bold text-slate-800 bg-slate-50 focus:bg-white focus:border-purple-600 focus:outline-none transition"
+							placeholder="예: 차량 배차 관리"
+						/>
+						<p class="text-[11px] text-slate-400">내부 시스템에서 식별하는 공식 이름입니다.</p>
+					</div>
 				</div>
 
-				<div class="space-y-6">
-					<div class="grid grid-cols-2 gap-4">
-						<div class="space-y-2">
-							<label class="text-[9px] font-black tracking-widest uppercase opacity-30"
-								>앱 식별자 (app_id)</label
-							>
-							<input
-								type="text"
-								bind:value={editingApp.app_id}
-								readonly={isEditMode}
-								class="h-12 w-full border border-black bg-slate-50 px-4 text-xs font-bold transition-all focus:bg-white focus:outline-none {isEditMode
-									? 'cursor-not-allowed opacity-50'
-									: ''}"
-								placeholder="board, page 등"
-							/>
-						</div>
-						<div class="space-y-2">
-							<label class="text-[9px] font-black tracking-widest uppercase opacity-30"
-								>내부 명칭 (name)</label
-							>
-							<input
-								type="text"
-								bind:value={editingApp.name}
-								class="h-12 w-full border border-black bg-slate-50 px-4 text-xs font-bold transition-all focus:bg-white focus:outline-none"
-								placeholder="앱 공식 명칭"
-							/>
-						</div>
-					</div>
+				<div class="space-y-1.5">
+					<label for="app-title-input" class="block text-xs font-black text-slate-700 tracking-wide">
+						표시 타이틀 (title)
+					</label>
+					<input
+						id="app-title-input"
+						type="text"
+						bind:value={editingApp.title}
+						class="w-full px-4 py-3 rounded-2xl border-2 border-slate-200 text-xs font-bold text-slate-800 bg-white focus:border-purple-600 focus:outline-none transition"
+						placeholder="사용자 화면 및 메뉴에 표기될 타이틀"
+					/>
+				</div>
 
-					<div class="space-y-2">
-						<label class="text-[9px] font-black tracking-widest uppercase opacity-30"
-							>표시 타이틀 (title)</label
-						>
-						<input
-							type="text"
-							bind:value={editingApp.title}
-							class="h-12 w-full border border-black bg-slate-50 px-4 font-bold transition-all focus:bg-white focus:outline-none"
-							placeholder="UI에 표시될 명칭"
-						/>
-					</div>
+				<div class="space-y-1.5">
+					<label for="app-desc-input" class="block text-xs font-black text-slate-700 tracking-wide">
+						설명 (description)
+					</label>
+					<textarea
+						id="app-desc-input"
+						bind:value={editingApp.description}
+						class="w-full px-4 py-3 rounded-2xl border-2 border-slate-200 text-xs font-bold text-slate-800 bg-white focus:border-purple-600 focus:outline-none transition h-20 resize-none"
+						placeholder="엔진 기능 및 비즈니스 역할 요약 설명"
+					></textarea>
+				</div>
 
-					<div class="space-y-2">
-						<label class="text-[9px] font-black tracking-widest uppercase opacity-30"
-							>설명 (description)</label
-						>
-						<textarea
-							bind:value={editingApp.description}
-							class="h-20 w-full resize-none border border-black bg-slate-50 p-4 text-xs font-bold transition-all focus:bg-white focus:outline-none"
-							placeholder="엔진 기능 요약 설명"
-						></textarea>
-					</div>
-
-					<div class="grid grid-cols-2 gap-4 border-t border-black/5 pt-6">
-						<div class="space-y-2">
-							<label class="text-[9px] font-black tracking-widest uppercase opacity-30"
-								>앱 유형 (app_type)</label
-							>
-							<select
-								bind:value={editingApp.app_type}
-								disabled={isEditMode && editingApp.app_type === 'SYSTEM'}
-								class="h-12 w-full border border-black bg-slate-50 px-4 text-xs font-black {isEditMode && editingApp.app_type === 'SYSTEM' ? 'cursor-not-allowed opacity-60' : ''}"
-							>
-								<option value="SYSTEM">🏛️ SYSTEM (시스템 관제 · 삭제불가)</option>
-								<option value="CUSTOM">🚐 CUSTOM (단독 도메인 비즈니스)</option>
-								<option value="INSTANCE">🧩 INSTANCE (추상화 다중 인스턴스)</option>
-								<option value="STATIC">📄 STATIC (정적 콘텐츠 · 관리자 없음)</option>
-							</select>
-							{#if isEditMode && editingApp.app_type === 'SYSTEM'}
-								<p class="text-[9px] font-bold text-purple-700">
-									🛡️ SYSTEM 앱은 시스템 필수 관제 앱이므로 유형을 변경할 수 없습니다.
-								</p>
-							{/if}
-						</div>
-						<div class="space-y-2">
-							<div class="flex items-center justify-between">
-								<label class="text-[9px] font-black tracking-widest uppercase opacity-40"
-									>컴포넌트 명칭 (main_component)</label
-								>
-								{#if editingApp.app_type === 'INSTANCE'}
-									<span class="badge border-none bg-blue-600 text-white rounded-none px-1 text-[8px] font-black">
-										🧩 인스턴스 엔진
-									</span>
-								{/if}
-							</div>
-							<input
-								type="text"
-								bind:value={editingApp.main_component}
-								class="h-12 w-full border border-black bg-slate-50 px-4 font-mono text-xs font-bold transition-all focus:bg-white focus:outline-none {editingApp.app_type === 'INSTANCE' ? 'border-l-4 border-l-blue-600' : ''}"
-								placeholder={editingApp.app_type === 'INSTANCE' ? '예: BoardEngine, SurveyEngine' : '선택 사항 (단독/시스템 앱)'}
-							/>
-							{#if editingApp.app_type === 'INSTANCE'}
-								<p class="text-[9px] font-bold text-blue-700">
-									💡 다중 인스턴스 확장 시 클라이언트 공통 런처(/v1/app/[slug])에 마운트할 Svelte 엔진 컴포넌트명
-								</p>
-							{/if}
-						</div>
-					</div>
-
-					<div class="space-y-2">
-						<div class="flex items-baseline justify-between">
-							<label class="text-[9px] font-black tracking-widest uppercase opacity-30"
-								>관리자 진입 경로 (admin_route)</label
-							>
-							<span class="text-[8px] font-bold text-slate-400">
-								* 관리자 화면은 무조건 /v1/admin/... 규격을 따릅니다
-							</span>
-						</div>
-						<input
-							type="text"
-							bind:value={editingApp.frontend_route}
-							class="h-12 w-full border border-black bg-slate-50 px-4 font-mono text-xs font-bold transition-all focus:bg-white focus:outline-none"
-							placeholder={editingApp.app_type === 'STATIC' ? '/v1/pages/슬러그' : '/v1/admin/앱이름'}
-						/>
-					</div>
-
-					<div class="grid grid-cols-3 gap-4 border-t border-black/5 pt-6">
-						<div class="space-y-2">
-							<label class="text-[9px] font-black tracking-widest uppercase opacity-30"
-								>읽기 최소 랭크 (min_read_rank)</label
-							>
-							<select
-								bind:value={editingApp.min_read_rank}
-								class="h-12 w-full border border-black bg-slate-50 px-4 text-xs font-black"
-							>
-								<option value={0}>R0 (Guest)</option>
-								<option value={1}>R1 (Staff)</option>
-								<option value={2}>R2 (Manager)</option>
-								<option value={4}>R4 (Admin)</option>
-							</select>
-						</div>
-						<div class="space-y-2">
-							<label class="text-[9px] font-black tracking-widest uppercase opacity-30"
-								>쓰기 최소 랭크 (min_write_rank)</label
-							>
-							<select
-								bind:value={editingApp.min_write_rank}
-								class="h-12 w-full border border-black bg-slate-50 px-4 text-xs font-black"
-							>
-								<option value={0}>R0 (Guest)</option>
-								<option value={1}>R1 (Staff)</option>
-								<option value={2}>R2 (Manager)</option>
-								<option value={4}>R4 (Admin)</option>
-							</select>
-						</div>
-						<div class="space-y-2">
-							<label class="text-[9px] font-black tracking-widest uppercase opacity-30">아이콘 (icon_default)</label>
-							<input
-								type="text"
-								bind:value={editingApp.icon_default}
-								class="h-12 w-full border border-black bg-slate-50 px-4 text-center text-xl font-black transition-all focus:bg-white focus:outline-none"
-								placeholder="mdi:apps (Iconify)"
-							/>
-						</div>
-					</div>
-
-					<div class="flex flex-col gap-2 py-4">
-						<label
-							class="flex h-12 w-fit cursor-pointer items-center gap-4 border border-black bg-white px-6 text-[10px] font-black uppercase transition-colors hover:bg-slate-50 {isEditMode && editingApp.app_type === 'SYSTEM' ? 'cursor-not-allowed opacity-60' : ''}"
-						>
-							<input
-								type="checkbox"
-								bind:checked={editingApp.is_active}
-								disabled={isEditMode && editingApp.app_type === 'SYSTEM'}
-								class="checkbox rounded-none checkbox-xs"
-							/>
-							앱 엔진 활성화 (운영 상태)
+				<div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+					<div class="space-y-1.5">
+						<label for="app-type-select" class="block text-xs font-black text-slate-700 tracking-wide">
+							앱 유형 (app_type)
 						</label>
+						<select
+							id="app-type-select"
+							bind:value={editingApp.app_type}
+							disabled={isEditMode && editingApp.app_type === 'SYSTEM'}
+							class="w-full px-4 py-3 rounded-2xl border-2 border-slate-200 text-xs font-bold text-slate-800 bg-white focus:border-purple-600 focus:outline-none transition {isEditMode && editingApp.app_type === 'SYSTEM' ? 'opacity-60 cursor-not-allowed' : ''}"
+						>
+							<option value="SYSTEM">🏛️ SYSTEM (시스템 관제 · 삭제불가)</option>
+							<option value="CUSTOM">🚐 CUSTOM (단독 도메인 비즈니스)</option>
+							<option value="INSTANCE">🧩 INSTANCE (추상화 다중 인스턴스)</option>
+							<option value="STATIC">📄 STATIC (정적 콘텐츠 · 관리자 없음)</option>
+						</select>
 						{#if isEditMode && editingApp.app_type === 'SYSTEM'}
-							<p class="text-[9px] font-bold text-purple-700">
-								🛡️ SYSTEM 앱은 시스템 필수 관제 코어이므로 비활성화할 수 없습니다.
-							</p>
-						{:else}
-							<p class="text-[9px] font-bold opacity-40">
-								체크 해제 시 백엔드 API 접근 및 일반 사용자 메뉴 노출이 즉시 전면 차단(점검 모드)됩니다.
+							<p class="text-[11px] font-bold text-purple-700">
+								🛡️ SYSTEM 앱은 시스템 필수 관제 코어이므로 유형을 변경할 수 없습니다.
 							</p>
 						{/if}
 					</div>
 
-					<div class="flex gap-4 pt-6">
-						<button
-							class="h-16 flex-1 border-2 border-black bg-black text-lg font-black tracking-widest text-white uppercase transition-all hover:bg-white hover:text-black"
-							onclick={handleSave}
-						>
-							{isEditMode ? '수정 사항 저장' : '새 앱 엔진 등록'}
-						</button>
-						<button
-							class="h-16 w-20 border-2 border-black text-[10px] font-black uppercase transition-all hover:bg-slate-100"
-							onclick={resetForm}
-						>
-							초기화
-						</button>
+					<div class="space-y-1.5">
+						<label for="app-route-input" class="block text-xs font-black text-slate-700 tracking-wide">
+							관리자 진입 경로 (frontend_route)
+						</label>
+						<input
+							id="app-route-input"
+							type="text"
+							bind:value={editingApp.frontend_route}
+							class="w-full px-4 py-3 rounded-2xl border-2 border-slate-200 text-xs font-bold font-mono text-purple-700 bg-white focus:border-purple-600 focus:outline-none transition"
+							placeholder="/v1/admin/앱이름"
+						/>
 					</div>
+				</div>
+
+				<div class="grid grid-cols-1 sm:grid-cols-3 gap-5">
+					<div class="space-y-1.5">
+						<label for="min-read-rank" class="block text-xs font-black text-slate-700 tracking-wide">
+							읽기 최소 랭크
+						</label>
+						<select
+							id="min-read-rank"
+							bind:value={editingApp.min_read_rank}
+							class="w-full px-4 py-3 rounded-2xl border-2 border-slate-200 text-xs font-bold text-slate-800 bg-white focus:border-purple-600 focus:outline-none transition"
+						>
+							<option value={0}>R0 (일반회원)</option>
+							<option value={1}>R1 (정회원)</option>
+							<option value={2}>R2 (매니저)</option>
+							<option value={4}>R4 (운영관리자)</option>
+							<option value={8}>R8 (시스템관리자)</option>
+							<option value={9}>R9 (최고관리자)</option>
+						</select>
+					</div>
+
+					<div class="space-y-1.5">
+						<label for="min-write-rank" class="block text-xs font-black text-slate-700 tracking-wide">
+							쓰기 최소 랭크
+						</label>
+						<select
+							id="min-write-rank"
+							bind:value={editingApp.min_write_rank}
+							class="w-full px-4 py-3 rounded-2xl border-2 border-slate-200 text-xs font-bold text-slate-800 bg-white focus:border-purple-600 focus:outline-none transition"
+						>
+							<option value={0}>R0 (일반회원)</option>
+							<option value={1}>R1 (정회원)</option>
+							<option value={2}>R2 (매니저)</option>
+							<option value={4}>R4 (운영관리자)</option>
+							<option value={8}>R8 (시스템관리자)</option>
+							<option value={9}>R9 (최고관리자)</option>
+						</select>
+					</div>
+
+					<div class="space-y-1.5">
+						<label for="icon-default-input" class="block text-xs font-black text-slate-700 tracking-wide">
+							아이콘 (Iconify 식별자)
+						</label>
+						<input
+							id="icon-default-input"
+							type="text"
+							bind:value={editingApp.icon_default}
+							class="w-full px-4 py-3 rounded-2xl border-2 border-slate-200 text-xs font-bold text-slate-800 bg-white focus:border-purple-600 focus:outline-none transition"
+							placeholder="mdi:apps"
+						/>
+					</div>
+				</div>
+
+				<div class="pt-6 border-t border-slate-100 flex flex-wrap items-center gap-3">
+					<button
+						onclick={handleSave}
+						class="px-6 py-3 rounded-2xl bg-purple-600 text-white font-black text-xs uppercase tracking-wider hover:bg-purple-700 transition shadow-md"
+					>
+						{isEditMode ? '수정 사항 저장하기' : '새 앱 엔진 등록하기'}
+					</button>
+
+					<button
+						onclick={() => { resetForm(); isEditMode = false; activeTab = 'list'; }}
+						class="px-5 py-3 rounded-2xl border-2 border-slate-200 text-slate-600 font-black text-xs uppercase hover:bg-slate-50 transition"
+					>
+						목록으로 돌아가기
+					</button>
 				</div>
 			</div>
 		</div>
-	</div>
+	{/if}
 </div>
-
-<style>
-	:global(.btn) {
-		border-radius: 0;
-	}
-</style>

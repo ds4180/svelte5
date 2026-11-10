@@ -13,6 +13,7 @@
 	import { onMount, onDestroy } from 'svelte';
 	import * as api from '$lib/api/admin.js';
 	import { toast } from '$lib/runes/toast.svelte.js';
+	import { getSiteTitle } from '$lib/config/site';
 	import { formatDateTime, timeAgo } from '$lib/utils';
 	import Icon from '@iconify/svelte';
 
@@ -371,14 +372,14 @@
 </script>
 
 <svelte:head>
-	<title>예약 작업 관리 | jeju.live Core</title>
+	<title>{getSiteTitle('예약 작업 관리')}</title>
 </svelte:head>
 
-<div class="mx-auto max-w-7xl space-y-6 px-4 py-8 font-['Noto_Sans_KR','Outfit'] md:space-y-8 md:px-6 lg:px-8">
+<div class="mx-auto max-w-7xl space-y-6 px-4 py-8 pb-24 font-['Noto_Sans_KR','Outfit'] md:space-y-8 md:px-6 lg:px-8">
 	<!-- ===================================================================== -->
-	<!-- 1. 페이지 헤더 & 실시간 컨트롤 바 -->
+	<!-- 1. 페이지 헤더 & 실시간 컨트롤 바 (기본값: 새로고침 + 관리자 홈) -->
 	<!-- ===================================================================== -->
-	<div class="flex flex-col gap-4 border-b-2 border-slate-900 pb-6 md:flex-row md:items-end md:justify-between md:border-b-4">
+	<div class="flex flex-col gap-4 border-b-2 border-slate-900 pb-6 md:flex-row md:items-end md:justify-between md:border-b-4 md:pb-8">
 		<div>
 			<div class="flex items-center gap-2">
 				<span class="inline-flex items-center gap-1.5 rounded-full bg-slate-900 px-3 py-1 text-[11px] font-black tracking-widest text-emerald-400 uppercase">
@@ -395,7 +396,7 @@
 			</p>
 		</div>
 
-		<!-- 자동갱신 및 새로고침 버튼 -->
+		<!-- 상단 버튼 그룹 (새로고침과 관리자 홈은 필수 기본값) -->
 		<div class="flex flex-wrap items-center gap-3">
 			<label class="flex cursor-pointer items-center gap-2 rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-slate-50">
 				<input type="checkbox" bind:checked={autoRefresh} class="h-4 w-4 rounded text-blue-600 focus:ring-blue-500" />
@@ -410,17 +411,25 @@
 				class="flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2 text-xs font-black text-white shadow-md transition hover:bg-blue-600 active:scale-95"
 			>
 				<Icon icon="solar:restart-bold" class="text-base {isLoading ? 'animate-spin' : ''}" />
-				<span>지금 새로고침</span>
+				<span>새로고침</span>
 			</button>
+
+			<a
+				href="/v1/admin"
+				class="flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 active:scale-95"
+			>
+				<Icon icon="solar:home-smile-angle-bold-duotone" class="text-base text-slate-500" />
+				<span>관리자 홈</span>
+			</a>
 		</div>
 	</div>
 
 	<!-- ===================================================================== -->
-	<!-- 2. 상단 4대 로봇 일꾼 상태 요약 카드 (Status Cards) -->
+	<!-- 2. 상단 4대 로봇 일꾼 상태 요약 카드 (Status Cards: 1~4개) -->
 	<!-- ===================================================================== -->
 	<div class="grid grid-cols-2 gap-4 md:grid-cols-4 md:gap-5">
 		<!-- 카드 1: 워커 가동 상태 -->
-		<div class="flex flex-col justify-between rounded-2xl border-2 border-slate-200 bg-white p-5 shadow-sm">
+		<div class="flex flex-col justify-between rounded-[1.75rem] border-2 border-slate-200 bg-white p-5 shadow-sm">
 			<div class="flex items-center justify-between">
 				<span class="text-xs font-black tracking-wider text-slate-400 uppercase">Worker Engine</span>
 				<div class="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-100 text-emerald-600">

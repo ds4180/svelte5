@@ -8,6 +8,7 @@
 	import * as api from '$lib/api/admin.js';
 	import Icon from '@iconify/svelte';
 	import { formatDateTime } from '$lib/utils.js';
+	import { getSiteTitle } from '$lib/config/site';
 
 	let {} = $props();
 
@@ -128,105 +129,131 @@
 </script>
 
 <svelte:head>
-	<title>휴무(결근계) 관리 | jeju.live Core</title>
+	<title>{getSiteTitle('근태·휴무 관리')}</title>
 </svelte:head>
 
-<div
-	class="animate-fade-in mx-auto max-w-7xl space-y-6 px-4 pb-20 font-['Noto_Sans_KR','Outfit'] md:space-y-10 md:px-6 md:pb-40 lg:px-8"
->
-	<!-- 📄 페이지 타이틀 & 탭 전환 -->
-	<div
-		class="flex flex-col items-start justify-between gap-4 border-b-2 border-slate-900 pb-6 md:flex-row md:items-end md:gap-6 md:border-b-4 md:pb-8"
-	>
+<div class="mx-auto max-w-7xl space-y-6 px-4 py-8 pb-24 font-['Noto_Sans_KR','Outfit'] md:space-y-8 md:px-6 lg:px-8">
+	<!-- ===================================================================== -->
+	<!-- 1. 페이지 헤더 & 액션 바 (기본값: 새로고침 + 관리자 홈) -->
+	<!-- ===================================================================== -->
+	<div class="flex flex-col gap-4 border-b-2 border-slate-900 pb-6 md:flex-row md:items-end md:justify-between md:border-b-4 md:pb-8">
 		<div>
-			<span
-				class="mb-1 block text-[8px] font-black tracking-[0.2em] text-slate-400 uppercase md:mb-2 md:text-[10px] md:tracking-[0.4em]"
-				>Admin Control / HR-System</span
-			>
-			<h1 class="text-3xl font-black tracking-tighter text-slate-900 uppercase italic md:text-5xl">
-				휴무(결근계) <span class="NOT-ITALIC text-blue-600"
-					>관리 <Icon
-						icon="mdi:calendar-check-outline"
-						class="ml-1 inline-block align-text-bottom text-blue-600"
-					/></span
-				>
+			<div class="flex items-center gap-2">
+				<span class="inline-flex items-center gap-1.5 rounded-full bg-slate-900 px-3 py-1 text-[11px] font-black tracking-widest text-emerald-400 uppercase">
+					<span class="h-2 w-2 rounded-full bg-emerald-400 animate-ping"></span>
+					Governance HR-System
+				</span>
+				<span class="text-xs font-bold text-slate-400">v1/admin/dayoff</span>
+			</div>
+			<h1 class="mt-2 text-3xl font-black tracking-tight text-slate-900 uppercase italic md:text-4xl">
+				근태·휴무 <span class="not-italic text-blue-600">관리</span>
 			</h1>
-			<p class="mt-2 text-xs font-bold text-slate-500 md:mt-3 md:text-sm">
-				전체 인원 휴무 내역을 통합 관리하고 레코드 기반으로 현황을 파악합니다.
+			<p class="mt-1 text-sm font-medium text-slate-500">
+				전체 사원의 휴무(결근계) 신청 내역을 검토·승인하고 월간 타임라인 레코드로 현황을 파악합니다.
 			</p>
 		</div>
-		<div class="flex flex-wrap gap-2 md:gap-4">
-			<div class="join overflow-hidden rounded-lg border border-slate-200 md:rounded-2xl">
-				<button
-					class="btn join-item btn-sm md:btn-lg {currentView === 'list'
-						? 'btn-neutral'
-						: 'btn-ghost'}"
-					onclick={() => (currentView = 'list')}>신청 목록</button
-				>
-				<button
-					class="btn join-item btn-sm md:btn-lg {currentView === 'timeline'
-						? 'btn-timeline'
-						: 'btn-ghost'}"
-					onclick={() => (currentView = 'timeline')}>월간 현황</button
-				>
-			</div>
+
+		<!-- 상단 버튼 그룹 (새로고침과 관리자 홈은 필수 기본값) -->
+		<div class="flex flex-wrap items-center gap-3">
 			<button
-				class="btn rounded-lg border-none bg-slate-900 px-4 font-black text-white shadow-md transition-all btn-sm hover:bg-slate-800 md:rounded-2xl md:px-8 md:shadow-xl md:btn-lg"
 				onclick={loadDayoffs}
 				disabled={loading}
+				class="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 active:scale-95 disabled:opacity-50"
 			>
-				{#if loading}
-					<span class="loading loading-spinner"></span>
-				{:else}
-					<Icon icon="mdi:refresh" class="h-4 w-4 md:h-6 md:w-6" />
-					새로고침
-				{/if}
+				<Icon icon="solar:restart-bold" class="text-base {loading ? 'animate-spin' : ''}" />
+				<span>새로고침</span>
 			</button>
+
+			<a
+				href="/v1/admin"
+				class="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 active:scale-95"
+			>
+				<Icon icon="solar:home-smile-angle-bold-duotone" class="text-base text-slate-500" />
+				<span>관리자 홈</span>
+			</a>
 		</div>
 	</div>
 
-	<!-- 📊 주요 수치 (Dashboard Summary) -->
-	<div class="grid grid-cols-2 gap-4 md:grid-cols-4 md:gap-6">
-		<div
-			class="rounded-xl border border-slate-200 bg-white p-4 shadow-lg md:rounded-2xl md:p-6 md:shadow-xl"
-		>
-			<div class="mb-1 text-[10px] font-black tracking-widest text-slate-400 uppercase">
-				Approval Pending
+	<!-- ===================================================================== -->
+	<!-- 2. 상단 4대 관제 지표 요약 카드 (Status Cards: 1~4개) -->
+	<!-- ===================================================================== -->
+	<div class="grid grid-cols-2 gap-4 md:grid-cols-4 md:gap-5">
+		<div class="flex flex-col justify-between rounded-[1.75rem] border-2 border-slate-200 bg-white p-5 shadow-sm">
+			<div class="flex items-center justify-between">
+				<span class="text-xs font-black tracking-wider text-slate-400 uppercase">Approval Pending</span>
+				<div class="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
+					<Icon icon="solar:clock-circle-bold-duotone" class="text-xl" />
+				</div>
 			</div>
-			<div class="text-2xl font-black text-amber-600 md:text-4xl">
-				{stats.requestedCount} <span class="text-xs opacity-50">건</span>
-			</div>
-		</div>
-		<div
-			class="rounded-xl border border-slate-200 bg-white p-4 shadow-lg md:rounded-2xl md:p-6 md:shadow-xl"
-		>
-			<div class="mb-1 text-[10px] font-black tracking-widest text-slate-400 uppercase">
-				Approved This Month
-			</div>
-			<div class="text-2xl font-black text-emerald-600 md:text-4xl">
-				{stats.approvedCount} <span class="text-xs opacity-50">일</span>
+			<div class="mt-4">
+				<div class="text-3xl font-black text-amber-600">{stats.requestedCount} <span class="text-xs font-normal text-slate-500">건</span></div>
+				<div class="mt-1 text-xs font-bold text-slate-400">검토 대기 중인 신청</div>
 			</div>
 		</div>
-		<div
-			class="rounded-xl border border-slate-200 bg-white p-4 shadow-lg md:rounded-2xl md:p-6 md:shadow-xl"
-		>
-			<div class="mb-1 text-[10px] font-black tracking-widest text-slate-400 uppercase">
-				Annual Leave
+
+		<div class="flex flex-col justify-between rounded-[1.75rem] border-2 border-slate-200 bg-white p-5 shadow-sm">
+			<div class="flex items-center justify-between">
+				<span class="text-xs font-black tracking-wider text-slate-400 uppercase">Approved This Month</span>
+				<div class="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
+					<Icon icon="solar:check-circle-bold-duotone" class="text-xl" />
+				</div>
 			</div>
-			<div class="text-2xl font-black text-blue-600 md:text-4xl">
-				{stats.typeStats.ANNUAL} <span class="text-xs opacity-50">일</span>
-			</div>
-		</div>
-		<div
-			class="rounded-xl border border-slate-200 bg-white p-4 shadow-lg md:rounded-2xl md:p-6 md:shadow-xl"
-		>
-			<div class="mb-1 text-[10px] font-black tracking-widest text-slate-400 uppercase">
-				Others (Sick/ETC)
-			</div>
-			<div class="text-2xl font-black text-rose-500 md:text-4xl">
-				{stats.typeStats.SICK + stats.typeStats.SPECIAL} <span class="text-xs opacity-50">일</span>
+			<div class="mt-4">
+				<div class="text-3xl font-black text-emerald-600">{stats.approvedCount} <span class="text-xs font-normal text-slate-500">일</span></div>
+				<div class="mt-1 text-xs font-bold text-slate-400">이번 달 총 승인 휴무</div>
 			</div>
 		</div>
+
+		<div class="flex flex-col justify-between rounded-[1.75rem] border-2 border-slate-200 bg-white p-5 shadow-sm">
+			<div class="flex items-center justify-between">
+				<span class="text-xs font-black tracking-wider text-slate-400 uppercase">Annual Leave</span>
+				<div class="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
+					<Icon icon="solar:calendar-date-bold-duotone" class="text-xl" />
+				</div>
+			</div>
+			<div class="mt-4">
+				<div class="text-3xl font-black text-blue-600">{stats.typeStats.ANNUAL} <span class="text-xs font-normal text-slate-500">일</span></div>
+				<div class="mt-1 text-xs font-bold text-slate-400">정기 연차 사용일수</div>
+			</div>
+		</div>
+
+		<div class="flex flex-col justify-between rounded-[1.75rem] border-2 border-slate-200 bg-white p-5 shadow-sm">
+			<div class="flex items-center justify-between">
+				<span class="text-xs font-black tracking-wider text-slate-400 uppercase">Others (Sick/ETC)</span>
+				<div class="flex h-9 w-9 items-center justify-center rounded-xl bg-rose-50 text-rose-600">
+					<Icon icon="solar:hospital-bold-duotone" class="text-xl" />
+				</div>
+			</div>
+			<div class="mt-4">
+				<div class="text-3xl font-black text-rose-600">{stats.typeStats.SICK + stats.typeStats.SPECIAL + stats.typeStats.OFFICIAL} <span class="text-xs font-normal text-slate-500">일</span></div>
+				<div class="mt-1 text-xs font-bold text-slate-400">병가 및 경조사·공가</div>
+			</div>
+		</div>
+	</div>
+
+	<!-- ===================================================================== -->
+	<!-- 3. 전사 공통 탭 바 (최소 1개 일관성 및 확장성) -->
+	<!-- ===================================================================== -->
+	<div class="flex items-center border-b-2 border-slate-200">
+		<button
+			type="button"
+			onclick={() => (currentView = 'list')}
+			class="flex items-center gap-2 border-b-4 px-6 py-3 text-xs font-black rounded-t-2xl transition {currentView === 'list' ? 'border-blue-600 bg-blue-50/50 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-900'}"
+		>
+			<Icon icon="solar:list-check-bold-duotone" class="text-base" />
+			<span>신청 승인 목록</span>
+			{#if stats.requestedCount > 0}
+				<span class="rounded-full bg-amber-500 px-2 py-0.5 text-[10px] font-black text-white">{stats.requestedCount}</span>
+			{/if}
+		</button>
+		<button
+			type="button"
+			onclick={() => (currentView = 'timeline')}
+			class="flex items-center gap-2 border-b-4 px-6 py-3 text-xs font-black rounded-t-2xl transition {currentView === 'timeline' ? 'border-blue-600 bg-blue-50/50 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-900'}"
+		>
+			<Icon icon="solar:calendar-bold-duotone" class="text-base" />
+			<span>월간 타임라인 현황</span>
+		</button>
 	</div>
 
 	{#if currentView === 'list'}

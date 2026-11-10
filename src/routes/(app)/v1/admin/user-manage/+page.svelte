@@ -12,7 +12,8 @@
 	import { onMount } from 'svelte';
 	import { fade } from 'svelte/transition';
 	import * as api from '$lib/api/admin.js';
-	import { toast } from '$lib/runes/toast.svelte.ts';
+	import { toast } from '$lib/runes/toast.svelte.js';
+	import { getSiteTitle } from '$lib/config/site';
 	import Icon from '@iconify/svelte';
 
 	let users = $state([]);
@@ -212,29 +213,32 @@
 </script>
 
 <svelte:head>
-	<title>사원 랭크 및 계정 관리 | jeju.live Core</title>
+	<title>{getSiteTitle('사용자 랭크 관리')}</title>
 </svelte:head>
 
-<div class="animate-fade-in mx-auto max-w-7xl space-y-8 px-4 pb-20 font-['Outfit','Noto_Sans_KR']">
-	<!-- 📄 최상단 헤더 -->
-	<div class="flex flex-col items-start justify-between gap-4 border-b-4 border-slate-900 pb-8 md:flex-row md:items-end">
+<div class="animate-fade-in mx-auto max-w-7xl space-y-8 px-4 py-8 pb-24 font-['Noto_Sans_KR','Outfit'] md:px-8">
+	<!-- 🏛️ 모던 엔터프라이즈 통합 헤더 -->
+	<header class="flex flex-col items-start justify-between gap-6 border-b-4 border-slate-900 pb-8 md:flex-row md:items-end">
 		<div>
 			<div class="flex items-center gap-2 mb-2">
-				<span class="block text-[10px] font-black tracking-[0.4em] text-slate-400 uppercase">Enterprise Protocol</span>
-				<span class="badge badge-sm badge-neutral font-mono font-bold">SYSTEM APP</span>
+				<span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black uppercase tracking-widest bg-emerald-50 text-emerald-700 border border-emerald-200">
+					<Icon icon="ph:shield-check-bold" class="text-sm" />
+					SYSTEM GOVERNANCE • USER RANK
+				</span>
+				<span class="text-xs font-bold text-slate-400 font-mono">v1/admin/user-manage</span>
 			</div>
-			<h1 class="text-4xl font-black tracking-tighter text-slate-900 uppercase italic md:text-6xl">
-				사원 랭크 <span class="NOT-ITALIC text-emerald-600">관리</span>
+			<h1 class="text-3xl sm:text-4xl font-black tracking-tighter text-slate-900 uppercase italic md:text-5xl">
+				사용자 랭크 <span class="not-italic text-emerald-600">관리</span>
 			</h1>
-			<p class="mt-3 text-sm font-bold text-slate-500">
+			<p class="mt-2 text-xs sm:text-sm font-bold text-slate-500">
 				중소기업 오피스 보안 인트라넷: 사원 직접 발급, 가입 승인, 소프트 삭제(퇴사) 및 전역 랭크(Lv.0~9) 관제탑
 			</p>
 		</div>
 
-		<div class="flex flex-wrap items-center gap-2 w-full md:w-auto">
+		<div class="flex flex-wrap items-center gap-2.5 w-full md:w-auto">
 			<!-- 🔒 가입 정책 스위치 드롭다운 -->
 			<div class="dropdown dropdown-end">
-				<div tabindex="0" role="button" class="btn btn-outline btn-sm rounded-xl font-bold flex items-center gap-1.5 border-slate-300">
+				<div tabindex="0" role="button" class="flex items-center gap-1.5 px-4 py-2.5 rounded-2xl border-2 border-slate-200 bg-white font-black text-xs uppercase tracking-wider text-slate-700 hover:border-slate-400 transition shadow-sm cursor-pointer">
 					<Icon icon="mdi:shield-lock-outline" class="text-base text-emerald-600" />
 					<span class="text-xs">
 						{#if registerMode === 'ADMIN_ONLY'}🔒 관리자 직접등록
@@ -243,14 +247,14 @@
 					</span>
 					<Icon icon="mdi:chevron-down" class="text-xs text-slate-400" />
 				</div>
-				<ul tabindex="0" class="dropdown-content z-[20] menu w-72 rounded-xl border border-slate-200 bg-white p-2 shadow-2xl mt-1">
+				<ul tabindex="0" class="dropdown-content z-[20] menu w-72 rounded-2xl border border-slate-200 bg-white p-2 shadow-2xl mt-1">
 					<li class="menu-title text-[10px] font-black text-slate-400 uppercase tracking-widest px-2 py-1">
 						사내 가입 정책 설정
 					</li>
 					<li>
 						<button 
 							onclick={() => setRegisterMode('ADMIN_ONLY')}
-							class="flex flex-col items-start text-left py-2 {registerMode === 'ADMIN_ONLY' ? 'bg-emerald-50 text-emerald-700 font-black' : ''}"
+							class="flex flex-col items-start text-left py-2 rounded-xl {registerMode === 'ADMIN_ONLY' ? 'bg-emerald-50 text-emerald-700 font-black' : ''}"
 						>
 							<div class="flex items-center gap-1 text-xs">
 								<span>🔒 관리자 직접 등록만 허용</span>
@@ -262,7 +266,7 @@
 					<li>
 						<button 
 							onclick={() => setRegisterMode('APPROVAL')}
-							class="flex flex-col items-start text-left py-2 {registerMode === 'APPROVAL' ? 'bg-emerald-50 text-emerald-700 font-black' : ''}"
+							class="flex flex-col items-start text-left py-2 rounded-xl {registerMode === 'APPROVAL' ? 'bg-emerald-50 text-emerald-700 font-black' : ''}"
 						>
 							<div class="flex items-center gap-1 text-xs">
 								<span>⚖️ 가입 신청 후 관리자 승인제</span>
@@ -274,7 +278,7 @@
 					<li>
 						<button 
 							onclick={() => setRegisterMode('OPEN')}
-							class="flex flex-col items-start text-left py-2 {registerMode === 'OPEN' ? 'bg-emerald-50 text-emerald-700 font-black' : ''}"
+							class="flex flex-col items-start text-left py-2 rounded-xl {registerMode === 'OPEN' ? 'bg-emerald-50 text-emerald-700 font-black' : ''}"
 						>
 							<div class="flex items-center gap-1 text-xs">
 								<span>🌐 자유 가입</span>
@@ -288,79 +292,126 @@
 
 			<!-- ➕ 신규 사원 직접 등록 버튼 -->
 			<button 
-				class="btn btn-sm rounded-xl bg-emerald-600 text-white font-bold hover:bg-emerald-700 shadow-sm"
+				class="flex items-center gap-1.5 px-4 py-2.5 rounded-2xl border-2 border-emerald-600 bg-emerald-600 text-white font-black text-xs uppercase tracking-wider hover:bg-emerald-700 transition shadow-sm"
 				onclick={() => (showCreateModal = true)}
 			>
-				<Icon icon="mdi:account-plus" class="text-base" />
-				신규 사원 등록
+				<Icon icon="ph:user-plus-bold" class="text-base" />
+				<span>신규 사원 등록</span>
 			</button>
 
 			<!-- 🔄 새로고침 -->
-			<button class="btn btn-square btn-sm rounded-xl bg-slate-900 text-white hover:bg-slate-800" onclick={loadUsers} title="새로고침">
-				<Icon icon="mdi:refresh" class={loading ? 'animate-spin' : ''} />
+			<button 
+				class="flex items-center gap-1.5 px-4 py-2.5 rounded-2xl border-2 border-slate-200 bg-white font-black text-xs uppercase tracking-wider text-slate-700 hover:border-slate-400 transition shadow-sm disabled:opacity-50"
+				onclick={loadUsers} 
+				title="새로고침"
+			>
+				<Icon icon="ph:arrows-clockwise-bold" class="text-base {loading ? 'animate-spin' : ''}" />
+				<span>새로고침</span>
 			</button>
+
+			<!-- 🏠 관리자 홈 -->
+			<a
+				href="/v1/admin"
+				class="flex items-center gap-1.5 px-4 py-2.5 rounded-2xl border-2 border-slate-200 bg-white font-black text-xs uppercase tracking-wider text-slate-700 hover:border-slate-400 transition shadow-sm"
+			>
+				<Icon icon="ph:house-bold" class="text-base text-slate-500" />
+				<span>관리자 홈</span>
+			</a>
 		</div>
-	</div>
+	</header>
 
 	<!-- 📊 상태 요약 카드 4종 -->
-	<div class="grid grid-cols-2 gap-4 md:grid-cols-4">
-		<div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-			<div class="flex items-center justify-between text-slate-400 mb-2">
-				<span class="text-xs font-black uppercase tracking-wider">전체 등록 사원</span>
-				<Icon icon="mdi:account-group" class="text-lg" />
+	<section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-5">
+		<button
+			onclick={() => (activeTab = 'ALL')}
+			class="text-left relative overflow-hidden rounded-[1.75rem] border-2 bg-white p-5 shadow-sm transition group {activeTab === 'ALL' ? 'border-slate-800 bg-slate-50/50 ring-2 ring-slate-800/10' : 'border-slate-100 hover:border-slate-300'}"
+		>
+			<div class="flex items-center justify-between mb-3">
+				<span class="text-xs font-black uppercase tracking-wider text-slate-400 group-hover:text-slate-700">Total Users</span>
+				<div class="flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-100 text-slate-700 group-hover:scale-110 transition-transform">
+					<Icon icon="ph:users-bold" class="text-2xl" />
+				</div>
 			</div>
-			<div class="text-2xl font-black text-slate-900">{stats.total}<span class="text-xs font-normal text-slate-400 ml-1">명</span></div>
-		</div>
-		<div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-			<div class="flex items-center justify-between text-emerald-600 mb-2">
-				<span class="text-xs font-black uppercase tracking-wider">활동 사원 (정규직)</span>
-				<Icon icon="mdi:account-check" class="text-lg" />
+			<div class="text-3xl font-black text-slate-900 tracking-tight">{stats.total}<span class="text-sm font-bold text-slate-400 ml-1">명 등록</span></div>
+			<div class="mt-2 text-xs font-bold text-slate-500">
+				<span class="rounded-lg bg-slate-100 px-2 py-0.5 font-mono">전체 계정</span>
 			</div>
-			<div class="text-2xl font-black text-emerald-600">{stats.active}<span class="text-xs font-normal text-slate-400 ml-1">명</span></div>
-		</div>
-		<div class="rounded-2xl border border-amber-200 bg-amber-50/50 p-5 shadow-sm">
-			<div class="flex items-center justify-between text-amber-700 mb-2">
-				<span class="text-xs font-black uppercase tracking-wider">가입 승인 대기 (Lv.0)</span>
-				<Icon icon="mdi:clock-alert-outline" class="text-lg" />
+		</button>
+
+		<button
+			onclick={() => (activeTab = 'ALL')}
+			class="text-left relative overflow-hidden rounded-[1.75rem] border-2 bg-white p-5 shadow-sm transition group border-slate-100 hover:border-emerald-300"
+		>
+			<div class="flex items-center justify-between mb-3">
+				<span class="text-xs font-black uppercase tracking-wider text-emerald-600">Active Staff</span>
+				<div class="flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600 group-hover:scale-110 transition-transform">
+					<Icon icon="ph:user-check-bold" class="text-2xl" />
+				</div>
 			</div>
-			<div class="text-2xl font-black text-amber-700">
-				{stats.pending}<span class="text-xs font-normal text-amber-600 ml-1">명</span>
+			<div class="text-3xl font-black text-emerald-600 tracking-tight">{stats.active}<span class="text-sm font-bold text-slate-400 ml-1">명 활동</span></div>
+			<div class="mt-2 text-xs font-bold text-emerald-600">
+				<span class="rounded-lg bg-emerald-50 px-2 py-0.5 font-mono">정규 승인</span>
 			</div>
-		</div>
-		<div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-			<div class="flex items-center justify-between text-slate-400 mb-2">
-				<span class="text-xs font-black uppercase tracking-wider">소프트 삭제 (퇴사)</span>
-				<Icon icon="mdi:account-off-outline" class="text-lg" />
+		</button>
+
+		<button
+			onclick={() => (activeTab = 'PENDING')}
+			class="text-left relative overflow-hidden rounded-[1.75rem] border-2 bg-white p-5 shadow-sm transition group {activeTab === 'PENDING' ? 'border-amber-500 bg-amber-50/20 ring-2 ring-amber-500/20' : 'border-slate-100 hover:border-amber-300'}"
+		>
+			<div class="flex items-center justify-between mb-3">
+				<span class="text-xs font-black uppercase tracking-wider text-amber-700">Pending Approval</span>
+				<div class="flex h-10 w-10 items-center justify-center rounded-2xl bg-amber-50 text-amber-600 group-hover:scale-110 transition-transform">
+					<Icon icon="ph:hourglass-bold" class="text-2xl" />
+				</div>
 			</div>
-			<div class="text-2xl font-black text-slate-500">{stats.inactive}<span class="text-xs font-normal text-slate-400 ml-1">명</span></div>
-		</div>
-	</div>
+			<div class="text-3xl font-black text-amber-700 tracking-tight">{stats.pending}<span class="text-sm font-bold text-amber-600 ml-1">명 대기</span></div>
+			<div class="mt-2 text-xs font-bold text-amber-600">
+				<span class="rounded-lg bg-amber-50 px-2 py-0.5 font-mono">Lv.0 가입승인</span>
+			</div>
+		</button>
+
+		<button
+			onclick={() => (activeTab = 'INACTIVE')}
+			class="text-left relative overflow-hidden rounded-[1.75rem] border-2 bg-white p-5 shadow-sm transition group {activeTab === 'INACTIVE' ? 'border-slate-500 bg-slate-50/50 ring-2 ring-slate-500/20' : 'border-slate-100 hover:border-slate-300'}"
+		>
+			<div class="flex items-center justify-between mb-3">
+				<span class="text-xs font-black uppercase tracking-wider text-slate-400">Soft Deleted</span>
+				<div class="flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-100 text-slate-500 group-hover:scale-110 transition-transform">
+					<Icon icon="ph:user-minus-bold" class="text-2xl" />
+				</div>
+			</div>
+			<div class="text-3xl font-black text-slate-500 tracking-tight">{stats.inactive}<span class="text-sm font-bold text-slate-400 ml-1">명 퇴사</span></div>
+			<div class="mt-2 text-xs font-bold text-slate-500">
+				<span class="rounded-lg bg-slate-100 px-2 py-0.5 font-mono">비활성 계정</span>
+			</div>
+		</button>
+	</section>
 
 	<!-- 🗂️ 탭 메뉴 & 검색 필터 -->
 	<div class="flex flex-col sm:flex-row items-center justify-between gap-4">
-		<div class="flex items-center gap-2 border-b-2 border-slate-200 w-full sm:w-auto">
+		<nav class="flex gap-2 border-b-2 border-slate-200 overflow-x-auto no-scrollbar w-full sm:w-auto">
 			<button 
-				class="pb-3 px-4 font-black text-sm transition-all border-b-2 -mb-[2px] {activeTab === 'ALL' ? 'border-emerald-600 text-emerald-600' : 'border-transparent text-slate-400 hover:text-slate-600'}"
+				class="px-5 py-3 text-xs font-black uppercase tracking-widest transition-all whitespace-nowrap {activeTab === 'ALL' ? 'border-b-4 border-emerald-600 text-emerald-700 bg-emerald-50/60 rounded-t-2xl' : 'text-slate-400 hover:text-slate-700'}"
 				onclick={() => (activeTab = 'ALL')}
 			>
 				전체 활동 사원 ({stats.active})
 			</button>
 			<button 
-				class="pb-3 px-4 font-black text-sm transition-all border-b-2 -mb-[2px] flex items-center gap-1.5 {activeTab === 'PENDING' ? 'border-amber-600 text-amber-700' : 'border-transparent text-slate-400 hover:text-slate-600'}"
+				class="px-5 py-3 text-xs font-black uppercase tracking-widest transition-all whitespace-nowrap flex items-center gap-1.5 {activeTab === 'PENDING' ? 'border-b-4 border-amber-600 text-amber-700 bg-amber-50/60 rounded-t-2xl' : 'text-slate-400 hover:text-slate-700'}"
 				onclick={() => (activeTab = 'PENDING')}
 			>
-				승인 대기
+				<span>승인 대기</span>
 				{#if stats.pending > 0}
-					<span class="badge badge-warning badge-sm font-black px-1.5">{stats.pending}</span>
+					<span class="bg-amber-100 text-amber-800 text-[10px] font-mono px-1.5 py-0.5 rounded-full">{stats.pending}</span>
 				{/if}
 			</button>
 			<button 
-				class="pb-3 px-4 font-black text-sm transition-all border-b-2 -mb-[2px] {activeTab === 'INACTIVE' ? 'border-slate-800 text-slate-900' : 'border-transparent text-slate-400 hover:text-slate-600'}"
+				class="px-5 py-3 text-xs font-black uppercase tracking-widest transition-all whitespace-nowrap {activeTab === 'INACTIVE' ? 'border-b-4 border-slate-800 text-slate-800 bg-slate-100 rounded-t-2xl' : 'text-slate-400 hover:text-slate-700'}"
 				onclick={() => (activeTab = 'INACTIVE')}
 			>
 				퇴사/비활성 ({stats.inactive})
 			</button>
-		</div>
+		</nav>
 
 		<div class="relative w-full sm:w-72">
 			<Icon icon="mdi:magnify" class="absolute top-1/2 left-3 -translate-y-1/2 text-slate-400" />

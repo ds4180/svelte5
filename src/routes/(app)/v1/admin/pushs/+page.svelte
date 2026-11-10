@@ -15,6 +15,7 @@
 	import * as api from '$lib/api/admin.js';
 	import { syncPushSubscription } from '$lib/pwa/serviceWorker.js';
 	import { toast } from '$lib/runes/toast.svelte.js';
+	import { getSiteTitle } from '$lib/config/site';
 	import Icon from '@iconify/svelte';
 
 	let subscriptions = $state(/** @type {any[]} */ ([]));
@@ -167,14 +168,14 @@
 </script>
 
 <svelte:head>
-	<title>푸시·구독 관리 | jeju.live Core</title>
+	<title>{getSiteTitle('푸시·구독 관리')}</title>
 </svelte:head>
 
-<div class="mx-auto max-w-7xl space-y-6 px-4 py-8 font-['Noto_Sans_KR','Outfit'] md:space-y-8 md:px-6 lg:px-8">
+<div class="mx-auto max-w-7xl space-y-6 px-4 py-8 pb-24 font-['Noto_Sans_KR','Outfit'] md:space-y-8 md:px-6 lg:px-8">
 	<!-- ===================================================================== -->
-	<!-- 1. 헤더 영역 -->
+	<!-- 1. 헤더 영역 (기본값: 새로고침 + 관리자 홈) -->
 	<!-- ===================================================================== -->
-	<div class="flex flex-col gap-4 border-b-2 border-slate-900 pb-6 md:flex-row md:items-end md:justify-between md:border-b-4">
+	<div class="flex flex-col gap-4 border-b-2 border-slate-900 pb-6 md:flex-row md:items-end md:justify-between md:border-b-4 md:pb-8">
 		<div>
 			<div class="flex items-center gap-2">
 				<span class="inline-flex items-center gap-1.5 rounded-full bg-slate-900 px-3 py-1 text-[11px] font-black tracking-widest text-pink-400 uppercase">
@@ -191,15 +192,8 @@
 			</p>
 		</div>
 
+		<!-- 상단 버튼 그룹 (맨 우측 [관리자 홈], 그 좌측 [새로고침] 고정, 이후 버튼은 새로고침 좌측) -->
 		<div class="flex flex-wrap items-center gap-3">
-			<button
-				onclick={loadSubscriptions}
-				class="flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 active:scale-95"
-			>
-				<Icon icon="solar:restart-bold" class="text-base {loading ? 'animate-spin' : ''}" />
-				<span>새로고침</span>
-			</button>
-
 			<button
 				onclick={subscribeCurrentDevice}
 				disabled={subscribing}
@@ -226,12 +220,20 @@
 				<span>구독 전체 삭제 ({subscriptions.length})</span>
 			</button>
 
+			<button
+				onclick={loadSubscriptions}
+				class="flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 active:scale-95"
+			>
+				<Icon icon="solar:restart-bold" class="text-base {loading ? 'animate-spin' : ''}" />
+				<span>새로고침</span>
+			</button>
+
 			<a
 				href="/v1/admin"
 				class="flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 active:scale-95"
 			>
 				<Icon icon="solar:home-smile-angle-bold-duotone" class="text-base text-slate-500" />
-				<span>관제탑 홈</span>
+				<span>관리자 홈</span>
 			</a>
 		</div>
 	</div>

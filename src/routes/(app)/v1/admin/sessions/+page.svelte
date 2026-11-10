@@ -2,10 +2,15 @@
 	import { onMount } from 'svelte';
 	import * as api from '$lib/api/admin.js';
 	import { formatDateTime } from '$lib/utils';
+	import { getSiteTitle } from '$lib/config/site';
 	import Icon from '@iconify/svelte';
 
 	let sessions = $state([]);
 	let loading = $state(true);
+
+	const activeCount = $derived(sessions.filter((s) => s.status === 'ACTIVE').length);
+	const mobileCount = $derived(sessions.filter((s) => s.device_category === 'MOBILE').length);
+	const kickedCount = $derived(sessions.filter((s) => s.status === 'KICKED_OUT').length);
 
 	async function loadSessions() {
 		loading = true;
@@ -33,53 +38,106 @@
 </script>
 
 <svelte:head>
-	<title>세션 모니터링 (구버전) | jeju.live Core</title>
+	<title>{getSiteTitle('세션 모니터링')}</title>
 </svelte:head>
 
-<div
-	class="animate-fade-in mx-auto max-w-7xl space-y-6 px-4 pb-20 font-['Noto_Sans_KR','Outfit'] md:space-y-10 md:px-6 md:pb-40 lg:px-8"
->
-	<div
-		class="flex flex-col items-start justify-between gap-4 border-b-2 border-slate-900 pb-6 md:flex-row md:items-end md:gap-6 md:border-b-4 md:pb-8"
-	>
+<div class="mx-auto max-w-7xl space-y-6 px-4 py-8 pb-24 font-['Noto_Sans_KR','Outfit'] md:space-y-8 md:px-6 lg:px-8">
+	<!-- ===================================================================== -->
+	<!-- 1. 페이지 헤더 & 액션 바 (기본값: 새로고침 + 관리자 홈) -->
+	<!-- ===================================================================== -->
+	<div class="flex flex-col gap-4 border-b-2 border-slate-900 pb-6 md:flex-row md:items-end md:justify-between md:border-b-4 md:pb-8">
 		<div>
-			<span
-				class="mb-1 block text-[8px] font-black tracking-[0.2em] text-slate-400 uppercase md:mb-2 md:text-[10px] md:tracking-[0.4em]"
-				>System Infrastructure</span
-			>
-			<h1 class="text-3xl font-black tracking-tighter text-slate-900 uppercase italic md:text-5xl">
-				세션 <span class="NOT-ITALIC text-blue-600"
-					>모니터링 (구버전) <Icon
-						icon="mdi:account-clock-outline"
-						class="ml-1 inline-block align-text-bottom text-blue-600"
-					/></span
-				>
+			<div class="flex items-center gap-2">
+				<span class="inline-flex items-center gap-1.5 rounded-full bg-slate-900 px-3 py-1 text-[11px] font-black tracking-widest text-emerald-400 uppercase">
+					<span class="h-2 w-2 rounded-full bg-emerald-400 animate-ping"></span>
+					System Infrastructure
+				</span>
+				<span class="text-xs font-bold text-slate-400">v1/admin/sessions</span>
+			</div>
+			<h1 class="mt-2 text-3xl font-black tracking-tight text-slate-900 uppercase italic md:text-4xl">
+				세션 <span class="not-italic text-blue-600">모니터링</span>
 			</h1>
-			<p class="mt-2 text-xs font-bold text-slate-500 md:mt-3 md:text-sm">
-				현재 활성화된 모든 사용자 세션을 실시간으로 확인하고 제어합니다.
+			<p class="mt-1 text-sm font-medium text-slate-500">
+				현재 활성화된 모든 사용자 세션을 실시간으로 확인하고 비정상 세션을 즉시 제어합니다.
 			</p>
 		</div>
-		<div class="flex gap-2 md:gap-4">
-			<a
-				href="/v1/admin"
-				class="btn rounded-lg border-none bg-slate-200 px-4 font-black text-slate-700 shadow-md transition-all btn-sm hover:bg-slate-300 md:rounded-2xl md:px-8 md:shadow-xl md:btn-lg"
-			>
-				<Icon icon="mdi:home-outline" class="h-4 w-4 md:h-6 md:w-6" />
-				홈으로
-			</a>
+
+		<!-- 상단 버튼 그룹 (새로고침과 관리자 홈은 필수 기본값) -->
+		<div class="flex flex-wrap items-center gap-3">
 			<button
-				class="btn rounded-lg border-none bg-slate-900 px-4 font-black text-white shadow-md transition-all btn-sm hover:bg-slate-800 md:rounded-2xl md:px-8 md:shadow-xl md:btn-lg"
 				onclick={loadSessions}
 				disabled={loading}
+				class="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 active:scale-95 disabled:opacity-50"
 			>
-				{#if loading}
-					<span class="loading loading-spinner"></span>
-				{:else}
-					<Icon icon="mdi:refresh" class="h-4 w-4 md:h-6 md:w-6" />
-					목록 새로고침
-				{/if}
+				<Icon icon="solar:restart-bold" class="text-base {loading ? 'animate-spin' : ''}" />
+				<span>새로고침</span>
 			</button>
+
+			<a
+				href="/v1/admin"
+				class="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 active:scale-95"
+			>
+				<Icon icon="solar:home-smile-angle-bold-duotone" class="text-base text-slate-500" />
+				<span>관리자 홈</span>
+			</a>
 		</div>
+	</div>
+
+	<!-- ===================================================================== -->
+	<!-- 2. 상단 핵심 지표 요약 카드 (Status Cards: 1~4개) -->
+	<!-- ===================================================================== -->
+	<div class="grid grid-cols-2 gap-4 md:grid-cols-3 md:gap-5">
+		<div class="flex flex-col justify-between rounded-[1.75rem] border-2 border-slate-200 bg-white p-5 shadow-sm">
+			<div class="flex items-center justify-between">
+				<span class="text-xs font-black tracking-wider text-slate-400 uppercase">Active Sessions</span>
+				<div class="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
+					<Icon icon="solar:users-group-rounded-bold-duotone" class="text-xl" />
+				</div>
+			</div>
+			<div class="mt-4">
+				<div class="text-3xl font-black text-slate-900">{loading ? '...' : activeCount.toLocaleString()} <span class="text-xs font-normal text-slate-500">명</span></div>
+				<div class="mt-1 text-xs font-bold text-emerald-600">접속 활성 중</div>
+			</div>
+		</div>
+
+		<div class="flex flex-col justify-between rounded-[1.75rem] border-2 border-slate-200 bg-white p-5 shadow-sm">
+			<div class="flex items-center justify-between">
+				<span class="text-xs font-black tracking-wider text-slate-400 uppercase">Mobile Devices</span>
+				<div class="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
+					<Icon icon="solar:smartphone-bold-duotone" class="text-xl" />
+				</div>
+			</div>
+			<div class="mt-4">
+				<div class="text-3xl font-black text-slate-900">{loading ? '...' : mobileCount.toLocaleString()} <span class="text-xs font-normal text-slate-500">명</span></div>
+				<div class="mt-1 text-xs font-bold text-amber-600">모바일 접속 기기</div>
+			</div>
+		</div>
+
+		<div class="flex flex-col justify-between rounded-[1.75rem] border-2 border-slate-200 bg-white p-5 shadow-sm col-span-2 md:col-span-1">
+			<div class="flex items-center justify-between">
+				<span class="text-xs font-black tracking-wider text-slate-400 uppercase">Kicked Out</span>
+				<div class="flex h-9 w-9 items-center justify-center rounded-xl bg-rose-50 text-rose-600">
+					<Icon icon="solar:shield-warning-bold-duotone" class="text-xl" />
+				</div>
+			</div>
+			<div class="mt-4">
+				<div class="text-3xl font-black text-slate-900">{loading ? '...' : kickedCount.toLocaleString()} <span class="text-xs font-normal text-slate-500">건</span></div>
+				<div class="mt-1 text-xs font-bold text-rose-600">강제 추방 이력</div>
+			</div>
+		</div>
+	</div>
+
+	<!-- ===================================================================== -->
+	<!-- 3. 전사 공통 탭 바 (최소 1개 일관성 및 확장성) -->
+	<!-- ===================================================================== -->
+	<div class="flex items-center border-b-2 border-slate-200">
+		<button
+			type="button"
+			class="flex items-center gap-2 border-b-4 border-blue-600 bg-blue-50/50 px-6 py-3 text-xs font-black text-blue-600 rounded-t-2xl transition"
+		>
+			<Icon icon="solar:user-id-bold-duotone" class="text-base" />
+			<span>실시간 활성 세션 목록</span>
+		</button>
 	</div>
 
 	<!-- 🏛️ [통합 관제 센터 이전 안내 배너] -->
@@ -98,6 +156,13 @@
 			</div>
 		</div>
 		<a
+			href="/v1/admin/observability?tab=SESSIONS"
+			class="inline-flex shrink-0 items-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-xs font-black text-white shadow-md transition hover:bg-slate-900 active:scale-95"
+		>
+			<span>통합 관제 센터로 이동</span>
+			<Icon icon="solar:arrow-right-bold" class="text-sm" />
+		</a>
+	</div>
 			href="/v1/admin/observability?tab=SESSIONS"
 			class="inline-flex shrink-0 items-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-xs font-black text-white shadow-md transition hover:bg-slate-900 active:scale-95"
 		>

@@ -14,6 +14,7 @@
 	import { page } from '$app/state';
 	import * as api from '$lib/api/admin.js';
 	import { toast } from '$lib/runes/toast.svelte.js';
+	import { getSiteTitle } from '$lib/config/site';
 	import Icon from '@iconify/svelte';
 
 	import AlertList from './components/AlertList.svelte';
@@ -154,10 +155,10 @@
 </script>
 
 <svelte:head>
-	<title>알림·지시 관리 | jeju.live Core</title>
+	<title>{getSiteTitle('알림·지시 관리')}</title>
 </svelte:head>
 
-<div class="mx-auto max-w-7xl space-y-6 px-4 py-8 font-['Noto_Sans_KR','Outfit'] md:space-y-8 md:px-6 lg:px-8">
+<div class="mx-auto max-w-7xl space-y-6 px-4 py-8 pb-24 font-['Noto_Sans_KR','Outfit'] md:space-y-8 md:px-6 lg:px-8">
 	<!-- ===================================================================== -->
 	<!-- 1. 페이지 헤더 & 실시간 컨트롤 바 -->
 	<!-- ===================================================================== -->
@@ -178,7 +179,7 @@
 			</p>
 		</div>
 
-		<!-- 상단 액션 버튼 그룹 -->
+		<!-- 상단 액션 버튼 그룹 (맨 우측 [관리자 홈], 그 좌측 [새로고침] 고정, 이후 버튼은 새로고침 좌측) -->
 		<div class="flex flex-wrap items-center gap-3">
 			<button
 				onclick={() => (showCreateModal = true)}
@@ -196,14 +197,6 @@
 				<span>푸시 구독자 관리 (/v1/admin/pushs)</span>
 			</a>
 
-			<a
-				href="/v1/admin"
-				class="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 active:scale-95"
-			>
-				<Icon icon="solar:home-smile-angle-bold-duotone" class="text-base text-slate-500" />
-				<span>관리자 홈</span>
-			</a>
-
 			<button
 				onclick={loadAlerts}
 				disabled={loading}
@@ -212,6 +205,14 @@
 				<Icon icon="solar:restart-bold" class="text-base {loading ? 'animate-spin' : ''}" />
 				<span>새로고침</span>
 			</button>
+
+			<a
+				href="/v1/admin"
+				class="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 active:scale-95"
+			>
+				<Icon icon="solar:home-smile-angle-bold-duotone" class="text-base text-slate-500" />
+				<span>관리자 홈</span>
+			</a>
 		</div>
 	</div>
 

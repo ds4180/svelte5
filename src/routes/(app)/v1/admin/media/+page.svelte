@@ -10,6 +10,7 @@
 	import { onMount } from 'svelte';
 	import { env } from '$env/dynamic/public';
 	import { getMediaUrl, getSecureMediaUrl } from '$lib/config/media';
+	import { getSiteTitle } from '$lib/config/site';
 	import { fade, slide, fly } from 'svelte/transition';
 	import ImageUploader from '$lib/components/ImageUploader.svelte';
 	import Icon from '@iconify/svelte';
@@ -515,11 +516,11 @@
 </script>
 
 <svelte:head>
-	<title>파일·사진 관리 | Core Governance</title>
+	<title>{getSiteTitle('파일·사진 관리')}</title>
 </svelte:head>
 
-<div class="mx-auto max-w-7xl space-y-8 px-4 pb-20 font-['Outfit','Noto_Sans_KR'] md:px-8">
-	<!-- 🏛️ 모던 엔터프라이즈 통합 헤더 규격 -->
+<div class="mx-auto max-w-7xl space-y-8 px-4 pb-24 font-['Outfit','Noto_Sans_KR'] md:px-8">
+	<!-- 🏛️ 모던 엔터프라이즈 통합 헤더 규격 (새로고침과 관리자 홈은 필수 기본값) -->
 	<header class="flex flex-col items-start justify-between gap-6 border-b-4 border-slate-900 pb-8 md:flex-row md:items-end">
 		<div>
 			<div class="flex items-center gap-2 mb-2">
@@ -537,7 +538,7 @@
 			</p>
 		</div>
 
-		<!-- 상단 헤더 액션 버튼 모음 -->
+		<!-- 상단 헤더 액션 버튼 모음 (새로고침과 관리자 홈은 필수 기본값) -->
 		<div class="flex flex-wrap items-center gap-3">
 			<!-- 관리자용 숨김/격리 파일 열람 토글 -->
 			{#if userRank >= 4}
@@ -570,6 +571,14 @@
 				<Icon icon="ph:arrows-clockwise-bold" class="text-base {isLoadingMedia ? 'animate-spin' : ''}" />
 				<span>새로고침</span>
 			</button>
+
+			<a
+				href="/v1/admin"
+				class="flex items-center gap-2 px-4 py-2.5 rounded-2xl border-2 border-slate-200 bg-white font-black text-xs uppercase tracking-wider text-slate-700 hover:border-slate-400 hover:bg-slate-50 transition-all shadow-sm"
+			>
+				<Icon icon="solar:home-smile-angle-bold-duotone" class="text-base text-slate-500" />
+				<span>관리자 홈</span>
+			</a>
 		</div>
 	</header>
 

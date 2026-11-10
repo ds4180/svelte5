@@ -6,6 +6,7 @@
 	import { onMount } from 'svelte';
 	import * as api from '$lib/api/admin.js';
 	import { toast } from '$lib/runes/toast.svelte.ts';
+	import { getSiteTitle } from '$lib/config/site';
 	import { fade, fly } from 'svelte/transition';
 	import Icon from '@iconify/svelte';
 
@@ -332,7 +333,7 @@
 </script>
 
 <svelte:head>
-	<title>관리자 페이지 | jeju.live Core</title>
+	<title>{getSiteTitle('관리자 페이지')}</title>
 </svelte:head>
 
 <div

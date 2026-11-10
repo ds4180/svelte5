@@ -2,19 +2,30 @@
 	/**
 	 * @file (app)/v1/admin/services/+page.svelte
 	 * @description 서비스 엔진 및 앱 통합 관리 페이지 (Lego Architecture)
+	 *              - 전사 표준 모던 엔터프라이즈 헤더 & 4대 핵심 관제 지표 요약 카드
+	 *              - 반응형 카드 기반 본문 레이아웃 (모바일 세로/태블릿/데스크탑 최적화)
+	 *              - 브라우저 탭 단일 진실 공급원(SSOT) 환경설정 타이틀 연동
+	 *              - 4대 탭 기반 네비게이션 (번들 / 앱 / 엔진 / 레지스트리)
 	 */
 	import { onMount } from 'svelte';
 	import * as api from '$lib/api/admin.js';
-	import { toast } from '$lib/runes/toast.svelte.ts';
+	import { toast } from '$lib/runes/toast.svelte.js';
+	import { getSiteTitle } from '$lib/config/site';
 	import Icon from '@iconify/svelte';
 	import { fade, fly } from 'svelte/transition';
 
-	let registries = $state([]);
-	let engines = $state([]);
-	let serviceApps = $state([]);
-	let serviceInstances = $state([]);
+	let registries = $state(/** @type {any[]} */ ([]));
+	let engines = $state(/** @type {any[]} */ ([]));
+	let serviceApps = $state(/** @type {any[]} */ ([]));
+	let serviceInstances = $state(/** @type {any[]} */ ([]));
 	let loading = $state(true);
 	let activeTab = $state('instances'); // instances, apps, engines, registries
+
+	// 📊 4대 관제 지표 요약 수치
+	const countInstances = $derived(serviceInstances.length);
+	const countApps = $derived(serviceApps.length);
+	const countEngines = $derived(engines.length);
+	const countRegistries = $derived(registries.length);
 
 	async function loadAll() {
 		loading = true;
@@ -29,8 +40,8 @@
 			engines = e;
 			serviceApps = a;
 			serviceInstances = i;
-		} catch (err) {
-			toast.error(err.message);
+		} catch (/** @type {any} */ err) {
+			toast.error('데이터 로드 실패: ' + (err.message || '오류 발생'));
 		} finally {
 			loading = false;
 		}
@@ -40,9 +51,13 @@
 
 	// --- [CRUD Helpers] ---
 	let showModal = $state(false);
-	let modalType = $state(''); // registry, engine, app
-	let formData = $state({});
+	let modalType = $state(''); // registry, engine, app, instance
+	let formData = $state(/** @type {any} */ ({}));
 
+	/**
+	 * @param {string} type
+	 * @param {any} target
+	 */
 	function openModal(type, target = null) {
 		modalType = type;
 		formData = target ? { ...target } : {};
@@ -84,11 +99,15 @@
 			toast.success('성공적으로 저장되었습니다.');
 			showModal = false;
 			loadAll();
-		} catch (err) {
-			toast.error(err.message);
+		} catch (/** @type {any} */ err) {
+			toast.error('저장 실패: ' + (err.message || '오류 발생'));
 		}
 	}
 
+	/**
+	 * @param {string} type
+	 * @param {any} id
+	 */
 	async function handleDelete(type, id) {
 		if (!confirm('정말 삭제하시겠습니까?')) return;
 		try {
@@ -97,285 +116,368 @@
 			else if (type === 'instance') await api.adminDeleteServiceInstance(id);
 			toast.success('삭제되었습니다.');
 			loadAll();
-		} catch (err) {
-			toast.error(err.message);
+		} catch (/** @type {any} */ err) {
+			toast.error('삭제 실패: ' + (err.message || '오류 발생'));
 		}
 	}
 </script>
 
 <svelte:head>
-	<title>서비스 마스터 (Add-on) | jeju.live Core</title>
+	<title>{getSiteTitle('서비스 마스터 (Add-on)')}</title>
 </svelte:head>
 
-<div class="mx-auto max-w-7xl space-y-8 px-4 pb-20 font-['Outfit','Noto_Sans_KR'] md:px-8">
-	<!-- Header -->
-	<header class="flex flex-col items-start justify-between gap-6 border-b-4 border-black pb-8 md:flex-row md:items-end">
+<div class="animate-fade-in mx-auto max-w-7xl space-y-8 px-4 py-8 pb-24 font-['Noto_Sans_KR','Outfit'] md:px-8">
+	<!-- ===================================================================== -->
+	<!-- 1. 페이지 헤더 & 우측 컨트롤 바 -->
+	<!-- ===================================================================== -->
+	<header class="flex flex-col items-start justify-between gap-6 border-b-4 border-slate-900 pb-8 md:flex-row md:items-end">
 		<div>
-			<span class="mb-2 block text-[10px] font-black tracking-[0.4em] text-slate-400 uppercase">Modular Services</span>
-			<h1 class="text-4xl font-black tracking-tighter text-slate-900 uppercase italic md:text-6xl">
-				서비스 <span class="NOT-ITALIC text-rose-600">마스터 (Add-on)</span>
+			<div class="flex items-center gap-2 mb-2">
+				<span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black uppercase tracking-widest bg-rose-50 text-rose-700 border border-rose-200">
+					<Icon icon="ph:lego-bold" class="text-sm" />
+					SYSTEM GOVERNANCE • MODULAR SERVICES
+				</span>
+				<span class="text-xs font-bold text-slate-400 font-mono">v1/admin/services</span>
+			</div>
+			<h1 class="text-3xl sm:text-4xl font-black tracking-tighter text-slate-900 uppercase italic md:text-5xl">
+				서비스 <span class="not-italic text-rose-600">마스터 (Add-on)</span>
 			</h1>
-			<p class="mt-4 text-sm font-bold text-slate-500">
-				댓글, 업로드, 추천 등 독립된 레고 조각들을 관리하고 앱 인스턴스에 주입할 준비를 합니다.
+			<p class="mt-2 text-xs sm:text-sm font-bold text-slate-500">
+				댓글, 업로드, 추천 등 독립된 레고형 서비스 번들을 관리하고 앱 인스턴스에 주입합니다.
 			</p>
 		</div>
-		<div class="flex gap-2">
-			<button onclick={() => openModal('app')} class="btn h-14 rounded-xl bg-rose-600 px-8 font-black text-white shadow-lg transition-all hover:bg-rose-700">
-				<Icon icon="ph:plus-bold" /> 서비스 앱 생성
+
+		<!-- 상단 액션 버튼 그룹 -->
+		<div class="flex flex-wrap items-center gap-2.5 w-full md:w-auto">
+			<button
+				onclick={() => openModal('instance')}
+				class="flex items-center gap-1.5 px-4 py-2.5 rounded-2xl border-2 border-rose-600 bg-rose-600 text-white font-black text-xs uppercase tracking-wider hover:bg-rose-700 transition shadow-sm"
+			>
+				<Icon icon="ph:plus-circle-bold" class="text-base" />
+				<span>새 번들 생성</span>
 			</button>
+
+			<button
+				onclick={loadAll}
+				disabled={loading}
+				class="flex items-center gap-1.5 px-4 py-2.5 rounded-2xl border-2 border-slate-200 bg-white font-black text-xs uppercase tracking-wider text-slate-700 hover:border-slate-400 transition shadow-sm disabled:opacity-50"
+			>
+				<Icon icon="ph:arrows-clockwise-bold" class="text-base {loading ? 'animate-spin' : ''}" />
+				<span>새로고침</span>
+			</button>
+
+			<a
+				href="/v1/admin"
+				class="flex items-center gap-1.5 px-4 py-2.5 rounded-2xl border-2 border-slate-200 bg-white font-black text-xs uppercase tracking-wider text-slate-700 hover:border-slate-400 transition shadow-sm"
+			>
+				<Icon icon="ph:house-bold" class="text-base text-slate-500" />
+				<span>관리자 홈</span>
+			</a>
 		</div>
 	</header>
 
-	<!-- Tabs -->
-	<nav class="sticky top-0 z-20 -mx-4 mb-8 flex gap-2 border-b-2 border-slate-100 bg-white/80 px-4 backdrop-blur-md overflow-x-auto no-scrollbar md:mx-0 md:px-0">
-		<button onclick={() => activeTab = 'instances'} class="whitespace-nowrap px-6 py-4 text-[11px] font-black uppercase tracking-widest transition-all md:text-sm {activeTab === 'instances' ? 'border-b-4 border-rose-600 text-rose-600' : 'text-slate-400 opacity-50 hover:opacity-100'}">
-			Service Bundles
+	<!-- ===================================================================== -->
+	<!-- 2. 알림/요약 지표 카드 (최대 4개, 최소 1개 규격) -->
+	<!-- ===================================================================== -->
+	<section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-5">
+		<!-- 카드 1: 서비스 번들 -->
+		<button
+			onclick={() => (activeTab = 'instances')}
+			class="text-left relative overflow-hidden rounded-[1.75rem] border-2 bg-white p-5 shadow-sm transition group {activeTab === 'instances' ? 'border-rose-500 bg-rose-50/20 ring-2 ring-rose-500/20' : 'border-slate-100 hover:border-rose-300'}"
+		>
+			<div class="flex items-center justify-between mb-3">
+				<span class="text-xs font-black tracking-widest uppercase text-slate-400 group-hover:text-rose-600">Service Bundles</span>
+				<div class="flex h-10 w-10 items-center justify-center rounded-2xl bg-rose-50 text-rose-600 group-hover:scale-110 transition-transform">
+					<Icon icon="ph:package-bold" class="text-2xl" />
+				</div>
+			</div>
+			<div class="text-3xl font-black text-slate-900 tracking-tight">
+				{loading ? '...' : countInstances}
+				<span class="text-sm font-bold text-slate-400 ml-1">개 번들</span>
+			</div>
+			<div class="mt-2 flex items-center gap-2 text-xs font-bold text-rose-600">
+				<span class="rounded-lg bg-rose-50 px-2 py-0.5 font-mono">조합 세트</span>
+			</div>
 		</button>
-		<button onclick={() => activeTab = 'apps'} class="whitespace-nowrap px-6 py-4 text-[11px] font-black uppercase tracking-widest transition-all md:text-sm {activeTab === 'apps' ? 'border-b-4 border-rose-600 text-rose-600' : 'text-slate-400 opacity-50 hover:opacity-100'}">
-			Service Apps
+
+		<!-- 카드 2: 서비스 앱 -->
+		<button
+			onclick={() => (activeTab = 'apps')}
+			class="text-left relative overflow-hidden rounded-[1.75rem] border-2 bg-white p-5 shadow-sm transition group {activeTab === 'apps' ? 'border-purple-500 bg-purple-50/20 ring-2 ring-purple-500/20' : 'border-slate-100 hover:border-purple-300'}"
+		>
+			<div class="flex items-center justify-between mb-3">
+				<span class="text-xs font-black tracking-widest uppercase text-slate-400 group-hover:text-purple-600">Service Apps</span>
+				<div class="flex h-10 w-10 items-center justify-center rounded-2xl bg-purple-50 text-purple-600 group-hover:scale-110 transition-transform">
+					<Icon icon="ph:puzzle-piece-bold" class="text-2xl" />
+				</div>
+			</div>
+			<div class="text-3xl font-black text-slate-900 tracking-tight">
+				{loading ? '...' : countApps}
+				<span class="text-sm font-bold text-slate-400 ml-1">개 모듈</span>
+			</div>
+			<div class="mt-2 flex items-center gap-2 text-xs font-bold text-purple-600">
+				<span class="rounded-lg bg-purple-50 px-2 py-0.5 font-mono">독립 기능</span>
+			</div>
 		</button>
-		<button onclick={() => activeTab = 'engines'} class="whitespace-nowrap px-6 py-4 text-[11px] font-black uppercase tracking-widest transition-all md:text-sm {activeTab === 'engines' ? 'border-b-4 border-rose-600 text-rose-600' : 'text-slate-400 opacity-50 hover:opacity-100'}">
-			Engines
+
+		<!-- 카드 3: 구동 엔진 -->
+		<button
+			onclick={() => (activeTab = 'engines')}
+			class="text-left relative overflow-hidden rounded-[1.75rem] border-2 bg-white p-5 shadow-sm transition group {activeTab === 'engines' ? 'border-emerald-500 bg-emerald-50/20 ring-2 ring-emerald-500/20' : 'border-slate-100 hover:border-emerald-300'}"
+		>
+			<div class="flex items-center justify-between mb-3">
+				<span class="text-xs font-black tracking-widest uppercase text-slate-400 group-hover:text-emerald-600">Engines</span>
+				<div class="flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600 group-hover:scale-110 transition-transform">
+					<Icon icon="ph:cpu-bold" class="text-2xl" />
+				</div>
+			</div>
+			<div class="text-3xl font-black text-slate-900 tracking-tight">
+				{loading ? '...' : countEngines}
+				<span class="text-sm font-bold text-slate-400 ml-1">개 엔진</span>
+			</div>
+			<div class="mt-2 flex items-center gap-2 text-xs font-bold text-emerald-600">
+				<span class="rounded-lg bg-emerald-50 px-2 py-0.5 font-mono">런타임 코어</span>
+			</div>
 		</button>
-		<button onclick={() => activeTab = 'registries'} class="whitespace-nowrap px-6 py-4 text-[11px] font-black uppercase tracking-widest transition-all md:text-sm {activeTab === 'registries' ? 'border-b-4 border-rose-600 text-rose-600' : 'text-slate-400 opacity-50 hover:opacity-100'}">
-			Registries
+
+		<!-- 카드 4: 레지스트리 -->
+		<button
+			onclick={() => (activeTab = 'registries')}
+			class="text-left relative overflow-hidden rounded-[1.75rem] border-2 bg-white p-5 shadow-sm transition group {activeTab === 'registries' ? 'border-amber-500 bg-amber-50/20 ring-2 ring-amber-500/20' : 'border-slate-100 hover:border-amber-300'}"
+		>
+			<div class="flex items-center justify-between mb-3">
+				<span class="text-xs font-black tracking-widest uppercase text-slate-400 group-hover:text-amber-600">Registries</span>
+				<div class="flex h-10 w-10 items-center justify-center rounded-2xl bg-amber-50 text-amber-600 group-hover:scale-110 transition-transform">
+					<Icon icon="ph:books-bold" class="text-2xl" />
+				</div>
+			</div>
+			<div class="text-3xl font-black text-slate-900 tracking-tight">
+				{loading ? '...' : countRegistries}
+				<span class="text-sm font-bold text-slate-400 ml-1">개 등록소</span>
+			</div>
+			<div class="mt-2 flex items-center gap-2 text-xs font-bold text-amber-600">
+				<span class="rounded-lg bg-amber-50 px-2 py-0.5 font-mono">프로토콜 규격</span>
+			</div>
+		</button>
+	</section>
+
+	<!-- ===================================================================== -->
+	<!-- 3. 모드 탭 바 (최소 1개, 일관성 및 확장성) -->
+	<!-- ===================================================================== -->
+	<nav class="flex gap-2 border-b-2 border-slate-200 overflow-x-auto no-scrollbar">
+		<button
+			onclick={() => (activeTab = 'instances')}
+			class="px-6 py-3.5 text-xs font-black uppercase tracking-widest transition-all whitespace-nowrap {activeTab === 'instances' ? 'border-b-4 border-rose-600 text-rose-700 bg-rose-50/60 rounded-t-2xl' : 'text-slate-400 hover:text-slate-700'}"
+		>
+			서비스 번들 ({serviceInstances.length})
+		</button>
+		<button
+			onclick={() => (activeTab = 'apps')}
+			class="px-6 py-3.5 text-xs font-black uppercase tracking-widest transition-all whitespace-nowrap {activeTab === 'apps' ? 'border-b-4 border-rose-600 text-rose-700 bg-rose-50/60 rounded-t-2xl' : 'text-slate-400 hover:text-slate-700'}"
+		>
+			서비스 앱 ({serviceApps.length})
+		</button>
+		<button
+			onclick={() => (activeTab = 'engines')}
+			class="px-6 py-3.5 text-xs font-black uppercase tracking-widest transition-all whitespace-nowrap {activeTab === 'engines' ? 'border-b-4 border-rose-600 text-rose-700 bg-rose-50/60 rounded-t-2xl' : 'text-slate-400 hover:text-slate-700'}"
+		>
+			구동 엔진 ({engines.length})
+		</button>
+		<button
+			onclick={() => (activeTab = 'registries')}
+			class="px-6 py-3.5 text-xs font-black uppercase tracking-widest transition-all whitespace-nowrap {activeTab === 'registries' ? 'border-b-4 border-rose-600 text-rose-700 bg-rose-50/60 rounded-t-2xl' : 'text-slate-400 hover:text-slate-700'}"
+		>
+			레지스트리 ({registries.length})
 		</button>
 	</nav>
 
-	<!-- Content Area -->
-	<main class="min-h-[400px]">
-		{#if loading}
-			<div class="flex h-64 items-center justify-center">
-				<div class="h-12 w-12 animate-spin rounded-full border-4 border-rose-600 border-t-transparent"></div>
+	<!-- ===================================================================== -->
+	<!-- 4. 본문 컨텐츠 (반응형 카드 형식 위주) -->
+	<!-- ===================================================================== -->
+	{#if loading}
+		<div class="flex justify-center py-20">
+			<div class="flex flex-col items-center gap-3">
+				<div class="h-10 w-10 animate-spin rounded-full border-4 border-rose-600 border-t-transparent"></div>
+				<p class="text-xs font-bold text-slate-400 font-mono">서비스 마스터 스캔 중...</p>
 			</div>
-		{:else if activeTab === 'instances'}
-			<div class="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
-				{#each serviceInstances as inst}
-					<div in:fly={{ y: 20 }} class="rounded-2xl border-2 border-slate-100 bg-white p-8 shadow-sm group hover:border-rose-300 transition-all">
-						<div class="flex justify-between items-start mb-4">
-							<Icon icon="ph:package-bold" class="text-3xl text-rose-600" />
-							<div class="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-								<button onclick={() => openModal('instance', inst)} class="p-2 text-slate-400 hover:text-blue-600">
-									<Icon icon="ph:pencil-simple-bold" />
+		</div>
+	{:else if activeTab === 'instances'}
+		<!-- 탭 1: 서비스 번들 카드 목록 -->
+		<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+			{#each serviceInstances as inst}
+				<div class="rounded-2xl border-2 border-slate-200 bg-white p-6 shadow-sm hover:border-rose-400 transition-all flex flex-col justify-between">
+					<div>
+						<div class="flex justify-between items-start mb-3">
+							<div class="flex h-11 w-11 items-center justify-center rounded-2xl bg-rose-50 text-rose-600 text-2xl">
+								<Icon icon="ph:package-bold" />
+							</div>
+							<div class="flex items-center gap-1.5">
+								<button
+									type="button"
+									onclick={() => openModal('instance', inst)}
+									class="px-2.5 py-1 text-xs font-bold text-blue-600 hover:bg-blue-50 rounded-lg transition"
+								>
+									수정
 								</button>
-								<button onclick={() => handleDelete('instance', inst.id)} class="p-2 text-slate-400 hover:text-rose-600">
-									<Icon icon="ph:trash-bold" />
+								<button
+									type="button"
+									onclick={() => handleDelete('instance', inst.id)}
+									class="px-2.5 py-1 text-xs font-bold text-rose-500 hover:bg-rose-50 rounded-lg transition"
+								>
+									삭제
 								</button>
 							</div>
 						</div>
-						<h3 class="text-xl font-black mb-1">{inst.name}</h3>
-						<div class="flex flex-wrap gap-1 mb-6">
+						<h3 class="text-xl font-black text-slate-900 tracking-tight">{inst.name}</h3>
+						<div class="flex flex-wrap gap-1.5 mt-3">
 							{#each (inst.service_app_ids || []) as appId}
-								<span class="text-[8px] font-black bg-rose-50 text-rose-600 px-1.5 py-0.5 rounded border border-rose-100 uppercase">
-									{serviceApps.find(a => a.id === appId)?.name || appId}
+								<span class="text-[10px] font-bold bg-rose-50 text-rose-700 px-2 py-0.5 rounded-md border border-rose-200">
+									{serviceApps.find((a) => a.id === appId)?.name || appId}
 								</span>
 							{/each}
 						</div>
-						<a href="/v1/admin/services/binding" class="text-[10px] font-black uppercase text-rose-600 hover:underline">Go to Bindings →</a>
 					</div>
-				{/each}
-				<button onclick={() => openModal('instance')} class="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-200 p-8 text-slate-300 hover:border-rose-400 hover:text-rose-400">
-					<Icon icon="ph:plus-bold" class="text-2xl mb-2" />
-					<span class="text-[10px] font-black uppercase">Create New Bundle</span>
-				</button>
-			</div>
-		{:else if activeTab === 'apps'}
-			<div class="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
-				{#each serviceApps as app}
-					<div in:fly={{ y: 20 }} class="group relative overflow-hidden rounded-2xl border-2 border-slate-100 bg-white p-8 shadow-sm transition-all hover:border-rose-200 hover:shadow-xl">
-						<div class="mb-6 flex items-center justify-between">
-							<div class="h-12 w-12 bg-rose-50 text-rose-600 flex items-center justify-center rounded-xl text-xl">
+
+					<div class="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between">
+						<span class="text-xs text-slate-400 font-mono">id: {inst.id}</span>
+						<a href="/v1/admin/services/binding" class="text-xs font-bold text-rose-600 hover:underline flex items-center gap-1">
+							<span>바인딩 관리</span>
+							<Icon icon="ph:arrow-right-bold" class="text-xs" />
+						</a>
+					</div>
+				</div>
+			{/each}
+
+			<button
+				type="button"
+				onclick={() => openModal('instance')}
+				class="rounded-2xl border-2 border-dashed border-slate-300 p-8 text-center flex flex-col items-center justify-center hover:border-rose-400 hover:bg-rose-50/30 transition min-h-[180px] group"
+			>
+				<Icon icon="ph:plus-circle-bold" class="text-3xl text-slate-300 group-hover:text-rose-500 transition mb-2" />
+				<span class="text-xs font-black uppercase text-slate-400 group-hover:text-rose-600 transition">새 번들 생성</span>
+			</button>
+		</div>
+	{:else if activeTab === 'apps'}
+		<!-- 탭 2: 서비스 앱 카드 목록 -->
+		<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+			{#each serviceApps as app}
+				<div class="rounded-2xl border-2 border-slate-200 bg-white p-6 shadow-sm hover:border-purple-400 transition-all flex flex-col justify-between">
+					<div>
+						<div class="flex items-center justify-between mb-3">
+							<div class="flex h-11 w-11 items-center justify-center rounded-2xl bg-purple-50 text-purple-600 text-2xl">
 								<Icon icon="ph:puzzle-piece-bold" />
 							</div>
-							<div class="flex gap-1">
-								<button onclick={() => openModal('app', app)} class="btn btn-square btn-ghost btn-sm text-slate-400 hover:text-blue-600">
-									<Icon icon="ph:pencil-simple-bold" />
-								</button>
-							</div>
+							<button
+								type="button"
+								onclick={() => openModal('app', app)}
+								class="px-2.5 py-1 text-xs font-bold text-blue-600 hover:bg-blue-50 rounded-lg transition"
+							>
+								수정
+							</button>
 						</div>
-						<h3 class="mb-2 text-xl font-black tracking-tight">{app.name}</h3>
-						<div class="space-y-2 text-xs font-bold text-slate-500">
-							<p><span class="opacity-50 uppercase">Engine:</span> {app.engine_id}</p>
-							<p><span class="opacity-50 uppercase">Next Chain:</span> {app.child_app_id || 'None'}</p>
-						</div>
-						<div class="mt-6 flex flex-wrap gap-2">
-							<span class="rounded bg-slate-100 px-2 py-1 text-[9px] font-black uppercase">v1.2.0</span>
-							<span class="rounded bg-emerald-50 text-emerald-600 px-2 py-1 text-[9px] font-black uppercase">Active</span>
+						<h3 class="text-xl font-black text-slate-900 tracking-tight">{app.name}</h3>
+						<div class="mt-3 space-y-1 text-xs text-slate-500">
+							<p><span class="font-bold text-slate-400">엔진:</span> {app.engine_id}</p>
+							<p><span class="font-bold text-slate-400">체인:</span> {app.child_app_id || '없음'}</p>
 						</div>
 					</div>
-				{/each}
-			</div>
-		{:else if activeTab === 'engines'}
-			<div class="overflow-x-auto rounded-2xl border-2 border-slate-100 bg-white">
-				<table class="w-full text-left">
-					<thead class="bg-slate-50 text-[10px] font-black uppercase tracking-widest text-slate-400">
-						<tr>
-							<th class="px-8 py-4">ID / Version</th>
-							<th class="px-8 py-4">Registry</th>
-							<th class="px-8 py-4">Frontend Plugin</th>
-							<th class="px-8 py-4 text-right">Actions</th>
+
+					<div class="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between">
+						<span class="text-[10px] font-bold bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded border border-emerald-200">
+							Active
+						</span>
+						<span class="text-xs text-slate-400 font-mono">id: {app.id}</span>
+					</div>
+				</div>
+			{/each}
+		</div>
+	{:else if activeTab === 'engines'}
+		<!-- 탭 3: 구동 엔진 목록 -->
+		<div class="overflow-x-auto rounded-2xl border-2 border-slate-200 bg-white">
+			<table class="w-full text-left text-xs">
+				<thead class="bg-slate-50 text-[11px] font-black uppercase text-slate-400 border-b border-slate-200">
+					<tr>
+						<th class="px-6 py-4">ID / Version</th>
+						<th class="px-6 py-4">Registry</th>
+						<th class="px-6 py-4">Frontend Plugin</th>
+						<th class="px-6 py-4 text-right">Actions</th>
+					</tr>
+				</thead>
+				<tbody class="divide-y divide-slate-100 font-bold">
+					{#each engines as engine}
+						<tr class="hover:bg-slate-50">
+							<td class="px-6 py-4 font-mono font-black text-slate-900">{engine.id} ({engine.version})</td>
+							<td class="px-6 py-4 text-slate-600">{engine.registry_id}</td>
+							<td class="px-6 py-4 text-slate-500">{engine.frontend_component || '-'}</td>
+							<td class="px-6 py-4 text-right">
+								<button onclick={() => handleDelete('engine', engine.id)} class="text-rose-500 hover:underline">
+									삭제
+								</button>
+							</td>
 						</tr>
-					</thead>
-					<tbody class="divide-y divide-slate-100 font-bold">
-						{#each engines as engine}
-							<tr class="hover:bg-slate-50/50">
-								<td class="px-8 py-6">
-									<div class="text-slate-900">{engine.id}</div>
-									<div class="text-[10px] opacity-40">{engine.version}</div>
-								</td>
-								<td class="px-8 py-6 text-rose-600 uppercase text-xs">{engine.registry_id}</td>
-								<td class="px-8 py-6">
-									<span class="rounded-lg bg-blue-50 px-3 py-1 text-xs text-blue-600">{engine.frontend_plugin}</span>
-								</td>
-								<td class="px-8 py-6 text-right">
-									<button onclick={() => handleDelete('engine', engine.id)} class="text-slate-300 hover:text-rose-600 transition-colors">
-										<Icon icon="ph:trash-bold" />
-									</button>
-								</td>
-							</tr>
-						{/each}
-					</tbody>
-				</table>
-				<div class="p-8 border-t border-slate-100">
-					<button onclick={() => openModal('engine')} class="btn btn-outline border-2 border-slate-200 font-black uppercase tracking-widest hover:bg-black hover:text-white">
-						<Icon icon="ph:plus-bold" /> 엔진 추가 등록
+					{/each}
+				</tbody>
+			</table>
+		</div>
+	{:else}
+		<!-- 탭 4: 레지스트리 목록 -->
+		<div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+			{#each registries as reg}
+				<div class="rounded-2xl border-2 border-slate-200 bg-white p-6 shadow-sm">
+					<h4 class="text-lg font-black text-slate-900">{reg.name} ({reg.id})</h4>
+					<p class="text-xs text-slate-500 mt-1">{reg.description || '설명 없음'}</p>
+				</div>
+			{/each}
+		</div>
+	{/if}
+</div>
+
+<!-- 모달 다이얼로그 (생성/수정) -->
+{#if showModal}
+	<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+		<div class="w-full max-w-lg rounded-3xl border-2 border-slate-200 bg-white p-6 sm:p-8 shadow-2xl">
+			<div class="mb-6 flex items-center justify-between border-b pb-4">
+				<h3 class="text-xl font-black text-slate-900 uppercase">
+					{formData.id ? '수정' : '신규 생성'} ({modalType})
+				</h3>
+				<button onclick={() => (showModal = false)} class="text-slate-400 hover:text-slate-700">
+					<Icon icon="ph:x-bold" class="text-xl" />
+				</button>
+			</div>
+
+			<div class="space-y-4">
+				{#if modalType === 'instance'}
+					<div>
+						<label for="bundle-name-input" class="block text-xs font-bold text-slate-700 mb-1">번들 명칭</label>
+						<input
+							id="bundle-name-input"
+							type="text"
+							bind:value={formData.name}
+							class="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-xs font-bold focus:border-rose-600 focus:outline-none"
+							placeholder="예: Standard Blog Set"
+						/>
+					</div>
+				{:else}
+					<div>
+						<label for="service-item-name-input" class="block text-xs font-bold text-slate-700 mb-1">명칭</label>
+						<input
+							id="service-item-name-input"
+							type="text"
+							bind:value={formData.name}
+							class="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-xs font-bold focus:border-rose-600 focus:outline-none"
+						/>
+					</div>
+				{/if}
+
+				<div class="pt-4 flex justify-end gap-2">
+					<button onclick={() => (showModal = false)} class="px-4 py-2 rounded-xl border border-slate-200 text-xs font-bold hover:bg-slate-50">
+						취소
+					</button>
+					<button onclick={handleSubmit} class="px-5 py-2 rounded-xl bg-rose-600 text-white text-xs font-black hover:bg-rose-700 shadow">
+						저장
 					</button>
 				</div>
 			</div>
-		{:else if activeTab === 'registries'}
-			<div class="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
-				{#each registries as reg}
-					<div class="rounded-2xl border-2 border-slate-100 bg-white p-6">
-						<div class="mb-4 text-xs font-black text-rose-600 uppercase tracking-widest">{reg.id}</div>
-						<h4 class="mb-2 text-lg font-black">{reg.name}</h4>
-						<p class="text-xs text-slate-400 leading-relaxed font-bold">{reg.description || 'No description provided.'}</p>
-						<button onclick={() => handleDelete('registry', reg.id)} class="mt-6 text-xs font-black text-rose-600/30 hover:text-rose-600 uppercase">Delete Registry</button>
-					</div>
-				{/each}
-				<button onclick={() => openModal('registry')} class="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-200 p-8 text-slate-300 transition-all hover:border-rose-400 hover:text-rose-400">
-					<Icon icon="ph:plus-circle-bold" class="text-4xl mb-2" />
-					<span class="text-xs font-black uppercase tracking-widest">Add Registry</span>
-				</button>
-			</div>
-		{/if}
-	</main>
-</div>
-
-<!-- Modal -->
-{#if showModal}
-	<div transition:fade class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
-		<div transition:fly={{ y: 50 }} class="w-full max-w-xl overflow-hidden rounded-3xl bg-white shadow-2xl">
-			<header class="flex items-center justify-between border-b border-slate-100 bg-slate-50 px-10 py-6">
-				<h2 class="text-2xl font-black tracking-tighter uppercase italic">{modalType} <span class="text-rose-600">Configuration</span></h2>
-				<button onclick={() => showModal = false} class="text-slate-400 hover:text-black">
-					<Icon icon="ph:x-bold" class="text-2xl" />
-				</button>
-			</header>
-			
-			<div class="p-10 space-y-6 max-h-[70vh] overflow-y-auto">
-				{#if modalType === 'registry'}
-					<div class="space-y-2">
-						<label class="text-[10px] font-black uppercase tracking-widest opacity-40">Registry ID (Key)</label>
-						<input type="text" bind:value={formData.id} class="w-full border-b-2 border-slate-200 py-2 font-bold focus:border-rose-600 focus:outline-none" placeholder="e.g., comment" />
-					</div>
-					<div class="space-y-2">
-						<label class="text-[10px] font-black uppercase tracking-widest opacity-40">Display Name</label>
-						<input type="text" bind:value={formData.name} class="w-full border-b-2 border-slate-200 py-2 font-bold focus:border-rose-600 focus:outline-none" placeholder="e.g., 댓글 서비스" />
-					</div>
-				{:else if modalType === 'engine'}
-					<div class="grid grid-cols-2 gap-6">
-						<div class="space-y-2">
-							<label class="text-[10px] font-black uppercase tracking-widest opacity-40">Engine ID</label>
-							<input type="text" bind:value={formData.id} class="w-full border-b-2 border-slate-200 py-2 font-bold focus:border-rose-600 focus:outline-none" />
-						</div>
-						<div class="space-y-2">
-							<label class="text-[10px] font-black uppercase tracking-widest opacity-40">Registry Group</label>
-							<select bind:value={formData.registry_id} class="w-full border-b-2 border-slate-200 py-2 font-bold focus:border-rose-600 focus:outline-none">
-								{#each registries as r}<option value={r.id}>{r.name}</option>{/each}
-							</select>
-						</div>
-					</div>
-					<div class="space-y-2">
-						<label class="text-[10px] font-black uppercase tracking-widest opacity-40">Frontend Plugin (Svelte Component)</label>
-						<input type="text" bind:value={formData.frontend_plugin} class="w-full border-b-2 border-slate-200 py-2 font-bold focus:border-rose-600 focus:outline-none" placeholder="e.g., CommentEngine" />
-					</div>
-				{:else if modalType === 'app'}
-					<div class="space-y-2">
-						<label class="text-[10px] font-black uppercase tracking-widest opacity-40">App Name</label>
-						<input type="text" bind:value={formData.name} class="w-full border-b-2 border-slate-200 py-2 font-bold focus:border-rose-600 focus:outline-none" />
-					</div>
-					<div class="grid grid-cols-2 gap-6">
-						<div class="space-y-2">
-							<label class="text-[10px] font-black uppercase tracking-widest opacity-40">Base Engine</label>
-							<select bind:value={formData.engine_id} class="w-full border-b-2 border-slate-200 py-2 font-bold focus:border-rose-600 focus:outline-none">
-								{#each engines as e}<option value={e.id}>{e.id} ({e.version})</option>{/each}
-							</select>
-						</div>
-						<div class="space-y-2">
-							<label class="text-[10px] font-black uppercase tracking-widest opacity-40">Child (Chain)</label>
-							<select bind:value={formData.child_app_id} class="w-full border-b-2 border-slate-200 py-2 font-bold focus:border-rose-600 focus:outline-none">
-								<option value={null}>None</option>
-								{#each serviceApps.filter(a => a.id !== formData.id) as a}<option value={a.id}>{a.name}</option>{/each}
-							</select>
-						</div>
-					</div>
-					<div class="space-y-2">
-						<label class="text-[10px] font-black uppercase tracking-widest opacity-40">JSON Configuration</label>
-						<textarea bind:value={formData.config_str} rows="5" class="w-full rounded-xl border-2 border-slate-100 bg-slate-50 p-4 font-mono text-xs focus:border-rose-600 focus:outline-none"></textarea>
-					</div>
-				{:else if modalType === 'instance'}
-					<div class="space-y-6">
-						<div class="space-y-2">
-							<label class="text-[10px] font-black uppercase tracking-widest opacity-40">Bundle Name</label>
-							<input type="text" bind:value={formData.name} class="w-full border-b-2 border-slate-200 py-2 font-bold focus:border-rose-600 focus:outline-none" placeholder="e.g., Standard Board Plugin Set" />
-						</div>
-						
-						<div class="space-y-4">
-							<label class="text-[10px] font-black uppercase tracking-widest opacity-40">Included Service Apps (Select & Order)</label>
-							<div class="space-y-2 max-h-60 overflow-y-auto rounded-xl border-2 border-slate-50 p-2">
-								{#each serviceApps as app}
-									<label class="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50 cursor-pointer transition-colors {formData.service_app_ids?.includes(app.id) ? 'bg-rose-50 border-rose-100 border' : ''}">
-										<input 
-											type="checkbox" 
-											checked={formData.service_app_ids?.includes(app.id)}
-											onchange={(e) => {
-												if (!formData.service_app_ids) formData.service_app_ids = [];
-												if (e.target.checked) {
-													formData.service_app_ids = [...formData.service_app_ids, app.id];
-												} else {
-													formData.service_app_ids = formData.service_app_ids.filter(id => id !== app.id);
-												}
-											}}
-											class="checkbox checkbox-rose checkbox-sm" 
-										/>
-										<div class="flex-1">
-											<div class="text-sm font-black">{app.name}</div>
-											<div class="text-[9px] opacity-40 uppercase font-bold">{app.engine_id}</div>
-										</div>
-										{#if formData.service_app_ids?.includes(app.id)}
-											<span class="text-[10px] font-black text-rose-600 bg-white px-2 py-1 rounded-lg">
-												Order: {formData.service_app_ids.indexOf(app.id) + 1}
-											</span>
-										{/if}
-									</label>
-								{/each}
-							</div>
-							<p class="text-[9px] font-bold text-slate-400">※ 체크한 순서대로 화면에 렌더링됩니다.</p>
-						</div>
-					</div>
-				{/if}
-			</div>
-
-			<footer class="flex justify-end gap-3 bg-slate-50 px-10 py-6">
-				<button onclick={() => showModal = false} class="btn btn-ghost font-black uppercase tracking-widest opacity-50">Cancel</button>
-				<button onclick={handleSubmit} class="btn bg-black px-10 font-black text-white transition-all hover:bg-rose-600">Save Changes</button>
-			</footer>
 		</div>
 	</div>
 {/if}
-
-<style>
-	:global(body) { background-color: #fcfcfc; }
-	.no-scrollbar::-webkit-scrollbar { display: none; }
-	.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-</style>

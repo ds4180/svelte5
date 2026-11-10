@@ -14,6 +14,7 @@
 	import { onMount } from 'svelte';
 	import * as api from '$lib/api/admin.js';
 	import { toast } from '$lib/runes/toast.svelte.js';
+	import { getSiteTitle } from '$lib/config/site';
 	import Icon from '@iconify/svelte';
 
 	// 🌐 1. 글로벌 사이트 기본 설정
@@ -219,14 +220,14 @@
 </script>
 
 <svelte:head>
-	<title>환경설정 | jeju.live Core</title>
+	<title>{getSiteTitle('환경설정')}</title>
 </svelte:head>
 
-<div class="mx-auto max-w-7xl space-y-6 px-4 py-8 font-['Noto_Sans_KR','Outfit'] md:space-y-8 md:px-6 lg:px-8">
+<div class="mx-auto max-w-7xl space-y-6 px-4 py-8 pb-24 font-['Noto_Sans_KR','Outfit'] md:space-y-8 md:px-6 lg:px-8">
 	<!-- ===================================================================== -->
-	<!-- 1. 페이지 헤더 & 액션 바 -->
+	<!-- 1. 페이지 헤더 & 액션 바 (기본값: 새로고침 + 관리자 홈) -->
 	<!-- ===================================================================== -->
-	<div class="flex flex-col gap-4 border-b-2 border-slate-900 pb-6 md:flex-row md:items-end md:justify-between md:border-b-4">
+	<div class="flex flex-col gap-4 border-b-2 border-slate-900 pb-6 md:flex-row md:items-end md:justify-between md:border-b-4 md:pb-8">
 		<div>
 			<div class="flex items-center gap-2">
 				<span class="inline-flex items-center gap-1.5 rounded-full bg-slate-900 px-3 py-1 text-[11px] font-black tracking-widest text-emerald-400 uppercase">
@@ -243,16 +244,8 @@
 			</p>
 		</div>
 
-		<!-- 상단 버튼 그룹 -->
+		<!-- 상단 버튼 그룹 (맨 우측 [관리자 홈], 그 좌측 [새로고침] 고정, 이후 버튼은 새로고침 좌측) -->
 		<div class="flex flex-wrap items-center gap-3">
-			<a
-				href="/v1/admin"
-				class="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 active:scale-95"
-			>
-				<Icon icon="solar:home-smile-angle-bold-duotone" class="text-base text-slate-500" />
-				<span>관리자 홈</span>
-			</a>
-
 			<button
 				onclick={saveSettings}
 				disabled={isSaving || isLoading}
@@ -266,7 +259,98 @@
 					<span>설정 전체 저장</span>
 				{/if}
 			</button>
+
+			<button
+				onclick={loadSettings}
+				disabled={isLoading}
+				class="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 active:scale-95 disabled:opacity-50"
+			>
+				<Icon icon="solar:restart-bold" class="text-base {isLoading ? 'animate-spin' : ''}" />
+				<span>새로고침</span>
+			</button>
+
+			<a
+				href="/v1/admin"
+				class="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 active:scale-95"
+			>
+				<Icon icon="solar:home-smile-angle-bold-duotone" class="text-base text-slate-500" />
+				<span>관리자 홈</span>
+			</a>
 		</div>
+	</div>
+
+	<!-- ===================================================================== -->
+	<!-- 2. 상단 4대 핵심 지표 요약 카드 (Status Cards: 1~4개) -->
+	<!-- ===================================================================== -->
+	<div class="grid grid-cols-2 gap-4 md:grid-cols-4 md:gap-5">
+		<div class="flex flex-col justify-between rounded-[1.75rem] border-2 border-slate-200 bg-white p-5 shadow-sm">
+			<div class="flex items-center justify-between">
+				<span class="text-xs font-black tracking-wider text-slate-400 uppercase">Site Title</span>
+				<div class="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
+					<Icon icon="solar:widget-5-bold-duotone" class="text-xl" />
+				</div>
+			</div>
+			<div class="mt-4">
+				<div class="text-xl font-black text-slate-900 truncate" title={siteTitle}>{siteTitle}</div>
+				<div class="mt-1 text-xs font-bold text-blue-600">랜딩: {landingPage}</div>
+			</div>
+		</div>
+
+		<div class="flex flex-col justify-between rounded-[1.75rem] border-2 border-slate-200 bg-white p-5 shadow-sm">
+			<div class="flex items-center justify-between">
+				<span class="text-xs font-black tracking-wider text-slate-400 uppercase">Register Policy</span>
+				<div class="flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
+					<Icon icon="solar:users-group-rounded-bold-duotone" class="text-xl" />
+				</div>
+			</div>
+			<div class="mt-4">
+				<div class="text-xl font-black text-slate-900">
+					{registerMode === 'ADMIN_ONLY' ? '초대 전용' : registerMode === 'APPROVAL' ? '가입 승인제' : '자율 가입'}
+				</div>
+				<div class="mt-1 text-xs font-bold text-slate-400 font-mono">{registerMode}</div>
+			</div>
+		</div>
+
+		<div class="flex flex-col justify-between rounded-[1.75rem] border-2 border-slate-200 bg-white p-5 shadow-sm">
+			<div class="flex items-center justify-between">
+				<span class="text-xs font-black tracking-wider text-slate-400 uppercase">Watchdog Sentinel</span>
+				<div class="flex h-9 w-9 items-center justify-center rounded-xl {watchdogEnabled ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}">
+					<Icon icon="solar:shield-warning-bold-duotone" class="text-xl" />
+				</div>
+			</div>
+			<div class="mt-4">
+				<div class="text-xl font-black {watchdogEnabled ? 'text-emerald-600' : 'text-rose-600'}">
+					{watchdogEnabled ? '실시간 감시 ON' : '감시 OFF'}
+				</div>
+				<div class="mt-1 text-xs font-bold text-slate-400">임계치: {watchdogFailThreshold}회 실패</div>
+			</div>
+		</div>
+
+		<div class="flex flex-col justify-between rounded-[1.75rem] border-2 border-slate-200 bg-white p-5 shadow-sm">
+			<div class="flex items-center justify-between">
+				<span class="text-xs font-black tracking-wider text-slate-400 uppercase">Redis & GC Life</span>
+				<div class="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
+					<Icon icon="solar:trash-bin-trash-bold-duotone" class="text-xl" />
+				</div>
+			</div>
+			<div class="mt-4">
+				<div class="text-xl font-black text-slate-900">{retentionRedisDynamicHours}시간 소멸</div>
+				<div class="mt-1 text-xs font-bold text-slate-400">감사로그: {retentionAuditLogDays}일</div>
+			</div>
+		</div>
+	</div>
+
+	<!-- ===================================================================== -->
+	<!-- 3. 전사 공통 탭 바 (최소 1개 일관성 및 확장성) -->
+	<!-- ===================================================================== -->
+	<div class="flex items-center border-b-2 border-slate-200">
+		<button
+			type="button"
+			class="flex items-center gap-2 border-b-4 border-blue-600 bg-blue-50/50 px-6 py-3 text-xs font-black text-blue-600 rounded-t-2xl transition"
+		>
+			<Icon icon="solar:settings-bold-duotone" class="text-base" />
+			<span>전체 환경설정</span>
+		</button>
 	</div>
 
 	{#if isLoading}
