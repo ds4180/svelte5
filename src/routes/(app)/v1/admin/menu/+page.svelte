@@ -16,6 +16,7 @@
 	import { getSiteTitle } from '$lib/config/site';
 	import { browser } from '$app/environment';
 	import Icon from '@iconify/svelte';
+	import SmartIcon from '$lib/components/SmartIcon.svelte';
 
 	let menus = $state([]);
 	let apps = $state([]);
@@ -135,26 +136,54 @@
 
 	function startEdit(m) {
 		editingMenu = {
-			...m,
+			id: m.id,
 			parent_id: m.parent_id || '',
-			app_id: m.app_id || '',
-			app_instance_id: m.app_instance_id || '',
+			title: m.title || '',
+			icon_name: m.icon_name || '🚀',
+			link_type: m.link_type === 'APP' ? 'INSTANCE' : (m.link_type || 'INSTANCE'),
 			external_url: m.external_url || '',
-			link_type: m.link_type || 'INSTANCE',
+			app_id: m.app_id || '',
+			app_instance_id: m.link_type === 'SYSTEM' ? '-1' : (m.app_instance_id != null ? String(m.app_instance_id) : ''),
+			page_mode: 'user',
+			order: m.order ?? 0,
+			is_visible: m.is_visible !== false,
 			min_rank: m.min_rank ?? 0
 		};
 		activeTab = 'form';
 	}
 
 	async function handleSave() {
-		if (!editingMenu.title) {
+		if (!editingMenu.title?.trim()) {
 			toast.warning('메뉴 이름은 필수입니다.');
 			return;
 		}
 
 		try {
 			const data = { ...editingMenu };
-			if (!data.parent_id) data.parent_id = null;
+			delete data.page_mode;
+
+			data.parent_id = data.parent_id ? Number(data.parent_id) : null;
+			data.order = Number(data.order) || 0;
+			data.min_rank = Number(data.min_rank) || 0;
+			data.is_visible = Boolean(data.is_visible);
+
+			// SYSTEM 앱이거나 관리자 모드인 경우 -1 고정
+			if (data.link_type === 'SYSTEM' || String(data.app_instance_id) === '-1') {
+				data.app_instance_id = -1;
+			} else if (data.app_instance_id === '' || data.app_instance_id == null) {
+				data.app_instance_id = null;
+			} else if (!isNaN(Number(data.app_instance_id))) {
+				data.app_instance_id = Number(data.app_instance_id);
+			}
+
+			// 엔진 기반 링크인 경우 정규화된 URL 자동 계산 반영
+			if (data.link_type !== 'URL' && data.link_type !== 'FOLDER' && data.link_type !== 'DIVIDER') {
+				data.external_url = getRecursiveUrl(data);
+			}
+
+			for (const key in data) {
+				if (data[key] === '') data[key] = null;
+			}
 
 			if (!data.id) {
 				delete data.id;
@@ -376,19 +405,34 @@
 							<div>
 								<div class="flex items-center justify-between mb-3">
 									<div class="flex items-center gap-3">
-										<span class="text-2xl">{m.icon_name || '🔹'}</span>
+										<div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 text-blue-600">
+											<SmartIcon
+												icon={m.icon_name}
+												fallback="ph:squares-four-bold"
+												class="h-6 w-6"
+												emojiClass="text-2xl leading-none"
+											/>
+										</div>
 										<div>
 											<h3 class="text-lg font-black text-slate-900 tracking-tight leading-snug">{m.title}</h3>
 											<span class="font-mono text-xs text-slate-400">{m.external_url || '#'}</span>
 										</div>
 									</div>
-									<div class="flex items-center gap-1.5">
+									<div class="flex flex-wrap items-center gap-1.5 justify-end">
+										<span class="px-2 py-0.5 rounded text-[10px] font-black bg-slate-900 text-white font-mono" title="정렬 순서">
+											#{m.order ?? 0}
+										</span>
 										<span class="px-2 py-0.5 rounded text-[10px] font-bold border {badge.class}">
 											{badge.label}
 										</span>
 										<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-600 font-mono">
 											R{m.min_rank ?? 0}
 										</span>
+										{#if m.is_visible === false}
+											<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-50 text-rose-600 border border-rose-200">
+												숨김
+											</span>
+										{/if}
 									</div>
 								</div>
 
@@ -400,10 +444,24 @@
 										</span>
 										{#each m.sub_menus as sub (sub.id)}
 											<div class="flex items-center justify-between bg-slate-50 px-3.5 py-2 rounded-xl border border-slate-100">
-												<div class="flex items-center gap-2">
+												<div class="flex items-center gap-2 min-w-0">
 													<span class="text-slate-400 text-xs">└</span>
-													<span class="text-xs font-bold text-slate-800">{sub.title}</span>
+													<span class="px-1.5 py-0.5 rounded bg-slate-200 text-[10px] font-black text-slate-700 font-mono">
+														#{sub.order ?? 0}
+													</span>
+													<SmartIcon
+														icon={sub.icon_name}
+														fallback="ph:link-bold"
+														class="h-3.5 w-3.5 text-slate-400 shrink-0"
+														emojiClass="text-xs leading-none shrink-0"
+													/>
+													<span class="text-xs font-bold text-slate-800 truncate">{sub.title}</span>
 													<span class="font-mono text-[10px] text-slate-400">R{sub.min_rank ?? 0}</span>
+													{#if sub.is_visible === false}
+														<span class="px-1.5 py-0.5 rounded text-[9px] font-bold bg-rose-50 text-rose-600 border border-rose-200">
+															숨김
+														</span>
+													{/if}
 												</div>
 												<div class="flex items-center gap-1.5">
 													<button
@@ -548,13 +606,23 @@
 						<label for="menu-icon" class="block text-xs font-black text-slate-700 tracking-wide">
 							아이콘
 						</label>
-						<input
-							id="menu-icon"
-							type="text"
-							bind:value={editingMenu.icon_name}
-							class="w-full px-4 py-3 rounded-2xl border-2 border-slate-200 text-xs font-bold text-slate-800 bg-white focus:border-blue-600 focus:outline-none transition"
-							placeholder="이모지 또는 Iconify"
-						/>
+						<div class="flex items-center gap-2">
+							<div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border-2 border-slate-200 bg-slate-50 text-blue-600">
+								<SmartIcon
+									icon={editingMenu.icon_name}
+									fallback="ph:rocket-fill"
+									class="h-5 w-5"
+									emojiClass="text-xl leading-none"
+								/>
+							</div>
+							<input
+								id="menu-icon"
+								type="text"
+								bind:value={editingMenu.icon_name}
+								class="w-full px-4 py-3 rounded-2xl border-2 border-slate-200 text-xs font-bold text-slate-800 bg-white focus:border-blue-600 focus:outline-none transition"
+								placeholder="이모지 또는 Iconify (예: ph:rocket-fill)"
+							/>
+						</div>
 					</div>
 				</div>
 
@@ -618,7 +686,7 @@
 									{#if boards && boards.length > 0}
 										<optgroup label="개별 게시판 인스턴스">
 											{#each boards as b}
-												<option value={b.id}>📋 {b.name} (/{b.slug})</option>
+												<option value={String(b.id)}>📋 {b.name} (/{b.slug})</option>
 											{/each}
 										</optgroup>
 									{/if}
@@ -626,7 +694,78 @@
 							{/if}
 						</div>
 					</div>
+				{:else if editingMenu.link_type === 'URL'}
+					<div class="space-y-4 rounded-2xl border-2 border-slate-200 bg-slate-50/70 p-6">
+						<div class="space-y-1.5">
+							<label for="menu-url" class="block text-xs font-black text-slate-700 tracking-wide">
+								고정 경로 / URL 직접 입력
+							</label>
+							<input
+								id="menu-url"
+								type="text"
+								bind:value={editingMenu.external_url}
+								class="w-full px-4 py-3 rounded-2xl border-2 border-slate-200 text-xs font-mono font-bold text-slate-800 bg-white focus:border-blue-600 focus:outline-none transition"
+								placeholder="/v1/pages/schedule 또는 https://..."
+							/>
+						</div>
+						{#if pages && pages.length > 0}
+							<div class="flex flex-wrap items-center gap-1.5 pt-1">
+								<span class="text-[11px] font-bold text-slate-400 mr-1">CMS 페이지 빠른 연결:</span>
+								{#each pages as p}
+									<button
+										type="button"
+										onclick={() => (editingMenu.external_url = `/v1/custom/page/${p.slug}`)}
+										class="px-2.5 py-1 rounded-xl border border-slate-200 bg-white text-[11px] font-bold text-slate-600 hover:border-blue-400 hover:text-blue-600 transition"
+									>
+										📄 {p.title}
+									</button>
+								{/each}
+							</div>
+						{/if}
+					</div>
 				{/if}
+
+				<!-- 정렬 순서 및 가시성 설정 -->
+				<div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+					<div class="space-y-1.5">
+						<label for="menu-order" class="block text-xs font-black text-slate-700 tracking-wide">
+							정렬 순서 (Order)
+						</label>
+						<input
+							id="menu-order"
+							type="number"
+							bind:value={editingMenu.order}
+							class="w-full px-4 py-3 rounded-2xl border-2 border-slate-200 text-xs font-mono font-black text-slate-900 bg-white focus:border-blue-600 focus:outline-none transition"
+							placeholder="0"
+						/>
+						<p class="text-[11px] font-medium text-slate-400">숫자가 작을수록 메뉴 상단에 먼저 배치됩니다. (예: 0, 1, 2...)</p>
+					</div>
+
+					<div class="space-y-1.5">
+						<span class="block text-xs font-black text-slate-700 tracking-wide">메뉴 노출 여부</span>
+						<label
+							for="menu-visible"
+							class="flex cursor-pointer items-center justify-between rounded-2xl border-2 px-4 py-3 transition {editingMenu.is_visible
+								? 'border-emerald-200 bg-emerald-50/50'
+								: 'border-slate-200 bg-slate-50'}"
+						>
+							<div class="flex items-center gap-2.5">
+								<input
+									id="menu-visible"
+									type="checkbox"
+									bind:checked={editingMenu.is_visible}
+									class="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+								/>
+								<span class="text-xs font-black {editingMenu.is_visible ? 'text-emerald-700' : 'text-slate-500'}">
+									{editingMenu.is_visible ? '사이드바 표시함 (Visible)' : '숨김 처리됨 (Hidden)'}
+								</span>
+							</div>
+							<span class="rounded-full px-2 py-0.5 text-[10px] font-black {editingMenu.is_visible ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600'}">
+								{editingMenu.is_visible ? 'ON' : 'OFF'}
+							</span>
+						</label>
+					</div>
+				</div>
 
 				<div class="pt-6 border-t border-slate-100 flex flex-wrap items-center gap-3">
 					<button

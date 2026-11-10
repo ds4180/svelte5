@@ -12,6 +12,7 @@
 	import { toast } from '$lib/runes/toast.svelte.js';
 	import { getSiteTitle } from '$lib/config/site';
 	import Icon from '@iconify/svelte';
+	import SmartIcon from '$lib/components/SmartIcon.svelte';
 
 	let apps = $state(/** @type {any[]} */ ([]));
 	let loading = $state(true);
@@ -401,11 +402,12 @@
 							<div class="flex items-start justify-between mb-3">
 								<div class="flex items-center gap-3">
 									<div class="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-100 text-slate-800 text-2xl shadow-inner">
-										{#if app.icon_default && app.icon_default.includes(':')}
-											<Icon icon={app.icon_default} />
-										{:else}
-											<span class="text-xl">{app.icon_default || '🚀'}</span>
-										{/if}
+										<SmartIcon
+											icon={app.icon_default}
+											fallback="ph:rocket-fill"
+											class="h-6 w-6"
+											emojiClass="text-xl leading-none"
+										/>
 									</div>
 									<div>
 										<h3 class="text-lg font-black text-slate-900 tracking-tight leading-snug">
@@ -417,9 +419,16 @@
 									</div>
 								</div>
 
-								<span class="px-2.5 py-0.5 rounded-md text-[10px] font-bold border {badge.class}">
-									{badge.label}
-								</span>
+								<div class="flex flex-col items-end gap-1">
+									<span class="px-2.5 py-0.5 rounded-md text-[10px] font-bold border {badge.class}">
+										{badge.label}
+									</span>
+									{#if !app.is_active}
+										<span class="px-2 py-0.5 rounded-md text-[10px] font-black bg-rose-50 text-rose-600 border border-rose-200">
+											비활성화됨
+										</span>
+									{/if}
+								</div>
 							</div>
 
 							<p class="text-xs text-slate-500 mt-2 line-clamp-2 leading-relaxed">
@@ -428,12 +437,14 @@
 
 							<!-- 경로 및 랭크 스펙 -->
 							<div class="mt-4 pt-3 border-t border-slate-100 space-y-1.5 text-xs">
-								<div class="flex items-center justify-between">
-									<span class="text-[11px] font-bold text-slate-400">관리자 경로</span>
-									<span class="font-mono text-[11px] font-bold text-purple-700">
-										{app.frontend_route || `/v1/admin/${app.app_id}`}
-									</span>
-								</div>
+								{#if app.app_type !== 'STATIC'}
+									<div class="flex items-center justify-between">
+										<span class="text-[11px] font-bold text-slate-400">관리자 경로</span>
+										<span class="font-mono text-[11px] font-bold text-purple-700">
+											{app.frontend_route || `/v1/admin/${app.app_id}`}
+										</span>
+									</div>
+								{/if}
 								{#if app.app_type === 'CUSTOM'}
 									<div class="flex items-center justify-between">
 										<span class="text-[11px] font-bold text-slate-400">사용자 경로</span>
@@ -445,7 +456,7 @@
 											<Icon icon="ph:arrow-square-out-bold" class="text-xs" />
 										</a>
 									</div>
-								{:else if app.app_type === 'INSTANCE'}
+								{:else if app.app_type === 'INSTANCE' || app.app_type === 'APP'}
 									<div class="flex items-center justify-between">
 										<span class="text-[11px] font-bold text-slate-400">인스턴스 허브</span>
 										<a
@@ -453,6 +464,25 @@
 											class="font-mono text-[11px] font-bold text-blue-600 hover:underline flex items-center gap-1"
 										>
 											<span>/v1/app/{app.app_id}</span>
+											<Icon icon="ph:arrow-square-out-bold" class="text-xs" />
+										</a>
+									</div>
+									{#if app.main_component}
+										<div class="flex items-center justify-between">
+											<span class="text-[11px] font-bold text-slate-400">엔진 컴포넌트</span>
+											<span class="font-mono text-[10px] font-black text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200">
+												{app.main_component}
+											</span>
+										</div>
+									{/if}
+								{:else if app.app_type === 'STATIC'}
+									<div class="flex items-center justify-between">
+										<span class="text-[11px] font-bold text-slate-400">사용자 경로</span>
+										<a
+											href={app.frontend_route || `/v1/pages/${app.app_id}`}
+											class="font-mono text-[11px] font-bold text-emerald-600 hover:underline flex items-center gap-1"
+										>
+											<span>{app.frontend_route || `/v1/pages/${app.app_id}`}</span>
 											<Icon icon="ph:arrow-square-out-bold" class="text-xs" />
 										</a>
 									</div>
@@ -598,17 +628,42 @@
 					</div>
 
 					<div class="space-y-1.5">
-						<label for="app-route-input" class="block text-xs font-black text-slate-700 tracking-wide">
-							관리자 진입 경로 (frontend_route)
-						</label>
+						<div class="flex items-center justify-between">
+							<label for="main-comp-input" class="block text-xs font-black text-slate-700 tracking-wide">
+								컴포넌트 명칭 (main_component)
+							</label>
+							{#if editingApp.app_type === 'INSTANCE'}
+								<span class="px-2 py-0.5 rounded bg-blue-600 text-white text-[9px] font-black">
+									🧩 인스턴스 엔진
+								</span>
+							{/if}
+						</div>
 						<input
-							id="app-route-input"
+							id="main-comp-input"
 							type="text"
-							bind:value={editingApp.frontend_route}
-							class="w-full px-4 py-3 rounded-2xl border-2 border-slate-200 text-xs font-bold font-mono text-purple-700 bg-white focus:border-purple-600 focus:outline-none transition"
-							placeholder="/v1/admin/앱이름"
+							bind:value={editingApp.main_component}
+							class="w-full px-4 py-3 rounded-2xl border-2 text-xs font-mono font-bold text-slate-800 bg-white focus:border-purple-600 focus:outline-none transition {editingApp.app_type === 'INSTANCE' ? 'border-blue-300 bg-blue-50/20' : 'border-slate-200'}"
+							placeholder={editingApp.app_type === 'INSTANCE' ? '예: BoardEngine, SurveyEngine' : '선택 사항 (단독/시스템 앱)'}
 						/>
+						{#if editingApp.app_type === 'INSTANCE'}
+							<p class="text-[11px] font-bold text-blue-600">
+								💡 다중 인스턴스 확장 시 클라이언트 공통 런처(/v1/app/[slug])에 마운트할 Svelte 엔진 컴포넌트명
+							</p>
+						{/if}
 					</div>
+				</div>
+
+				<div class="space-y-1.5">
+					<label for="app-route-input" class="block text-xs font-black text-slate-700 tracking-wide">
+						관리자 진입 경로 (frontend_route)
+					</label>
+					<input
+						id="app-route-input"
+						type="text"
+						bind:value={editingApp.frontend_route}
+						class="w-full px-4 py-3 rounded-2xl border-2 border-slate-200 text-xs font-bold font-mono text-purple-700 bg-white focus:border-purple-600 focus:outline-none transition"
+						placeholder="/v1/admin/앱이름 (STATIC 앱은 /v1/pages/앱이름)"
+					/>
 				</div>
 
 				<div class="grid grid-cols-1 sm:grid-cols-3 gap-5">
@@ -650,16 +705,59 @@
 
 					<div class="space-y-1.5">
 						<label for="icon-default-input" class="block text-xs font-black text-slate-700 tracking-wide">
-							아이콘 (Iconify 식별자)
+							아이콘 (이모지 또는 Iconify)
 						</label>
-						<input
-							id="icon-default-input"
-							type="text"
-							bind:value={editingApp.icon_default}
-							class="w-full px-4 py-3 rounded-2xl border-2 border-slate-200 text-xs font-bold text-slate-800 bg-white focus:border-purple-600 focus:outline-none transition"
-							placeholder="mdi:apps"
-						/>
+						<div class="flex items-center gap-2">
+							<div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border-2 border-slate-200 bg-slate-50 text-purple-600">
+								<SmartIcon
+									icon={editingApp.icon_default}
+									fallback="ph:rocket-fill"
+									class="h-5 w-5"
+									emojiClass="text-xl leading-none"
+								/>
+							</div>
+							<input
+								id="icon-default-input"
+								type="text"
+								bind:value={editingApp.icon_default}
+								class="w-full px-4 py-3 rounded-2xl border-2 border-slate-200 text-xs font-bold text-slate-800 bg-white focus:border-purple-600 focus:outline-none transition"
+								placeholder="mdi:apps 또는 🚀"
+							/>
+						</div>
 					</div>
+				</div>
+
+				<!-- 앱 활성화 상태 토글 -->
+				<div class="space-y-2 pt-1">
+					<span class="block text-xs font-black text-slate-700 tracking-wide">앱 엔진 운영 상태</span>
+					<label
+						for="app-is-active"
+						class="flex w-fit items-center gap-3 rounded-2xl border-2 px-5 py-3 transition {isEditMode && editingApp.app_type === 'SYSTEM'
+							? 'cursor-not-allowed border-slate-200 bg-slate-50 opacity-60'
+							: editingApp.is_active
+								? 'cursor-pointer border-emerald-200 bg-emerald-50/50'
+								: 'cursor-pointer border-rose-200 bg-rose-50/50'}"
+					>
+						<input
+							id="app-is-active"
+							type="checkbox"
+							bind:checked={editingApp.is_active}
+							disabled={isEditMode && editingApp.app_type === 'SYSTEM'}
+							class="h-4 w-4 rounded border-slate-300 text-purple-600 focus:ring-purple-500"
+						/>
+						<span class="text-xs font-black text-slate-800">
+							앱 엔진 활성화 (운영 상태)
+						</span>
+					</label>
+					{#if isEditMode && editingApp.app_type === 'SYSTEM'}
+						<p class="text-[11px] font-bold text-purple-700">
+							🛡️ SYSTEM 앱은 시스템 필수 관제 코어이므로 비활성화할 수 없습니다.
+						</p>
+					{:else}
+						<p class="text-[11px] font-medium text-slate-400">
+							체크 해제 시 백엔드 API 접근 및 일반 사용자 메뉴 노출이 즉시 전면 차단(점검 모드)됩니다.
+						</p>
+					{/if}
 				</div>
 
 				<div class="pt-6 border-t border-slate-100 flex flex-wrap items-center gap-3">

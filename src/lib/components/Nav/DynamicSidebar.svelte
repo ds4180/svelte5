@@ -4,6 +4,7 @@
 	 * @description [v1.1] 모바일 슬라이딩 가동 보증 (좌표 및 트랜지션 초기화 최적화)
 	 */
 	import Icon from '@iconify/svelte';
+	import SmartIcon from '$lib/components/SmartIcon.svelte';
 	import { navState } from '$lib/runes/nav.svelte.js';
 	import { getAuthContext } from '$lib/runes/auth.svelte.js';
 	import { miniappStore } from '$lib/runes/miniapps.svelte.js';
@@ -17,10 +18,12 @@
 	 * @property {boolean} [isMobile] - 모바일 환경 여부
 	 * @property {boolean} [isOpen] - 사이드바 열림 상태
 	 * @property {boolean} [isMounted] - 초기 마운트 완료 여부 (초기 로딩 애니메이션 튐 방지)
-	 * @property {import('svelte/elements').MouseEventHandler<HTMLElement>} [onClose] - 닫기 이벤트 핸들러
+	 * @property {() => void} [onClose] - 닫기 이벤트 핸들러
 	 */
+	/** @type {Props} */
 	let { isMobile = false, isOpen = false, isMounted = false, onClose = () => {} } = $props();
 
+	/** @param {string} tab */
 	function navigateTo(tab) {
 		goto(`/v1/pages/miniapps?tab=${tab}`);
 		onClose();
@@ -47,203 +50,271 @@
 
 <!-- ➡️ 우측 동적 폼 사이드바 (레이아웃 셸 계층 z-[1010]: 하단 퀵메뉴 z-[1020] 아래, 포탈 모달 z-[9999] 아래) -->
 <aside
-	class="fixed z-[1010] overflow-hidden bg-white text-slate-900
+	class="fixed z-[1010] overflow-hidden bg-slate-50 text-slate-900
           {isMounted ? 'transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]' : 'transition-none'}
           {isMobile
-		? 'top-0 right-0 bottom-0 left-0 h-full rounded-t-[3.5rem] border-t-8 border-slate-900'
-		: 'top-20 right-0 bottom-0 w-[450px] border-l-4 border-slate-900'} 
+		? 'top-0 right-0 bottom-0 left-0 h-full rounded-t-3xl border-t-4 border-slate-900'
+		: 'top-16 right-0 bottom-0 w-[440px] border-l-4 border-slate-900'} 
           {isOpen
-		? 'translate-x-0 translate-y-0 ' + (isMobile ? 'shadow-[0_-20px_50px_rgba(0,0,0,0.5)]' : 'shadow-[-20px_0_60px_-15px_rgba(0,0,0,0.4)]')
+		? 'translate-x-0 translate-y-0 ' + (isMobile ? 'shadow-[0_-20px_50px_rgba(15,23,42,0.4)]' : 'shadow-[-20px_0_60px_-15px_rgba(15,23,42,0.25)]')
 		: (isMobile ? 'translate-x-0 translate-y-[110%] shadow-none pointer-events-none' : 'translate-x-full translate-y-0 shadow-none pointer-events-none')}"
 	aria-label="동적 폼 사이드바 패널"
 >
 	<div
-		class="custom-scrollbar flex h-full w-full flex-col divide-y divide-slate-100 overflow-y-auto px-2 pb-40"
+		class="custom-scrollbar flex h-full w-full flex-col overflow-y-auto pb-28 md:pb-12"
 	>
-		<!-- [0] 헤더 및 닫기 버튼 (상단 20px 상향 조정, X 버튼 우측 10px 이동) -->
+		<!-- [0] 모던 패널 헤더 및 닫기 버튼 -->
 		<header
-			class="sticky top-0 z-10 flex flex-none items-center justify-between border-b border-slate-100 bg-slate-50/50 pt-3 pb-6 px-6 backdrop-blur-md md:pt-5 md:pb-8 md:px-10"
+			class="sticky top-0 z-10 flex flex-none items-center justify-between border-b-2 border-slate-200 bg-white/95 px-5 py-4 backdrop-blur-md sm:px-6 sm:py-5"
 		>
 			<div class="flex flex-col">
-				<span
-					class="mb-2 text-[10px] leading-none font-black tracking-widest text-slate-400 uppercase underline decoration-slate-200 underline-offset-4"
-					>Interactive Panel</span
-				>
-				<h2
-					class="text-3xl leading-none font-black tracking-tighter text-slate-900 uppercase italic"
-				>
-					Dynamic Form
+				<div class="mb-1.5 flex items-center gap-2">
+					<span class="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2.5 py-0.5 text-[10px] font-black tracking-widest text-blue-700 uppercase">
+						<Icon icon="ph:magic-wand-bold" class="text-xs" />
+						Interactive Workspace
+					</span>
+				</div>
+				<h2 class="text-2xl leading-none font-black tracking-tighter text-slate-900 uppercase italic">
+					Dynamic <span class="not-italic text-blue-600">Form</span>
 				</h2>
 			</div>
 			<button
-				class="btn btn-circle transform translate-x-[20px] border border-slate-200 bg-white shadow-sm btn-ghost transition-all btn-sm hover:bg-slate-900 hover:text-white active:scale-95"
+				type="button"
+				class="flex h-10 w-10 items-center justify-center rounded-2xl border-2 border-slate-200 bg-white text-slate-500 shadow-sm transition-all hover:border-slate-900 hover:bg-slate-900 hover:text-white active:scale-95"
 				onclick={onClose}
 				aria-label="사이드바 닫기"
 			>
-				<Icon icon="ph:x-bold" class="h-5 w-5 text-slate-500 group-hover:text-white" />
+				<Icon icon="ph:x-bold" class="h-5 w-5" />
 			</button>
 		</header>
 
-		<!-- [1] 상단 구역: Context Action (본문 전용 메뉴) -->
-		<section class="flex flex-col gap-6 p-10">
-			<h3
-				class="mb-2 flex items-center gap-3 text-[11px] font-black tracking-widest text-emerald-600 uppercase italic underline underline-offset-8"
-			>
-				<Icon icon="ph:lightning-fill" class="h-5 w-5" /> [01] Contextual Entry
-			</h3>
-			{#if navState.pageMenus && navState.pageMenus.length > 0}
-				<div class="grid grid-cols-1 gap-3">
-					{#each navState.pageMenus as pc (pc.title + pc.url)}
-						<a
-							href={pc.url}
-							class="group flex items-center justify-between rounded-[2.5rem] border border-slate-100 bg-slate-50 p-6 shadow-sm transition-all hover:bg-black hover:text-white"
-						>
-							<span class="text-sm font-black tracking-tighter uppercase italic">{pc.title}</span>
-							<Icon
-								icon="ph:caret-right-bold"
-								class="h-4 w-4 opacity-30 transition-all group-hover:translate-x-1 group-hover:opacity-100"
-							/>
-						</a>
-					{/each}
+		<div class="flex flex-col gap-6 p-5 sm:p-6">
+			<!-- [1] 상단 구역: Context Action (본문 전용 메뉴) -->
+			<section class="flex flex-col gap-3">
+				<div class="flex items-center justify-between">
+					<h3 class="flex items-center gap-2 text-xs font-black tracking-widest text-emerald-700 uppercase">
+						<span class="flex h-6 w-6 items-center justify-center rounded-lg bg-emerald-100 text-emerald-600">
+							<Icon icon="ph:lightning-fill" class="h-3.5 w-3.5" />
+						</span>
+						Contextual Entry
+					</h3>
+					{#if navState.pageMenus && navState.pageMenus.length > 0}
+						<span class="rounded-full bg-emerald-50 border border-emerald-200 px-2 py-0.5 text-[10px] font-black text-emerald-700">
+							{navState.pageMenus.length}개 활성
+						</span>
+					{/if}
 				</div>
-			{:else}
-				<div
-					class="flex flex-col items-center justify-center rounded-[3rem] border-2 border-dashed border-slate-100 bg-slate-50/5 py-24 text-slate-300"
-				>
-					<Icon icon="ph:circles-three-plus-duotone" class="mb-5 h-16 w-16 opacity-10" />
-					<p
-						class="text-center text-[10px] leading-relaxed font-black tracking-widest uppercase opacity-30"
+
+				{#if navState.pageMenus && navState.pageMenus.length > 0}
+					<div class="grid grid-cols-1 gap-2.5">
+						{#each navState.pageMenus as pc (pc.title + (pc.url || pc.path))}
+							<a
+								href={pc.url || pc.path || '#'}
+								onclick={onClose}
+								class="group flex items-center justify-between rounded-2xl border-2 border-slate-200 bg-white p-3.5 shadow-sm transition-all hover:border-blue-500 hover:shadow-md"
+							>
+								<div class="flex items-center gap-3">
+									<div class="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 transition-colors group-hover:bg-blue-600 group-hover:text-white">
+										<SmartIcon
+											icon={pc.icon || pc.icon_name}
+											fallback="ph:lightning-fill"
+											class="h-4.5 w-4.5"
+											emojiClass="text-base leading-none"
+										/>
+									</div>
+									<span class="text-sm font-black tracking-tight text-slate-800 group-hover:text-blue-600 transition-colors">
+										{pc.title}
+									</span>
+								</div>
+								<div class="flex h-7 w-7 items-center justify-center rounded-xl bg-slate-50 text-slate-400 transition-all group-hover:bg-blue-600 group-hover:text-white">
+									<Icon icon="ph:caret-right-bold" class="h-3.5 w-3.5" />
+								</div>
+							</a>
+						{/each}
+					</div>
+				{:else}
+					<div
+						class="flex flex-col items-center justify-center rounded-3xl border-2 border-dashed border-slate-200 bg-white/70 py-10 text-center"
 					>
-						Standby Mode <br /> No contextual tools injected
-					</p>
+						<div class="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-400">
+							<Icon icon="ph:circles-three-plus-duotone" class="h-7 w-7" />
+						</div>
+						<p class="text-xs font-bold text-slate-500">대기 모드 (Standby)</p>
+						<p class="mt-0.5 text-[11px] font-medium text-slate-400">현재 화면에 주입된 보조 도구가 없습니다.</p>
+					</div>
+				{/if}
+			</section>
+
+			<!-- [2] 중단 구역: Workspace Apps (알림, 알람, 지시사항, 메모, 메세지) -->
+			<section class="flex flex-col gap-3">
+				<div class="flex items-center justify-between">
+					<h3 class="flex items-center gap-2 text-xs font-black tracking-widest text-blue-700 uppercase">
+						<span class="flex h-6 w-6 items-center justify-center rounded-lg bg-blue-100 text-blue-600">
+							<Icon icon="ph:briefcase-fill" class="h-3.5 w-3.5" />
+						</span>
+						Workspace Apps
+					</h3>
+					{#if miniappStore.counts.TOTAL > 0}
+						<span class="rounded-full bg-rose-50 border border-rose-200 px-2.5 py-0.5 text-[10px] font-black text-rose-600">
+							미결 {miniappStore.counts.TOTAL}건
+						</span>
+					{/if}
 				</div>
-			{/if}
-		</section>
 
-		<!-- [2] 중단 구역: Workspace (알림, 알람, 지시사항, 메모, 메세지) -->
-		<section class="flex flex-col gap-4 p-10">
-			<div class="mb-4 flex items-center justify-between">
-				<h3
-					class="flex items-center gap-3 text-[11px] font-black tracking-widest text-blue-600 uppercase italic underline underline-offset-8"
-				>
-					<Icon icon="ph:briefcase-fill" class="h-5 w-5" /> [02] Workspace Apps
-				</h3>
-			</div>
-			
-			<div class="flex flex-col gap-2">
-				<button 
-					onclick={() => navigateTo('notifications')}
-					class="group flex h-16 w-full items-center justify-between rounded-2xl bg-slate-50 p-4 px-6 text-[12px] font-black tracking-tighter text-slate-500 shadow-sm transition-all hover:-translate-y-1 hover:bg-blue-600 hover:text-white hover:shadow-md"
-				>
-					<span class="flex items-center gap-3">
-						<Icon icon="ph:bell-ringing-fill" class="h-6 w-6 opacity-40 group-hover:text-white transition-opacity" />
-						알림
-					</span>
-					<div class="flex items-center gap-2">
-						{#if miniappStore.counts.NOTIFICATION > 0}
-							<span class="badge badge-error badge-sm font-black text-white">{miniappStore.counts.NOTIFICATION}</span>
-						{/if}
-						<Icon icon="ph:caret-right-bold" class="text-[10px]" />
-					</div>
-				</button>
-				
-				<button 
-					onclick={() => navigateTo('notifications')}
-					class="group flex h-16 w-full items-center justify-between rounded-2xl bg-slate-50 p-4 px-6 text-[12px] font-black tracking-tighter text-slate-500 shadow-sm transition-all hover:-translate-y-1 hover:bg-rose-500 hover:text-white hover:shadow-md"
-				>
-					<span class="flex items-center gap-3">
-						<Icon icon="ph:alarm-fill" class="h-6 w-6 opacity-40 group-hover:text-white transition-opacity" />
-						알람
-					</span>
-					<div class="flex items-center gap-2">
-						{#if miniappStore.counts.ALARM > 0}
-							<span class="badge badge-warning badge-sm font-black text-slate-900">{miniappStore.counts.ALARM}</span>
-						{/if}
-						<Icon icon="ph:caret-right-bold" class="text-[10px]" />
-					</div>
-				</button>
+				<div class="flex flex-col gap-2.5">
+					<button
+						type="button"
+						onclick={() => navigateTo('notifications')}
+						class="group flex w-full items-center justify-between rounded-2xl border-2 border-slate-200 bg-white p-3.5 shadow-sm transition-all hover:border-blue-400 hover:shadow-md active:scale-[0.99]"
+					>
+						<div class="flex items-center gap-3.5">
+							<div class="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-600 transition-colors group-hover:bg-blue-600 group-hover:text-white">
+								<Icon icon="ph:bell-ringing-fill" class="h-5 w-5" />
+							</div>
+							<div class="text-left">
+								<span class="block text-sm font-black text-slate-900">알림 센터</span>
+								<span class="block text-[11px] font-medium text-slate-400">전사 공지 및 시스템 알림</span>
+							</div>
+						</div>
+						<div class="flex items-center gap-2">
+							{#if miniappStore.counts.NOTIFICATION > 0}
+								<span class="rounded-full bg-rose-600 px-2 py-0.5 text-[11px] font-black text-white shadow-xs">
+									{miniappStore.counts.NOTIFICATION}
+								</span>
+							{/if}
+							<Icon icon="ph:caret-right-bold" class="text-xs text-slate-400 group-hover:text-blue-600 transition-colors" />
+						</div>
+					</button>
 
-				<button 
-					onclick={() => navigateTo('instructions')}
-					class="group flex h-16 w-full items-center justify-between rounded-2xl bg-slate-50 p-4 px-6 text-[12px] font-black tracking-tighter text-slate-500 shadow-sm transition-all hover:-translate-y-1 hover:bg-emerald-600 hover:text-white hover:shadow-md"
-				>
-					<span class="flex items-center gap-3">
-						<Icon icon="ph:clipboard-text-fill" class="h-6 w-6 opacity-40 group-hover:text-white transition-opacity" />
-						지시사항
-					</span>
-					<div class="flex items-center gap-2">
-						{#if miniappStore.counts.INSTRUCTION > 0}
-							<span class="badge badge-error badge-sm font-black text-white">{miniappStore.counts.INSTRUCTION}</span>
-						{/if}
-						<Icon icon="ph:caret-right-bold" class="text-[10px]" />
-					</div>
-				</button>
+					<button
+						type="button"
+						onclick={() => navigateTo('notifications')}
+						class="group flex w-full items-center justify-between rounded-2xl border-2 border-slate-200 bg-white p-3.5 shadow-sm transition-all hover:border-rose-400 hover:shadow-md active:scale-[0.99]"
+					>
+						<div class="flex items-center gap-3.5">
+							<div class="flex h-10 w-10 items-center justify-center rounded-xl bg-rose-50 text-rose-600 transition-colors group-hover:bg-rose-600 group-hover:text-white">
+								<Icon icon="ph:alarm-fill" class="h-5 w-5" />
+							</div>
+							<div class="text-left">
+								<span class="block text-sm font-black text-slate-900">긴급 알람</span>
+								<span class="block text-[11px] font-medium text-slate-400">일정 및 리마인더 경보</span>
+							</div>
+						</div>
+						<div class="flex items-center gap-2">
+							{#if miniappStore.counts.ALARM > 0}
+								<span class="rounded-full bg-amber-500 px-2 py-0.5 text-[11px] font-black text-white shadow-xs">
+									{miniappStore.counts.ALARM}
+								</span>
+							{/if}
+							<Icon icon="ph:caret-right-bold" class="text-xs text-slate-400 group-hover:text-rose-600 transition-colors" />
+						</div>
+					</button>
 
-				<button 
-					onclick={() => navigateTo('memo')}
-					class="group flex h-16 w-full items-center justify-between rounded-2xl bg-slate-50 p-4 px-6 text-[12px] font-black tracking-tighter text-slate-500 shadow-sm transition-all hover:-translate-y-1 hover:bg-amber-500 hover:text-white hover:shadow-md"
-				>
-					<span class="flex items-center gap-3">
-						<Icon icon="ph:notepad-fill" class="h-6 w-6 opacity-40 group-hover:text-white transition-opacity" />
-						메모
-					</span>
-					<div class="flex items-center gap-2">
-						{#if miniappStore.counts.MEMO > 0}
-							<span class="badge bg-slate-900 text-white border-none badge-sm font-black">{miniappStore.counts.MEMO}</span>
-						{/if}
-						<Icon icon="ph:caret-right-bold" class="text-[10px]" />
-					</div>
-				</button>
+					<button
+						type="button"
+						onclick={() => navigateTo('instructions')}
+						class="group flex w-full items-center justify-between rounded-2xl border-2 border-slate-200 bg-white p-3.5 shadow-sm transition-all hover:border-emerald-400 hover:shadow-md active:scale-[0.99]"
+					>
+						<div class="flex items-center gap-3.5">
+							<div class="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 transition-colors group-hover:bg-emerald-600 group-hover:text-white">
+								<Icon icon="ph:clipboard-text-fill" class="h-5 w-5" />
+							</div>
+							<div class="text-left">
+								<span class="block text-sm font-black text-slate-900">업무 지시사항</span>
+								<span class="block text-[11px] font-medium text-slate-400">전달된 업무 확인 및 처리</span>
+							</div>
+						</div>
+						<div class="flex items-center gap-2">
+							{#if miniappStore.counts.INSTRUCTION > 0}
+								<span class="rounded-full bg-emerald-600 px-2 py-0.5 text-[11px] font-black text-white shadow-xs">
+									{miniappStore.counts.INSTRUCTION}
+								</span>
+							{/if}
+							<Icon icon="ph:caret-right-bold" class="text-xs text-slate-400 group-hover:text-emerald-600 transition-colors" />
+						</div>
+					</button>
 
-				<button 
-					onclick={() => navigateTo('messaging')}
-					class="group flex h-16 w-full items-center justify-between rounded-2xl bg-slate-50 p-4 px-6 text-[12px] font-black tracking-tighter text-slate-500 shadow-sm transition-all hover:-translate-y-1 hover:bg-indigo-600 hover:text-white hover:shadow-md"
-				>
-					<span class="flex items-center gap-3">
-						<Icon icon="ph:paper-plane-tilt-fill" class="h-6 w-6 opacity-40 group-hover:text-white transition-opacity" />
-						메세지 보내기
-					</span>
-					<div class="flex items-center gap-2">
-						{#if miniappStore.counts.MESSAGE > 0}
-							<span class="badge badge-info badge-sm font-black text-white">{miniappStore.counts.MESSAGE}</span>
-						{/if}
-						<Icon icon="ph:caret-right-bold" class="text-[10px]" />
-					</div>
-				</button>
-			</div>
-		</section>
+					<button
+						type="button"
+						onclick={() => navigateTo('memo')}
+						class="group flex w-full items-center justify-between rounded-2xl border-2 border-slate-200 bg-white p-3.5 shadow-sm transition-all hover:border-amber-400 hover:shadow-md active:scale-[0.99]"
+					>
+						<div class="flex items-center gap-3.5">
+							<div class="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-50 text-amber-600 transition-colors group-hover:bg-amber-500 group-hover:text-white">
+								<Icon icon="ph:notepad-fill" class="h-5 w-5" />
+							</div>
+							<div class="text-left">
+								<span class="block text-sm font-black text-slate-900">개인 메모</span>
+								<span class="block text-[11px] font-medium text-slate-400">빠른 기록 및 할 일 노트</span>
+							</div>
+						</div>
+						<div class="flex items-center gap-2">
+							{#if miniappStore.counts.MEMO > 0}
+								<span class="rounded-full bg-slate-900 px-2 py-0.5 text-[11px] font-black text-white shadow-xs">
+									{miniappStore.counts.MEMO}
+								</span>
+							{/if}
+							<Icon icon="ph:caret-right-bold" class="text-xs text-slate-400 group-hover:text-amber-600 transition-colors" />
+						</div>
+					</button>
 
-		<!-- [3] 하단 구역: System Core (로그아웃 통합) -->
-		<section class="flex flex-col gap-6 bg-slate-50/30 p-10">
-			<h3
-				class="mb-2 flex items-center gap-3 text-[11px] font-black tracking-widest text-slate-400 uppercase italic underline underline-offset-8"
-			>
-				<Icon icon="ph:power-fill" class="h-5 w-5" /> [03] System Console
-			</h3>
-			<div class="grid grid-cols-2 gap-4">
-				{#if auth.user}
-					<div class="block w-full">
+					<button
+						type="button"
+						onclick={() => navigateTo('messaging')}
+						class="group flex w-full items-center justify-between rounded-2xl border-2 border-slate-200 bg-white p-3.5 shadow-sm transition-all hover:border-indigo-400 hover:shadow-md active:scale-[0.99]"
+					>
+						<div class="flex items-center gap-3.5">
+							<div class="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 transition-colors group-hover:bg-indigo-600 group-hover:text-white">
+								<Icon icon="ph:paper-plane-tilt-fill" class="h-5 w-5" />
+							</div>
+							<div class="text-left">
+								<span class="block text-sm font-black text-slate-900">사내 메세지</span>
+								<span class="block text-[11px] font-medium text-slate-400">동료 간 실시간 1:1/그룹 쪽지</span>
+							</div>
+						</div>
+						<div class="flex items-center gap-2">
+							{#if miniappStore.counts.MESSAGE > 0}
+								<span class="rounded-full bg-indigo-600 px-2 py-0.5 text-[11px] font-black text-white shadow-xs">
+									{miniappStore.counts.MESSAGE}
+								</span>
+							{/if}
+							<Icon icon="ph:caret-right-bold" class="text-xs text-slate-400 group-hover:text-indigo-600 transition-colors" />
+						</div>
+					</button>
+				</div>
+			</section>
+
+			<!-- [3] 하단 구역: System Console -->
+			{#if auth.user}
+				<section class="flex flex-col gap-3 pt-2">
+					<h3 class="flex items-center gap-2 text-xs font-black tracking-widest text-slate-500 uppercase">
+						<span class="flex h-6 w-6 items-center justify-center rounded-lg bg-slate-200 text-slate-600">
+							<Icon icon="ph:power-fill" class="h-3.5 w-3.5" />
+						</span>
+						System Console
+					</h3>
+					<div class="grid grid-cols-2 gap-3">
 						<a
 							href="/v1/pages/profile"
-							class="group flex w-full flex-col items-center gap-4 rounded-[3rem] border border-slate-200 bg-white p-6 text-center shadow-sm transition-all hover:bg-slate-900 hover:text-white"
+							onclick={onClose}
+							class="group flex flex-col items-center justify-center gap-2 rounded-2xl border-2 border-slate-200 bg-white p-4 text-center shadow-sm transition-all hover:border-slate-900 hover:bg-slate-900 hover:text-white"
 						>
-							<Icon icon="ph:user-focus-bold" class="h-8 w-8 text-slate-300 group-hover:text-white" />
-							<span class="text-[9px] font-black tracking-tight uppercase">My Profile</span>
+							<Icon icon="ph:user-focus-bold" class="h-6 w-6 text-slate-500 transition-colors group-hover:text-white" />
+							<span class="text-xs font-black tracking-tight">내 프로필</span>
 						</a>
-					</div>
-					<div class="block w-full">
+
 						<a
 							href="/logout"
 							data-sveltekit-reload
-							class="group flex w-full flex-col items-center gap-4 rounded-[3rem] border border-rose-200 bg-rose-50 p-6 text-center shadow-sm transition-all hover:bg-rose-600 hover:text-white"
+							class="group flex flex-col items-center justify-center gap-2 rounded-2xl border-2 border-rose-200 bg-rose-50 p-4 text-center text-rose-700 shadow-sm transition-all hover:border-rose-600 hover:bg-rose-600 hover:text-white"
 						>
-							<Icon icon="ph:sign-out-bold" class="h-8 w-8 text-rose-300 group-hover:text-white" />
-							<span class="text-[9px] font-black tracking-tight uppercase">Logout System</span>
+							<Icon icon="ph:sign-out-bold" class="h-6 w-6 text-rose-500 transition-colors group-hover:text-white" />
+							<span class="text-xs font-black tracking-tight">로그아웃</span>
 						</a>
 					</div>
-				{/if}
-			</div>
-		</section>
+				</section>
+			{/if}
+		</div>
 	</div>
 </aside>
 
@@ -256,14 +327,15 @@
 		background: transparent;
 	}
 	.custom-scrollbar::-webkit-scrollbar-thumb {
-		background: rgba(0, 0, 0, 0.05);
+		background: rgba(15, 23, 42, 0.12);
+		border-radius: 4px;
 	}
 	.custom-scrollbar:hover::-webkit-scrollbar-thumb {
-		background: rgba(0, 0, 0, 0.1);
+		background: rgba(15, 23, 42, 0.25);
 	}
 
 	.animate-fade-in {
-		animation: fadeIn 0.4s ease-out forwards;
+		animation: fadeIn 0.3s ease-out forwards;
 	}
 	@keyframes fadeIn {
 		from {
@@ -272,9 +344,5 @@
 		to {
 			opacity: 1;
 		}
-	}
-
-	:global(.btn) {
-		border-radius: 0;
 	}
 </style>

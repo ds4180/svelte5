@@ -6,7 +6,7 @@
 	 *              - 반응형 카드 기반 본문 레이아웃 (모바일 세로/태블릿/데스크탑 최적화)
 	 *              - 브라우저 탭 단일 진실 공급원(SSOT) 환경설정 타이틀 연동
 	 */
-	import { onMount } from 'svelte';
+	import { onMount, untrack } from 'svelte';
 	import * as api from '$lib/api/page.js';
 	import { toast } from '$lib/runes/toast.svelte.js';
 	import { getSiteTitle } from '$lib/config/site';
@@ -14,7 +14,7 @@
 
 	let { data } = $props();
 
-	let pages = $state(data?.pages || []);
+	let pages = $state(/** @type {any[]} */ (untrack(() => data?.pages || [])));
 	let loading = $state(false);
 	let isSavingMeta = $state(false);
 
@@ -160,7 +160,7 @@
 	 * @param {number} idx
 	 */
 	function removeCustomOption(idx) {
-		metaForm.customOptions = metaForm.customOptions.filter((_, i) => i !== idx);
+		metaForm.customOptions = metaForm.customOptions.filter((/** @type {any} */ _, /** @type {number} */ i) => i !== idx);
 	}
 
 	async function handleSaveMeta() {
@@ -507,9 +507,16 @@
 					<div class="rounded-2xl border-2 border-slate-200 bg-white p-6 shadow-sm hover:border-blue-400 transition-all flex flex-col justify-between">
 						<div>
 							<div class="flex items-center justify-between mb-3">
-								<span class="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase font-mono {p.status === 'PUBLISHED' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-slate-100 text-slate-600'}">
-									{p.status}
-								</span>
+								<div class="flex items-center gap-1.5">
+									<span class="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase font-mono {p.status === 'PUBLISHED' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-slate-100 text-slate-600'}">
+										{p.status}
+									</span>
+									{#if p.is_active === false}
+										<span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-rose-50 text-rose-600 border border-rose-200">
+											비활성
+										</span>
+									{/if}
+								</div>
 								<div class="flex items-center gap-1.5">
 									<button
 										type="button"
@@ -532,18 +539,27 @@
 							<p class="font-mono text-xs font-bold text-blue-600 mt-1 truncate">/v1/custom/page/{p.slug}</p>
 						</div>
 
-						<div class="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between">
+						<div class="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between gap-2">
 							<div class="flex items-center gap-1 text-xs text-slate-400">
 								<Icon icon="ph:eye-bold" class="text-sm" />
 								<span class="font-bold">{p.view_count || 0}</span>
 							</div>
-							<a
-								href="/v1/custom/page/{p.slug}"
-								class="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-black bg-slate-900 text-white hover:bg-blue-600 rounded-xl transition shadow-sm"
-							>
-								<span>페이지 보기</span>
-								<Icon icon="ph:arrow-right-bold" class="text-xs" />
-							</a>
+							<div class="flex items-center gap-1.5">
+								<a
+									href="/v1/custom/page/{p.slug}?edit=true"
+									class="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-bold border border-slate-200 bg-white text-slate-700 hover:border-blue-400 hover:text-blue-600 rounded-xl transition"
+								>
+									<Icon icon="ph:pencil-simple-bold" class="text-xs" />
+									<span>편집</span>
+								</a>
+								<a
+									href="/v1/custom/page/{p.slug}"
+									class="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-black bg-slate-900 text-white hover:bg-blue-600 rounded-xl transition shadow-sm"
+								>
+									<span>보기</span>
+									<Icon icon="ph:arrow-right-bold" class="text-xs" />
+								</a>
+							</div>
 						</div>
 					</div>
 				{/each}
@@ -554,43 +570,63 @@
 
 <!-- 메타데이터 수정 모달 -->
 {#if showMetaModal}
-	<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-		<div class="w-full max-w-xl rounded-3xl border-2 border-slate-200 bg-white p-6 sm:p-8 shadow-2xl max-h-[90vh] overflow-y-auto">
-			<div class="mb-6 flex items-center justify-between border-b pb-4">
-				<h3 class="text-xl font-black text-slate-900">페이지 메타데이터 설정</h3>
-				<button onclick={() => (showMetaModal = false)} class="text-slate-400 hover:text-slate-700">
+	<!-- svelte-ignore a11y_click_events_have_key_events -->
+	<!-- svelte-ignore a11y_no_static_element_interactions -->
+	<div
+		onclick={() => (showMetaModal = false)}
+		class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+	>
+		<div
+			onclick={(e) => e.stopPropagation()}
+			class="w-full max-w-2xl rounded-3xl border-2 border-slate-200 bg-white p-6 sm:p-8 shadow-2xl max-h-[90vh] overflow-y-auto"
+		>
+			<div class="mb-6 flex items-center justify-between border-b border-slate-100 pb-4">
+				<div>
+					<h3 class="text-xl font-black text-slate-900">페이지 메타데이터 설정</h3>
+					<p class="text-[11px] font-mono font-bold text-slate-400 mt-0.5">Target ID: {metaForm.id}</p>
+				</div>
+				<button type="button" onclick={() => (showMetaModal = false)} class="text-slate-400 hover:text-slate-700 p-1">
 					<Icon icon="ph:x-bold" class="text-xl" />
 				</button>
 			</div>
 
-			<div class="space-y-4">
-				<div>
-					<label for="meta-title-input" class="block text-xs font-bold text-slate-700 mb-1">페이지 제목</label>
-					<input
-						id="meta-title-input"
-						type="text"
-						bind:value={metaForm.title}
-						class="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-xs font-bold focus:border-blue-600 focus:outline-none"
-					/>
-				</div>
-
-				<div>
-					<label for="meta-slug-input" class="block text-xs font-bold text-slate-700 mb-1">경로 (Slug)</label>
-					<input
-						id="meta-slug-input"
-						type="text"
-						bind:value={metaForm.slug}
-						class="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-xs font-bold font-mono focus:border-blue-600 focus:outline-none"
-					/>
-				</div>
-
-				<div class="grid grid-cols-2 gap-4">
+			<div class="space-y-5">
+				<!-- 제목 & Slug -->
+				<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
 					<div>
-						<label for="meta-status-select" class="block text-xs font-bold text-slate-700 mb-1">상태</label>
+						<label for="meta-title-input" class="block text-xs font-black text-slate-700 mb-1.5">페이지 제목</label>
+						<input
+							id="meta-title-input"
+							type="text"
+							bind:value={metaForm.title}
+							class="w-full px-4 py-2.5 rounded-2xl border-2 border-slate-200 text-xs font-bold focus:border-blue-600 focus:outline-none transition"
+						/>
+					</div>
+
+					<div>
+						<label for="meta-slug-input" class="block text-xs font-black text-slate-700 mb-1.5">경로 (Slug)</label>
+						<div class="flex items-center">
+							<span class="px-2.5 py-2.5 rounded-l-2xl border-2 border-r-0 border-slate-200 bg-slate-50 text-[11px] font-mono font-bold text-slate-400">
+								/page/
+							</span>
+							<input
+								id="meta-slug-input"
+								type="text"
+								bind:value={metaForm.slug}
+								class="w-full px-3 py-2.5 rounded-r-2xl border-2 border-slate-200 text-xs font-bold font-mono focus:border-blue-600 focus:outline-none transition"
+							/>
+						</div>
+					</div>
+				</div>
+
+				<!-- 상태 & 게시 시작일시 -->
+				<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+					<div>
+						<label for="meta-status-select" class="block text-xs font-black text-slate-700 mb-1.5">게시 상태</label>
 						<select
 							id="meta-status-select"
 							bind:value={metaForm.status}
-							class="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-xs font-bold focus:border-blue-600 focus:outline-none bg-white"
+							class="w-full px-4 py-2.5 rounded-2xl border-2 border-slate-200 text-xs font-bold focus:border-blue-600 focus:outline-none bg-white transition"
 						>
 							<option value="PUBLISHED">게시 중 (PUBLISHED)</option>
 							<option value="DRAFT">임시 저장 (DRAFT)</option>
@@ -598,11 +634,24 @@
 					</div>
 
 					<div>
-						<label for="meta-rank-select" class="block text-xs font-bold text-slate-700 mb-1">최소 권한</label>
+						<label for="meta-pub-input" class="block text-xs font-black text-slate-700 mb-1.5">게시 시작 일시 (Release Time)</label>
+						<input
+							id="meta-pub-input"
+							type="datetime-local"
+							bind:value={metaForm.published_at}
+							class="w-full px-4 py-2.5 rounded-2xl border-2 border-slate-200 text-xs font-bold focus:border-blue-600 focus:outline-none transition"
+						/>
+					</div>
+				</div>
+
+				<!-- 최소 권한, 만료 일시, 활성화 여부 -->
+				<div class="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2 border-t border-slate-100">
+					<div>
+						<label for="meta-rank-select" class="block text-xs font-black text-slate-700 mb-1.5">최소 권한</label>
 						<select
 							id="meta-rank-select"
 							bind:value={metaForm.min_rank}
-							class="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-xs font-bold focus:border-blue-600 focus:outline-none bg-white"
+							class="w-full px-3 py-2.5 rounded-2xl border-2 border-slate-200 text-xs font-bold focus:border-blue-600 focus:outline-none bg-white transition"
 						>
 							<option value={0}>전체 (R0)</option>
 							<option value={1}>직원 (R1)</option>
@@ -610,14 +659,105 @@
 							<option value={4}>마스터 (R4)</option>
 						</select>
 					</div>
+
+					<div>
+						<label for="meta-exp-input" class="block text-xs font-black text-rose-600 mb-1.5">만료 일시 (Expiration)</label>
+						<input
+							id="meta-exp-input"
+							type="datetime-local"
+							bind:value={metaForm.expired_at}
+							class="w-full px-3 py-2.5 rounded-2xl border-2 border-dashed border-rose-200 text-xs font-bold focus:border-rose-500 focus:outline-none transition"
+						/>
+					</div>
+
+					<div class="flex flex-col justify-end">
+						<label class="flex items-center gap-2.5 cursor-pointer rounded-2xl border-2 px-3.5 py-2.5 transition {metaForm.is_active ? 'border-emerald-200 bg-emerald-50/50' : 'border-slate-200 bg-slate-50'}">
+							<input
+								type="checkbox"
+								bind:checked={metaForm.is_active}
+								class="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+							/>
+							<span class="text-xs font-black text-slate-800">시스템 활성화</span>
+						</label>
+					</div>
 				</div>
 
-				<div class="pt-4 flex justify-end gap-2 border-t">
-					<button onclick={() => (showMetaModal = false)} class="px-4 py-2 rounded-xl border border-slate-200 text-xs font-bold hover:bg-slate-50">
+				<!-- 리다이렉트 URL -->
+				<div>
+					<label for="meta-redirect-input" class="block text-xs font-black text-blue-600 mb-1.5">리다이렉트 URL (외부/내부 강제 이동 링크)</label>
+					<input
+						id="meta-redirect-input"
+						type="text"
+						bind:value={metaForm.redirect_url}
+						placeholder="https://... 또는 /v1/..."
+						class="w-full px-4 py-2.5 rounded-2xl border-2 border-slate-200 bg-blue-50/20 text-xs font-mono font-bold focus:border-blue-600 focus:outline-none transition"
+					/>
+				</div>
+
+				<!-- JSONB 커스텀 속성 동적 추가 -->
+				<div class="space-y-3 pt-4 border-t-2 border-dashed border-slate-200">
+					<div class="flex items-center justify-between">
+						<span class="text-xs font-black text-slate-600 uppercase tracking-wider flex items-center gap-1.5">
+							<Icon icon="ph:brackets-curly-bold" class="text-blue-600" />
+							Custom Page Properties (JSONB)
+						</span>
+						<button
+							type="button"
+							onclick={addCustomOption}
+							class="px-3 py-1.5 rounded-xl bg-amber-100 border border-amber-300 text-[11px] font-black text-amber-800 hover:bg-amber-200 transition"
+						>
+							+ 속성 추가
+						</button>
+					</div>
+
+					{#if metaForm.customOptions && metaForm.customOptions.length > 0}
+						<div class="max-h-40 overflow-y-auto space-y-2 pr-1">
+							{#each metaForm.customOptions as opt, idx}
+								<div class="flex items-center gap-2">
+									<input
+										type="text"
+										bind:value={opt.key}
+										placeholder="KEY"
+										class="flex-1 px-3 py-2 rounded-xl border-2 border-slate-200 bg-slate-900 text-white font-mono text-xs font-bold focus:border-blue-500 focus:outline-none"
+									/>
+									<input
+										type="text"
+										bind:value={opt.value}
+										placeholder="VALUE"
+										class="flex-[1.5] px-3 py-2 rounded-xl border-2 border-slate-200 text-xs font-bold focus:border-blue-600 focus:outline-none"
+									/>
+									<button
+										type="button"
+										onclick={() => removeCustomOption(idx)}
+										class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border-2 border-slate-200 bg-slate-50 text-slate-500 hover:border-rose-500 hover:bg-rose-500 hover:text-white transition"
+										aria-label="속성 삭제"
+									>
+										<Icon icon="ph:x-bold" class="text-sm" />
+									</button>
+								</div>
+							{/each}
+						</div>
+					{:else}
+						<p class="text-[11px] font-medium text-slate-400">등록된 커스텀 JSONB 속성이 없습니다.</p>
+					{/if}
+				</div>
+
+				<div class="pt-4 flex justify-end gap-2 border-t border-slate-100">
+					<button
+						type="button"
+						onclick={() => (showMetaModal = false)}
+						class="px-5 py-2.5 rounded-2xl border-2 border-slate-200 bg-white text-xs font-black text-slate-600 hover:border-slate-400 transition"
+					>
 						취소
 					</button>
-					<button onclick={handleSaveMeta} disabled={isSavingMeta} class="px-5 py-2 rounded-xl bg-blue-600 text-white text-xs font-black hover:bg-blue-700 shadow disabled:opacity-50">
-						{isSavingMeta ? '저장 중...' : '설정 저장'}
+					<button
+						type="button"
+						onclick={handleSaveMeta}
+						disabled={isSavingMeta}
+						class="flex items-center gap-1.5 px-6 py-2.5 rounded-2xl bg-blue-600 text-white text-xs font-black hover:bg-blue-700 shadow-sm disabled:opacity-50 transition"
+					>
+						<Icon icon="ph:check-circle-bold" class="text-base {isSavingMeta ? 'animate-spin' : ''}" />
+						<span>{isSavingMeta ? '저장 중...' : '모든 설정 저장'}</span>
 					</button>
 				</div>
 			</div>

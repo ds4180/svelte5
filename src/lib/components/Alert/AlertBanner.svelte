@@ -56,7 +56,7 @@
 {#if activeAlert}
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
 	<div
-		class="{positionFilter === 'bottom' ? 'fixed bottom-0 left-0 right-0' : 'fixed top-20 left-0 right-0'} z-[1002] h-11 sm:h-12 w-full overflow-hidden px-4 text-center text-xs font-bold text-white shadow-lg md:text-sm flex items-center justify-between
+		class="{positionFilter === 'bottom' ? 'fixed bottom-16 md:bottom-0 left-0 right-0' : 'fixed top-14 md:top-16 left-0 right-0'} z-[1002] h-10 sm:h-11 w-full overflow-hidden px-4 text-center text-xs font-bold text-white shadow-lg md:text-sm flex items-center justify-between
 	           {activeAlert.style === 'danger' ? 'bg-rose-600' : 'bg-blue-600'}"
 		transition:slide={{ duration: 300 }}
 		onmouseenter={() => (isPaused = true)}

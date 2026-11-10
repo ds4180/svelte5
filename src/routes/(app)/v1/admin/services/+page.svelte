@@ -150,11 +150,28 @@
 		<!-- 상단 액션 버튼 그룹 -->
 		<div class="flex flex-wrap items-center gap-2.5 w-full md:w-auto">
 			<button
-				onclick={() => openModal('instance')}
+				onclick={() =>
+					openModal(
+						activeTab === 'apps'
+							? 'app'
+							: activeTab === 'engines'
+								? 'engine'
+								: activeTab === 'registries'
+									? 'registry'
+									: 'instance'
+					)}
 				class="flex items-center gap-1.5 px-4 py-2.5 rounded-2xl border-2 border-rose-600 bg-rose-600 text-white font-black text-xs uppercase tracking-wider hover:bg-rose-700 transition shadow-sm"
 			>
 				<Icon icon="ph:plus-circle-bold" class="text-base" />
-				<span>새 번들 생성</span>
+				<span>
+					{activeTab === 'apps'
+						? '새 서비스 앱 추가'
+						: activeTab === 'engines'
+							? '엔진 추가 등록'
+							: activeTab === 'registries'
+								? '레지스트리 추가'
+								: '새 번들 생성'}
+				</span>
 			</button>
 
 			<button
@@ -390,6 +407,15 @@
 					</div>
 				</div>
 			{/each}
+
+			<button
+				type="button"
+				onclick={() => openModal('app')}
+				class="rounded-2xl border-2 border-dashed border-slate-300 p-8 text-center flex flex-col items-center justify-center hover:border-purple-400 hover:bg-purple-50/30 transition min-h-[180px] group"
+			>
+				<Icon icon="ph:plus-circle-bold" class="text-3xl text-slate-300 group-hover:text-purple-500 transition mb-2" />
+				<span class="text-xs font-black uppercase text-slate-400 group-hover:text-purple-600 transition">새 서비스 앱 추가</span>
+			</button>
 		</div>
 	{:else if activeTab === 'engines'}
 		<!-- 탭 3: 구동 엔진 목록 -->
@@ -406,11 +432,15 @@
 				<tbody class="divide-y divide-slate-100 font-bold">
 					{#each engines as engine}
 						<tr class="hover:bg-slate-50">
-							<td class="px-6 py-4 font-mono font-black text-slate-900">{engine.id} ({engine.version})</td>
-							<td class="px-6 py-4 text-slate-600">{engine.registry_id}</td>
-							<td class="px-6 py-4 text-slate-500">{engine.frontend_component || '-'}</td>
+							<td class="px-6 py-4 font-mono font-black text-slate-900">{engine.id} ({engine.version || 'v1'})</td>
+							<td class="px-6 py-4 text-rose-600 font-black uppercase">{engine.registry_id}</td>
+							<td class="px-6 py-4">
+								<span class="rounded-lg bg-blue-50 px-2.5 py-1 text-xs text-blue-700 font-mono border border-blue-200">
+									{engine.frontend_plugin || '-'}
+								</span>
+							</td>
 							<td class="px-6 py-4 text-right">
-								<button onclick={() => handleDelete('engine', engine.id)} class="text-rose-500 hover:underline">
+								<button onclick={() => handleDelete('engine', engine.id)} class="text-rose-500 hover:underline font-bold">
 									삭제
 								</button>
 							</td>
@@ -418,66 +448,253 @@
 					{/each}
 				</tbody>
 			</table>
+			<div class="p-5 border-t border-slate-100 bg-slate-50/50">
+				<button
+					type="button"
+					onclick={() => openModal('engine')}
+					class="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-2xl border-2 border-slate-300 bg-white text-xs font-black uppercase tracking-wider text-slate-700 hover:border-slate-900 hover:bg-slate-900 hover:text-white transition"
+				>
+					<Icon icon="ph:plus-bold" />
+					<span>엔진 추가 등록</span>
+				</button>
+			</div>
 		</div>
 	{:else}
 		<!-- 탭 4: 레지스트리 목록 -->
-		<div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+		<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
 			{#each registries as reg}
-				<div class="rounded-2xl border-2 border-slate-200 bg-white p-6 shadow-sm">
-					<h4 class="text-lg font-black text-slate-900">{reg.name} ({reg.id})</h4>
-					<p class="text-xs text-slate-500 mt-1">{reg.description || '설명 없음'}</p>
+				<div class="rounded-2xl border-2 border-slate-200 bg-white p-6 shadow-sm flex flex-col justify-between hover:border-amber-400 transition-all">
+					<div>
+						<div class="flex items-center justify-between mb-3">
+							<span class="text-xs font-black text-rose-600 uppercase tracking-widest font-mono bg-rose-50 px-2.5 py-0.5 rounded-lg border border-rose-200">
+								{reg.id}
+							</span>
+							<button
+								type="button"
+								onclick={() => handleDelete('registry', reg.id)}
+								class="px-2.5 py-1 text-xs font-bold text-rose-500 hover:bg-rose-50 rounded-lg transition"
+							>
+								삭제
+							</button>
+						</div>
+						<h4 class="text-lg font-black text-slate-900">{reg.name}</h4>
+						<p class="text-xs text-slate-500 mt-1.5 leading-relaxed">{reg.description || '등록된 설명이 없습니다.'}</p>
+					</div>
 				</div>
 			{/each}
+
+			<button
+				type="button"
+				onclick={() => openModal('registry')}
+				class="rounded-2xl border-2 border-dashed border-slate-300 p-8 text-center flex flex-col items-center justify-center hover:border-amber-400 hover:bg-amber-50/30 transition min-h-[150px] group"
+			>
+				<Icon icon="ph:plus-circle-bold" class="text-3xl text-slate-300 group-hover:text-amber-500 transition mb-2" />
+				<span class="text-xs font-black uppercase text-slate-400 group-hover:text-amber-600 transition">레지스트리 추가</span>
+			</button>
 		</div>
 	{/if}
 </div>
 
 <!-- 모달 다이얼로그 (생성/수정) -->
 {#if showModal}
-	<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-		<div class="w-full max-w-lg rounded-3xl border-2 border-slate-200 bg-white p-6 sm:p-8 shadow-2xl">
-			<div class="mb-6 flex items-center justify-between border-b pb-4">
-				<h3 class="text-xl font-black text-slate-900 uppercase">
-					{formData.id ? '수정' : '신규 생성'} ({modalType})
-				</h3>
-				<button onclick={() => (showModal = false)} class="text-slate-400 hover:text-slate-700">
+	<!-- svelte-ignore a11y_click_events_have_key_events -->
+	<!-- svelte-ignore a11y_no_static_element_interactions -->
+	<div
+		transition:fade
+		onclick={() => (showModal = false)}
+		class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+	>
+		<div
+			transition:fly={{ y: 30 }}
+			onclick={(e) => e.stopPropagation()}
+			class="w-full max-w-xl rounded-3xl border-2 border-slate-200 bg-white shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
+		>
+			<header class="flex items-center justify-between border-b border-slate-100 bg-slate-50 px-6 py-5 sm:px-8">
+				<div>
+					<span class="text-[10px] font-black tracking-widest text-rose-600 uppercase">Service Architecture</span>
+					<h3 class="text-xl font-black text-slate-900 uppercase">
+						{formData.id && modalType !== 'registry' && modalType !== 'engine' ? '수정' : '신규 생성'} ({modalType})
+					</h3>
+				</div>
+				<button type="button" onclick={() => (showModal = false)} class="text-slate-400 hover:text-slate-700 p-1">
 					<Icon icon="ph:x-bold" class="text-xl" />
 				</button>
-			</div>
+			</header>
 
-			<div class="space-y-4">
-				{#if modalType === 'instance'}
+			<div class="p-6 sm:p-8 space-y-5 overflow-y-auto">
+				{#if modalType === 'registry'}
 					<div>
-						<label for="bundle-name-input" class="block text-xs font-bold text-slate-700 mb-1">번들 명칭</label>
+						<label for="reg-id-input" class="block text-xs font-black text-slate-700 mb-1.5">Registry ID (Key)</label>
+						<input
+							id="reg-id-input"
+							type="text"
+							bind:value={formData.id}
+							class="w-full px-4 py-3 rounded-2xl border-2 border-slate-200 text-xs font-mono font-bold focus:border-rose-600 focus:outline-none transition"
+							placeholder="예: comment, upload"
+						/>
+					</div>
+					<div>
+						<label for="reg-name-input" class="block text-xs font-black text-slate-700 mb-1.5">Display Name</label>
+						<input
+							id="reg-name-input"
+							type="text"
+							bind:value={formData.name}
+							class="w-full px-4 py-3 rounded-2xl border-2 border-slate-200 text-xs font-bold focus:border-rose-600 focus:outline-none transition"
+							placeholder="예: 댓글 서비스"
+						/>
+					</div>
+				{:else if modalType === 'engine'}
+					<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+						<div>
+							<label for="engine-id-input" class="block text-xs font-black text-slate-700 mb-1.5">Engine ID</label>
+							<input
+								id="engine-id-input"
+								type="text"
+								bind:value={formData.id}
+								class="w-full px-4 py-3 rounded-2xl border-2 border-slate-200 text-xs font-mono font-bold focus:border-rose-600 focus:outline-none transition"
+								placeholder="예: comment_v1"
+							/>
+						</div>
+						<div>
+							<label for="engine-reg-select" class="block text-xs font-black text-slate-700 mb-1.5">Registry Group</label>
+							<select
+								id="engine-reg-select"
+								bind:value={formData.registry_id}
+								class="w-full px-4 py-3 rounded-2xl border-2 border-slate-200 text-xs font-bold bg-white focus:border-rose-600 focus:outline-none transition"
+							>
+								<option value="">-- 레지스트리 선택 --</option>
+								{#each registries as r}
+									<option value={r.id}>{r.name} ({r.id})</option>
+								{/each}
+							</select>
+						</div>
+					</div>
+					<div>
+						<label for="engine-plugin-input" class="block text-xs font-black text-slate-700 mb-1.5">Frontend Plugin (Svelte Component)</label>
+						<input
+							id="engine-plugin-input"
+							type="text"
+							bind:value={formData.frontend_plugin}
+							class="w-full px-4 py-3 rounded-2xl border-2 border-slate-200 text-xs font-mono font-bold focus:border-rose-600 focus:outline-none transition"
+							placeholder="예: CommentEngine"
+						/>
+					</div>
+				{:else if modalType === 'app'}
+					<div>
+						<label for="app-name-input" class="block text-xs font-black text-slate-700 mb-1.5">App Name</label>
+						<input
+							id="app-name-input"
+							type="text"
+							bind:value={formData.name}
+							class="w-full px-4 py-3 rounded-2xl border-2 border-slate-200 text-xs font-bold focus:border-rose-600 focus:outline-none transition"
+							placeholder="예: 자유게시판 댓글"
+						/>
+					</div>
+					<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+						<div>
+							<label for="app-engine-select" class="block text-xs font-black text-slate-700 mb-1.5">Base Engine</label>
+							<select
+								id="app-engine-select"
+								bind:value={formData.engine_id}
+								class="w-full px-4 py-3 rounded-2xl border-2 border-slate-200 text-xs font-bold bg-white focus:border-rose-600 focus:outline-none transition"
+							>
+								<option value="">-- 기본 엔진 선택 --</option>
+								{#each engines as e}
+									<option value={e.id}>{e.id} ({e.version || 'v1'})</option>
+								{/each}
+							</select>
+						</div>
+						<div>
+							<label for="app-child-select" class="block text-xs font-black text-slate-700 mb-1.5">Child (Chain)</label>
+							<select
+								id="app-child-select"
+								bind:value={formData.child_app_id}
+								class="w-full px-4 py-3 rounded-2xl border-2 border-slate-200 text-xs font-bold bg-white focus:border-rose-600 focus:outline-none transition"
+							>
+								<option value={null}>None (단독 실행)</option>
+								{#each serviceApps.filter((a) => a.id !== formData.id) as a}
+									<option value={a.id}>{a.name}</option>
+								{/each}
+							</select>
+						</div>
+					</div>
+					<div>
+						<label for="app-config-input" class="block text-xs font-black text-slate-700 mb-1.5">JSON Configuration</label>
+						<textarea
+							id="app-config-input"
+							bind:value={formData.config_str}
+							rows="5"
+							placeholder={'{\n  "maxDepth": 3\n}'}
+							class="w-full rounded-2xl border-2 border-slate-200 bg-slate-50 p-4 font-mono text-xs focus:bg-white focus:border-rose-600 focus:outline-none transition"
+						></textarea>
+					</div>
+				{:else if modalType === 'instance'}
+					<div>
+						<label for="bundle-name-input" class="block text-xs font-black text-slate-700 mb-1.5">Bundle Name (번들 명칭)</label>
 						<input
 							id="bundle-name-input"
 							type="text"
 							bind:value={formData.name}
-							class="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-xs font-bold focus:border-rose-600 focus:outline-none"
-							placeholder="예: Standard Blog Set"
+							class="w-full px-4 py-3 rounded-2xl border-2 border-slate-200 text-xs font-bold focus:border-rose-600 focus:outline-none transition"
+							placeholder="예: Standard Board Plugin Set"
 						/>
 					</div>
-				{:else}
-					<div>
-						<label for="service-item-name-input" class="block text-xs font-bold text-slate-700 mb-1">명칭</label>
-						<input
-							id="service-item-name-input"
-							type="text"
-							bind:value={formData.name}
-							class="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-xs font-bold focus:border-rose-600 focus:outline-none"
-						/>
+
+					<div class="space-y-2.5">
+						<span class="block text-xs font-black text-slate-700">Included Service Apps (Select & Order)</span>
+						<div class="space-y-2 max-h-60 overflow-y-auto rounded-2xl border-2 border-slate-100 bg-slate-50/50 p-2.5">
+							{#each serviceApps as app}
+								<label
+									class="flex items-center gap-3 p-3 rounded-xl border transition-all cursor-pointer {formData.service_app_ids?.includes(app.id)
+										? 'bg-rose-50 border-rose-200 shadow-xs'
+										: 'bg-white border-slate-100 hover:border-slate-300'}"
+								>
+									<input
+										type="checkbox"
+										checked={formData.service_app_ids?.includes(app.id)}
+										onchange={(e) => {
+											if (!formData.service_app_ids) formData.service_app_ids = [];
+											if (e.currentTarget.checked) {
+												formData.service_app_ids = [...formData.service_app_ids, app.id];
+											} else {
+												formData.service_app_ids = formData.service_app_ids.filter((/** @type {any} */ id) => id !== app.id);
+											}
+										}}
+										class="h-4 w-4 rounded border-slate-300 text-rose-600 focus:ring-rose-500"
+									/>
+									<div class="flex-1 min-w-0">
+										<div class="text-xs font-black text-slate-900 truncate">{app.name}</div>
+										<div class="text-[10px] font-bold uppercase text-slate-400 font-mono">{app.engine_id}</div>
+									</div>
+									{#if formData.service_app_ids?.includes(app.id)}
+										<span class="text-[10px] font-black text-rose-600 bg-white px-2.5 py-1 rounded-lg border border-rose-200 shadow-xs">
+											Order: {formData.service_app_ids.indexOf(app.id) + 1}
+										</span>
+									{/if}
+								</label>
+							{/each}
+						</div>
+						<p class="text-[11px] font-medium text-slate-400">※ 체크한 순서대로 화면에 렌더링됩니다.</p>
 					</div>
 				{/if}
-
-				<div class="pt-4 flex justify-end gap-2">
-					<button onclick={() => (showModal = false)} class="px-4 py-2 rounded-xl border border-slate-200 text-xs font-bold hover:bg-slate-50">
-						취소
-					</button>
-					<button onclick={handleSubmit} class="px-5 py-2 rounded-xl bg-rose-600 text-white text-xs font-black hover:bg-rose-700 shadow">
-						저장
-					</button>
-				</div>
 			</div>
+
+			<footer class="flex justify-end gap-2.5 border-t border-slate-100 bg-slate-50 px-6 py-4 sm:px-8">
+				<button
+					type="button"
+					onclick={() => (showModal = false)}
+					class="px-5 py-2.5 rounded-2xl border-2 border-slate-200 bg-white text-xs font-black text-slate-600 hover:border-slate-400 transition"
+				>
+					취소
+				</button>
+				<button
+					type="button"
+					onclick={handleSubmit}
+					class="px-6 py-2.5 rounded-2xl bg-rose-600 text-white text-xs font-black hover:bg-rose-700 shadow-sm transition"
+				>
+					저장하기
+				</button>
+			</footer>
 		</div>
 	</div>
 {/if}
