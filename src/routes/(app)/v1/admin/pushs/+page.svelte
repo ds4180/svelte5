@@ -12,9 +12,9 @@
 
 	import { onMount } from 'svelte';
 	import { fade } from 'svelte/transition';
-	import * as api from '$lib/api/admin.js';
-	import { syncPushSubscription } from '$lib/pwa/serviceWorker.js';
-	import { toast } from '$lib/runes/toast.svelte.js';
+	import * as api from '$lib/api/admin';
+	import { syncPushSubscription } from '$lib/pwa/serviceWorker';
+	import { toast } from '$lib/runes/toast.svelte';
 	import { getSiteTitle } from '$lib/config/site';
 	import Icon from '@iconify/svelte';
 

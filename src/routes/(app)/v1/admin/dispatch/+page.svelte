@@ -7,13 +7,14 @@
     import Icon from '@iconify/svelte';
     import { fade } from 'svelte/transition';
     import { getSiteTitle } from '$lib/config/site';
-    import { toast } from '$lib/runes/toast.svelte.ts';
+    import { toast } from '$lib/runes/toast.svelte';
     import { formatDate } from '$lib/utils';
+    import { formatApiError } from '$lib/utils/error';
     import {
         adminGetActiveRouteMasters,
         adminGetDailyDispatch,
         adminSaveDailyDispatch
-    } from '$lib/api/admin.js';
+    } from '$lib/api/admin';
     import fleetData from '$lib/data/vehicles.json';
     import driverData from '$lib/data/drivers.json';
 
@@ -497,7 +498,7 @@
             // 데이터 재로딩
             await syncData(selectedDateKey, selectedRoute.id);
         } catch (err) {
-            toast.error('배차 저장 실패: ' + (err.detail || err.message || '오류'));
+            toast.error('배차 저장 실패: ' + formatApiError(err, '오류'));
         }
     }
 

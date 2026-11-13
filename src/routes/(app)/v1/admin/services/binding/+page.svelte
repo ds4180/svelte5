@@ -4,8 +4,8 @@
 	 * @description 앱 인스턴스(게시판 등)와 서비스 번들(Instance)을 연결하는 매핑 페이지
 	 */
 	import { onMount } from 'svelte';
-	import * as api from '$lib/api/admin.js';
-	import { toast } from '$lib/runes/toast.svelte.ts';
+	import * as api from '$lib/api/admin';
+	import { toast } from '$lib/runes/toast.svelte';
 	import Icon from '@iconify/svelte';
 	import { fade, fly } from 'svelte/transition';
 

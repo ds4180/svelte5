@@ -1,9 +1,10 @@
 <script>
 	import { onMount } from 'svelte';
-	import * as api from '$lib/api/admin.js';
+	import * as api from '$lib/api/admin';
 	import { formatDateTime } from '$lib/utils';
 	import { getSiteTitle } from '$lib/config/site';
-	import { toast } from '$lib/runes/toast.svelte.ts';
+	import { toast } from '$lib/runes/toast.svelte';
+	import { formatApiError } from '$lib/utils/error';
 	import Icon from '@iconify/svelte';
 
 	let sessions = $state([]);
@@ -18,7 +19,7 @@
 		try {
 			sessions = await api.adminGetSessions();
 		} catch (e) {
-			toast.error('세션 목록을 불러오지 못했습니다: ' + (e.detail || e.message));
+			toast.error('세션 목록을 불러오지 못했습니다: ' + formatApiError(e));
 		} finally {
 			loading = false;
 		}
@@ -31,7 +32,7 @@
 			toast.success('세션이 강제로 종료되었습니다.');
 			await loadSessions();
 		} catch (e) {
-			toast.error('세션 종료 실패: ' + (e.detail || e.message));
+			toast.error('세션 종료 실패: ' + formatApiError(e));
 		}
 	}
 

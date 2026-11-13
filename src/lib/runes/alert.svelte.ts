@@ -15,7 +15,7 @@
  */
 
 import { browser } from '$app/environment';
-import { isExpired } from '$lib/utils.js';
+import { isExpired } from '$lib/utils';
 import { notifyAlert } from '$lib/utils/sound';
 
 export interface AlertData {

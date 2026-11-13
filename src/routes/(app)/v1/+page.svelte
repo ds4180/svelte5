@@ -4,7 +4,7 @@
 	 * @description 시스템 접속 시 처음 마주하는 실무형 대시보드
 	 */
 	import { onMount } from 'svelte';
-	import { formatDateTime } from '$lib/utils.js';
+	import { formatDateTime } from '$lib/utils';
 
 	// ⚠️ [하이드레이션 방어] 서버와 클라이언트의 시간 차이를 방지하기 위해 초기값을 null로 설정
 	let now = $state(null);

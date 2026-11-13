@@ -6,7 +6,7 @@
 	 * - ✕ 닫기 클릭 시 24시간 동안 보지 않기(neverShowAgain) 자동 연동
 	 * - 2건 이상 등록 시 스택 카운트(예: 1/2) 뱃지 제공
 	 */
-	import { alertState } from '$lib/runes/alert.svelte.js';
+	import { alertState } from '$lib/runes/alert.svelte';
 	import { fly } from 'svelte/transition';
 	import Icon from '@iconify/svelte';
 

@@ -13,9 +13,10 @@
 	import * as engines from '$lib/index';
 	import { goto } from '$app/navigation';
 	import TiptapEditor from '$lib/components/TiptapEditor.svelte';
-	import { getAuthContext } from '$lib/runes/auth.svelte.js';
-	import { toast } from '$lib/runes/toast.svelte.ts';
+	import { getAuthContext } from '$lib/runes/auth.svelte';
+	import { toast } from '$lib/runes/toast.svelte';
 	import { formatDate } from '$lib/utils';
+	import { formatApiError } from '$lib/utils/error';
 
 	/** @type {{ slug: string, appId?: string, initialData?: any }} */
 	let { slug, appId = 'board', initialData = null } = $props();
@@ -166,8 +167,7 @@
 			}
 		} catch (e) {
 			console.error('[BoardEngine] 데이터 로딩 실패:', e);
-			const msg = e?.detail || e?.message || (typeof e === 'string' ? e : JSON.stringify(e));
-			errorMessage = `데이터를 불러오지 못했습니다: ${msg}`;
+			errorMessage = `데이터를 불러오지 못했습니다: ${formatApiError(e)}`;
 		} finally {
 			isLoading = false;
 		}
@@ -198,8 +198,7 @@
 			}
 			goto(`/v1/app/board/${boardSlug}`, { invalidateAll: true });
 		} catch (e) {
-			const msg = e?.detail || e?.message || (typeof e === 'string' ? e : JSON.stringify(e));
-			toast.error('저장 실패: ' + msg);
+			toast.error('저장 실패: ' + formatApiError(e));
 		} finally {
 			isLoading = false;
 		}
@@ -213,8 +212,7 @@
 			toast.success('게시물이 삭제되었습니다.');
 			goto(`/v1/app/board/${boardSlug}`, { invalidateAll: true });
 		} catch (e) {
-			const msg = e?.detail || e?.message || (typeof e === 'string' ? e : JSON.stringify(e));
-			toast.error('삭제 실패: ' + msg);
+			toast.error('삭제 실패: ' + formatApiError(e));
 		} finally {
 			isLoading = false;
 		}

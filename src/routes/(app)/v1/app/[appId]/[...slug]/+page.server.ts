@@ -1,29 +1,31 @@
-import { error } from '@sveltejs/kit';
-import { env } from '$env/dynamic/private';
+import { error, isHttpError } from '@sveltejs/kit';
+import { formatApiError } from '$lib/utils/error';
+import type { PageServerLoad } from './$types';
 
 /**
- * @file /v1/app/[appId]/[...slug]/+page.server.js
+ * @file /v1/app/[appId]/[...slug]/+page.server.ts
  * @description 앱 엔진 라우트 서버 로드 함수
  *   - appId 로 AppRegistry 정보를 조회하여 어떤 엔진(컴포넌트)을 마운트할지 결정
  *   - slug 는 엔진(BoardEngine 등)에 그대로 전달되어 내부 라우팅에 사용됨
- *
- * @example
- *   URL: /v1/app/board/notice          → appId="board", slug="notice"         → 목록 모드
- *   URL: /v1/app/board/notice/42       → appId="board", slug="notice/42"      → 상세 모드
- *   URL: /v1/app/board/notice/42/edit  → appId="board", slug="notice/42/edit" → 수정 모드
- *
- * BoardEngine initialData 구조:
- *   - 목록: { posts: [...], board: {...}, total: N }
- *   - 상세: { post: {...}, board: {...}, bindings: [...] }
  */
 
-/** @type {import('./$types').PageServerLoad} */
-export async function load({ params, fetch, locals }) {
+interface AppInfo {
+	app_id: string;
+	name?: string;
+	title?: string;
+	main_component: string;
+	deny_groups?: string[];
+	allow_groups?: string[];
+	min_read_rank?: number;
+	[key: string]: unknown;
+}
+
+export const load: PageServerLoad = async ({ params, fetch, locals }) => {
 	const { appId, slug } = params;
 	const user = locals.user || null;
 
 	// appId → 컴포넌트 자동 추론 매핑 (AppRegistry 폴백용)
-	const AUTO_COMPONENT_MAP = {
+	const AUTO_COMPONENT_MAP: Record<string, string> = {
 		board: 'BoardEngine',
 		boards: 'BoardEngine',
 		calendar: 'CalendarEngine',
@@ -31,15 +33,14 @@ export async function load({ params, fetch, locals }) {
 	};
 
 	// 1. AppRegistry 에서 앱 정보 조회
-	let appInfo = null;
-	let appRes = null;
+	let appInfo: AppInfo | null = null;
 	try {
-		appRes = await fetch(`/api/v1/admin/apps/${appId}`);
+		const appRes = await fetch(`/api/v1/admin/apps/${appId}`);
 		if (appRes.ok) {
 			appInfo = await appRes.json();
 		}
 	} catch (e) {
-		console.warn(`⚠️ [SSR] AppRegistry fetch error:`, e.message);
+		console.warn(`⚠️ [SSR] AppRegistry fetch error:`, e instanceof Error ? e.message : String(e));
 	}
 
 	if (!appInfo) {
@@ -66,15 +67,15 @@ export async function load({ params, fetch, locals }) {
 	// 1-1. 🛡️ [4단계 권한 SSR 입구 검문] (1.root(9) ➔ 2.deny_groups ➔ 3.allow_groups ➔ 4.min_read_rank)
 	// 📌 백엔드 `/api/users/me` 응답 스키마의 공식 필드명인 `rank_level`을 우선 참조합니다.
 	const userRank = Number(user?.rank_level ?? user?.rank ?? 0);
-	const userGroups = [];
+	const userGroups: string[] = [];
 	if (user?.primary_group) userGroups.push(user.primary_group);
 	if (Array.isArray(user?.secondary_groups)) {
 		for (const g of user.secondary_groups) {
 			if (g && !userGroups.includes(g)) userGroups.push(g);
 		}
 	}
-	const denyGroups = Array.isArray(appInfo.deny_groups) ? appInfo.deny_groups : [];
-	const allowGroups = Array.isArray(appInfo.allow_groups) ? appInfo.allow_groups : [];
+	const denyGroups: string[] = Array.isArray(appInfo.deny_groups) ? appInfo.deny_groups : [];
+	const allowGroups: string[] = Array.isArray(appInfo.allow_groups) ? appInfo.allow_groups : [];
 	const minReadRank = Number(appInfo.min_read_rank ?? 0);
 
 	let canReadApp = false;
@@ -93,17 +94,19 @@ export async function load({ params, fetch, locals }) {
 	}
 
 	// 2. [Data-Driven] 범용 데이터 로딩 (Hardcoding Zero 기반)
-	let initialData = null;
+	let initialData: Record<string, unknown> | null = null;
 	if (slug) {
 		try {
 			// ✅ 특정 엔진을 체크하는 if 문 없이, 범용 엔드포인트 호출
-			const res = await fetch(`/api/v1/app/data/${appId}/${slug}`); 
+			const res = await fetch(`/api/v1/app/data/${appId}/${slug}`);
 			if (res.status === 403) {
 				let errDetail = `해당 앱("${appInfo.title || appId}") 데이터에 접근할 권한이 없습니다.`;
 				try {
 					const errJson = await res.json();
-					if (errJson?.detail) errDetail = errJson.detail;
-				} catch (_) {}
+					errDetail = formatApiError(errJson, errDetail);
+				} catch {
+					// 기본 권한 안내 메시지 유지
+				}
 				throw error(403, errDetail);
 			}
 			if (res.ok) {
@@ -127,8 +130,11 @@ export async function load({ params, fetch, locals }) {
 				}
 			}
 		} catch (e) {
-			if (e?.status) throw e;
-			console.warn('⚠️ [SSR Preload] Generic data fetch failed:', e.message);
+			if (isHttpError(e)) throw e;
+			console.warn(
+				'⚠️ [SSR Preload] Generic data fetch failed:',
+				e instanceof Error ? e.message : String(e)
+			);
 		}
 	}
 
@@ -137,4 +143,4 @@ export async function load({ params, fetch, locals }) {
 		slug: slug || '',
 		initialData
 	};
-}
+};

@@ -7,10 +7,11 @@
     import { fade, scale } from 'svelte/transition';
     import Icon from '@iconify/svelte';
     import { formatDate } from '$lib/utils';
+    import { formatApiError } from '$lib/utils/error';
     import {
         customGetActiveRouteMasters,
         customGetDailyDispatch
-    } from '$lib/api/custom.js';
+    } from '$lib/api/custom';
 
     let routes = $state([]); // 활성 노선 목록
     let selectedRoute = $state(null); // 선택된 노선 (기본값: 전체 노선)
@@ -176,7 +177,7 @@
             console.error('❌ 배차 조회 실패:', err);
             
             dispatchRows = [];
-            errorMessage = err.detail || err.message || '데이터를 로드하는 데 실패했습니다.';
+            errorMessage = formatApiError(err, '데이터를 로드하는 데 실패했습니다.');
             showLockScreen = true;
         } finally {
             if (token === fetchToken) {

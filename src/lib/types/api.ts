@@ -21,194 +21,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/question/list": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Question List */
-        get: operations["question_list_question_list_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/question/detail/{question_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Question Detail */
-        get: operations["question_detail_question_detail__question_id__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/question/read/{question_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Question Read */
-        post: operations["question_read_question_read__question_id__post"];
-        /** Question Unread */
-        delete: operations["question_unread_question_read__question_id__delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/question/reaction": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Question Reaction */
-        post: operations["question_reaction_question_reaction_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/question/create": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Question Create */
-        post: operations["question_create_question_create_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/question/update": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /** Question Update */
-        put: operations["question_update_question_update_put"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/question/delete": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /** Question Delete */
-        delete: operations["question_delete_question_delete_delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/answer/create/{question_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Answer Create */
-        post: operations["answer_create_answer_create__question_id__post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/answer/detail/{answer_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Answer Detail */
-        get: operations["answer_detail_answer_detail__answer_id__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/answer/update": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /** Answer Update */
-        put: operations["answer_update_answer_update_put"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/answer/delete": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /** Answer Delete */
-        delete: operations["answer_delete_answer_delete_delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/users/login": {
         parameters: {
             query?: never;
@@ -220,9 +32,18 @@ export interface paths {
         put?: never;
         /**
          * Login For Access Token
-         * @description 사용자 아이디/비밀번호 검증 및 신규 세션 발급
-         *     - 비밀번호 검증 성공 시 core.session 엔진을 통해 UUID 세션을 발급합니다.
-         *     - 브라우저 쿠키(session_id)에 세션 키를 안전하게 설정합니다.
+         * @description 사용자 아이디/비밀번호 검증 및 신규 세션 발급 (5중 보안 강화 버전)
+         *
+         *     🛡️ 적용된 5대 보안 메커니즘:
+         *     1. [실제 IP & 기기 식별]: 프록시(SvelteKit SSR / Nginx)가 전달한 `X-Forwarded-For`, `X-Real-IP`,
+         *        `User-Agent`를 기반으로 실제 접속자 IP와 기기 카테고리(MOBILE/DESKTOP)를 정확히 식별합니다.
+         *     2. [Brute-Force 일시 잠금(Lockout)]: Redis 기반으로 계정+IP(5회/5분) 및 단일 IP(15회/15분)
+         *        연속 로그인 실패를 감시하며, 임계치 초과 시 `429 Too Many Requests`로 즉시 차단합니다.
+         *     3. [Constant-Time 타이밍 공격 방어]: 존재하지 않는 아이디 입력 시에도 더미 bcrypt 해시 연산을
+         *        동일하게 수행(`verify_user_credentials`)하여 응답 시간 차이로 아이디 유무를 유추할 수 없게 합니다.
+         *     4. [비활성 계정 차단]: 퇴사·정지된 계정(`is_active == False`)의 로그인을 `403 Forbidden`으로 차단합니다.
+         *     5. [세션 고정(Session Fixation) 방어 및 쿠키 보안]: 기존 `session_id` 쿠키가 있으면 먼저 폐기한 뒤
+         *        새 UUIDv4 세션을 발급하며, `settings.COOKIE_SECURE` 정책에 맞춰 쿠키를 설정합니다.
          */
         post: operations["login_for_access_token_users_login_post"];
         delete?: never;
@@ -240,9 +61,30 @@ export interface paths {
         };
         /**
          * Read Users Me
-         * @description 현재 로그인된 사용자의 기본 정보 및 권한 등급(rank_level) 반환
+         * @description 현재 로그인된 사용자의 기본 정보 6대 항목 중 보안 키(비밀번호)를 제외한
+         *     아이디, 이메일, 권한랭킹(0~9), 주그룹(1개), 부그룹(N개 리스트)을 반환합니다.
          */
         get: operations["read_users_me_users_me_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/users/register-mode": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Public Register Mode
+         * @description 현재 시스템의 회원가입 정책 모드 공개 조회 (ADMIN_ONLY, APPROVAL, OPEN)
+         */
+        get: operations["get_public_register_mode_users_register_mode_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -262,7 +104,7 @@ export interface paths {
         put?: never;
         /**
          * Create User
-         * @description 새로운 사용자 회원 가입
+         * @description 새로운 사용자 회원 가입 (가입 정책 스위치 연동)
          */
         post: operations["create_user_users_create_post"];
         delete?: never;
@@ -280,7 +122,7 @@ export interface paths {
         };
         /**
          * Session List
-         * @description 최근 접속한 사용자 세션 목록 조회
+         * @description 관리자 전용(Rank 4): 최근 접속한 사용자들의 세션 및 접속 기기/IP 목록을 조회합니다.
          */
         get: operations["session_list_users_sessions_get"];
         put?: never;
@@ -302,7 +144,7 @@ export interface paths {
         put?: never;
         /**
          * Kick User Session
-         * @description 관리자 전용: 특정 사용자의 세션을 강제로 만료(추방)시킵니다.
+         * @description 관리자 전용(Rank 4): 특정 사용자의 세션을 강제로 만료(추방)시킵니다.
          */
         post: operations["kick_user_session_users_sessions_kick__target_session_id__post"];
         delete?: never;
@@ -436,9 +278,29 @@ export interface paths {
         put?: never;
         /**
          * Media Upload
-         * @description [v3.2] 통합 파일 업로드 엔드포인트
+         * @description [v3.3] 통합 파일 업로드 엔드포인트 (개인 폴더 및 공용 티어 권한 검증 포함)
          */
         post: operations["media_upload_media_upload_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/media/publish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Media Publish
+         * @description [v3.3] 내 파일함(PRIVATE)에 미리 업로드된 파일을 서비스 영역(PUBLIC/PROTECTED)으로 물리 복사(Publish)
+         */
+        post: operations["media_publish_media_publish_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -547,6 +409,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/dayoff/quota-status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Dayoff Quota Status
+         * @description 현재 로그인한 사용자의 결근 운영 방식(APPROVAL vs FCFS) 및 지정 연/월의 일자별 선착순 정원 현황을 반환합니다.
+         */
+        get: operations["dayoff_quota_status_dayoff_quota_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/dayoff/create": {
         parameters: {
             query?: never;
@@ -558,7 +440,7 @@ export interface paths {
         put?: never;
         /**
          * Dayoff Create
-         * @description 휴무일 등록 (다중 날짜)
+         * @description 휴무일 등록 (다중 날짜 - 사무직 승인대기 / 운전직 선착순 정원 검사 후 즉시 확정)
          */
         post: operations["dayoff_create_dayoff_create_post"];
         delete?: never;
@@ -629,6 +511,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/push/unsubscribe": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Unsubscribe Push Notification
+         * @description 로그아웃 또는 세션 종료 시 해당 기기(endpoint)의 푸시 알림 구독을 DB에서 제거합니다.
+         *     (쿠키 만료 직후에도 안전하게 호출될 수 있도록 고유 endpoint 기반으로 삭제)
+         */
+        post: operations["unsubscribe_push_notification_push_unsubscribe_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/push/send-all": {
         parameters: {
             query?: never;
@@ -660,7 +563,8 @@ export interface paths {
         };
         /**
          * Alert List
-         * @description 모든 알림 목록 조회 (관리자용)
+         * @description 모든 알림 목록 조회 (관리자 전용)
+         *     - 만료되거나 비활성화된 알림을 포함한 전체 히스토리를 반환합니다.
          */
         get: operations["alert_list_alert_list_get"];
         put?: never;
@@ -680,7 +584,8 @@ export interface paths {
         };
         /**
          * Active Alert List
-         * @description 현재 활성화된 알림 목록 조회 (사용자용)
+         * @description 현재 활성화된 알림 목록 조회 (일반 사용자 및 클라이언트용)
+         *     - 기간 내에 있고 활성화된 알림만 반환합니다.
          */
         get: operations["active_alert_list_alert_active_get"];
         put?: never;
@@ -702,7 +607,9 @@ export interface paths {
         put?: never;
         /**
          * Alert Create
-         * @description 새로운 알림 생성
+         * @description 새로운 알림 생성 (관리자 전용)
+         *     - Level 5(긴급/시스템 락) 알림인 경우 전 사용자에게 백그라운드 Web Push를 자동 발송합니다.
+         *     - 실시간 WebSocket으로 클라이언트에 즉시 갱신 신호를 브로드캐스트합니다.
          */
         post: operations["alert_create_alert_create_post"];
         delete?: never;
@@ -723,7 +630,7 @@ export interface paths {
         post?: never;
         /**
          * Alert Delete
-         * @description 알림 삭제
+         * @description 알림 삭제 (관리자 전용)
          */
         delete: operations["alert_delete_alert_delete__alert_id__delete"];
         options?: never;
@@ -741,7 +648,7 @@ export interface paths {
         get?: never;
         /**
          * Alert Update
-         * @description 알림 수정
+         * @description 알림 수정 (관리자 전용)
          */
         put: operations["alert_update_alert_update__alert_id__put"];
         post?: never;
@@ -762,9 +669,29 @@ export interface paths {
         put?: never;
         /**
          * Alert Toggle
-         * @description 알림 활성/비활성 상태 전환
+         * @description 알림 활성/비활성 상태 전환 (관리자 전용)
          */
         post: operations["alert_toggle_alert_toggle__alert_id__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/alert/{alert_id}/acknowledgements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Alert Acknowledgements
+         * @description [관리자 전용] 특정 알림/지시사항의 사원별 수신 확인 현황 및 통계 조회
+         */
+        get: operations["alert_acknowledgements_alert__alert_id__acknowledgements_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -900,7 +827,8 @@ export interface paths {
         };
         /**
          * Get Dashboard Summary
-         * @description 관리자 대시보드 요약 정보
+         * @description [코어 통합 관제탑 대시보드 요약 정보]
+         *     시스템 코어 엔진(자율신경계 태스크, 관제/감사로그, 세션/근무, 지시사항 인지율) 종합 지표
          */
         get: operations["get_dashboard_summary_v1_admin_dashboard_get"];
         put?: never;
@@ -924,7 +852,12 @@ export interface paths {
          */
         get: operations["list_users_v1_admin_users_get"];
         put?: never;
-        post?: never;
+        /**
+         * Create User By Admin
+         * @description [관리자 전용 신규 사원 계정 직접 등록]
+         *     중소기업 오피스 인트라넷을 위한 관리자 직접 계정 발급 API
+         */
+        post: operations["create_user_by_admin_v1_admin_users_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -945,7 +878,11 @@ export interface paths {
         get: operations["get_user_detail_v1_admin_users__user_id__get"];
         put?: never;
         post?: never;
-        delete?: never;
+        /**
+         * Delete User By Admin
+         * @description [관리자 전용] 유저 계정 소프트 삭제 (is_active=False 비활성화 & 권한 0 박탈 & 세션 만료)
+         */
+        delete: operations["delete_user_by_admin_v1_admin_users__user_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -971,6 +908,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/admin/users/{user_id}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Restore User By Admin
+         * @description [관리자 전용] 소프트 삭제된 유저 계정 복구 (is_active=True & Lv.1 정회원 복귀)
+         */
+        put: operations["restore_user_by_admin_v1_admin_users__user_id__restore_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/users/config/register-mode": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Admin Register Mode
+         * @description [관리자용] 가입 모드 설정 조회 (ADMIN_ONLY, APPROVAL, OPEN)
+         */
+        get: operations["get_admin_register_mode_v1_admin_users_config_register_mode_get"];
+        /**
+         * Update Admin Register Mode
+         * @description [관리자용] 가입 모드 설정 변경 (ADMIN_ONLY, APPROVAL, OPEN)
+         */
+        put: operations["update_admin_register_mode_v1_admin_users_config_register_mode_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/admin/apps": {
         parameters: {
             query?: never;
@@ -986,7 +967,10 @@ export interface paths {
         put?: never;
         /**
          * Create App Registry
-         * @description 신규 App 엔진 및 메타데이터 등록
+         * @description [신규 App 엔진 및 메타데이터 등록]
+         *     - 인가 가드: admin_apps 전용 인가 가드(check_app_admin, Rank 9)
+         *     - 중복 식별자(app_id) 방어 및 Pydantic 엄격 검증(app_type 4대 분류, frontend_route 포맷)
+         *     - 📜 최고 관리자 등록 행위(APP_REGISTERED) 보안 감사로그(AuditLog) 영구 보존
          */
         post: operations["create_app_registry_v1_admin_apps_post"];
         delete?: never;
@@ -1004,21 +988,29 @@ export interface paths {
         };
         /**
          * Get App Detail
-         * @description 특정 앱의 메타데이터 및 설정 스키마 조회 (전체 공개 가능 - 권한 점검 시 사용)
+         * @description [특정 앱의 메타데이터 및 설정 스키마 상세 조회]
+         *     - 인가 가드: admin_apps 전용 인가 가드(check_app_admin, Rank 9) 적용
+         *     - 내부 권한 그룹(allow/deny_groups) 및 설정 스키마의 무단 노출을 방지하기 위해 관리자 권한 필수
          */
         get: operations["get_app_detail_v1_admin_apps__app_id__get"];
         put?: never;
         post?: never;
         /**
          * Delete App
-         * @description 앱 등록 제거
+         * @description [앱 등록 해제 및 제거]
+         *     - 인가 가드: admin_apps 전용 인가 가드(check_app_admin, Rank 9)
+         *     - 🚨 SYSTEM 앱은 시스템 필수 관제 앱이므로 삭제 영구 차단 (403)
+         *     - 📜 최고 관리자 앱 삭제 행위(APP_DELETED) 보안 감사로그(AuditLog, WARN) 영구 보존
          */
         delete: operations["delete_app_v1_admin_apps__app_id__delete"];
         options?: never;
         head?: never;
         /**
          * Update App Registry
-         * @description App 엔진 메타데이터 수정 (권한, 경로, 관리자 권한 위임 등)
+         * @description [App 엔진 메타데이터 수정 (권한, 경로, 자치관리자 등)]
+         *     - 인가 가드: admin_apps 전용 인가 가드(check_app_admin, Rank 9)
+         *     - 🚨 SYSTEM 필수 앱 보호: app_type 변경 시도 및 is_active=False 비활성화 원천 차단 (403)
+         *     - 📜 변경 전/후 필드 차이점(Diff-Patch) 자동 추적 및 보안/시스템 감사로그(AuditLog) 영구 보존
          */
         patch: operations["update_app_registry_v1_admin_apps__app_id__patch"];
         trace?: never;
@@ -1032,7 +1024,7 @@ export interface paths {
         };
         /**
          * Get Public Menus
-         * @description 일반 사용자용 공개 메뉴 조회 (지능형 URL 생성 포함)
+         * @description 일반 사용자용 공개 메뉴 조회 (4단계 그룹/랭킹 권한 필터링 및 지능형 URL 생성 포함)
          */
         get: operations["get_public_menus_v1_admin_menu_public_get"];
         put?: never;
@@ -1052,7 +1044,7 @@ export interface paths {
         };
         /**
          * Get All Menus
-         * @description 관리자용 전체 메뉴 트리 (Slug 변환 포함)
+         * @description 관리자용 전체 메뉴 트리 (admin_menu 거버넌스 연동)
          */
         get: operations["get_all_menus_v1_admin_menu_get"];
         put?: never;
@@ -1089,9 +1081,33 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get All Configs */
+        /**
+         * Get All Configs
+         * @description 전사 시스템 환경 설정 조회 (config 앱 읽기 권한 이상)
+         */
         get: operations["get_all_configs_v1_admin_config_get"];
         put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/config/batch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Update Configs Batch
+         * @description [전사 시스템 환경 설정 일괄 저장]
+         *     단일 트랜잭션으로 여러 설정을 안전하게 원자적 저장하고, 변경 감사로그를 자동 기록합니다.
+         */
+        put: operations["update_configs_batch_v1_admin_config_batch_put"];
         post?: never;
         delete?: never;
         options?: never;
@@ -1107,7 +1123,10 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** Update Config */
+        /**
+         * Update Config
+         * @description 단일 시스템 환경 설정 갱신 (하위 호환)
+         */
         put: operations["update_config_v1_admin_config__key__put"];
         post?: never;
         delete?: never;
@@ -1127,6 +1146,26 @@ export interface paths {
         get: operations["get_public_configs_v1_admin_config_public_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/system/gc/run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Run Manual Gc
+         * @description [관리자 수동 즉시 실행] 데이터 보존 기간 초과 이력 및 Redis 메모리 가비지 컬렉션(GC) (STD-SYS-009)
+         */
+        post: operations["run_manual_gc_v1_admin_system_gc_run_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1212,12 +1251,16 @@ export interface paths {
         };
         /**
          * List Push Subscriptions
-         * @description 모든 푸시 구독 목록 조회 (관리자용)
+         * @description 모든 푸시 구독 목록 조회 (관리자용 - 기기/브라우저 유형 및 소속 그룹 상세 포함)
          */
         get: operations["list_push_subscriptions_v1_admin_push_subscriptions_get"];
         put?: never;
         post?: never;
-        delete?: never;
+        /**
+         * Delete All Push Subscriptions
+         * @description 전체 푸시 구독 기기 목록 일괄 초기화(전체 삭제)
+         */
+        delete: operations["delete_all_push_subscriptions_v1_admin_push_subscriptions_delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1272,7 +1315,7 @@ export interface paths {
         };
         /**
          * Admin Get All Dayoffs
-         * @description 모든 사용자의 휴무 신청 내역 조회 (관리자용 - 원본 데이터)
+         * @description 모든 사용자의 휴무 신청 내역 조회 (관리자용 - 신청 일자 기준 유효 정책 판별)
          */
         get: operations["admin_get_all_dayoffs_v1_admin_dayoffs_get"];
         put?: never;
@@ -1293,11 +1336,79 @@ export interface paths {
         get?: never;
         /**
          * Admin Update Dayoff Status
-         * @description 휴무 신청 상태 변경 (승인/반려 등)
+         * @description 휴무 신청 상태 변경 (승인/반려 등 - 해당 사원의 동일 신청 묶음만 안전하게 동기화)
          */
         put: operations["admin_update_dayoff_status_v1_admin_dayoffs__dayoff_id__status_put"];
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/dayoff-policy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Admin Get Dayoff Policy
+         * @description 결근/휴무 정책 이력, 기준일 유효 정책 및 월간 일별 정원 현황 조회
+         */
+        get: operations["admin_get_dayoff_policy_v1_admin_dayoff_policy_get"];
+        /**
+         * Admin Update Dayoff Policy
+         * @description Append-Only: 적용날짜 기준 새 결근/휴무 정책 레코드를 추가(INSERT)합니다.
+         */
+        put: operations["admin_update_dayoff_policy_v1_admin_dayoff_policy_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/dayoff-policy/date-override": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Admin Update Dayoff Date Override
+         * @description 특정 날짜(단일 또는 복수 일자)의 선착순 정원을 Append-Only 레코드로 반영합니다.
+         */
+        put: operations["admin_update_dayoff_date_override_v1_admin_dayoff_policy_date_override_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/dayoff-policy/{policy_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Admin Edit Dayoff Policy Row
+         * @description 입력 오타 정정 등을 위해 특정 정책 레코드(#id)를 수정합니다.
+         */
+        put: operations["admin_edit_dayoff_policy_row_v1_admin_dayoff_policy__policy_id__put"];
+        post?: never;
+        /**
+         * Admin Delete Dayoff Policy Row
+         * @description 특정 정책 레코드(#id)를 논리 삭제합니다.
+         */
+        delete: operations["admin_delete_dayoff_policy_row_v1_admin_dayoff_policy__policy_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1544,6 +1655,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/admin/groups/candidates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Group Candidates
+         * @description [수동 타겟 그룹 생성용 사원 후보 목록 조회]
+         *     - target_groups 거버넌스 랭킹/그룹 설정에 실시간 연동됩니다.
+         *     - 주민번호/계좌 등 민감 정보를 배제하고 사원 선택에 필요한 최소 정보(id, username, real_name)만 안전하게 반환합니다.
+         */
+        get: operations["get_group_candidates_v1_admin_groups_candidates_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/admin/groups": {
         parameters: {
             query?: never;
@@ -1553,9 +1686,30 @@ export interface paths {
         };
         /**
          * Get All Groups
-         * @description 현재 생성된 모든 그룹(수동, 다이나믹, 복합) 목록 조회
+         * @description 현재 생성된 모든 그룹(수동, 다이나믹, 복합) 목록 조회 (동적 그룹 기본 세트 누락 시 자동 1회 연산 복구)
          */
         get: operations["get_all_groups_v1_admin_groups_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/groups/{name}/members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Group Members
+         * @description [특정 타겟 그룹 소속 사원 명단 조회]
+         *     Redis Set에서 user_id 목록을 조회한 후, DB의 User/UserProfile 정보를 매핑하여 반환합니다.
+         */
+        get: operations["get_group_members_v1_admin_groups__name__members_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1595,7 +1749,7 @@ export interface paths {
         put?: never;
         /**
          * Refresh Dynamic Groups
-         * @description 다이나믹 그룹 강제 갱신 (직급별, 아이디 길이별 등)
+         * @description 실 비즈니스 다이나믹 그룹 강제 연산 및 갱신
          */
         post: operations["refresh_dynamic_groups_v1_admin_groups_dynamic_refresh_post"];
         delete?: never;
@@ -1644,6 +1798,458 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/admin/auth-groups/master": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 공식 그룹 마스터 전체 목록 조회
+         * @description 등록된 모든 주그룹 및 부그룹 목록을 반환합니다.
+         *     각 그룹별로 현재 매칭된 회원 수(주/부) 및 allow/deny로 적용 중인 앱 이름을 함께 집계합니다.
+         */
+        get: operations["get_group_master_list_v1_admin_auth_groups_master_get"];
+        put?: never;
+        /**
+         * 신규 공식 그룹 생성
+         * @description 새로운 주그룹 또는 부그룹을 등록합니다. (오직 root만 수행 가능)
+         */
+        post: operations["create_group_master_v1_admin_auth_groups_master_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/auth-groups/master/{group_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * 공식 그룹 정보 수정
+         * @description 그룹 표시명, 카테고리, 설명을 수정합니다.
+         *     식별 코드(code)는 데이터 무결성을 위해 변경 불가합니다.
+         */
+        put: operations["update_group_master_v1_admin_auth_groups_master__group_id__put"];
+        post?: never;
+        /**
+         * 공식 그룹 삭제 (Cascade 자동 정화)
+         * @description 그룹을 삭제하고, 해당 그룹을 주그룹/부그룹으로 쓰던 회원 프로필과 앱 allow/deny 목록에서 자동 정리합니다.
+         *     (오직 root만 수행 가능)
+         */
+        delete: operations["delete_group_master_v1_admin_auth_groups_master__group_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/auth-groups/users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 사용자별 그룹 매칭 현황 목록 조회
+         * @description 모든 회원의 기본 정보, 권한 등급, 주그룹(1개), 부그룹(N개) 현황을 조회합니다.
+         */
+        get: operations["get_user_group_list_v1_admin_auth_groups_users_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/auth-groups/users/{user_id}/primary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * 사용자 주그룹 단일 설정/해제
+         * @description 특정 회원의 주그룹(1순위 본소속)을 설정하거나 해제합니다.
+         */
+        patch: operations["update_user_primary_group_v1_admin_auth_groups_users__user_id__primary_patch"];
+        trace?: never;
+    };
+    "/v1/admin/auth-groups/users/{user_id}/secondary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 사용자 부그룹 추가
+         * @description 특정 회원에게 부그룹(직무/특권/제재)을 추가합니다.
+         */
+        post: operations["add_user_secondary_group_v1_admin_auth_groups_users__user_id__secondary_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/auth-groups/users/{user_id}/secondary/{code}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * 사용자 부그룹 해제
+         * @description 특정 회원의 부그룹 목록에서 특정 그룹을 제거합니다.
+         */
+        delete: operations["remove_user_secondary_group_v1_admin_auth_groups_users__user_id__secondary__code__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/auth-groups/users/{user_id}/groups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * 사용자 주그룹 및 부그룹 일괄 설정
+         * @description 사용자의 주그룹과 부그룹을 일괄 변경합니다.
+         */
+        put: operations["update_user_groups_batch_v1_admin_auth_groups_users__user_id__groups_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/auth-groups/apps": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 등록된 앱 전체 권한 설정 현황 조회
+         * @description 등록된 모든 앱의 읽기/쓰기 최소 랭킹(0~9) 및 allow/deny 그룹 목록을 조회합니다.
+         */
+        get: operations["get_app_permission_list_v1_admin_auth_groups_apps_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/auth-groups/apps/{app_id}/permissions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * 앱 권한 랭킹 및 allow/deny 설정 변경
+         * @description 특정 앱의 읽기/쓰기 최소 랭킹(0~9) 및 allow/deny 그룹을 수정합니다. (오직 root만 수행 가능)
+         */
+        patch: operations["update_app_permissions_v1_admin_auth_groups_apps__app_id__permissions_patch"];
+        trace?: never;
+    };
+    "/v1/admin/auth-groups/instances": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 전체 인스턴스 권한 설정 현황 목록 조회
+         * @description 모든 게시판 인스턴스(BoardConfig), 페이지 인스턴스(Page), 커스텀 단일 앱(AppRegistry)을
+         *     통합 인스턴스 목록으로 추출하여 반환합니다.
+         */
+        get: operations["get_all_instance_permissions_v1_admin_auth_groups_instances_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/auth-groups/instances/{instance_type}/{target_id}/permissions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * 인스턴스 권한 랭킹 및 allow/deny 설정 변경
+         * @description 특정 인스턴스(게시판, 페이지, 커스텀앱)의 4단계 권한(랭킹, allow, deny)을 수정합니다. (root 전용)
+         */
+        patch: operations["update_instance_permissions_v1_admin_auth_groups_instances__instance_type___target_id__permissions_patch"];
+        trace?: never;
+    };
+    "/v1/admin/observability/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 실시간 활성 세션 및 접속 이력 목록 조회
+         * @description 관리자 전용(admin_observability 앱 권한 필요):
+         *     현재 시스템에 로그인되어 활동 중인 실시간 세션(ACTIVE)을 조회합니다.
+         *     include_history=True 일 경우 과거 로그아웃/만료/추방된 세션 접속 기록(EXPIRED, KICKED_OUT)까지 함께 조회합니다.
+         */
+        get: operations["get_live_sessions_v1_admin_observability_sessions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/observability/sessions/kick/{target_session_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 특정 세션 강제 추방 (원클릭 KICK)
+         * @description 관리자 전용(Rank 4 이상):
+         *     의심 세션을 강제로 만료시키며(ID 또는 session_key 모두 지원), 감사로그(SECURITY)에 행위 이력을 즉시 영구 기록합니다.
+         */
+        post: operations["kick_session_v1_admin_observability_sessions_kick__target_session_id__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/observability/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 관제탑 실시간 요약 통계 조회
+         * @description 관리자 전용(admin_observability 앱 권한 필요): 상단 대시보드 배지용 실시간 요약 통계를 반환합니다.
+         */
+        get: operations["get_observability_summary_v1_admin_observability_summary_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/observability/logs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 전사 통합 감사로그 페이징 및 필터 검색
+         * @description 관리자 전용(Rank 4 이상):
+         *     전사 감사로그를 앱별, 유형별, 심각도별, 사용자별로 고속 필터링하여 페이징 조회합니다.
+         */
+        get: operations["get_audit_logs_v1_admin_observability_logs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/observability/logs/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 전사 감사로그 CSV 내보내기 다운로드
+         * @description 관리자 전용(admin_observability 읽기 이상):
+         *     현재 필터 조건에 부합하는 감사로그를 엑셀 호환 UTF-8 BOM CSV 포맷으로 스트리밍 다운로드합니다.
+         */
+        get: operations["export_audit_logs_csv_v1_admin_observability_logs_export_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/observability/system-logs/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 서버 원시 시스템 콘솔 로그(.log) 다운로드
+         * @description 관리자 전용(admin_observability 읽기 이상):
+         *     Uvicorn/FastAPI 런타임 콘솔 표준 출력이 누적된 system.log 파일을 다운로드합니다.
+         */
+        get: operations["download_system_console_log_v1_admin_observability_system_logs_download_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/miniapps/counts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Miniapp Counts
+         * @description [상단 헤더 뱃지 & 동적 폼 슬라이더 실시간 카운트 API]
+         *     - 헤더 동적 폼 버튼에 띄울 미결 총합(TOTAL) 및 카테고리별(NOTIFICATION, INSTRUCTION 등) 미확인 건수를 반환합니다.
+         */
+        get: operations["get_miniapp_counts_v1_miniapps_counts_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/miniapps": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Miniapp Items
+         * @description [미니앱 단일 액션 피드 목록 조회 (SQL 1:N 확인 서명 격리 반영)]
+         *     로그인한 사원에게 할당된 알림, 지시사항, 메시지, 개인 메모를 최신순으로 반환합니다.
+         *     전사 공지(receiver_id IS NULL)는 MiniappRead 확인 서명 여부에 따라 사원별 status가 동적으로 결정됩니다.
+         */
+        get: operations["get_miniapp_items_v1_miniapps_get"];
+        put?: never;
+        /**
+         * Create Miniapp Item
+         * @description [미니앱 아이템 생성 (메모/알람/메시지/지시사항)]
+         *     - 보내는 사람 == 받는 사람 ➔ 메모 또는 알람으로 자동 처리
+         *     - 타인에게 보낼 때 ➔ 메시지 또는 업무 지시사항으로 처리
+         */
+        post: operations["create_miniapp_item_v1_miniapps_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/miniapps/{item_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Miniapp Item
+         * @description [미니앱 아이템 삭제 (메모 삭제, 관리자 공지 강제 삭제)]
+         */
+        delete: operations["delete_miniapp_item_v1_miniapps__item_id__delete"];
+        options?: never;
+        head?: never;
+        /**
+         * Update Miniapp Item
+         * @description [미니앱 상태 변경 (지시사항 완료, 메모 완료, 읽음 처리)]
+         *     - 전사 공지(receiver_id IS NULL)인 경우 MiniappRead 테이블에 현재 사원의 확인 서명을 기록하고 사원별 status를 반환합니다.
+         */
+        patch: operations["update_miniapp_item_v1_miniapps__item_id__patch"];
+        trace?: never;
+    };
+    "/v1/admin/tasks/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Tasks Summary
+         * @description [관리자용] 상단 4대 로봇 일꾼(워커) 관제 요약 지표 집계
+         */
+        get: operations["get_tasks_summary_v1_admin_tasks_summary_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/admin/tasks/types": {
         parameters: {
             query?: never;
@@ -1653,7 +2259,7 @@ export interface paths {
         };
         /**
          * List Task Types
-         * @description [관리자용] 현재 시스템에 등록된 모든 태스크 유형과 가이드를 조회합니다.
+         * @description [관리자용] 현재 시스템에 등록된 모든 태스크 유형과 가이드를 친절한 한글 메타데이터와 함께 조회합니다.
          */
         get: operations["list_task_types_v1_admin_tasks_types_get"];
         put?: never;
@@ -1702,13 +2308,19 @@ export interface paths {
          * @description 특정 태스크의 상세 정보(에러 로그 포함)를 조회합니다.
          */
         get: operations["get_task_detail_v1_admin_tasks__task_id__get"];
-        put?: never;
+        /**
+         * Update Task
+         * @description [관리자용] 대기 중(PENDING)인 비동기/예약 태스크의 스케줄, 주기 및 옵션을 수정합니다.
+         */
+        put: operations["update_task_v1_admin_tasks__task_id__put"];
         post?: never;
         /**
-         * Cancel Task
-         * @description 실행 대기 중인 태스크를 취소 처리합니다.
+         * Cancel Or Delete Task
+         * @description 태스크를 취소하거나 영구 삭제합니다.
+         *     - 실행 중(RUNNING)인 태스크는 삭제할 수 없습니다.
+         *     - hard_delete=True 이거나 이미 FAILED/CANCELLED 인 경우 DB에서 영구 삭제합니다.
          */
-        delete: operations["cancel_task_v1_admin_tasks__task_id__delete"];
+        delete: operations["cancel_or_delete_task_v1_admin_tasks__task_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1729,6 +2341,26 @@ export interface paths {
          */
         post: operations["retry_task_v1_admin_tasks__task_id__retry_post"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/tasks/failed/clear": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Clear All Failed Tasks
+         * @description [관리자용] 실패(FAILED) 상태인 모든 고아 태스크를 일괄 영구 삭제합니다.
+         */
+        delete: operations["clear_all_failed_tasks_v1_admin_tasks_failed_clear_delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1926,6 +2558,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/page/public/list": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Public Pages
+         * @description 사용자용 공개 페이지 목록 조회 (발행 상태 및 4단계 권한 필터링 적용)
+         */
+        get: operations["get_public_pages_v1_page_public_list_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/page/detail/{slug}": {
         parameters: {
             query?: never;
@@ -1935,7 +2587,7 @@ export interface paths {
         };
         /**
          * Get Page Detail
-         * @description 사용자용 페이지 상세 조회 (게시일시, 활성화, 권한 체크 포함)
+         * @description 사용자용 페이지 상세 조회 (게시일시, 활성화, 4단계 권한 체크 포함)
          */
         get: operations["get_page_detail_v1_page_detail__slug__get"];
         put?: never;
@@ -1977,6 +2629,13 @@ export interface components {
             end_date?: string | null;
             /** Target Users */
             target_users?: string | null;
+            /** Target Group */
+            target_group?: string | null;
+            /**
+             * Category
+             * @default NOTIFICATION
+             */
+            category: string | null;
             /** Confirm Text */
             confirm_text: string;
             /** Reset Sec */
@@ -2019,6 +2678,13 @@ export interface components {
             end_date?: string | null;
             /** Target Users */
             target_users?: string | null;
+            /** Target Group */
+            target_group?: string | null;
+            /**
+             * Category
+             * @default NOTIFICATION
+             */
+            category: string | null;
             /**
              * Confirm Text
              * @default 확인하였습니다
@@ -2029,6 +2695,11 @@ export interface components {
              * @default 0
              */
             reset_sec: number;
+            /**
+             * Send Web Push
+             * @default false
+             */
+            send_web_push: boolean | null;
         };
         /**
          * AlertUpdate
@@ -2053,6 +2724,10 @@ export interface components {
             end_date?: string | null;
             /** Target Users */
             target_users?: string | null;
+            /** Target Group */
+            target_group?: string | null;
+            /** Category */
+            category?: string | null;
             /** Confirm Text */
             confirm_text?: string | null;
             /** Reset Sec */
@@ -2060,39 +2735,63 @@ export interface components {
             /** Is Active */
             is_active?: boolean | null;
         };
-        /** Answer */
-        Answer: {
-            /** Id */
-            id: number;
-            /** Content */
-            content: string;
+        /**
+         * AppPermissionItemRes
+         * @description 앱 권한 설정 현황 응답
+         */
+        AppPermissionItemRes: {
+            /** App Id */
+            app_id: string;
+            /** Name */
+            name: string;
+            /** Title */
+            title: string | null;
+            /** Description */
+            description: string | null;
+            /** App Type */
+            app_type: string;
+            /** Min Read Rank */
+            min_read_rank: number;
+            /** Min Write Rank */
+            min_write_rank: number;
+            /** Allow Groups */
+            allow_groups?: string[] | {
+                [key: string]: unknown;
+            } | unknown;
+            /** Deny Groups */
+            deny_groups?: string[] | {
+                [key: string]: unknown;
+            } | unknown;
+        };
+        /**
+         * AppPermissionsUpdateReq
+         * @description 앱 권한 랭킹 및 allow/deny 설정 변경 요청 (오직 root만 수행 가능)
+         */
+        AppPermissionsUpdateReq: {
+            /** Min Read Rank */
+            min_read_rank?: number | null;
+            /** Min Write Rank */
+            min_write_rank?: number | null;
             /**
-             * Create Date
-             * Format: date-time
+             * Allow Groups
+             * @description 허용 그룹 (단순 배열 또는 {read:[], write:[]} 객체)
              */
-            create_date: string;
-            /** Modify Date */
-            modify_date?: string | null;
-            user: components["schemas"]["User"] | null;
+            allow_groups?: string[] | {
+                [key: string]: unknown;
+            } | unknown | null;
+            /**
+             * Deny Groups
+             * @description 차단 그룹 (단순 배열 또는 {read:[], write:[]} 객체)
+             */
+            deny_groups?: string[] | {
+                [key: string]: unknown;
+            } | unknown | null;
         };
-        /** AnswerCreate */
-        AnswerCreate: {
-            /** Content */
-            content: string;
-        };
-        /** AnswerDelete */
-        AnswerDelete: {
-            /** Answer Id */
-            answer_id: number;
-        };
-        /** AnswerUpdate */
-        AnswerUpdate: {
-            /** Content */
-            content: string;
-            /** Answer Id */
-            answer_id: number;
-        };
-        /** AppRegistryCreate */
+        /**
+         * AppRegistryCreate
+         * @description [신규 앱 등록 입력 스키마 (Create Validation)]
+         *     - 신규 등록 시 3대 분류, 경로 형식, 권한 랭크 범위를 엄격히 검증합니다.
+         */
         AppRegistryCreate: {
             /** App Id */
             app_id: string;
@@ -2117,29 +2816,39 @@ export interface components {
              * Min Read Rank
              * @default 0
              */
-            min_read_rank: number;
+            min_read_rank: number | null;
             /**
              * Min Write Rank
              * @default 2
              */
-            min_write_rank: number;
+            min_write_rank: number | null;
+            /**
+             * Allow Groups
+             * @default []
+             */
+            allow_groups: string[] | null;
+            /**
+             * Deny Groups
+             * @default []
+             */
+            deny_groups: string[] | null;
             /**
              * Admin Ids
              * @default []
              */
-            admin_ids: number[];
+            admin_ids: number[] | null;
             /**
              * Config Schema
              * @default {}
              */
             config_schema: {
                 [key: string]: unknown;
-            };
+            } | null;
             /**
              * Is Active
              * @default true
              */
-            is_active: boolean;
+            is_active: boolean | null;
         };
         /** AppRegistrySchema */
         AppRegistrySchema: {
@@ -2166,29 +2875,39 @@ export interface components {
              * Min Read Rank
              * @default 0
              */
-            min_read_rank: number;
+            min_read_rank: number | null;
             /**
              * Min Write Rank
              * @default 2
              */
-            min_write_rank: number;
+            min_write_rank: number | null;
+            /**
+             * Allow Groups
+             * @default []
+             */
+            allow_groups: string[] | null;
+            /**
+             * Deny Groups
+             * @default []
+             */
+            deny_groups: string[] | null;
             /**
              * Admin Ids
              * @default []
              */
-            admin_ids: number[];
+            admin_ids: number[] | null;
             /**
              * Config Schema
              * @default {}
              */
             config_schema: {
                 [key: string]: unknown;
-            };
+            } | null;
             /**
              * Is Active
              * @default true
              */
-            is_active: boolean;
+            is_active: boolean | null;
             /**
              * Created At
              * Format: date-time
@@ -2217,6 +2936,10 @@ export interface components {
             min_read_rank?: number | null;
             /** Min Write Rank */
             min_write_rank?: number | null;
+            /** Allow Groups */
+            allow_groups?: string[] | null;
+            /** Deny Groups */
+            deny_groups?: string[] | null;
             /** Admin Ids */
             admin_ids?: number[] | null;
             /** Config Schema */
@@ -2225,6 +2948,62 @@ export interface components {
             } | null;
             /** Is Active */
             is_active?: boolean | null;
+        };
+        /**
+         * AuditLogItemRes
+         * @description 감사로그 단일 항목 응답
+         */
+        AuditLogItemRes: {
+            /** Id */
+            id: number;
+            /** App Id */
+            app_id?: string | null;
+            /** Log Type */
+            log_type: string;
+            /** Severity */
+            severity: string;
+            /** Action */
+            action: string;
+            /** User Id */
+            user_id?: number | null;
+            /** User Summary */
+            user_summary?: string | null;
+            /** Resource Type */
+            resource_type?: string | null;
+            /** Resource Id */
+            resource_id?: string | null;
+            /** Title */
+            title: string;
+            /** Message */
+            message?: string | null;
+            /** Diff Payload */
+            diff_payload?: unknown[] | null;
+            /** Metadata Payload */
+            metadata_payload?: {
+                [key: string]: unknown;
+            } | null;
+            /** Ip Address */
+            ip_address?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /**
+         * AuditLogListRes
+         * @description 감사로그 페이징 목록 응답
+         */
+        AuditLogListRes: {
+            /** Items */
+            items: components["schemas"]["AuditLogItemRes"][];
+            /** Total */
+            total: number;
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+            summary: components["schemas"]["ObservabilitySummaryRes"];
         };
         /** BoardConfigAdminSchema */
         BoardConfigAdminSchema: {
@@ -2496,6 +3275,13 @@ export interface components {
             /** Memo */
             memo?: string | null;
         };
+        /** DayOffDateOverrideReq */
+        DayOffDateOverrideReq: {
+            /** Dates */
+            dates: string[];
+            /** Quota */
+            quota?: number | null;
+        };
         /** DayOffListResponse */
         DayOffListResponse: {
             /** Total */
@@ -2503,12 +3289,47 @@ export interface components {
             /** Data */
             data: components["schemas"]["DayOffResponse"][];
         };
+        /** DayOffPolicySchema */
+        DayOffPolicySchema: {
+            /** Effective Date */
+            effective_date?: string | null;
+            /** Classify Mode */
+            classify_mode?: string | null;
+            /** Fcfs Groups */
+            fcfs_groups?: string[] | null;
+            /** Fcfs Ranks */
+            fcfs_ranks?: number[] | null;
+            /** Daily Quota */
+            daily_quota?: number | null;
+            /** Date Overrides */
+            date_overrides?: {
+                [key: string]: number;
+            } | null;
+            /** Max Monthly Count */
+            max_monthly_count?: number | null;
+            /** Max Days Per Request */
+            max_days_per_request?: number | null;
+            /** Min Advance Days */
+            min_advance_days?: number | null;
+            /** Max Advance Days */
+            max_advance_days?: number | null;
+            /** Etc */
+            etc?: {
+                [key: string]: unknown;
+            } | null;
+        };
         /** DayOffResponse */
         DayOffResponse: {
             /** Id */
             id: number;
             /** Date */
             date: string;
+            /** Start Date */
+            start_date?: string | null;
+            /** End Date */
+            end_date?: string | null;
+            /** Total Days */
+            total_days?: number | null;
             type: components["schemas"]["DayOffType"];
             status: components["schemas"]["DayOffStatus"];
             /** Category */
@@ -2661,10 +3482,188 @@ export interface components {
             /** Scheduled At */
             scheduled_at?: string | null;
         };
+        /**
+         * GroupCreateReq
+         * @description 신규 공식 그룹 생성 요청 (오직 root만 수행 가능)
+         */
+        GroupCreateReq: {
+            /**
+             * Code
+             * @description 그룹 고유 식별 코드 (예: '운수1팀', '배차담당')
+             */
+            code: string;
+            /**
+             * Name
+             * @description 화면 표시용 그룹 이름
+             */
+            name: string;
+            /**
+             * Group Type
+             * @description 'PRIMARY'(주그룹/본소속) | 'SECONDARY'(부그룹/직무·특권)
+             * @default PRIMARY
+             */
+            group_type: string;
+            /**
+             * Category
+             * @description 'GENERAL'(일반) | 'PRIVILEGE'(특권/Allow용) | 'RESTRICTION'(제재/Deny용)
+             * @default GENERAL
+             */
+            category: string;
+            /**
+             * Description
+             * @description 그룹 설명 및 용도
+             */
+            description?: string | null;
+        };
+        /**
+         * GroupItemRes
+         * @description 그룹 목록 조회 응답 (소속 회원 수 및 앱 연동 현황 포함)
+         */
+        GroupItemRes: {
+            /** Id */
+            id: number;
+            /** Code */
+            code: string;
+            /** Name */
+            name: string;
+            /** Group Type */
+            group_type: string;
+            /** Category */
+            category: string;
+            /** Description */
+            description: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Primary Count
+             * @default 0
+             */
+            primary_count: number;
+            /**
+             * Secondary Count
+             * @default 0
+             */
+            secondary_count: number;
+            /**
+             * Allow Apps
+             * @default []
+             */
+            allow_apps: string[];
+            /**
+             * Deny Apps
+             * @default []
+             */
+            deny_apps: string[];
+        };
+        /**
+         * GroupUpdateReq
+         * @description 그룹 정보 수정 요청 (오직 root만 수행 가능)
+         */
+        GroupUpdateReq: {
+            /** Name */
+            name?: string | null;
+            /** Category */
+            category?: string | null;
+            /** Description */
+            description?: string | null;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
+        };
+        /**
+         * InstancePermissionItemRes
+         * @description 개별 인스턴스 단위 권한 설정 응답
+         */
+        InstancePermissionItemRes: {
+            /**
+             * Target Id
+             * @description 인스턴스 고유 식별자 (예: '1', 'notice', 'dayoff')
+             */
+            target_id: string;
+            /**
+             * Instance Type
+             * @description 'BOARD' | 'PAGE' | 'APP'
+             */
+            instance_type: string;
+            /**
+             * App Type
+             * @description 3대 앱 분류: 'SYSTEM' | 'CUSTOM' | 'INSTANCE'
+             * @default CUSTOM
+             */
+            app_type: string | null;
+            /**
+             * Title
+             * @description 인스턴스 화면 명칭 (예: '공지게시판', '결근계 관리')
+             */
+            title: string;
+            /**
+             * Slug
+             * @description URL 슬러그
+             */
+            slug?: string | null;
+            /**
+             * Frontend Route
+             * @description 프론트엔드 실제 진입 라우트 주소
+             */
+            frontend_route?: string | null;
+            /**
+             * Parent Engine
+             * @description 상위 앱 엔진 명칭 (예: '게시판 (board)', '페이지 (page)', '단일 앱')
+             */
+            parent_engine: string;
+            /**
+             * Icon
+             * @description 아이콘
+             * @default mdi:apps
+             */
+            icon: string | null;
+            /**
+             * Min Read Rank
+             * @default 0
+             */
+            min_read_rank: number;
+            /**
+             * Min Write Rank
+             * @default 2
+             */
+            min_write_rank: number;
+            /** Allow Groups */
+            allow_groups?: string[] | {
+                [key: string]: unknown;
+            } | unknown;
+            /** Deny Groups */
+            deny_groups?: string[] | {
+                [key: string]: unknown;
+            } | unknown;
+        };
+        /**
+         * InstancePermissionUpdateReq
+         * @description 인스턴스 권한 랭킹 및 allow/deny 설정 변경 요청
+         */
+        InstancePermissionUpdateReq: {
+            /** Min Read Rank */
+            min_read_rank?: number | null;
+            /** Min Write Rank */
+            min_write_rank?: number | null;
+            /**
+             * Allow Groups
+             * @description 허용 그룹 (단순 배열 또는 {read:[], write:[]} 객체)
+             */
+            allow_groups?: string[] | {
+                [key: string]: unknown;
+            } | unknown | null;
+            /**
+             * Deny Groups
+             * @description 차단 그룹 (단순 배열 또는 {read:[], write:[]} 객체)
+             */
+            deny_groups?: string[] | {
+                [key: string]: unknown;
+            } | unknown | null;
         };
         /** LandingPageResponse */
         LandingPageResponse: {
@@ -2676,6 +3675,38 @@ export interface components {
              */
             message: string;
         };
+        /**
+         * LiveSessionItemRes
+         * @description 실시간 활성 세션 및 과거 접속 이력 항목 응답
+         */
+        LiveSessionItemRes: {
+            /** Id */
+            id: number;
+            /** Session Key */
+            session_key: string;
+            /** User Id */
+            user_id: number;
+            /** Username */
+            username: string;
+            /** Real Name */
+            real_name?: string | null;
+            /** Primary Group */
+            primary_group?: string | null;
+            /** Device Category */
+            device_category: string;
+            /** Status */
+            status: string;
+            /** Device Name */
+            device_name?: string | null;
+            /** Ip Address */
+            ip_address?: string | null;
+            /** Login At */
+            login_at?: string | null;
+            /** Logout At */
+            logout_at?: string | null;
+            /** Last Activity */
+            last_activity?: string | null;
+        };
         /** MenuCreate */
         MenuCreate: {
             /** Title */
@@ -2686,7 +3717,7 @@ export interface components {
             icon_color?: string | null;
             /**
              * Link Type
-             * @default URL
+             * @default INSTANCE
              */
             link_type: string;
             /** External Url */
@@ -2706,6 +3737,16 @@ export interface components {
              * @default 0
              */
             min_rank: number;
+            /**
+             * Allow Groups
+             * @default []
+             */
+            allow_groups: string[];
+            /**
+             * Deny Groups
+             * @default []
+             */
+            deny_groups: string[];
             /** App Id */
             app_id?: string | null;
             /** App Instance Id */
@@ -2725,7 +3766,7 @@ export interface components {
             icon_color?: string | null;
             /**
              * Link Type
-             * @default URL
+             * @default INSTANCE
              */
             link_type: string;
             /** External Url */
@@ -2745,6 +3786,16 @@ export interface components {
              * @default 0
              */
             min_rank: number;
+            /**
+             * Allow Groups
+             * @default []
+             */
+            allow_groups: string[];
+            /**
+             * Deny Groups
+             * @default []
+             */
+            deny_groups: string[];
             /** App Id */
             app_id?: string | null;
             /** App Instance Id */
@@ -2781,12 +3832,189 @@ export interface components {
             is_visible?: boolean | null;
             /** Min Rank */
             min_rank?: number | null;
+            /** Allow Groups */
+            allow_groups?: string[] | null;
+            /** Deny Groups */
+            deny_groups?: string[] | null;
             /** App Id */
             app_id?: string | null;
             /** App Instance Id */
             app_instance_id?: unknown | null;
             /** Page Id */
             page_id?: number | null;
+        };
+        /**
+         * MiniappCountsResponse
+         * @description 상단 헤더 뱃지 및 슬라이더 뱃지용 실시간 미결 카운트
+         */
+        MiniappCountsResponse: {
+            /**
+             * Notification
+             * @default 0
+             */
+            NOTIFICATION: number;
+            /**
+             * Instruction
+             * @default 0
+             */
+            INSTRUCTION: number;
+            /**
+             * Message
+             * @default 0
+             */
+            MESSAGE: number;
+            /**
+             * Memo
+             * @default 0
+             */
+            MEMO: number;
+            /**
+             * Alarm
+             * @default 0
+             */
+            ALARM: number;
+            /**
+             * Total
+             * @default 0
+             */
+            TOTAL: number;
+        };
+        /**
+         * MiniappItemCreate
+         * @description 신규 미니앱 아이템 생성 요청
+         */
+        MiniappItemCreate: {
+            /**
+             * Category
+             * @default MEMO
+             */
+            category: string;
+            /** Title */
+            title?: string | null;
+            /** Content */
+            content: string;
+            /** Target Time */
+            target_time?: string | null;
+            /** Link */
+            link?: string | null;
+            /** Extra Payload */
+            extra_payload?: {
+                [key: string]: unknown;
+            } | null;
+            /** Receiver Id */
+            receiver_id?: number | null;
+        };
+        /**
+         * MiniappItemResponse
+         * @description 미니앱 단일 아이템 응답
+         */
+        MiniappItemResponse: {
+            /** Id */
+            id: number;
+            /** Sender Id */
+            sender_id?: number | null;
+            /** Sender Name */
+            sender_name?: string | null;
+            /** Receiver Id */
+            receiver_id?: number | null;
+            /** Category */
+            category: string;
+            /** Title */
+            title?: string | null;
+            /** Content */
+            content: string;
+            /** Status */
+            status: string;
+            /** Target Time */
+            target_time?: string | null;
+            /** Link */
+            link?: string | null;
+            /**
+             * Extra Payload
+             * @default {}
+             */
+            extra_payload: {
+                [key: string]: unknown;
+            };
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /**
+         * MiniappItemUpdate
+         * @description 미니앱 아이템 상태/내용 변경 요청
+         */
+        MiniappItemUpdate: {
+            /** Status */
+            status?: string | null;
+            /** Title */
+            title?: string | null;
+            /** Content */
+            content?: string | null;
+            /** Target Time */
+            target_time?: string | null;
+            /** Extra Payload */
+            extra_payload?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /**
+         * ObservabilitySummaryRes
+         * @description 관제탑 상단 실시간 요약 통계
+         */
+        ObservabilitySummaryRes: {
+            /**
+             * Active Sessions Count
+             * @default 0
+             */
+            active_sessions_count: number;
+            /**
+             * Today Logins Count
+             * @default 0
+             */
+            today_logins_count: number;
+            /**
+             * Today Changes Count
+             * @default 0
+             */
+            today_changes_count: number;
+            /**
+             * Today Errors Count
+             * @default 0
+             */
+            today_errors_count: number;
+            /**
+             * Today Security Count
+             * @default 0
+             */
+            today_security_count: number;
+            /**
+             * Active Sessions
+             * @default 0
+             */
+            active_sessions: number;
+            /**
+             * Today Access Count
+             * @default 0
+             */
+            today_access_count: number;
+            /**
+             * Today Change Count
+             * @default 0
+             */
+            today_change_count: number;
+            /**
+             * Today Error Alert Count
+             * @default 0
+             */
+            today_error_alert_count: number;
         };
         /** PageCreate */
         PageCreate: {
@@ -3035,6 +4263,25 @@ export interface components {
             /** Media Ids */
             media_ids?: number[] | null;
         };
+        /** PublishRequest */
+        PublishRequest: {
+            /** Asset Ids */
+            asset_ids: number[];
+            /**
+             * App Id
+             * @default general
+             */
+            app_id: string;
+            /** Target Id */
+            target_id?: string | null;
+            /**
+             * Access Level
+             * @default PUBLIC
+             */
+            access_level: string;
+            /** Sub Path */
+            sub_path?: string | null;
+        };
         /** PushSubscriptionCreate */
         PushSubscriptionCreate: {
             /** Endpoint */
@@ -3048,125 +4295,10 @@ export interface components {
             /** Auth */
             auth: string;
         };
-        /** Question */
-        Question: {
-            /** Id */
-            id: number;
-            /** Subject */
-            subject: string;
-            /** Content */
-            content: string;
-            /**
-             * Create Date
-             * Format: date-time
-             */
-            create_date: string;
-            /**
-             * Answers
-             * @default []
-             */
-            answers: components["schemas"]["Answer"][];
-            user: components["schemas"]["User"] | null;
-            /**
-             * Is Read
-             * @default false
-             */
-            is_read: boolean;
-            /**
-             * Read Count
-             * @default 0
-             */
-            read_count: number;
-            /**
-             * Like Count
-             * @default 0
-             */
-            like_count: number;
-            /**
-             * Dislike Count
-             * @default 0
-             */
-            dislike_count: number;
-            /**
-             * Soso Count
-             * @default 0
-             */
-            soso_count: number;
-            /** My Reaction */
-            my_reaction?: string | null;
-            /**
-             * Images
-             * @default []
-             */
-            images: components["schemas"]["QuestionImage"][];
-        };
-        /** QuestionCreate */
-        QuestionCreate: {
-            /** Subject */
-            subject: string;
-            /** Content */
-            content: string;
-            /**
-             * Image Files
-             * @default []
-             */
-            image_files: {
-                [key: string]: unknown;
-            }[];
-        };
-        /** QuestionDelete */
-        QuestionDelete: {
-            /** Question Id */
-            question_id: number;
-        };
-        /** QuestionImage */
-        QuestionImage: {
-            /** Id */
-            id: number;
-            /** Filename */
-            filename: string;
-            /** Original Name */
-            original_name: string;
-            /** Thumbnail Filename */
-            thumbnail_filename?: string | null;
-            /** Question Id */
-            question_id: number;
-        };
-        /** QuestionList */
-        QuestionList: {
-            /**
-             * Total
-             * @default 0
-             */
-            total: number;
-            /**
-             * Question List
-             * @default []
-             */
-            question_list: components["schemas"]["Question"][];
-        };
-        /** QuestionReactionCreate */
-        QuestionReactionCreate: {
-            /** Question Id */
-            question_id: number;
-            /** Reaction Type */
-            reaction_type: string;
-        };
-        /** QuestionUpdate */
-        QuestionUpdate: {
-            /** Subject */
-            subject: string;
-            /** Content */
-            content: string;
-            /**
-             * Image Files
-             * @default []
-             */
-            image_files: {
-                [key: string]: unknown;
-            }[];
-            /** Question Id */
-            question_id: number;
+        /** PushUnsubscribeRequest */
+        PushUnsubscribeRequest: {
+            /** Endpoint */
+            endpoint: string;
         };
         /**
          * RouteMasterCreate
@@ -3494,6 +4626,29 @@ export interface components {
              */
             tags: string[];
         };
+        /** SystemTaskUpdate */
+        SystemTaskUpdate: {
+            /** Task Type */
+            task_type?: string | null;
+            /** Payload */
+            payload?: {
+                [key: string]: unknown;
+            } | null;
+            /** Priority */
+            priority?: number | null;
+            /** Scheduled At */
+            scheduled_at?: string | null;
+            /** Cron Expression */
+            cron_expression?: string | null;
+            /** Repeat Interval */
+            repeat_interval?: number | null;
+            /** Max Retries */
+            max_retries?: number | null;
+            /** Timeout Sec */
+            timeout_sec?: number | null;
+            /** Tags */
+            tags?: string[] | null;
+        };
         /** User */
         User: {
             /** Id */
@@ -3510,6 +4665,13 @@ export interface components {
              * @default 0
              */
             rank_level: number;
+            /** Primary Group */
+            primary_group?: string | null;
+            /**
+             * Secondary Groups
+             * @default []
+             */
+            secondary_groups: string[];
         };
         /** UserAdminSchema */
         UserAdminSchema: {
@@ -3540,10 +4702,83 @@ export interface components {
              */
             email: string;
         };
+        /** UserCreateByAdmin */
+        UserCreateByAdmin: {
+            /** Username */
+            username: string;
+            /** Password */
+            password: string;
+            /**
+             * Email
+             * Format: email
+             */
+            email: string;
+            /** Real Name */
+            real_name?: string | null;
+            /**
+             * Rank Level
+             * @description 부여할 랭크 등급 (0~9)
+             * @default 1
+             */
+            rank_level: number;
+            /** Primary Group */
+            primary_group?: string | null;
+            /**
+             * Secondary Groups
+             * @default []
+             */
+            secondary_groups: string[];
+            /** Employee No */
+            employee_no?: string | null;
+        };
+        /**
+         * UserGroupBatchReq
+         * @description 사용자 주/부그룹 일괄 설정 요청
+         */
+        UserGroupBatchReq: {
+            /** Primary Group */
+            primary_group?: string | null;
+            /** Secondary Groups */
+            secondary_groups?: string[];
+        };
+        /**
+         * UserGroupItemRes
+         * @description 사용자 그룹 매칭 현황 응답
+         */
+        UserGroupItemRes: {
+            /** Id */
+            id: number;
+            /** Username */
+            username: string;
+            /** Real Name */
+            real_name: string | null;
+            /** Email */
+            email: string;
+            /** Rank Level */
+            rank_level: number;
+            /** Primary Group */
+            primary_group: string | null;
+            /**
+             * Secondary Groups
+             * @default []
+             */
+            secondary_groups: string[];
+        };
         /** UserList */
         UserList: {
             /** Users */
             users: components["schemas"]["User"][];
+        };
+        /**
+         * UserPrimaryGroupReq
+         * @description 사용자 주그룹 단일 설정 요청 (1인당 최대 1개)
+         */
+        UserPrimaryGroupReq: {
+            /**
+             * Primary Group
+             * @description 설정할 주그룹 코드 (null/빈값일 경우 미지정 해제)
+             */
+            primary_group?: string | null;
         };
         /** UserProfileSchema */
         UserProfileSchema: {
@@ -3552,6 +4787,13 @@ export interface components {
              * @default 0
              */
             rank_level: number;
+            /** Primary Group */
+            primary_group?: string | null;
+            /**
+             * Secondary Groups
+             * @default []
+             */
+            secondary_groups: string[];
             /**
              * Is Active
              * @default true
@@ -3564,8 +4806,22 @@ export interface components {
         };
         /** UserRankUpdate */
         UserRankUpdate: {
-            /** Rank Level */
+            /**
+             * Rank Level
+             * @description 0~9 사이의 사용자 권한 랭크
+             */
             rank_level: number;
+        };
+        /**
+         * UserSecondaryGroupReq
+         * @description 사용자 부그룹 단일 추가 요청
+         */
+        UserSecondaryGroupReq: {
+            /**
+             * Code
+             * @description 추가할 부그룹 코드
+             */
+            code: string;
         };
         /** UserSessionResponse */
         UserSessionResponse: {
@@ -3638,402 +4894,6 @@ export interface operations {
             };
         };
     };
-    question_list_question_list_get: {
-        parameters: {
-            query?: {
-                page?: number;
-                size?: number;
-                keyword?: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: {
-                session_id?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["QuestionList"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    question_detail_question_detail__question_id__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                question_id: number;
-            };
-            cookie?: {
-                session_id?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Question"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    question_read_question_read__question_id__post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                question_id: number;
-            };
-            cookie?: {
-                session_id?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    question_unread_question_read__question_id__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                question_id: number;
-            };
-            cookie?: {
-                session_id?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    question_reaction_question_reaction_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: {
-                session_id?: string | null;
-            };
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["QuestionReactionCreate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    question_create_question_create_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: {
-                session_id?: string | null;
-            };
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["QuestionCreate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Question"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    question_update_question_update_put: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: {
-                session_id?: string | null;
-            };
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["QuestionUpdate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    question_delete_question_delete_delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: {
-                session_id?: string | null;
-            };
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["QuestionDelete"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    answer_create_answer_create__question_id__post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                question_id: number;
-            };
-            cookie?: {
-                session_id?: string | null;
-            };
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["AnswerCreate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    answer_detail_answer_detail__answer_id__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                answer_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Answer"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    answer_update_answer_update_put: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: {
-                session_id?: string | null;
-            };
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["AnswerUpdate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    answer_delete_answer_delete_delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: {
-                session_id?: string | null;
-            };
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["AnswerDelete"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     login_for_access_token_users_login_post: {
         parameters: {
             query?: never;
@@ -4094,6 +4954,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_public_register_mode_users_register_mode_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
         };
@@ -4429,12 +5309,48 @@ export interface operations {
             };
         };
     };
+    media_publish_media_publish_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                session_id?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PublishRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     media_admin_list_media_admin_list_get: {
         parameters: {
             query?: {
                 tier?: string;
                 sub_path?: string;
                 recursive?: boolean;
+                show_hidden?: boolean;
             };
             header?: never;
             path?: never;
@@ -4637,6 +5553,42 @@ export interface operations {
             };
         };
     };
+    dayoff_quota_status_dayoff_quota_status_get: {
+        parameters: {
+            query?: {
+                /** @description 조회 연도 (기본: 올해) */
+                year?: number | null;
+                /** @description 조회 월 1~12 (기본: 이번 달) */
+                month?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                session_id?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     dayoff_create_dayoff_create_post: {
         parameters: {
             query?: never;
@@ -4770,6 +5722,39 @@ export interface operations {
             };
         };
     };
+    unsubscribe_push_notification_push_unsubscribe_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PushUnsubscribeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     send_all_push_notifications_push_send_all_post: {
         parameters: {
             query?: never;
@@ -4806,7 +5791,9 @@ export interface operations {
             query?: never;
             header?: never;
             path?: never;
-            cookie?: never;
+            cookie?: {
+                session_id?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -4819,6 +5806,15 @@ export interface operations {
                     "application/json": components["schemas"]["Alert"][];
                 };
             };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
     };
     active_alert_list_alert_active_get: {
@@ -4826,7 +5822,9 @@ export interface operations {
             query?: never;
             header?: never;
             path?: never;
-            cookie?: never;
+            cookie?: {
+                session_id?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -4837,6 +5835,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Alert"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -4964,6 +5971,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Alert"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    alert_acknowledgements_alert__alert_id__acknowledgements_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                alert_id: number;
+            };
+            cookie?: {
+                session_id?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
@@ -5247,6 +6287,41 @@ export interface operations {
             };
         };
     };
+    create_user_by_admin_v1_admin_users_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                session_id?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UserCreateByAdmin"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserAdminSchema"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_user_detail_v1_admin_users__user_id__get: {
         parameters: {
             query?: never;
@@ -5280,6 +6355,39 @@ export interface operations {
             };
         };
     };
+    delete_user_by_admin_v1_admin_users__user_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: number;
+            };
+            cookie?: {
+                session_id?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     update_user_rank_v1_admin_users__user_id__rank_put: {
         parameters: {
             query?: never;
@@ -5294,6 +6402,107 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["UserRankUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    restore_user_by_admin_v1_admin_users__user_id__restore_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: number;
+            };
+            cookie?: {
+                session_id?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_admin_register_mode_v1_admin_users_config_register_mode_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                session_id?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_admin_register_mode_v1_admin_users_config_register_mode_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                session_id?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
             };
         };
         responses: {
@@ -5390,7 +6599,9 @@ export interface operations {
             path: {
                 app_id: string;
             };
-            cookie?: never;
+            cookie?: {
+                session_id?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -5682,6 +6893,43 @@ export interface operations {
             };
         };
     };
+    update_configs_batch_v1_admin_config_batch_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                session_id?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     update_config_v1_admin_config__key__put: {
         parameters: {
             query?: never;
@@ -5735,6 +6983,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+        };
+    };
+    run_manual_gc_v1_admin_system_gc_run_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                session_id?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -5968,6 +7247,37 @@ export interface operations {
             };
         };
     };
+    delete_all_push_subscriptions_v1_admin_push_subscriptions_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                session_id?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     admin_send_push_v1_admin_push_send_post: {
         parameters: {
             query?: never;
@@ -6087,6 +7397,180 @@ export interface operations {
                 };
             };
         };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    admin_get_dayoff_policy_v1_admin_dayoff_policy_get: {
+        parameters: {
+            query?: {
+                year?: number | null;
+                month?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                session_id?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    admin_update_dayoff_policy_v1_admin_dayoff_policy_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                session_id?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DayOffPolicySchema"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    admin_update_dayoff_date_override_v1_admin_dayoff_policy_date_override_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                session_id?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DayOffDateOverrideReq"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    admin_edit_dayoff_policy_row_v1_admin_dayoff_policy__policy_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                policy_id: number;
+            };
+            cookie?: {
+                session_id?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DayOffPolicySchema"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    admin_delete_dayoff_policy_row_v1_admin_dayoff_policy__policy_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                policy_id: number;
+            };
+            cookie?: {
+                session_id?: string | null;
+            };
+        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {
@@ -6785,12 +8269,14 @@ export interface operations {
             };
         };
     };
-    get_all_groups_v1_admin_groups_get: {
+    get_group_candidates_v1_admin_groups_candidates_get: {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
-            cookie?: never;
+            cookie?: {
+                session_id?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -6803,6 +8289,79 @@ export interface operations {
                     "application/json": unknown;
                 };
             };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_all_groups_v1_admin_groups_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                session_id?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_group_members_v1_admin_groups__name__members_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: {
+                session_id?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
     };
     create_manual_group_v1_admin_groups_manual_post: {
@@ -6810,7 +8369,9 @@ export interface operations {
             query?: never;
             header?: never;
             path?: never;
-            cookie?: never;
+            cookie?: {
+                session_id?: string | null;
+            };
         };
         requestBody: {
             content: {
@@ -6843,7 +8404,9 @@ export interface operations {
             query?: never;
             header?: never;
             path?: never;
-            cookie?: never;
+            cookie?: {
+                session_id?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -6856,6 +8419,15 @@ export interface operations {
                     "application/json": unknown;
                 };
             };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
     };
     combine_groups_v1_admin_groups_combine_post: {
@@ -6863,7 +8435,9 @@ export interface operations {
             query?: never;
             header?: never;
             path?: never;
-            cookie?: never;
+            cookie?: {
+                session_id?: string | null;
+            };
         };
         requestBody: {
             content: {
@@ -6898,7 +8472,892 @@ export interface operations {
             path: {
                 name: string;
             };
-            cookie?: never;
+            cookie?: {
+                session_id?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_group_master_list_v1_admin_auth_groups_master_get: {
+        parameters: {
+            query?: {
+                /** @description PRIMARY | SECONDARY 필터 */
+                group_type?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                session_id?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GroupItemRes"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_group_master_v1_admin_auth_groups_master_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                session_id?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GroupCreateReq"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GroupItemRes"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_group_master_v1_admin_auth_groups_master__group_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                group_id: number;
+            };
+            cookie?: {
+                session_id?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GroupUpdateReq"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GroupItemRes"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_group_master_v1_admin_auth_groups_master__group_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                group_id: number;
+            };
+            cookie?: {
+                session_id?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_user_group_list_v1_admin_auth_groups_users_get: {
+        parameters: {
+            query?: {
+                /** @description 이름/아이디/이메일 검색 */
+                query?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                session_id?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserGroupItemRes"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_user_primary_group_v1_admin_auth_groups_users__user_id__primary_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: number;
+            };
+            cookie?: {
+                session_id?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UserPrimaryGroupReq"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_user_secondary_group_v1_admin_auth_groups_users__user_id__secondary_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: number;
+            };
+            cookie?: {
+                session_id?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UserSecondaryGroupReq"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remove_user_secondary_group_v1_admin_auth_groups_users__user_id__secondary__code__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: number;
+                code: string;
+            };
+            cookie?: {
+                session_id?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_user_groups_batch_v1_admin_auth_groups_users__user_id__groups_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: number;
+            };
+            cookie?: {
+                session_id?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UserGroupBatchReq"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_app_permission_list_v1_admin_auth_groups_apps_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                session_id?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AppPermissionItemRes"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_app_permissions_v1_admin_auth_groups_apps__app_id__permissions_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                app_id: string;
+            };
+            cookie?: {
+                session_id?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AppPermissionsUpdateReq"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AppPermissionItemRes"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_all_instance_permissions_v1_admin_auth_groups_instances_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                session_id?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InstancePermissionItemRes"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_instance_permissions_v1_admin_auth_groups_instances__instance_type___target_id__permissions_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                instance_type: string;
+                target_id: string;
+            };
+            cookie?: {
+                session_id?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InstancePermissionUpdateReq"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InstancePermissionItemRes"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_live_sessions_v1_admin_observability_sessions_get: {
+        parameters: {
+            query?: {
+                /** @description 과거 만료/종료된 세션 접속 이력까지 전체 포함 여부 */
+                include_history?: boolean;
+                /** @description 최대 조회 건수 */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                session_id?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LiveSessionItemRes"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    kick_session_v1_admin_observability_sessions_kick__target_session_id__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                target_session_id: string;
+            };
+            cookie?: {
+                session_id?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_observability_summary_v1_admin_observability_summary_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                session_id?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ObservabilitySummaryRes"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_audit_logs_v1_admin_observability_logs_get: {
+        parameters: {
+            query?: {
+                /** @description 앱 식별자 필터 (예: 'dispatch', 'auth', 'board') */
+                app_id?: string | null;
+                /** @description 'ACCESS' | 'CHANGE' | 'ERROR' | 'SECURITY' */
+                log_type?: string | null;
+                /** @description 'INFO' | 'WARN' | 'ERROR' | 'CRITICAL' */
+                severity?: string | null;
+                /** @description 특정 사용자 user_id 필터 */
+                user_id?: number | null;
+                /** @description 제목, 내용, 사용자 스냅샷 검색어 */
+                query?: string | null;
+                /** @description 페이지 번호 */
+                page?: number;
+                /** @description 페이지당 건수 (최대 100) */
+                page_size?: number;
+                /** @description 레거시 skip 파라미터 호환 */
+                skip?: number | null;
+                /** @description 레거시 limit 파라미터 호환 */
+                limit?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                session_id?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditLogListRes"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_audit_logs_csv_v1_admin_observability_logs_export_get: {
+        parameters: {
+            query?: {
+                /** @description 앱 식별자 필터 */
+                app_id?: string | null;
+                /** @description 'ACCESS' | 'CHANGE' | 'ERROR' | 'SECURITY' */
+                log_type?: string | null;
+                /** @description 'INFO' | 'WARN' | 'ERROR' | 'CRITICAL' */
+                severity?: string | null;
+                /** @description 특정 사용자 user_id 필터 */
+                user_id?: number | null;
+                /** @description 검색어 */
+                query?: string | null;
+                /** @description 내보낼 최대 건수 */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                session_id?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    download_system_console_log_v1_admin_observability_system_logs_download_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                session_id?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_miniapp_counts_v1_miniapps_counts_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                session_id?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MiniappCountsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_miniapp_items_v1_miniapps_get: {
+        parameters: {
+            query?: {
+                /** @description MEMO, ALARM, INSTRUCTION, MESSAGE, NOTIFICATION */
+                category?: string | null;
+                /** @description PENDING, ONGOING, COMPLETED, READ */
+                status?: string | null;
+                skip?: number;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                session_id?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MiniappItemResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_miniapp_item_v1_miniapps_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                session_id?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MiniappItemCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MiniappItemResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_miniapp_item_v1_miniapps__item_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: number;
+            };
+            cookie?: {
+                session_id?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_miniapp_item_v1_miniapps__item_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: number;
+            };
+            cookie?: {
+                session_id?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MiniappItemUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MiniappItemResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_tasks_summary_v1_admin_tasks_summary_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                session_id?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -7058,9 +9517,48 @@ export interface operations {
             };
         };
     };
-    cancel_task_v1_admin_tasks__task_id__delete: {
+    update_task_v1_admin_tasks__task_id__put: {
         parameters: {
             query?: never;
+            header?: never;
+            path: {
+                task_id: number;
+            };
+            cookie?: {
+                session_id?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SystemTaskUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancel_or_delete_task_v1_admin_tasks__task_id__delete: {
+        parameters: {
+            query?: {
+                hard_delete?: boolean;
+            };
             header?: never;
             path: {
                 task_id: number;
@@ -7098,6 +9596,37 @@ export interface operations {
             path: {
                 task_id: number;
             };
+            cookie?: {
+                session_id?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clear_all_failed_tasks_v1_admin_tasks_failed_clear_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
             cookie?: {
                 session_id?: string | null;
             };
@@ -7499,6 +10028,37 @@ export interface operations {
             };
         };
     };
+    get_public_pages_v1_page_public_list_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                session_id?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PageSimpleResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_page_detail_v1_page_detail__slug__get: {
         parameters: {
             query?: never;
@@ -7506,7 +10066,9 @@ export interface operations {
             path: {
                 slug: string;
             };
-            cookie?: never;
+            cookie?: {
+                session_id?: string | null;
+            };
         };
         requestBody?: never;
         responses: {

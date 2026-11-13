@@ -125,6 +125,13 @@
 		}
 	});
 
+	// 🔄 외부에서 content prop이 비동기로 로드되거나 초기화된 경우 에디터 본문과 동기화
+	$effect(() => {
+		if (editor && content !== undefined && content !== editor.getHTML()) {
+			editor.commands.setContent(content || '', false);
+		}
+	});
+
 	onDestroy(() => {
 		if (browser) {
 			console.log('[Tiptap] onDestroy 실행: 에디터 인스턴스 정리');

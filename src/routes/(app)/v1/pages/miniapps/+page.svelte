@@ -19,8 +19,10 @@
 	import { page } from '$app/state';
 	import Icon from '@iconify/svelte';
 	import FeedItem from './components/FeedItem.svelte';
-	import { miniappStore } from '$lib/runes/miniapps.svelte.js';
-	import { toast } from '$lib/runes/toast.svelte.js';
+	import { miniappStore } from '$lib/runes/miniapps.svelte';
+	import { toast } from '$lib/runes/toast.svelte';
+	import { toLocalISOString } from '$lib/utils';
+	import { formatApiError } from '$lib/utils/error';
 
 	// 📝 새 메모 작성 상태
 	let memoTitle = $state('');
@@ -29,8 +31,29 @@
 	let memoAlarmTime = $state('');
 	let isSaving = $state(false);
 
-	// 🔍 탭 필터: 'ALL' | 'NOTIFICATION' | 'INSTRUCTION' | 'MEMO' | 'MESSAGE'
+	// 🔍 탭 필터: 'ALL' | 'NOTIFICATION' | 'ALARM' | 'INSTRUCTION' | 'MEMO' | 'MESSAGE'
 	let activeTab = $state('ALL');
+
+	/** @type {Record<string, string>} */
+	const TAB_QUERY_MAP = {
+		'notifications': 'NOTIFICATION',
+		'notification': 'NOTIFICATION',
+		'instructions': 'INSTRUCTION',
+		'instruction': 'INSTRUCTION',
+		'alarms': 'ALARM',
+		'alarm': 'ALARM',
+		'memo': 'MEMO',
+		'messaging': 'MESSAGE',
+		'message': 'MESSAGE'
+	};
+
+	// 🔗 사이드바 등 동일 페이지 내 쿼리 파라미터(?tab=...) 변경 시에도 반응형으로 즉시 탭 전환
+	$effect(() => {
+		const queryTab = page.url.searchParams.get('tab');
+		if (queryTab && TAB_QUERY_MAP[queryTab]) {
+			activeTab = TAB_QUERY_MAP[queryTab];
+		}
+	});
 
 	onMount(() => {
 		// 🛡️ [레이아웃 보호] 브라우저 스크롤 오프셋을 즉시 (0, 0) 원점으로 강제 고정
@@ -40,29 +63,16 @@
 
 		miniappStore.refresh();
 
-		// 쿼리 파라미터(?tab=...) 또는 해시(#...) 기반 탭 전환 (화면 스크롤 없이 탭만 안전하게 전환)
-		const targetTab = page.url.searchParams.get('tab') || window.location.hash.replace('#', '');
-		if (targetTab) {
-			/** @type {Record<string, string>} */
-			const tabMap = {
-				'notifications': 'NOTIFICATION',
-				'notification': 'NOTIFICATION',
-				'instructions': 'INSTRUCTION',
-				'instruction': 'INSTRUCTION',
-				'alarms': 'ALARM',
-				'alarm': 'ALARM',
-				'memo': 'MEMO',
-				'messaging': 'MESSAGE',
-				'message': 'MESSAGE'
-			};
-			if (tabMap[targetTab]) {
-				activeTab = tabMap[targetTab];
-			}
+		// 해시(#...) 기반 초기 탭 전환 보조 지원
+		const targetHash = typeof window !== 'undefined' ? window.location.hash.replace('#', '') : '';
+		if (targetHash && TAB_QUERY_MAP[targetHash]) {
+			activeTab = TAB_QUERY_MAP[targetHash];
 		}
 	});
 
 	/**
 	 * 💾 새 메모/알람 저장 처리
+	 * - 백엔드 target_time(Naive KST)과 일치하도록 toLocalISOString()을 사용하여 9시간 시차 버그 방지
 	 */
 	async function handleSaveMemo() {
 		if (!memoContent.trim()) {
@@ -74,13 +84,13 @@
 		try {
 			await miniappStore.addItem(memoCategory, memoContent.trim(), {
 				title: memoTitle.trim() || null,
-				target_time: memoAlarmTime ? new Date(memoAlarmTime).toISOString() : null
+				target_time: memoAlarmTime ? toLocalISOString(memoAlarmTime) : null
 			});
 			// 입력 폼 초기화
 			handleCancelMemo();
 			toast.success('새 메모가 안전하게 저장되었습니다.');
 		} catch (/** @type {any} */ e) {
-			toast.error('메모 저장에 실패했습니다: ' + (e.detail || e.message));
+			toast.error('메모 저장에 실패했습니다: ' + formatApiError(e));
 		} finally {
 			isSaving = false;
 		}
@@ -113,7 +123,7 @@
 					await miniappStore.deleteItem(id);
 					toast.success('피드에서 삭제되었습니다.');
 				} catch (/** @type {any} */ e) {
-					toast.error('삭제에 실패했습니다: ' + (e.detail || e.message || '서버 오류'));
+					toast.error('삭제에 실패했습니다: ' + formatApiError(e, '서버 오류'));
 				}
 			}
 		} else if (action === 'reply') {
@@ -390,6 +400,18 @@
 				{#if miniappStore.counts.NOTIFICATION > 0}
 					<span class="rounded-full bg-emerald-100 text-emerald-800 px-1.5 py-0.2 text-[10px] font-black">
 						{miniappStore.counts.NOTIFICATION}
+					</span>
+				{/if}
+			</button>
+			<button
+				type="button"
+				onclick={() => (activeTab = 'ALARM')}
+				class="flex items-center gap-1.5 rounded-xl px-4 py-2 text-xs font-black transition {activeTab === 'ALARM' ? 'bg-rose-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'}"
+			>
+				<span>긴급 알람</span>
+				{#if miniappStore.counts.ALARM > 0}
+					<span class="rounded-full bg-rose-100 text-rose-800 px-1.5 py-0.2 text-[10px] font-black">
+						{miniappStore.counts.ALARM}
 					</span>
 				{/if}
 			</button>

@@ -7,8 +7,8 @@
 	 *              - 브라우저 탭 단일 진실 공급원(SSOT) 환경설정 타이틀 연동
 	 */
 	import { onMount, untrack } from 'svelte';
-	import * as api from '$lib/api/page.js';
-	import { toast } from '$lib/runes/toast.svelte.js';
+	import * as api from '$lib/api/page';
+	import { toast } from '$lib/runes/toast.svelte';
 	import { getSiteTitle } from '$lib/config/site';
 	import { toLocalISOString } from '$lib/utils';
 	import Icon from '@iconify/svelte';

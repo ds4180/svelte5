@@ -5,8 +5,8 @@
 	 *              시스템에 개설된 모든 게시판 인스턴스 목록을 탐색하고 개별 게시판(/v1/app/board/[slug])으로 진입합니다.
 	 */
 	import { onMount } from 'svelte';
-	import * as api from '$lib/api/admin.js';
-	import { toast } from '$lib/runes/toast.svelte.ts';
+	import * as api from '$lib/api/admin';
+	import { toast } from '$lib/runes/toast.svelte';
 	import Icon from '@iconify/svelte';
 
 	let boards = $state([]);

@@ -3,7 +3,7 @@
 	 * @file v1/pages/profile/+page.svelte
 	 * @description [v4.0] 통합 사용자 센터 - 중첩 탭(Nested Tabs) 확장형 아키텍처
 	 */
-	import { getAuthContext } from '$lib/runes/auth.svelte.js';
+	import { getAuthContext } from '$lib/runes/auth.svelte';
 	import Icon from '@iconify/svelte';
 	import FileManager from '$lib/components/FileManager.svelte';
 

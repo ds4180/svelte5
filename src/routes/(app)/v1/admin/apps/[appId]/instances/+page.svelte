@@ -5,8 +5,8 @@
 	 */
 	import { page } from '$app/state';
 	import { onMount } from 'svelte';
-	import * as api from '$lib/api/admin.js';
-	import { toast } from '$lib/runes/toast.svelte.ts';
+	import * as api from '$lib/api/admin';
+	import { toast } from '$lib/runes/toast.svelte';
 	import Icon from '@iconify/svelte';
 
 	const appId = $derived(page.params.appId);
@@ -30,8 +30,8 @@
 				if (api.adminGetPages) {
 					instances = await api.adminGetPages();
 				} else {
-					// page.js 에서 가져오는 로직 (추후 admin.js 통합 권장)
-					const pageApi = await import('$lib/api/page.js');
+					// page.ts 에서 가져오는 로직 (추후 admin.ts 통합 권장)
+					const pageApi = await import('$lib/api/page');
 					instances = await pageApi.adminGetPages();
 				}
 			} else {

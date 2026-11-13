@@ -6,7 +6,7 @@
 	 */
 	import Icon from '@iconify/svelte';
 	import { fly, fade } from 'svelte/transition';
-	import { formatDateTime } from '$lib/utils';
+	import { formatDateTime, toLocalISOString } from '$lib/utils';
 
 	let { 
 		item = {
@@ -17,7 +17,7 @@
 			status: 'PENDING',
 			sender: null,
 			sender_name: null,
-			created_at: new Date().toISOString(),
+			created_at: toLocalISOString(new Date()),
 			target_time: null,
 			link: null,
 			is_done: false

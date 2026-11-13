@@ -6,7 +6,7 @@
 	 * - 레벨 5: 시스템 락 스타일링
 	 */
 	import { onMount } from 'svelte';
-	import { alertState } from '$lib/runes/alert.svelte.js';
+	import { alertState } from '$lib/runes/alert.svelte';
 	import { notifyAlert } from '$lib/utils/sound';
 	import { fade } from 'svelte/transition';
 	import { goto } from '$app/navigation';

@@ -1,6 +1,6 @@
 <script>
-	import { getAuthContext } from '$lib/runes/auth.svelte.js';
-	import { unsubscribePushOnLogout } from '$lib/pwa/serviceWorker.js';
+	import { getAuthContext } from '$lib/runes/auth.svelte';
+	import { unsubscribePushOnLogout } from '$lib/pwa/serviceWorker';
 	import Icon from '@iconify/svelte';
 
 	let { data } = $props();

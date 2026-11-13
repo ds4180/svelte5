@@ -5,10 +5,10 @@
 	 */
 	import Icon from '@iconify/svelte';
 	import SmartIcon from '$lib/components/SmartIcon.svelte';
-	import { navState } from '$lib/runes/nav.svelte.js';
-	import { getAuthContext } from '$lib/runes/auth.svelte.js';
-	import { miniappStore } from '$lib/runes/miniapps.svelte.js';
-	import { unsubscribePushOnLogout } from '$lib/pwa/serviceWorker.js';
+	import { navState } from '$lib/runes/nav.svelte';
+	import { getAuthContext } from '$lib/runes/auth.svelte';
+	import { miniappStore } from '$lib/runes/miniapps.svelte';
+	import { unsubscribePushOnLogout } from '$lib/pwa/serviceWorker';
 	import { goto } from '$app/navigation';
 
 	// 📌 상위 Root 레이아웃에서 주입된 요청별 안전 인증 Context를 가져옵니다.
@@ -189,7 +189,7 @@
 
 					<button
 						type="button"
-						onclick={() => navigateTo('notifications')}
+						onclick={() => navigateTo('alarms')}
 						class="group flex w-full items-center justify-between rounded-2xl border-2 border-slate-200 bg-white p-3.5 shadow-sm transition-all hover:border-rose-400 hover:shadow-md active:scale-[0.99]"
 					>
 						<div class="flex items-center gap-3.5">

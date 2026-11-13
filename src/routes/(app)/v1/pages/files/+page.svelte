@@ -3,7 +3,7 @@
 	 * @file v1/pages/files/+page.svelte
 	 * @description [v3.2] 독립형 개인 파일 커맨드 센터
 	 */
-	import { getAuthContext } from '$lib/runes/auth.svelte.js';
+	import { getAuthContext } from '$lib/runes/auth.svelte';
 	import Icon from '@iconify/svelte';
 	import FileManager from '$lib/components/FileManager.svelte';
 

@@ -12,6 +12,7 @@
 
 	// 각 정적 페이지별 설명 및 아이콘 메타
 	const PAGE_INFO = {
+		calender: { title: '통합 확장형 캘린더', desc: '모바일 무여백 반응형 및 날짜별 일정·알림 이벤트를 지원하는 공용 캘린더', icon: '📅' },
 		chart: { title: '차트 통계 데모', desc: 'Chart.js 기반 대화형 데이터 시각화 정적 웹페이지', icon: '📊' },
 		canvas: { title: '2D 캔버스 도면', desc: 'HTML5 2D Canvas 약도 및 그래픽 렌더링 정적 웹페이지', icon: '🎨' },
 		uploadfile: { title: '파일 업로드 자산', desc: '미디어 스토리지 연동 및 파일 업로드 데모 페이지', icon: '📁' }

@@ -4,9 +4,10 @@
 	 * @description 댓글 엔진 컴포넌트. BoardEngine의 서비스 바인딩으로 마운트됨. (DaisyUI 스타일 적용)
 	 * @prop {{ id: number }} post - 부모 게시물 객체 (id 필수)
 	 */
-	import { onMount } from 'svelte';
 	import * as commentApi from '$lib/api/comment';
-	import { toast } from '$lib/runes/toast.svelte.ts';
+	import { toast } from '$lib/runes/toast.svelte';
+	import { formatDateTime } from '$lib/utils';
+	import { formatApiError } from '$lib/utils/error';
 	import Icon from '@iconify/svelte';
 
 	// --- [Svelte 5 Props] ---
@@ -19,6 +20,7 @@
 
 	// --- [데이터 로드] ---
 	async function loadComments() {
+		if (!post?.id) return;
 		loading = true;
 		try {
 			comments = await commentApi.getComments(post.id);
@@ -38,11 +40,16 @@
 			newComment = ''; // 입력창 초기화
 			await loadComments(); // 댓글 목록 새로고침
 		} catch (e) {
-			toast.error('댓글 작성 실패: ' + (e.detail || e.message || '오류'));
+			toast.error('댓글 작성 실패: ' + formatApiError(e, '오류'));
 		}
 	}
 
-	onMount(loadComments);
+	// 🔄 게시물(post.id) 변경 시마다 댓글 목록 자동 재조회
+	$effect(() => {
+		if (post?.id) {
+			loadComments();
+		}
+	});
 </script>
 
 <!-- ================================================================== -->
@@ -103,7 +110,7 @@
 						<div class="mb-1 flex items-center justify-between">
 							<span class="text-sm font-bold">{comment.user?.username || '익명'}</span>
 							<span class="text-xs text-base-content/40">
-								{new Date(comment.create_date).toLocaleString()}
+								{formatDateTime(comment.create_date)}
 							</span>
 						</div>
 						<p class="rounded-lg bg-base-200 p-3 text-sm text-base-content/80">

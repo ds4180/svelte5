@@ -8,8 +8,8 @@
 	 *              - 탭 기반 네비게이션 (명부 조회 / 새 인스턴스 생성 및 설정)
 	 */
 	import { onMount } from 'svelte';
-	import * as api from '$lib/api/admin.js';
-	import { toast } from '$lib/runes/toast.svelte.js';
+	import * as api from '$lib/api/admin';
+	import { toast } from '$lib/runes/toast.svelte';
 	import { getSiteTitle } from '$lib/config/site';
 	import Icon from '@iconify/svelte';
 

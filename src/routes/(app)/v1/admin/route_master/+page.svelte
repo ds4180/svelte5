@@ -17,8 +17,9 @@
 		adminDeleteRouteMaster 
 	} from '$lib/api/admin';
 	import { getSiteTitle } from '$lib/config/site';
-	import { toast } from '$lib/runes/toast.svelte.ts';
+	import { toast } from '$lib/runes/toast.svelte';
 	import { formatDate } from '$lib/utils';
+	import { formatApiError } from '$lib/utils/error';
 	import Icon from '@iconify/svelte';
 
 	// ==========================================
@@ -219,7 +220,7 @@
 			await loadRouteMasters();
 		} catch (err) {
 			console.error('❌ 당연 근무 토글 중 오류 발생:', err);
-			toast.error(`당연 근무 상태 변경에 실패했습니다: ${err.detail || err.message}`);
+			toast.error(`당연 근무 상태 변경에 실패했습니다: ${formatApiError(err)}`);
 		}
 	}
 
@@ -324,7 +325,7 @@
 			await loadRouteMasters();
 		} catch (err) {
 			console.error('❌ 저장 중 오류 발생:', err);
-			toast.error(`저장에 실패했습니다: ${err.detail || err.message}`);
+			toast.error(`저장에 실패했습니다: ${formatApiError(err)}`);
 		}
 	}
 
@@ -346,7 +347,7 @@
 				await loadRouteMasters();
 			} catch (err) {
 				console.error('❌ 삭제 오류:', err);
-				toast.error(`삭제에 실패했습니다: ${err.detail || err.message}`);
+				toast.error(`삭제에 실패했습니다: ${formatApiError(err)}`);
 			}
 		}
 	}

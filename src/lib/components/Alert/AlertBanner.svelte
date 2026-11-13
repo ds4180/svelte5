@@ -6,7 +6,7 @@
 	 * - 5초 자동 롤링 티커, 마우스 호버 시 일시 정지, 이전/다음 수동 탐색 지원
 	 * - ✕ 닫기 클릭 시 24시간 동안 보지 않기(neverShowAgain) 자동 연동
 	 */
-	import { alertState } from '$lib/runes/alert.svelte.js';
+	import { alertState } from '$lib/runes/alert.svelte';
 	import { slide, fade } from 'svelte/transition';
 	import Icon from '@iconify/svelte';
 

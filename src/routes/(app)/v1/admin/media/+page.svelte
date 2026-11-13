@@ -11,11 +11,13 @@
 	import { env } from '$env/dynamic/public';
 	import { getMediaUrl, getSecureMediaUrl } from '$lib/config/media';
 	import { getSiteTitle } from '$lib/config/site';
+	import { formatDate, formatBytes, toLocalISOString, getLocalFileTimestamp } from '$lib/utils';
+	import { formatApiError } from '$lib/utils/error';
 	import { fade, slide, fly } from 'svelte/transition';
 	import ImageUploader from '$lib/components/ImageUploader.svelte';
 	import Icon from '@iconify/svelte';
-	import { page } from '$app/stores';
-	import { toast } from '$lib/runes/toast.svelte.js';
+	import { getAuthContext } from '$lib/runes/auth.svelte';
+	import { toast } from '$lib/runes/toast.svelte';
 	import { portal } from '$lib/actions/portal';
 	import {
 		adminGetMediaStats,
@@ -26,13 +28,14 @@
 		adminBulkDeleteMedia,
 		adminRunMediaGC,
 		adminDeleteMedia
-	} from '$lib/api/admin.js';
+	} from '$lib/api/admin';
 
 	const PUBLIC_SERVER_URL = env.PUBLIC_SERVER_URL || '';
+	const auth = getAuthContext();
 
 	// --- 탭 구성 및 권한 설정 ---
-	const userRank = $derived($page.data.user?.rank_level ?? 0);
-	const userId = $derived($page.data.user?.id ?? 0);
+	const userRank = $derived(auth.user?.rank_level ?? 0);
+	const userId = $derived(auth.user?.id ?? 0);
 
 	const tabConfigs = $derived([
 		{ id: 'SHARED', label: '공용폴더 (OFFICE)', tier: 'SYSTEM', basePath: 'GLOBAL/OFFICE' },
@@ -124,7 +127,7 @@
 			recursiveFiles = res.files || [];
 		} catch (err) {
 			console.error('Media list fail', err);
-			toast.error(err?.detail || '미디어 목록을 불러오지 못했습니다.');
+			toast.error(formatApiError(err, '미디어 목록을 불러오지 못했습니다.'));
 		} finally {
 			isLoadingMedia = false;
 		}
@@ -187,7 +190,7 @@
 			newFolderName = '';
 			loadMedia();
 		} catch (err) {
-			toast.error('폴더 생성 실패: ' + (err.detail || '오류가 발생했습니다.'));
+			toast.error('폴더 생성 실패: ' + formatApiError(err));
 		} finally {
 			isCreatingFolder = false;
 		}
@@ -216,7 +219,7 @@
 			selectedFolders = new Set();
 			loadMedia();
 		} catch (err) {
-			toast.error('백업 실패: ' + (err.detail || '오류가 발생했습니다.'));
+			toast.error('백업 실패: ' + formatApiError(err));
 		}
 	}
 
@@ -244,7 +247,7 @@
 			selectedFolders = new Set();
 			await Promise.all([loadMedia(), loadStats()]);
 		} catch (err) {
-			toast.error('삭제 실패: ' + (err.detail || '오류가 발생했습니다.'));
+			toast.error('삭제 실패: ' + formatApiError(err));
 		} finally {
 			isDeleting = false;
 		}
@@ -254,7 +257,8 @@
 		try {
 			const res = await adminRunMediaGC({ 
 				indices: [1, 2, 3, 4, 5, 6],
-				scheduled_at: (gcRunMode === 'later' && gcScheduledAt) ? new Date(gcScheduledAt).toISOString() : null
+				// 🛡️ toISOString()의 9시간 시차 왜곡 없이 한국 표준시(KST) 그대로 스케줄 예약
+				scheduled_at: (gcRunMode === 'later' && gcScheduledAt) ? toLocalISOString(gcScheduledAt) : null
 			});
 			toast.success(res.message || '시스템 정리(GC) 작업이 예약되었습니다.');
 			gcModalOpen = false;
@@ -262,8 +266,7 @@
 			gcRunMode = 'now';
 			await loadStats();
 		} catch (err) { 
-			const msg = err.detail ? (typeof err.detail === 'object' ? JSON.stringify(err.detail) : err.detail) : '오류';
-			toast.error('GC 예약 실패: ' + msg); 
+			toast.error('GC 예약 실패: ' + formatApiError(err, '오류')); 
 		}
 	}
 
@@ -288,7 +291,7 @@
 			const url = window.URL.createObjectURL(blob);
 			const a = document.createElement('a');
 			a.href = url;
-			a.download = `media_export_${new Date().getTime()}.zip`;
+			a.download = `media_export_${getLocalFileTimestamp()}.zip`;
 			document.body.appendChild(a);
 			a.click();
 			a.remove();
@@ -465,16 +468,8 @@
 			selectedAsset = null;
 			await Promise.all([loadStats(), loadRecent(), loadMedia()]);
 		} catch (err) {
-			toast.error('삭제 실패: ' + (err.detail || '오류가 발생했습니다.'));
+			toast.error('삭제 실패: ' + formatApiError(err));
 		}
-	}
-
-	function formatBytes(bytes) {
-		if (!bytes || bytes === 0) return '0 B';
-		const k = 1024;
-		const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
-		const i = Math.floor(Math.log(bytes) / Math.log(k));
-		return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 	}
 
 	function selectTab(tab) {
@@ -975,7 +970,7 @@
 													{formatBytes(asset.file_size)}
 												</td>
 												<td class="px-6 py-4 text-slate-400 font-mono">
-													{new Date(asset.created_at).toLocaleDateString()}
+													{formatDate(asset.created_at)}
 												</td>
 												<td class="px-6 py-4 text-right">
 													<button 
@@ -1304,7 +1299,7 @@
 								</div>
 								{#if selectedAsset.meta_info?.original_expires_at}
 									<p class="mt-0.5 text-[10px] opacity-80">
-										보관 만료: {new Date(selectedAsset.meta_info.original_expires_at).toLocaleDateString()}
+										보관 만료: {formatDate(selectedAsset.meta_info.original_expires_at)}
 									</p>
 								{/if}
 							{/if}

@@ -1,6 +1,6 @@
 <script>
 	import { onMount } from 'svelte';
-	import { toast } from '$lib/runes/toast.svelte.ts';
+	import { toast } from '$lib/runes/toast.svelte';
 
 	// ========================================
 	// 1. 정거장 정의 (Station Nodes)

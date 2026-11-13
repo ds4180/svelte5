@@ -1,7 +1,8 @@
 <script>
 	import Icon from '@iconify/svelte';
-	import * as api from '$lib/api/admin.js';
-	import { toast } from '$lib/runes/toast.svelte.js';
+	import * as api from '$lib/api/admin';
+	import { toast } from '$lib/runes/toast.svelte';
+	import { formatApiError } from '$lib/utils/error';
 
 	let {
 		isOpen = $bindable(false),
@@ -20,7 +21,7 @@
 		try {
 			ackStats = await api.adminGetAlertAcknowledgements(alertItem.id);
 		} catch (e) {
-			toast.error('수신 현황 조회 실패: ' + (e.message || e));
+			toast.error('수신 현황 조회 실패: ' + formatApiError(e));
 		} finally {
 			ackLoading = false;
 		}

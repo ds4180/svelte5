@@ -2,7 +2,7 @@
  * @file src/lib/config/site.ts
  * @description 브라우저 탭 및 전역 사이트 타이틀 단일 진실 공급원 (SSOT)
  */
-import { config } from '$lib/api/config.js';
+import { config } from '$lib/api/config';
 
 // 전역 사이트 기본 설정 (SSR 호환 순수 객체)
 export const siteConfig = {

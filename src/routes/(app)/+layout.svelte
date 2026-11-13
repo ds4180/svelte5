@@ -15,15 +15,15 @@
 	 */
 	import { page } from '$app/state';
 	import { onMount, untrack } from 'svelte';
-	import { alertState } from '$lib/runes/alert.svelte.js';
-	import { getAuthContext } from '$lib/runes/auth.svelte.js'; // 최상위 Root가 주입한 안전 인증 Context 사용
-	import { navState } from '$lib/runes/nav.svelte.js';
-	import { miniappStore } from '$lib/runes/miniapps.svelte.js';
-	import { websocket } from '$lib/runes/websocket.svelte.js';
-	import { offlineSync } from '$lib/runes/offlineSync.svelte.js';
-	import { hardReset, unsubscribePushOnLogout } from '$lib/pwa/serviceWorker.js';
+	import { alertState } from '$lib/runes/alert.svelte';
+	import { getAuthContext } from '$lib/runes/auth.svelte'; // 최상위 Root가 주입한 안전 인증 Context 사용
+	import { navState } from '$lib/runes/nav.svelte';
+	import { miniappStore } from '$lib/runes/miniapps.svelte';
+	import { websocket } from '$lib/runes/websocket.svelte';
+	import { offlineSync } from '$lib/runes/offlineSync.svelte';
+	import { hardReset, unsubscribePushOnLogout } from '$lib/pwa/serviceWorker';
 	import { enterCameraFullscreen } from '$lib/utils/fullscreen';
-	import { toast } from '$lib/runes/toast.svelte.js';
+	import { toast } from '$lib/runes/toast.svelte';
 	import DynamicSidebar from '$lib/components/Nav/DynamicSidebar.svelte';
 	import SmartIcon from '$lib/components/SmartIcon.svelte';
 	import '../layout.css';
@@ -656,14 +656,15 @@
 					{#if data.menus}
 						{#each data.menus as m, i (m.id || i)}
 							{#if m.sub_menus && m.sub_menus.length > 0}
+								{@const menuKey = m.id ?? i}
 								<div class="group mb-1 flex flex-col">
 									<button
 										type="button"
 										class="flex w-full items-center justify-between rounded-2xl px-4 py-3 text-sm font-black tracking-tight text-slate-200 transition-all hover:bg-slate-800 hover:text-white"
-										onclick={() => toggleMenu(m.id)}
+										onclick={() => toggleMenu(menuKey)}
 									>
 										<span class="flex items-center gap-3.5">
-											<div class="flex h-8 w-8 items-center justify-center rounded-xl bg-slate-800 transition-colors {(openMenus[m.id] ?? true) ? 'text-blue-400 bg-blue-500/10' : 'text-slate-500'}">
+											<div class="flex h-8 w-8 items-center justify-center rounded-xl bg-slate-800 transition-colors {(openMenus[menuKey] ?? true) ? 'text-blue-400 bg-blue-500/10' : 'text-slate-500'}">
 												<SmartIcon
 													icon={m.icon_name}
 													fallback="ph:folder-fill"
@@ -675,12 +676,12 @@
 										</span>
 										<Icon
 											icon="ph:caret-down-bold"
-											class="text-xs text-slate-500 transition-transform duration-300 {(openMenus[m.id] ?? true)
+											class="text-xs text-slate-500 transition-transform duration-300 {(openMenus[menuKey] ?? true)
 												? 'rotate-180 text-blue-400'
 												: ''}"
 										/>
 									</button>
-									{#if (openMenus[m.id] ?? true)}
+									{#if (openMenus[menuKey] ?? true)}
 										<div class="mt-1 ml-4 flex flex-col gap-1 border-l-2 border-slate-800 pl-3 transition-all">
 											{#each m.sub_menus as sub, si (sub.id || si)}
 												<a

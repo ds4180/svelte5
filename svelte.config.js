@@ -7,7 +7,7 @@ const config = {
 	kit: {
 		adapter: adapter(),
 		serviceWorker: {
-			// 자동 등록 대신 $lib/pwa/serviceWorker.js 의 registerServiceWorker() 로 직접 등록
+			// 자동 등록 대신 $lib/pwa/serviceWorker.ts 의 registerServiceWorker() 로 직접 등록
 			// (운영 빌드에서만 등록, dev 서버에서는 HMR 충돌 방지를 위해 미등록)
 			register: false
 		},

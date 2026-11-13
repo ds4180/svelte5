@@ -13,6 +13,8 @@
  * 3. Svelte 5의 최신 `$state` 룬을 기반으로 반응형 UI와 초고속 동기화됩니다.
  */
 
+import { normalizeErrorMessage } from '$lib/utils/error';
+
 export interface ToastItem {
 	id: string;
 	message: string;
@@ -29,11 +31,14 @@ class ToastState {
 
 	/**
 	 * 기본 알림 표시 공통 메서드
-	 * @param message 표시할 메시지
+	 * @param rawMessage 표시할 메시지
 	 * @param type 알림 성격 ('info' | 'success' | 'warning' | 'error')
 	 * @param duration 유지 시간 (기본 3500ms = 3.5초)
 	 */
-	show(message: string, type: ToastItem['type'] = 'info', duration: number = 3500): string {
+	show(rawMessage: unknown, type: ToastItem['type'] = 'info', duration: number = 3500): string {
+		// '[object Object]'가 단독 또는 비문자열 형태로 전달될 경우 공백 처리해 방어합니다.
+		const message = normalizeErrorMessage(rawMessage);
+		if (!message) return '';
 		const now = Date.now();
 		const isAuthError = message.includes('권한이 없습니다') || message.includes('권한 없음');
 
@@ -89,28 +94,28 @@ class ToastState {
 	/**
 	 * [정보] 일반 안내 알림 (파란색)
 	 */
-	info(message: string, duration?: number): string {
+	info(message: unknown, duration?: number): string {
 		return this.show(message, 'info', duration);
 	}
 
 	/**
 	 * [성공] 작업 완료 알림 (초록색)
 	 */
-	success(message: string, duration?: number): string {
+	success(message: unknown, duration?: number): string {
 		return this.show(message, 'success', duration);
 	}
 
 	/**
 	 * [경고] 주의 필요 알림 (노란색/주황색)
 	 */
-	warning(message: string, duration?: number): string {
+	warning(message: unknown, duration?: number): string {
 		return this.show(message, 'warning', duration);
 	}
 
 	/**
 	 * [에러] 시스템 오류 / 네트워크 실패 알림 (빨간색)
 	 */
-	error(message: string, duration?: number): string {
+	error(message: unknown, duration?: number): string {
 		return this.show(message, 'error', duration ?? 4500); // 에러는 인지 시간을 위해 조금 더 길게(4.5초)
 	}
 

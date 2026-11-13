@@ -10,8 +10,8 @@
 	 */
 
 	import { onMount, onDestroy } from 'svelte';
-	import { toast } from '$lib/runes/toast.svelte.js';
-	import { websocket } from '$lib/runes/websocket.svelte.js';
+	import { toast } from '$lib/runes/toast.svelte';
+	import { websocket } from '$lib/runes/websocket.svelte';
 	import { enterCameraFullscreen } from '$lib/utils/fullscreen';
 	import {
 		initAudioUnlocker,

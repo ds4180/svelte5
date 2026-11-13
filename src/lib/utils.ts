@@ -154,6 +154,8 @@ export function formatDDay(targetDate: DateInput): string {
 	return `D+${Math.abs(days)}`;
 }
 
+export const getDday = formatDDay;
+
 /**
  * 9. 파일명 및 로그 생성용 로컬 타임스탬프 (기본: YYYYMMDD_HHmmss)
  * 🚨 toISOString()의 9시간 시차(UTC) 왜곡 없는 한국 표준시(KST) 기반 파일명 생성
@@ -175,4 +177,22 @@ export function getLocalFileTimestamp(dateInput: DateInput = new Date(), withUnd
 	const sep = withUnderscore ? '_' : '';
 	return `${year}${month}${day}${sep}${hours}${minutes}${seconds}`;
 }
+
+export const formatFileDateTime = getLocalFileTimestamp;
+
+/**
+ * 10. 파일 용량(Bytes)을 사람이 읽기 쉬운 단위(B, KB, MB, GB, TB)로 변환
+ * @param bytes - 바이트 크기
+ * @param decimals - 소수점 자리수 (기본값: 2)
+ * @returns '1.25 MB', '0 B' 등 포맷팅된 문자열
+ */
+export function formatBytes(bytes: number | null | undefined, decimals: number = 2): string {
+	if (!bytes || bytes <= 0) return '0 B';
+	const k = 1024;
+	const dm = decimals < 0 ? 0 : decimals;
+	const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+	const i = Math.min(Math.floor(Math.log(bytes) / Math.log(k)), sizes.length - 1);
+	return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
+}
+
 

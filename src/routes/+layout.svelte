@@ -20,12 +20,12 @@
 		clearSwUserCache,
 		syncPushSubscription,
 		unsubscribePushOnLogout
-	} from '$lib/pwa/serviceWorker.js';
-	import { setAuthContext } from '$lib/runes/auth.svelte.js';
-	import { alertState } from '$lib/runes/alert.svelte.js';
-	import { toast } from '$lib/runes/toast.svelte.js';
-	import { websocket } from '$lib/runes/websocket.svelte.js';
-	import { offlineSync } from '$lib/runes/offlineSync.svelte.js';
+	} from '$lib/pwa/serviceWorker';
+	import { setAuthContext } from '$lib/runes/auth.svelte';
+	import { alertState } from '$lib/runes/alert.svelte';
+	import { toast } from '$lib/runes/toast.svelte';
+	import { websocket } from '$lib/runes/websocket.svelte';
+	import { offlineSync } from '$lib/runes/offlineSync.svelte';
 	import { initAudioUnlocker } from '$lib/utils/sound';
 	import Alert from '$lib/components/Alert.svelte';
 	import Toast from '$lib/components/Toast.svelte';

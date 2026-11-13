@@ -1,6 +1,7 @@
 <script>
   import { fade } from 'svelte/transition';
   import Icon from '@iconify/svelte';
+  import { formatDate } from '$lib/utils';
 
   let {
     primaryGroups = [],
@@ -78,7 +79,7 @@
               <div class="flex items-center gap-1 font-bold text-emerald-700">
                 <Icon icon="mdi:account" /> 본소속 인원: {group.primary_count || 0}명
               </div>
-              <span class="text-[10px] font-bold text-slate-400">등록일: {group.created_at ? new Date(group.created_at).toLocaleDateString() : '-'}</span>
+              <span class="text-[10px] font-bold text-slate-400">등록일: {formatDate(group.created_at)}</span>
             </div>
           </div>
         </div>
@@ -152,7 +153,7 @@
               <div class="flex items-center gap-1 font-bold text-indigo-700">
                 <Icon icon="mdi:shield-account" /> 보유 인원: {group.secondary_count || 0}명
               </div>
-              <span class="text-[10px] font-bold text-slate-400">등록일: {group.created_at ? new Date(group.created_at).toLocaleDateString() : '-'}</span>
+              <span class="text-[10px] font-bold text-slate-400">등록일: {formatDate(group.created_at)}</span>
             </div>
           </div>
         </div>

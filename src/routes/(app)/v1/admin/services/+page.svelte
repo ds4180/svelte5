@@ -8,8 +8,8 @@
 	 *              - 4대 탭 기반 네비게이션 (번들 / 앱 / 엔진 / 레지스트리)
 	 */
 	import { onMount } from 'svelte';
-	import * as api from '$lib/api/admin.js';
-	import { toast } from '$lib/runes/toast.svelte.js';
+	import * as api from '$lib/api/admin';
+	import { toast } from '$lib/runes/toast.svelte';
 	import { getSiteTitle } from '$lib/config/site';
 	import Icon from '@iconify/svelte';
 	import { fade, fly } from 'svelte/transition';

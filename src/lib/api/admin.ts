@@ -111,6 +111,21 @@ export const adminGetAppData = <T = any>(
 export const adminGetAllDayoffs = <T = any>() => request<T>(`${BASE_URL}/dayoffs`);
 export const adminUpdateDayoffStatus = <T = any>(dayoffId: number | string, status: string) =>
 	request<T>(`${BASE_URL}/dayoffs/${dayoffId}/status`, 'PUT', { status });
+export const adminGetDayoffPolicy = <T = any>(year?: number, month?: number) => {
+	const qs = new URLSearchParams();
+	if (year !== undefined) qs.set('year', String(year));
+	if (month !== undefined) qs.set('month', String(month));
+	const queryStr = qs.toString();
+	return request<T>(`${BASE_URL}/dayoff-policy${queryStr ? `?${queryStr}` : ''}`);
+};
+export const adminUpdateDayoffPolicy = <T = any>(data: Record<string, any>) =>
+	request<T>(`${BASE_URL}/dayoff-policy`, 'PUT', data);
+export const adminEditDayoffPolicyRow = <T = any>(policyId: number, data: Record<string, any>) =>
+	request<T>(`${BASE_URL}/dayoff-policy/${policyId}`, 'PUT', data);
+export const adminDeleteDayoffPolicyRow = <T = any>(policyId: number) =>
+	request<T>(`${BASE_URL}/dayoff-policy/${policyId}`, 'DELETE');
+export const adminUpdateDayoffDateOverride = <T = any>(dates: string[], quota: number | null) =>
+	request<T>(`${BASE_URL}/dayoff-policy/date-override`, 'PUT', { dates, quota });
 
 // 👤 유저 관리 API
 export const adminGetUsers = <T = any>() => request<T>(`${BASE_URL}/users`);

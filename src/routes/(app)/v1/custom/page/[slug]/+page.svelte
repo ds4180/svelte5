@@ -3,6 +3,8 @@
 	 * @file (app)/v1/custom/page/[slug]/+page.svelte
 	 * @description [CUSTOM 앱] DB CMS 페이지 개별 본문 열람 뷰어 (SSR 즉각 렌더링)
 	 */
+	import { formatDate } from '$lib/utils';
+
 	let { data } = $props();
 	let pageData = $derived(data.pageData);
 </script>
@@ -22,7 +24,7 @@
 					</span>
 					{#if pageData.published_at}
 						<span class="text-xs font-bold text-slate-400">
-							게시일: {new Date(pageData.published_at).toLocaleDateString()}
+							게시일: {formatDate(pageData.published_at)}
 						</span>
 					{/if}
 				</div>

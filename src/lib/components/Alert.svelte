@@ -5,8 +5,8 @@
 	 * - 필터링 로직을 alertState로 이관
 	 * - 레벨별 전용 컴포넌트(Toast, Banner, Modal) 호출
 	 */
-	import { alertState } from '$lib/runes/alert.svelte.js';
-	import { websocket } from '$lib/runes/websocket.svelte.js';
+	import { alertState } from '$lib/runes/alert.svelte';
+	import { websocket } from '$lib/runes/websocket.svelte';
 	import { fastApi } from '$lib/api';
 	import { notifyAlert } from '$lib/utils/sound';
 	import { page } from '$app/state';

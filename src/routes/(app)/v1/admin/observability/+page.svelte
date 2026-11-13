@@ -13,9 +13,9 @@
 	 */
 
 	import { onMount, onDestroy } from 'svelte';
-	import { page as pageStore } from '$app/stores';
-	import * as api from '$lib/api/admin.js';
-	import { toast } from '$lib/runes/toast.svelte.js';
+	import { page } from '$app/state';
+	import * as api from '$lib/api/admin';
+	import { toast } from '$lib/runes/toast.svelte';
 	import { getSiteTitle } from '$lib/config/site';
 	import { formatDateTime, timeAgo } from '$lib/utils';
 	import Icon from '@iconify/svelte';
@@ -263,8 +263,8 @@
 	}
 
 	onMount(() => {
-		// URL 쿼리 파라미터에서 초기 탭 및 앱 ID 추출
-		const urlParams = $pageStore.url.searchParams;
+		// URL 쿼리 파라미터에서 초기 탭 및 앱 ID 추출 (Svelte 5 $app/state 표준)
+		const urlParams = page.url.searchParams;
 		const queryTab = urlParams.get('tab');
 		const queryApp = urlParams.get('app_id');
 

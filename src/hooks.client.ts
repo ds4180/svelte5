@@ -1,6 +1,8 @@
+import type { HandleClientError } from '@sveltejs/kit';
+
 /**
  * ============================================================================
- * [SvelteKit 공식 클라이언트 훅 (src/hooks.client.js)]
+ * [SvelteKit 공식 클라이언트 훅 (src/hooks.client.ts)]
  * ============================================================================
  * 💡 역할:
  * 새 버전 배포 직후, 이미 열려 있던 구버전 화면이 서버에서 사라진 청크(_app/immutable/...)를
@@ -20,9 +22,8 @@ const CHUNK_ERROR_PATTERNS = [
 	'Unable to preload CSS'
 ];
 
-/** @type {import('@sveltejs/kit').HandleClientError} */
-export function handleError({ error, event, message }) {
-	const errMsg = String(/** @type {any} */ (error)?.message || message || '');
+export const handleError: HandleClientError = ({ error, event, message }) => {
+	const errMsg = error instanceof Error ? error.message : String((error as { message?: unknown })?.message || message || '');
 	const isChunkLoadError = CHUNK_ERROR_PATTERNS.some((p) => errMsg.includes(p));
 
 	if (isChunkLoadError) {
@@ -42,4 +43,4 @@ export function handleError({ error, event, message }) {
 	return {
 		message: message || '일시적인 화면 로드 오류가 발생했습니다.'
 	};
-}
+};

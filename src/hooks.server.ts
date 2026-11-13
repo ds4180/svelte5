@@ -1,14 +1,15 @@
+import type { Handle, HandleFetch } from '@sveltejs/kit';
 import { PUBLIC_API_ENDPOINT } from '$env/static/public';
 import {
 	SESSION_COOKIE_OPTIONS,
 	syncSessionCookieFromResponse,
 	buildBackendForwardHeaders
-} from '$lib/server/sessionCookie.js';
+} from '$lib/server/sessionCookie';
 
 /**
- * @file hooks.server.js (Performance Optimized v3.1)
+ * @file hooks.server.ts (Performance Optimized v3.1)
  */
-export async function handle({ event, resolve }) {
+export const handle: Handle = async ({ event, resolve }) => {
 	const start = Date.now();
 	const sessionId = event.cookies.get('session_id');
 	const pathname = event.url.pathname;
@@ -43,9 +44,9 @@ export async function handle({ event, resolve }) {
 	}
 
 	return response;
-}
+};
 
-export async function handleFetch({ request, fetch, event }) {
+export const handleFetch: HandleFetch = async ({ request, fetch, event }) => {
 	const apiEndpoint = PUBLIC_API_ENDPOINT || 'http://backend:8000';
 	let internalUrl = request.url;
 
@@ -63,7 +64,7 @@ export async function handleFetch({ request, fetch, event }) {
 
 	// 🛡️ [보안 강화 2]: 브라우저의 Cookie, User-Agent 및 실제 클라이언트 IP(X-Forwarded-For / X-Real-IP)를
 	// 백엔드 FastAPI로 손실 없이 전파하여 모바일/PC 세션 바인딩 검증과 감사로그 실제 IP 기록을 보장합니다.
-	let clientIp = null;
+	let clientIp: string | null = null;
 	try {
 		clientIp = event.getClientAddress();
 	} catch {
@@ -80,4 +81,4 @@ export async function handleFetch({ request, fetch, event }) {
 	syncSessionCookieFromResponse(event.cookies, res);
 
 	return res;
-}
+};

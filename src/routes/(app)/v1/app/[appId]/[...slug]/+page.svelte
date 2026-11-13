@@ -18,7 +18,7 @@
 	 * 2. `{#key}` 블록이 이전 화면의 잔상을 깨끗이 정리(Unmount)하고 새 화면을 띄워주어
 	 *    무한 루프 없이 부드러운 SPA 화면 전환을 완벽하게 지원합니다.
 	 */
-	import * as Engines from '$lib'; // $lib/index.js 에 등록된 모든 앱 엔진 컴포넌트 맵
+	import * as Engines from '$lib'; // $lib/index.ts 에 등록된 모든 앱 엔진 컴포넌트 맵
 	import { fade } from 'svelte/transition';
 
 	/** @type {import('./$types').PageData} */
@@ -56,7 +56,7 @@
 					<div>
 						<h3 class="text-lg font-bold">컴포넌트를 찾을 수 없습니다</h3>
 						<p class="mt-1 text-sm opacity-70">
-							App Registry에 등록된 컴포넌트명 (<strong>{data.appInfo?.main_component}</strong>)이 엔진 지도(<code>$lib/index.js</code>)에 존재하는지 확인하세요.
+							App Registry에 등록된 컴포넌트명 (<strong>{data.appInfo?.main_component}</strong>)이 엔진 지도(<code>$lib/index.ts</code>)에 존재하는지 확인하세요.
 						</p>
 					</div>
 					<a href="/v1/admin/app" class="btn btn-sm btn-primary"> App 설정 확인하러 가기 </a>

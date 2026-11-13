@@ -4,8 +4,8 @@
 	 * @description 시스템 통합 관리 관제탑 (한글화 버전)
 	 */
 	import { onMount } from 'svelte';
-	import * as api from '$lib/api/admin.js';
-	import { toast } from '$lib/runes/toast.svelte.ts';
+	import * as api from '$lib/api/admin';
+	import { toast } from '$lib/runes/toast.svelte';
 	import { getSiteTitle } from '$lib/config/site';
 	import { fade, fly } from 'svelte/transition';
 	import Icon from '@iconify/svelte';

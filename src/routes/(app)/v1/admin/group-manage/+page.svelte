@@ -5,7 +5,7 @@
    */
   import { onMount } from 'svelte';
   import Icon from '@iconify/svelte';
-  import { toast } from '$lib/runes/toast.svelte.js';
+  import { toast } from '$lib/runes/toast.svelte';
   import { getSiteTitle } from '$lib/config/site';
   import {
     adminGetAuthGroupsMaster,

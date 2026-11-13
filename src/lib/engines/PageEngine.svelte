@@ -6,10 +6,11 @@
 	import { page as pageState } from '$app/state';
 	import { onMount, onDestroy } from 'svelte';
 	import { goto, invalidateAll } from '$app/navigation';
-	import { getAuthContext } from '$lib/runes/auth.svelte.js';
-	import { toast } from '$lib/runes/toast.svelte.ts';
-	import { toLocalISOString } from '$lib/utils';
-	import * as api from '$lib/api/page.js';
+	import { getAuthContext } from '$lib/runes/auth.svelte';
+	import { toast } from '$lib/runes/toast.svelte';
+	import { formatDate, toLocalISOString } from '$lib/utils';
+	import { formatApiError } from '$lib/utils/error';
+	import * as api from '$lib/api/page';
 	import TiptapEditor from '$lib/components/TiptapEditor.svelte';
 	import Icon from '@iconify/svelte';
 
@@ -91,7 +92,7 @@
 			mode = 'view';
 			invalidateAll();
 		} catch (e) {
-			toast.error('저장 실패: ' + (e.detail || e.message || '알 수 없는 오류'));
+			toast.error('저장 실패: ' + formatApiError(e));
 		} finally {
 			isLoading = false;
 		}
@@ -104,7 +105,7 @@
 			toast.success('삭제되었습니다.');
 			goto('/v1/admin/apps/page/instances'); // 목록으로 이동
 		} catch (e) {
-			toast.error('삭제 실패: ' + (e.detail || e.message || '오류'));
+			toast.error('삭제 실패: ' + formatApiError(e, '오류'));
 		}
 	}
 
@@ -166,7 +167,7 @@
 								{page.title}
 							</h1>
 							<div class="flex items-center gap-4 text-[9px] font-bold italic opacity-10 uppercase tracking-widest">
-								<span class="flex items-center gap-1"><Icon icon="ph:calendar-bold" /> {new Date(page.published_at).toLocaleDateString()}</span>
+								<span class="flex items-center gap-1"><Icon icon="ph:calendar-bold" /> {formatDate(page.published_at)}</span>
 								<span class="flex items-center gap-1"><Icon icon="ph:eye-bold" /> {page.view_count || 0} views</span>
 							</div>
 						</div>

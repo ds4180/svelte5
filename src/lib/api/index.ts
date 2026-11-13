@@ -1,7 +1,8 @@
 import { env } from '$env/dynamic/public';
 import { auth } from '$lib/runes/auth.svelte';
 import { toast } from '$lib/runes/toast.svelte';
-import { offlineSync } from '$lib/runes/offlineSync.svelte.js';
+import { offlineSync } from '$lib/runes/offlineSync.svelte';
+import { formatApiError } from '$lib/utils/error';
 import { browser } from '$app/environment';
 
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH' | 'get' | 'post' | 'put' | 'delete' | 'patch';
@@ -226,11 +227,8 @@ export async function fastApi<TResponse = any, TBody = unknown>(
 				return Promise.reject(errObj);
 			}
 
-			// 🛡️ 표준 에러 메시지 추출 (data.error.message -> data.detail 순서로 안전 추출)
-			const errMsg =
-				(typeof data.error?.message === 'string' && data.error.message) ||
-				(Array.isArray(data.detail) ? data.detail.map((item: any) => item.msg || JSON.stringify(item)).join('; ') : data.detail) ||
-				`API 요청 실패 (${response.status})`;
+			// 🛡️ 표준 에러 메시지 추출 (비배열 객체 detail/중첩 error/422 배열 모두 안전 문자열로 정규화)
+			const errMsg = formatApiError(data, `API 요청 실패 (${response.status})`);
 
 			// [500 서버 장애]: 별도 콜백이 없으면 시스템 에러 토스트 표시
 			if (browser && response.status >= 500 && !failure_callback) {
@@ -238,7 +236,7 @@ export async function fastApi<TResponse = any, TBody = unknown>(
 			}
 
 			const errObj: any = new Error(errMsg);
-			Object.assign(errObj, data, { status: response.status, detail: errMsg });
+			Object.assign(errObj, data, { status: response.status, detail: errMsg, message: errMsg });
 
 			if (failure_callback) failure_callback(errObj);
 			return Promise.reject(errObj);
@@ -256,11 +254,14 @@ export async function fastApi<TResponse = any, TBody = unknown>(
 
 		const errorMessage = isTimeout
 			? '서버 응답 시간이 초과되었습니다. 네트워크 상태를 확인해 주세요.'
-			: (error && error.message) || '서버와의 통신에 실패했습니다.';
+			: formatApiError(error, '서버와의 통신에 실패했습니다.');
 
 		console.error('[API Network Error]:', error);
 		const errorObj: any = error instanceof Error ? error : new Error(errorMessage);
-		errorObj.detail = errorObj.detail || errorMessage;
+		errorObj.detail = formatApiError(errorObj.detail ?? errorMessage, errorMessage);
+		if (!errorObj.message || errorObj.message === '[object Object]') {
+			errorObj.message = errorMessage;
+		}
 
 		if (browser && !failure_callback) {
 			toast.error(errorMessage);

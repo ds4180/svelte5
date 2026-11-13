@@ -1,11 +1,17 @@
 import fs from 'fs';
 import path from 'path';
+import type { PageServerLoad } from './$types';
 
-/** @type {import('./$types').PageServerLoad} */
-export async function load() {
+interface StaticPageItem {
+	slug: string;
+	url: string;
+	last_modified: Date;
+}
+
+export const load: PageServerLoad = async () => {
 	// 📁 순수 파일 시스템 정적 페이지 루트 디렉터리 스캔
 	const PAGES_DIR = path.resolve('src/routes/(app)/v1/pages');
-	let pages = [];
+	const pages: StaticPageItem[] = [];
 
 	try {
 		if (fs.existsSync(PAGES_DIR)) {
@@ -34,4 +40,4 @@ export async function load() {
 	return {
 		pages: pages.sort((a, b) => a.slug.localeCompare(b.slug))
 	};
-}
+};

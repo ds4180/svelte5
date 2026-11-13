@@ -19,9 +19,10 @@
 
 	import { onMount, onDestroy } from 'svelte';
 	import { goto, beforeNavigate } from '$app/navigation';
-	import { toast } from '$lib/runes/toast.svelte.js';
-	import { getAuthContext } from '$lib/runes/auth.svelte.js';
-	import { offlineSync } from '$lib/runes/offlineSync.svelte.js';
+	import { toast } from '$lib/runes/toast.svelte';
+	import { formatApiError } from '$lib/utils/error';
+	import { getAuthContext } from '$lib/runes/auth.svelte';
+	import { offlineSync } from '$lib/runes/offlineSync.svelte';
 	import { uploadFiles, createUserFolder } from '$lib/services/mediaService';
 	import { getLocalFileTimestamp } from '$lib/utils';
 	import {
@@ -479,7 +480,7 @@
 			return historyItem;
 		} catch (e) {
 			console.error('내 파일함 업로드 실패:', e);
-			const errMsg = /** @type {any} */ (e).detail || /** @type {any} */ (e).message || '서버 통신 실패';
+			const errMsg = formatApiError(e, '서버 통신 실패');
 			toast.error(`내 파일함 업로드 실패: ${errMsg}`);
 			return null;
 		} finally {

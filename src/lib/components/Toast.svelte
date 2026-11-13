@@ -12,7 +12,7 @@
 	 * - 거대한 모달이나 전역 쉬머 배너를 띄우지 않고, 우측 하단에서 3~4초 뒤 자동 소멸합니다.
 	 * - 사내 업무 공지와 시스템 피드백이 시각적으로 명확하게 구분됩니다.
 	 */
-	import { toast, type ToastItem } from '$lib/runes/toast.svelte.js';
+	import { toast, type ToastItem } from '$lib/runes/toast.svelte';
 	import { fly } from 'svelte/transition';
 	import Icon from '@iconify/svelte';
 

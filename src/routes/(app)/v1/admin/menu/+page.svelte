@@ -10,9 +10,9 @@
 	 */
 	import { onMount } from 'svelte';
 	import { fade } from 'svelte/transition';
-	import * as api from '$lib/api/admin.js';
-	import { adminGetPages } from '$lib/api/page.js';
-	import { toast } from '$lib/runes/toast.svelte.js';
+	import * as api from '$lib/api/admin';
+	import { adminGetPages } from '$lib/api/page';
+	import { toast } from '$lib/runes/toast.svelte';
 	import { getSiteTitle } from '$lib/config/site';
 	import { browser } from '$app/environment';
 	import Icon from '@iconify/svelte';

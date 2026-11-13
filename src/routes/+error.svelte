@@ -6,7 +6,7 @@
 	import { page } from '$app/state';
 	import { onMount } from 'svelte';
 	import { browser } from '$app/environment';
-	import { hardReset } from '$lib/pwa/serviceWorker.js';
+	import { hardReset } from '$lib/pwa/serviceWorker';
 
 	let isOnline = $state(true);
 	let isRetrying = $state(false);

@@ -1,7 +1,7 @@
 <script>
   import { fade, scale, slide } from 'svelte/transition';
   import Icon from '@iconify/svelte';
-  import { toast } from '$lib/runes/toast.svelte.ts';
+  import { toast } from '$lib/runes/toast.svelte';
 
   let {
     isOpen = $bindable(false),

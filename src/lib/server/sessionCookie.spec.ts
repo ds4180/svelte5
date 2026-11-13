@@ -5,7 +5,7 @@ import {
 	requireAuthUser,
 	resolveSafeRedirect,
 	buildBackendForwardHeaders
-} from './sessionCookie.js';
+} from './sessionCookie';
 
 describe('sessionCookie server helpers', () => {
 	it('parses sliding session_id and dynamic Max-Age from Set-Cookie header', () => {

@@ -7,7 +7,8 @@
 	import { onDestroy, onMount } from 'svelte';
 	import Icon from '@iconify/svelte';
 	import { getSiteTitle } from '$lib/config/site';
-	import { toast } from '$lib/runes/toast.svelte.js';
+	import { toast } from '$lib/runes/toast.svelte';
+	import { formatBytes, formatDateTime } from '$lib/utils';
 
 	interface PendingFile {
 		id: string;
@@ -67,28 +68,6 @@
 		selectedFiles.reduce((sum, item) => sum + item.file.size, 0)
 	);
 	const totalStoredBytes = $derived(serverFiles.reduce((sum, file) => sum + file.size, 0));
-
-	function formatBytes(bytes: number): string {
-		if (!bytes || bytes <= 0) return '0 B';
-		const units = ['B', 'KB', 'MB', 'GB'];
-		const idx = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
-		const value = bytes / 1024 ** idx;
-		return `${value >= 10 || idx === 0 ? value.toFixed(0) : value.toFixed(1)} ${units[idx]}`;
-	}
-
-	function formatTime(iso: string): string {
-		try {
-			return new Date(iso).toLocaleString('ko-KR', {
-				month: '2-digit',
-				day: '2-digit',
-				hour: '2-digit',
-				minute: '2-digit',
-				second: '2-digit'
-			});
-		} catch {
-			return iso;
-		}
-	}
 
 	function getEstimatedChunks(size: number): number {
 		if (size <= 0) return 0;
@@ -727,7 +706,7 @@
 										{file.name}
 									</p>
 									<p class="text-xs text-slate-400">
-										{formatBytes(file.size)} · {formatTime(file.updatedAt)}
+										{formatBytes(file.size)} · {formatDateTime(file.updatedAt, true)}
 									</p>
 								</div>
 

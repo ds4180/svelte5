@@ -10,9 +10,11 @@
 	import { fade, fly } from 'svelte/transition';
 	import ImageUploader from './ImageUploader.svelte';
 	import Icon from '@iconify/svelte';
-	import { getAuthContext } from '$lib/runes/auth.svelte.js';
-	import { toast } from '$lib/runes/toast.svelte.ts';
+	import { getAuthContext } from '$lib/runes/auth.svelte';
+	import { toast } from '$lib/runes/toast.svelte';
 	import { portal } from '$lib/actions/portal';
+	import { formatBytes, formatDate } from '$lib/utils';
+	import { formatApiError } from '$lib/utils/error';
 
 	const PUBLIC_SERVER_URL = env.PUBLIC_SERVER_URL || '';
 	const auth = getAuthContext();
@@ -112,7 +114,7 @@
 			}, { offline: false }); // 즉시 결과 확인이 필요하므로 오프라인 우체통 제외
 			await loadMedia();
 		} catch (err) {
-			toast.error('폴더 생성 실패: ' + (err.detail || err.message || '오류'));
+			toast.error('폴더 생성 실패: ' + formatApiError(err, '오류'));
 		}
 	}
 
@@ -130,7 +132,7 @@
 			selectedFolders = new Set();
 			await loadMedia();
 		} catch (err) {
-			toast.error('삭제 실패: ' + (err.detail || err.message || '오류'));
+			toast.error('삭제 실패: ' + formatApiError(err, '오류'));
 		}
 	}
 
@@ -146,7 +148,7 @@
 			selectedFolders = new Set(selectedFolders);
 			await loadMedia();
 		} catch (err) {
-			toast.error('폴더 삭제 실패: ' + (err.detail || err.message || '오류'));
+			toast.error('폴더 삭제 실패: ' + formatApiError(err, '오류'));
 		}
 	}
 
@@ -157,7 +159,7 @@
 			selectedAsset = null;
 			await loadMedia();
 		} catch (err) {
-			toast.error('삭제 실패: ' + (err.detail || err.message || '오류'));
+			toast.error('삭제 실패: ' + formatApiError(err, '오류'));
 		}
 	}
 
@@ -319,14 +321,6 @@
 		} else if (e.key === 'Escape') {
 			selectedAsset = null;
 		}
-	}
-
-	function formatBytes(bytes) {
-		if (!bytes || bytes === 0) return '0 B';
-		const k = 1024;
-		const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
-		const i = Math.floor(Math.log(bytes) / Math.log(k));
-		return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 	}
 
 	function enterFolder(path) {
@@ -649,7 +643,7 @@
 												</div>
 											</td>
 											<td class="px-8 py-6 text-xs text-slate-400 font-mono">{formatBytes(asset.file_size)}</td>
-											<td class="px-8 py-6 text-[10px] text-slate-400 font-mono">{new Date(asset.created_at).toLocaleDateString()}</td>
+											<td class="px-8 py-6 text-[10px] text-slate-400 font-mono">{formatDate(asset.created_at)}</td>
 											<td class="px-8 py-6 text-right opacity-0 group-hover:opacity-100 transition-opacity space-x-1">
 												<button
 													class="btn btn-square btn-ghost btn-sm text-slate-400 hover:text-rose-600"
@@ -815,7 +809,7 @@
 								</div>
 								{#if selectedAsset.meta_info?.original_expires_at}
 									<p class="mt-0.5 text-[10px] opacity-80">
-										보관 만료: {new Date(selectedAsset.meta_info.original_expires_at).toLocaleDateString()}
+										보관 만료: {formatDate(selectedAsset.meta_info.original_expires_at)}
 									</p>
 								{/if}
 							{/if}

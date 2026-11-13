@@ -11,10 +11,11 @@
 	 */
 
 	import { onMount, onDestroy } from 'svelte';
-	import * as api from '$lib/api/admin.js';
-	import { toast } from '$lib/runes/toast.svelte.js';
+	import * as api from '$lib/api/admin';
+	import { toast } from '$lib/runes/toast.svelte';
 	import { getSiteTitle } from '$lib/config/site';
-	import { formatDateTime, timeAgo } from '$lib/utils';
+	import { formatDateTime, timeAgo, toLocalISOString } from '$lib/utils';
+	import { formatApiError } from '$lib/utils/error';
 	import Icon from '@iconify/svelte';
 
 	// 📑 3대 직관적 탭: 'monitor' (실시간 작업) | 'schedule' (정기 예약 일정) | 'register' (작업 등록)
@@ -57,17 +58,7 @@
 	function openEditModal(task) {
 		editingTask = task;
 		editForm.priority = task.priority ?? 5;
-		if (task.scheduled_at) {
-			const d = new Date(task.scheduled_at);
-			if (!isNaN(d.getTime())) {
-				const pad = (n) => String(n).padStart(2, '0');
-				editForm.scheduled_at = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-			} else {
-				editForm.scheduled_at = '';
-			}
-		} else {
-			editForm.scheduled_at = '';
-		}
+		editForm.scheduled_at = task.scheduled_at ? toLocalISOString(task.scheduled_at) : '';
 		editForm.cron_expression = task.cron_expression || '';
 		editForm.repeat_interval = task.repeat_interval || null;
 		editForm.payload_str = JSON.stringify(task.payload || {}, null, 2);
@@ -97,7 +88,8 @@
 			};
 
 			if (editForm.scheduled_at) {
-				payload.scheduled_at = new Date(editForm.scheduled_at).toISOString();
+				// 🛡️ toISOString()의 9시간(UTC) 시차 왜곡 없이 한국 표준시(KST) 그대로 전송
+				payload.scheduled_at = toLocalISOString(editForm.scheduled_at);
 			}
 
 			await api.adminUpdateTask(editingTask.id, payload);
@@ -106,7 +98,7 @@
 			editingTask = null;
 			await loadAllData(false);
 		} catch (/** @type {any} */ err) {
-			toast.error('작업 수정 실패: ' + (err.detail || err.message || '서버 오류'));
+			toast.error('작업 수정 실패: ' + formatApiError(err, '서버 오류'));
 		} finally {
 			isSavingEdit = false;
 		}
@@ -225,7 +217,7 @@
 			} else if (scheduleMode === 'interval') {
 				finalInterval = Number(newTask.repeat_interval) || 3600;
 			} else if (scheduleMode === 'specific_time') {
-				finalScheduledAt = newTask.scheduled_at || null;
+				finalScheduledAt = newTask.scheduled_at ? toLocalISOString(newTask.scheduled_at) : null;
 			}
 
 			const body = {

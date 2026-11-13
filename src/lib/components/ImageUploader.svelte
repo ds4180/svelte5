@@ -8,6 +8,7 @@
 	import { env } from '$env/dynamic/public';
 	import { getSecureMediaUrl } from '$lib/config/media';
 	import { slide } from 'svelte/transition';
+	import { formatApiError } from '$lib/utils/error';
 
 	const PUBLIC_SERVER_URL = env.PUBLIC_SERVER_URL || '';
 
@@ -84,7 +85,7 @@
 			}
 		} catch (err) {
 			console.error('Media upload failed:', err);
-			errorMessage = err?.detail || '업로드 중 오류가 발생했습니다.';
+			errorMessage = formatApiError(err, '업로드 중 오류가 발생했습니다.');
 		} finally {
 			isLoading = false;
 		}

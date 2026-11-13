@@ -11,9 +11,10 @@
 	import { onMount } from 'svelte';
 	import { fade, slide, fly } from 'svelte/transition';
 	import Icon from '@iconify/svelte';
-	import { toast } from '$lib/runes/toast.svelte.ts';
+	import { toast } from '$lib/runes/toast.svelte';
 	import { getSiteTitle } from '$lib/config/site';
 	import { formatDateTime } from '$lib/utils';
+	import { formatApiError } from '$lib/utils/error';
 	import { 
 		adminGetGroups, 
 		adminRefreshDynamicGroups, 
@@ -94,7 +95,7 @@
 			await fetchGroups();
 			toast.success('오늘 출근자, 휴무자, 노선별 배차 동적 그룹이 실시간 갱신되었습니다.');
 		} catch (e) {
-			toast.error('동적 그룹 갱신 실패: ' + (e.detail || e.message || '오류'));
+			toast.error('동적 그룹 갱신 실패: ' + formatApiError(e, '오류'));
 		} finally {
 			isRefreshing = false;
 		}
@@ -122,7 +123,7 @@
 			listFilterCategory = 'manual';
 			await fetchGroups();
 		} catch (e) {
-			toast.error('생성 실패: ' + (e.detail || e.message || '오류가 발생했습니다.'));
+			toast.error('생성 실패: ' + formatApiError(e));
 		} finally {
 			isCreatingManual = false;
 		}
@@ -151,7 +152,7 @@
 			listFilterCategory = 'combined';
 			await fetchGroups();
 		} catch (e) {
-			toast.error('연산 실패: ' + (e.detail || e.message || '오류가 발생했습니다.'));
+			toast.error('연산 실패: ' + formatApiError(e));
 		} finally {
 			isCombining = false;
 		}
@@ -173,7 +174,7 @@
 			groupToDelete = null;
 			await fetchGroups();
 		} catch (e) {
-			toast.error('삭제 실패: ' + (e.detail || e.message || '오류가 발생했습니다.'));
+			toast.error('삭제 실패: ' + formatApiError(e));
 		} finally {
 			isDeleting = false;
 		}
