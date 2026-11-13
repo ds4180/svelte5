@@ -222,9 +222,9 @@
 		},
 		{
 			type: 'CUSTOM',
-			appId: 'pages',
+			appId: 'page',
 			title: '페이지 엔진 관리',
-			desc: 'DB 기반 고정 콘텐츠 페이지 작성 및 게시 기간·권한 제어 (사용자: /v1/pages/[slug])',
+			desc: 'DB 기반 고정 콘텐츠 페이지 작성 및 게시 기간·권한 제어 (사용자: /v1/custom/page)',
 			link: '/v1/admin/page',
 			icon: 'mdi:file-document-edit-outline',
 			color: 'bg-sky-600'
@@ -237,15 +237,6 @@
 			link: '/v1/admin/services',
 			icon: 'mdi:toy-brick-outline',
 			color: 'bg-rose-600'
-		},
-		{
-			type: 'PAGES',
-			appId: 'pages',
-			title: '정적 페이지 탐색기',
-			desc: '순수 파일 시스템(/v1/pages/...) 매핑 정적 페이지 실시간 스캔 및 탐색',
-			link: '/v1/admin/pages',
-			icon: 'mdi:folder-search-outline',
-			color: 'bg-slate-600'
 		}
 	];
 
@@ -260,8 +251,6 @@
 				return 'border-amber-200 bg-amber-50 text-amber-700';
 			case 'SERVICE':
 				return 'border-rose-200 bg-rose-50 text-rose-700';
-			case 'PAGES':
-				return 'border-emerald-200 bg-emerald-50 text-emerald-700';
 			default:
 				return 'border-slate-200 bg-slate-50 text-slate-700';
 		}
@@ -653,7 +642,7 @@
 	</div>
 	{/if}
 
-	<!-- 🧩 섹션 2: 비즈니스 & 콘텐츠 앱 관리 모듈 (INSTANCE / CUSTOM / SERVICE / PAGES) -->
+	<!-- 🧩 섹션 2: 비즈니스 & 콘텐츠 앱 관리 모듈 (INSTANCE / CUSTOM / SERVICE) -->
 	{#if filteredAppModules.length > 0}
 	<div class="space-y-4 pt-4 md:space-y-6 md:pt-6">
 		<div class="flex flex-col gap-1 border-l-4 border-blue-600 pl-3 md:border-l-8 md:pl-4">

@@ -23,6 +23,7 @@ export interface OfflineFallbackContext {
 const WRITE_METHODS = ['post', 'put', 'delete', 'patch'];
 // 보안 가드레일: 인증/세션 엔드포인트는 호출부 옵션과 무관하게 절대 오프라인 우체통(IndexedDB)에 평문 적재하지 않음
 const AUTH_PATH_PATTERNS = ['/users/login', '/users/logout', '/logout'];
+let isHandlingUnauthorized = false;
 
 /**
  * 오프라인 폴백 처리 (선제 오프라인 감지 / 네트워크 실패 공통)
@@ -167,11 +168,17 @@ export async function fastApi<TResponse = any, TBody = unknown>(
 
 			if (browser && !isLoginAttempt && auth.user) {
 				auth.clear();
-				toast.warning('세션이 만료되었거나 다른 기기에서 로그인하여 접속이 종료되었습니다.');
-				if (!window.location.pathname.startsWith('/login')) {
-					setTimeout(() => {
-						window.location.href = '/login';
-					}, 800);
+				if (!isHandlingUnauthorized) {
+					isHandlingUnauthorized = true;
+					toast.warning('세션이 만료되었거나 다른 기기에서 로그인하여 접속이 종료되었습니다.');
+					if (!window.location.pathname.startsWith('/login')) {
+						const returnTo = encodeURIComponent(window.location.pathname + window.location.search);
+						setTimeout(() => {
+							window.location.href = `/login?redirect=${returnTo}`;
+						}, 800);
+					} else {
+						isHandlingUnauthorized = false;
+					}
 				}
 			}
 		}

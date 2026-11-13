@@ -1,4 +1,5 @@
 import { PUBLIC_API_ENDPOINT } from '$env/static/public';
+import { SESSION_COOKIE_OPTIONS, syncSessionCookieFromResponse } from '$lib/server/sessionCookie.js';
 
 /**
  * @file hooks.server.js (Performance Optimized v3.1)
@@ -20,11 +21,11 @@ export async function handle({ event, resolve }) {
 				if (response.ok) {
 					event.locals.user = await response.json();
 				} else if (response.status === 401) {
-					event.cookies.delete('session_id', { path: '/' });
+					event.cookies.delete('session_id', SESSION_COOKIE_OPTIONS);
 				}
 			}
 		} catch (e) {
-			console.error('❌ [Hooks] Revalidation Error:', e.message);
+			console.error('❌ [Hooks] Revalidation Error:', e instanceof Error ? e.message : String(e));
 		}
 	}
 
@@ -63,20 +64,8 @@ export async function handleFetch({ request, fetch, event }) {
 
 	const res = await fetch(newRequest);
 
-	// [Sliding Window]
-	const setCookie = res.headers.get('set-cookie');
-	if (setCookie && setCookie.includes('session_id=')) {
-		const match = setCookie.match(/session_id=([^;]+)/);
-		if (match) {
-			event.cookies.set('session_id', match[1], {
-				path: '/',
-				httpOnly: true,
-				sameSite: 'lax',
-				secure: false,
-				maxAge: 60 * 60 * 24 * 3
-			});
-		}
-	}
+	// [Sliding Window] 백엔드 Set-Cookie(session_id + Max-Age) 또는 삭제 지시를 브라우저 응답에 동기화
+	syncSessionCookieFromResponse(event.cookies, res);
 
 	return res;
 }

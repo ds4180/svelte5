@@ -52,16 +52,23 @@
 	// 💡 onMount 의 일회성 호출 한계를 완벽히 해결:
 	// 1. 비로그인 상태로 첫 진입 후 로그인 완료 시 ➔ 실시간 웹소켓 즉시 연결 (새로고침 불필요!)
 	// 2. 로그아웃 또는 세션 만료 시 ➔ 웹소켓 즉시 안전 종료 및 재연결 타이머 파기 (소켓 누수 원천 차단!)
+	let wasAuthenticated = false;
+
 	$effect(() => {
 		if (browser) {
 			if (auth.isAuthenticated) {
+				wasAuthenticated = true;
 				console.log('🌐 [Root Layout] 유저 세션 확인 -> 실시간 웹소켓 채널 연결 (/ws) 및 푸시 구독 1회 동기화');
 				websocket.init();
 				syncPushSubscription({ userId: auth.user?.id });
 			} else {
-				console.log('🔒 [Root Layout] 비로그인/세션종료 -> 웹소켓 안전 연결 해제 및 푸시 구독 해제');
 				websocket.disconnect();
-				unsubscribePushOnLogout();
+				// 수동/세션종료 전환 시에만 DB 푸시 구독을 해제 (단순 /login 진입으로 기존 기기 구독을 삭제하지 않음)
+				if (wasAuthenticated) {
+					wasAuthenticated = false;
+					console.log('🔒 [Root Layout] 인증 세션 종료 감지 -> 웹소켓 및 푸시 구독 해제');
+					unsubscribePushOnLogout();
+				}
 			}
 		}
 	});

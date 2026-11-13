@@ -12,6 +12,7 @@
 	import { onMount, onDestroy } from 'svelte';
 	import { toast } from '$lib/runes/toast.svelte.js';
 	import { websocket } from '$lib/runes/websocket.svelte.js';
+	import { enterCameraFullscreen } from '$lib/utils/fullscreen';
 	import {
 		initAudioUnlocker,
 		unlockAudioNow,
@@ -1627,11 +1628,11 @@
 
 		<div class="flex items-center gap-2">
 			<a
-				href="/v1/admin/pages"
+				href="/v1/pages"
 				class="inline-flex items-center gap-1.5 rounded-xl border-2 border-slate-900 bg-white px-3.5 py-2 text-xs font-black text-slate-900 shadow-[2px_2px_0_0_#0f172a] transition hover:bg-slate-100"
 			>
 				<Icon icon="ph:arrow-left-bold" class="text-sm" />
-				정적 페이지 탐색기
+				정적 페이지 갤러리
 			</a>
 		</div>
 	</div>
@@ -1732,6 +1733,7 @@
 					<div class="flex items-center gap-1.5">
 						<a
 							href="/v1/pages/camera"
+							onclick={() => enterCameraFullscreen()}
 							class="rounded-lg bg-purple-600 px-2 py-0.5 text-[10px] font-black text-white hover:bg-purple-700 transition flex items-center gap-1 shadow-xs"
 							title="16:9 풀옵션 프로 카메라 전용 웹앱으로 이동"
 						>

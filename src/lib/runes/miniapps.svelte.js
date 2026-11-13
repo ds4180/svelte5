@@ -8,6 +8,7 @@
  * 백엔드 REST API 및 WebSocket과 1:1 동기화하여 상단 헤더 뱃지와 슬라이더에 실시간 공급합니다.
  */
 
+import { auth } from './auth.svelte.js';
 import { websocket } from './websocket.svelte.js';
 import * as api from '$lib/api/miniapp.js';
 
@@ -30,12 +31,9 @@ class MiniappStore {
 
 	constructor() {
 		if (typeof window !== 'undefined') {
-			// 1. 초기 카운트 및 목록 비동기 로드
-			this.refresh();
-
-			// 2. WebSocket 실시간 알림 수신
+			// WebSocket 실시간 알림 수신 (인증된 세션에서만 자동 동기화)
 			websocket.addMessageListener((msg) => {
-				if (msg.type === 'MINIAPP_UPDATE' || msg.type === 'ALERT_BROADCAST') {
+				if (auth.isAuthenticated && (msg.type === 'MINIAPP_UPDATE' || msg.type === 'ALERT_BROADCAST')) {
 					console.log('🔔 [MiniappStore] 실시간 알림 신호 수신 -> 데이터 자동 동기화');
 					this.refresh();
 				}
@@ -44,9 +42,29 @@ class MiniappStore {
 	}
 
 	/**
-	 * 🔄 카운트 및 피드 목록 전체 갱신
+	 * 🧹 미인증/로그아웃 시 스토어 상태 초기화
+	 */
+	reset() {
+		this.items = [];
+		this.loading = false;
+		this.serverCounts = {
+			NOTIFICATION: 0,
+			INSTRUCTION: 0,
+			MESSAGE: 0,
+			MEMO: 0,
+			ALARM: 0,
+			TOTAL: 0
+		};
+	}
+
+	/**
+	 * 🔄 카운트 및 피드 목록 전체 갱신 (인증된 경우에만 호출)
 	 */
 	async refresh() {
+		if (!auth.isAuthenticated) {
+			this.reset();
+			return;
+		}
 		await Promise.all([this.loadCounts(), this.loadItems()]);
 	}
 
@@ -54,6 +72,7 @@ class MiniappStore {
 	 * 📊 뱃지용 실시간 미결 건수 로드
 	 */
 	async loadCounts() {
+		if (!auth.isAuthenticated) return;
 		try {
 			const res = await api.getMiniappCounts();
 			if (res) this.serverCounts = res;
@@ -67,6 +86,7 @@ class MiniappStore {
 	 * @param {Object} [params]
 	 */
 	async loadItems(params = {}) {
+		if (!auth.isAuthenticated) return;
 		this.loading = true;
 		try {
 			const res = await api.getMiniappItems(params);

@@ -22,6 +22,7 @@
 	import { websocket } from '$lib/runes/websocket.svelte.js';
 	import { offlineSync } from '$lib/runes/offlineSync.svelte.js';
 	import { hardReset, unsubscribePushOnLogout } from '$lib/pwa/serviceWorker.js';
+	import { enterCameraFullscreen } from '$lib/utils/fullscreen';
 	import { toast } from '$lib/runes/toast.svelte.js';
 	import DynamicSidebar from '$lib/components/Nav/DynamicSidebar.svelte';
 	import SmartIcon from '$lib/components/SmartIcon.svelte';
@@ -43,6 +44,14 @@
 		if (data.menus) {
 			navState.setMenus(data.menus);
 			navState.isLoading = false;
+		}
+	});
+
+	$effect(() => {
+		if (auth.isAuthenticated) {
+			miniappStore.refresh();
+		} else {
+			miniappStore.reset();
 		}
 	});
 
@@ -522,10 +531,10 @@
 									</span>
 								</button>
 
-								<!-- 📷 웹카메라 실행 (WebCam Studio) -->
+								<!-- 📷 웹카메라 실행 (WebCam Studio: 클릭 즉시 F11 전체화면 전환) -->
 								<a
 									href="/v1/pages/camera"
-									onclick={() => (isUserMenuOpen = false)}
+									onclick={() => { isUserMenuOpen = false; enterCameraFullscreen(); }}
 									class="flex w-full items-center justify-between px-3 py-2.5 font-bold text-slate-700 hover:bg-slate-100 transition rounded-xl"
 								>
 									<span class="flex items-center gap-2.5">
@@ -560,17 +569,24 @@
 								{/if}
 							</div>
 
-							<!-- [C] 로그아웃 버튼 -->
+							<!-- [C] 로그아웃 버튼 (POST Form Action 전용 - Hover 프리페치/GET 부작용 차단) -->
 							<div class="border-t border-slate-100 pt-2.5 mt-1">
-								<a
-									href="/logout"
-									onclick={() => unsubscribePushOnLogout()}
-									data-sveltekit-reload
-									class="flex w-full items-center justify-center gap-2 rounded-2xl border border-rose-200 bg-rose-50 py-2.5 text-xs font-black text-rose-700 hover:bg-rose-600 hover:text-white transition"
+								<form
+									method="POST"
+									action="/logout"
+									onsubmit={() => {
+										auth.clear();
+										unsubscribePushOnLogout();
+									}}
 								>
-									<Icon icon="ph:sign-out-bold" class="text-sm" />
-									로그아웃 (Sign Out)
-								</a>
+									<button
+										type="submit"
+										class="flex w-full items-center justify-center gap-2 rounded-2xl border border-rose-200 bg-rose-50 py-2.5 text-xs font-black text-rose-700 hover:bg-rose-600 hover:text-white transition cursor-pointer"
+									>
+										<Icon icon="ph:sign-out-bold" class="text-sm" />
+										로그아웃 (Sign Out)
+									</button>
+								</form>
 							</div>
 						</div>
 					{/if}
@@ -669,6 +685,9 @@
 											{#each m.sub_menus as sub, si (sub.id || si)}
 												<a
 													href={sub.external_url}
+													onclick={() => {
+														if (sub.external_url?.includes('/v1/pages/camera')) enterCameraFullscreen();
+													}}
 													class="flex items-center gap-2.5 rounded-xl px-3.5 py-2.5 text-xs font-bold tracking-tight transition-all
                                                          {isActive(sub.external_url)
 														? 'bg-blue-600 text-white font-black shadow-md shadow-blue-900/20'
@@ -693,6 +712,9 @@
 							{:else}
 								<a
 									href={m.external_url || '#'}
+									onclick={() => {
+										if (m.external_url?.includes('/v1/pages/camera')) enterCameraFullscreen();
+									}}
 									class="mb-1 flex items-center gap-3.5 rounded-2xl px-4 py-3 text-sm font-black tracking-tight transition-all
                                            {isActive(m.external_url)
 										? 'bg-blue-600 text-white shadow-md shadow-blue-900/20'

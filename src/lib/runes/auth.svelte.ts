@@ -159,6 +159,9 @@ export class AuthState {
 			if (this !== fallbackAuth) {
 				fallbackAuth.user = null;
 			}
+			if (activeClientAuth && activeClientAuth !== this) {
+				activeClientAuth.user = null;
+			}
 			localStorage.removeItem('auth_user');
 			localStorage.removeItem('accessToken');
 			localStorage.removeItem('refreshToken');
@@ -176,12 +179,15 @@ export function clearTokens(): void {
 	auth.clear();
 }
 
+let activeClientAuth: AuthState | null = null;
+
 /**
  * 🌟 [최상위 Root 레이아웃 전용]
  */
 export function setAuthContext(initialUser: UserProfile | null = null): AuthState {
 	const authState = new AuthState(initialUser);
 	if (browser) {
+		activeClientAuth = authState;
 		fallbackAuth.user = initialUser;
 	}
 	setContext(AUTH_KEY, authState);

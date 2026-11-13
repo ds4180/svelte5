@@ -8,6 +8,7 @@
 	import { navState } from '$lib/runes/nav.svelte.js';
 	import { getAuthContext } from '$lib/runes/auth.svelte.js';
 	import { miniappStore } from '$lib/runes/miniapps.svelte.js';
+	import { unsubscribePushOnLogout } from '$lib/pwa/serviceWorker.js';
 	import { goto } from '$app/navigation';
 
 	// 📌 상위 Root 레이아웃에서 주입된 요청별 안전 인증 Context를 가져옵니다.
@@ -303,14 +304,23 @@
 							<span class="text-xs font-black tracking-tight">내 프로필</span>
 						</a>
 
-						<a
-							href="/logout"
-							data-sveltekit-reload
-							class="group flex flex-col items-center justify-center gap-2 rounded-2xl border-2 border-rose-200 bg-rose-50 p-4 text-center text-rose-700 shadow-sm transition-all hover:border-rose-600 hover:bg-rose-600 hover:text-white"
+						<form
+							method="POST"
+							action="/logout"
+							class="contents"
+							onsubmit={() => {
+								auth.clear();
+								unsubscribePushOnLogout();
+							}}
 						>
-							<Icon icon="ph:sign-out-bold" class="h-6 w-6 text-rose-500 transition-colors group-hover:text-white" />
-							<span class="text-xs font-black tracking-tight">로그아웃</span>
-						</a>
+							<button
+								type="submit"
+								class="group flex flex-col items-center justify-center gap-2 rounded-2xl border-2 border-rose-200 bg-rose-50 p-4 text-center text-rose-700 shadow-sm transition-all hover:border-rose-600 hover:bg-rose-600 hover:text-white cursor-pointer"
+							>
+								<Icon icon="ph:sign-out-bold" class="h-6 w-6 text-rose-500 transition-colors group-hover:text-white" />
+								<span class="text-xs font-black tracking-tight">로그아웃</span>
+							</button>
+						</form>
 					</div>
 				</section>
 			{/if}

@@ -1,20 +1,29 @@
 import { redirect } from '@sveltejs/kit';
+import { SESSION_COOKIE_OPTIONS } from '$lib/server/sessionCookie.js';
 
 /**
  * @file logout/+page.server.js (로그아웃 서버 핸들러)
- * @description 쿠키를 만료시키고 백엔드 세션을 정리한 후 리다이렉션
+ * @description GET /logout 프리페치(hover preload) 부작용을 차단하고, POST Form Action으로만 세션을 종료합니다.
  */
-export async function load({ cookies, fetch }) {
-	// 1. 백엔드 로그아웃 API 호출 (Redis 세션 삭제)
-	try {
-		await fetch('/api/users/logout', { method: 'POST' });
-	} catch (e) {
-		console.warn('⚠️ [Logout] Backend notify failed:', e.message);
+export async function load({ locals }) {
+	if (!locals.user) {
+		throw redirect(302, '/login');
 	}
-
-	// 2. 브라우저의 session_id 쿠키 만료 처리
-	cookies.delete('session_id', { path: '/' });
-
-	// 3. 🚀 성공 즉시 최상위 루트(/)로 리다이렉션
-	throw redirect(302, '/');
+	return { username: locals.user.username };
 }
+
+export const actions = {
+	default: async ({ cookies, fetch }) => {
+		try {
+			await fetch('/api/users/logout', { method: 'POST' });
+		} catch (e) {
+			console.warn('⚠️ [Logout] Backend notify failed:', e instanceof Error ? e.message : String(e));
+		}
+
+		cookies.delete('session_id', SESSION_COOKIE_OPTIONS);
+		cookies.delete('accessToken', SESSION_COOKIE_OPTIONS);
+		cookies.delete('refreshToken', SESSION_COOKIE_OPTIONS);
+
+		throw redirect(303, '/login');
+	}
+};

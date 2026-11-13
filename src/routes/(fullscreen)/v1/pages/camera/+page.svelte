@@ -18,23 +18,34 @@
 	 */
 
 	import { onMount, onDestroy } from 'svelte';
-	import { goto } from '$app/navigation';
+	import { goto, beforeNavigate } from '$app/navigation';
 	import { toast } from '$lib/runes/toast.svelte.js';
 	import { getAuthContext } from '$lib/runes/auth.svelte.js';
 	import { offlineSync } from '$lib/runes/offlineSync.svelte.js';
 	import { uploadFiles, createUserFolder } from '$lib/services/mediaService';
 	import { getLocalFileTimestamp } from '$lib/utils';
+	import {
+		enterCameraFullscreen,
+		exitCameraFullscreenIfAuto,
+		toggleCameraFullscreen
+	} from '$lib/utils/fullscreen';
 	import Icon from '@iconify/svelte';
 
 	// 사용자 인증 상태 (내 파일함 USERS/{id}/WEBCAM 경로 결정)
 	const auth = getAuthContext();
 
+	// 전체화면(F11 모드) 상태
+	let isFullscreen = $state(false);
+
 	/**
 	 * 🔙 [스마트 뒤로가기 엔진]:
-	 * 1. 브라우저 히스토리가 있으면 직전 이전 페이지로 자연스럽게 복귀
-	 * 2. PWA 독립 실행/새 탭 유입 등 뒤로가기가 불가능하거나 응답이 없으면 안전하게 홈('/')으로 즉시 이동
+	 * 1. 웹카메라 진입으로 자동 켜진 전체화면이 있으면 창모드로 자동 복귀
+	 * 2. 브라우저 히스토리가 있으면 직전 이전 페이지로 자연스럽게 복귀
+	 * 3. PWA 독립 실행/새 탭 유입 등 뒤로가기가 불가능하거나 응답이 없으면 안전하게 홈('/')으로 즉시 이동
 	 */
 	function handleGoBack() {
+		exitCameraFullscreenIfAuto();
+
 		if (typeof window === 'undefined') {
 			goto('/');
 			return;
@@ -633,8 +644,66 @@
 		});
 	}
 
+	// 브라우저 물리 뒤로가기/타 라우트 이탈 시에도 자동 전체화면 복귀 보장
+	beforeNavigate((navigation) => {
+		if (navigation.to?.url.pathname !== navigation.from?.url.pathname) {
+			exitCameraFullscreenIfAuto();
+		}
+	});
+
 	onMount(() => {
 		checkOrientation();
+		let removeTouchFallback = /** @type {(() => void) | null} */ (null);
+		/** @type {any} */
+		let autoFsTimer = null;
+
+		const handleFullscreenChange = () => {
+			isFullscreen = !!document.fullscreenElement;
+			if (isFullscreen && removeTouchFallback) {
+				removeTouchFallback();
+				removeTouchFallback = null;
+			}
+		};
+
+		if (typeof document !== 'undefined') {
+			isFullscreen = !!document.fullscreenElement;
+			document.addEventListener('fullscreenchange', handleFullscreenChange);
+
+			// 창모드 상태로 직접 접속/새로고침 등으로 들어온 경우 첫 터치 시 자동 F11 전환 준비
+			if (!document.fullscreenElement) {
+				const handleFirstInteraction = async (/** @type {Event} */ e) => {
+					const target = /** @type {HTMLElement | null} */ (e.target);
+					if (target?.closest('[data-no-autofs]')) return;
+					if (removeTouchFallback) {
+						removeTouchFallback();
+						removeTouchFallback = null;
+					}
+					if (!document.fullscreenElement) {
+						await enterCameraFullscreen();
+					}
+				};
+
+				const registerFirstTouch = () => {
+					window.addEventListener('click', handleFirstInteraction, true);
+					window.addEventListener('touchend', handleFirstInteraction, true);
+					removeTouchFallback = () => {
+						window.removeEventListener('click', handleFirstInteraction, true);
+						window.removeEventListener('touchend', handleFirstInteraction, true);
+					};
+				};
+
+				// 진입 클릭의 requestFullscreen() 비동기 반영을 120ms 대기 후 확인
+				autoFsTimer = setTimeout(async () => {
+					if (!document.fullscreenElement) {
+						const ok = await enterCameraFullscreen();
+						if (!ok && !document.fullscreenElement) {
+							registerFirstTouch();
+						}
+					}
+				}, 120);
+			}
+		}
+
 		if (typeof window !== 'undefined') {
 			window.addEventListener('resize', checkOrientation);
 			window.addEventListener('orientationchange', checkOrientation);
@@ -642,6 +711,14 @@
 		}
 		ensureWebcamFolder();
 		initCameras();
+
+		return () => {
+			if (autoFsTimer) clearTimeout(autoFsTimer);
+			if (removeTouchFallback) removeTouchFallback();
+			if (typeof document !== 'undefined') {
+				document.removeEventListener('fullscreenchange', handleFullscreenChange);
+			}
+		};
 	});
 
 	onDestroy(() => {
@@ -650,6 +727,7 @@
 			window.removeEventListener('orientationchange', checkOrientation);
 			window.removeEventListener('jeju:offline-synced', handleOfflineSynced);
 		}
+		exitCameraFullscreenIfAuto();
 		stopCamera();
 	});
 </script>
@@ -781,16 +859,17 @@
 		<!-- 뒤로가기 (이전 화면 복귀 또는 홈으로) -->
 		<div class="flex items-center">
 			<button
+				data-no-autofs="true"
 				onclick={handleGoBack}
 				class="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-xl text-slate-300 hover:text-white hover:bg-white/15 active:scale-90 transition"
-				title="뒤로가기 (또는 홈으로)"
+				title="뒤로가기 (창모드 자동 복귀)"
 			>
 				<Icon icon="ph:arrow-left-bold" class="text-lg sm:text-xl" />
 			</button>
 		</div>
 
 		<!-- 중간 도구 아이콘들 (스마트 컴팩트 크기) -->
-		<div class="flex items-center gap-1.5 sm:gap-2 {isLandscape ? 'flex-col' : 'flex-row'}">
+		<div class="flex items-center gap-1 sm:gap-1.5 {isLandscape ? 'flex-col' : 'flex-row'}">
 			<!-- 플래시 조명 -->
 			{#if flashSupported}
 				<button
@@ -854,8 +933,17 @@
 			</button>
 		</div>
 
-		<!-- 우측: 풀옵션 세부 설정 열기 -->
-		<div class="flex items-center">
+		<!-- 우측: 전체화면(F11) 토글 & 풀옵션 세부 설정 열기 -->
+		<div class="flex items-center gap-1 sm:gap-1.5 {isLandscape ? 'flex-col' : 'flex-row'}">
+			<button
+				data-no-autofs="true"
+				onclick={() => toggleCameraFullscreen()}
+				class="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-xl transition active:scale-90 {isFullscreen ? 'text-blue-400 bg-blue-400/20 ring-1.5 ring-blue-400' : 'text-white/70 hover:text-white hover:bg-white/10'}"
+				title={isFullscreen ? '전체화면 해제 (창모드)' : '전체화면 전환 (F11)'}
+			>
+				<Icon icon={isFullscreen ? 'ph:corners-in-bold' : 'ph:corners-out-bold'} class="text-lg sm:text-xl" />
+			</button>
+
 			<button
 				onclick={() => (showSettingsPanel = !showSettingsPanel)}
 				class="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-xl transition active:scale-90 {showSettingsPanel ? 'text-purple-400 bg-purple-400/25 ring-1.5 ring-purple-400' : 'text-white/70 hover:text-white hover:bg-white/10'}"

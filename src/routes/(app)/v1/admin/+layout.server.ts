@@ -32,7 +32,6 @@ const PATH_TO_APP_ID: Record<string, string> = {
 	'/v1/admin/route_master': 'admin_route_master',
 	'/v1/admin/dayoff': 'admin_dayoff',
 	'/v1/admin/boards': 'admin_boards',
-	'/v1/admin/pages': 'admin_pages',
 	'/v1/admin/observability': 'admin_observability',
 	'/v1/admin/user-manage': 'admin_user_manage',
 	'/v1/admin/group-manage': 'admin_group_manage',

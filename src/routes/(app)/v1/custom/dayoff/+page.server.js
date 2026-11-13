@@ -1,13 +1,15 @@
 import { fail, redirect } from '@sveltejs/kit';
 import { env } from '$env/dynamic/private';
+import { requireAuthUser } from '$lib/server/sessionCookie.js';
 
 /** @type {import('./$types').PageServerLoad} */
-export async function load({ fetch, cookies }) {
+export async function load({ fetch, cookies, locals, url }) {
+	requireAuthUser(locals, url);
 	const sessionId = cookies.get('session_id');
 
 	// 토큰 없으면 로그인 페이지로 리다이렉트 (표준 주소 v1 기반)
 	if (!sessionId) {
-		throw redirect(303, '/login');
+		throw redirect(303, `/login?redirect=${encodeURIComponent(url.pathname + url.search)}`);
 	}
 
 	try {

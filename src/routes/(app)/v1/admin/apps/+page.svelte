@@ -18,13 +18,12 @@
 	let loading = $state(true);
 	let activeTab = $state('list'); // 'list' | 'form'
 	let isEditMode = $state(false); // 등록/수정 모드 판별
-	let selectedFilter = $state('ALL'); // 'ALL' | 'SYSTEM' | 'CUSTOM' | 'INSTANCE' | 'STATIC'
+	let selectedFilter = $state('ALL'); // 'ALL' | 'SYSTEM' | 'CUSTOM' | 'INSTANCE'
 
-	// 🏛️ 4대 분류 파생 상태
+	// 🏛️ 3대 분류 파생 상태 (PAGES는 DB 미등록 독립 정적 레이어)
 	const systemApps = $derived(apps.filter((a) => a.app_type === 'SYSTEM'));
 	const customApps = $derived(apps.filter((a) => a.app_type === 'CUSTOM'));
 	const instanceApps = $derived(apps.filter((a) => a.app_type === 'INSTANCE' || a.app_type === 'APP'));
-	const staticApps = $derived(apps.filter((a) => a.app_type === 'STATIC'));
 
 	// 📊 4대 관제 지표 요약 수치
 	const countTotal = $derived(apps.length);
@@ -170,8 +169,6 @@
 				return { label: 'SYSTEM APP', class: 'bg-purple-50 text-purple-700 border-purple-200' };
 			case 'CUSTOM':
 				return { label: 'CUSTOM APP', class: 'bg-rose-50 text-rose-700 border-rose-200' };
-			case 'STATIC':
-				return { label: 'STATIC APP', class: 'bg-emerald-50 text-emerald-700 border-emerald-200' };
 			default:
 				return { label: 'INSTANCE APP', class: 'bg-blue-50 text-blue-700 border-blue-200' };
 		}
@@ -382,13 +379,6 @@
 				>
 					🧩 INSTANCE ({instanceApps.length})
 				</button>
-				<button
-					type="button"
-					onclick={() => (selectedFilter = 'STATIC')}
-					class="px-4 py-2 rounded-xl text-xs font-black uppercase transition-all {selectedFilter === 'STATIC' ? 'bg-emerald-600 text-white shadow-sm' : 'bg-emerald-50 border border-emerald-200 text-emerald-700 hover:bg-emerald-100'}"
-				>
-					📄 STATIC ({staticApps.length})
-				</button>
 			</div>
 
 			<!-- 반응형 카드 그리드: 모바일 세로 1열, 태블릿 2열, 데스크탑 3열 -->
@@ -437,14 +427,12 @@
 
 							<!-- 경로 및 랭크 스펙 -->
 							<div class="mt-4 pt-3 border-t border-slate-100 space-y-1.5 text-xs">
-								{#if app.app_type !== 'STATIC'}
-									<div class="flex items-center justify-between">
-										<span class="text-[11px] font-bold text-slate-400">관리자 경로</span>
-										<span class="font-mono text-[11px] font-bold text-purple-700">
-											{app.frontend_route || `/v1/admin/${app.app_id}`}
-										</span>
-									</div>
-								{/if}
+								<div class="flex items-center justify-between">
+									<span class="text-[11px] font-bold text-slate-400">관리자 경로</span>
+									<span class="font-mono text-[11px] font-bold text-purple-700">
+										{app.frontend_route || `/v1/admin/${app.app_id}`}
+									</span>
+								</div>
 								{#if app.app_type === 'CUSTOM'}
 									<div class="flex items-center justify-between">
 										<span class="text-[11px] font-bold text-slate-400">사용자 경로</span>
@@ -475,17 +463,6 @@
 											</span>
 										</div>
 									{/if}
-								{:else if app.app_type === 'STATIC'}
-									<div class="flex items-center justify-between">
-										<span class="text-[11px] font-bold text-slate-400">사용자 경로</span>
-										<a
-											href={app.frontend_route || `/v1/pages/${app.app_id}`}
-											class="font-mono text-[11px] font-bold text-emerald-600 hover:underline flex items-center gap-1"
-										>
-											<span>{app.frontend_route || `/v1/pages/${app.app_id}`}</span>
-											<Icon icon="ph:arrow-square-out-bold" class="text-xs" />
-										</a>
-									</div>
 								{/if}
 							</div>
 						</div>
@@ -539,7 +516,7 @@
 						{isEditMode ? `앱 엔진 정보 수정: ${editingApp.title || editingApp.name}` : '신규 앱 엔진 등록'}
 					</h3>
 					<p class="text-xs font-bold text-slate-400 mt-1">
-						식별자(app_id), 4대 분류, 관리자 경로 및 보안 랭크를 설정합니다.
+						식별자(app_id), 3대 분류, 관리자 경로 및 보안 랭크를 설정합니다.
 					</p>
 				</div>
 				<span class="text-xs font-mono font-bold text-purple-600 bg-purple-50 px-2.5 py-1 rounded-lg border border-purple-200">
@@ -618,7 +595,6 @@
 							<option value="SYSTEM">🏛️ SYSTEM (시스템 관제 · 삭제불가)</option>
 							<option value="CUSTOM">🚐 CUSTOM (단독 도메인 비즈니스)</option>
 							<option value="INSTANCE">🧩 INSTANCE (추상화 다중 인스턴스)</option>
-							<option value="STATIC">📄 STATIC (정적 콘텐츠 · 관리자 없음)</option>
 						</select>
 						{#if isEditMode && editingApp.app_type === 'SYSTEM'}
 							<p class="text-[11px] font-bold text-purple-700">
@@ -662,7 +638,7 @@
 						type="text"
 						bind:value={editingApp.frontend_route}
 						class="w-full px-4 py-3 rounded-2xl border-2 border-slate-200 text-xs font-bold font-mono text-purple-700 bg-white focus:border-purple-600 focus:outline-none transition"
-						placeholder="/v1/admin/앱이름 (STATIC 앱은 /v1/pages/앱이름)"
+						placeholder="/v1/admin/앱이름"
 					/>
 				</div>
 
