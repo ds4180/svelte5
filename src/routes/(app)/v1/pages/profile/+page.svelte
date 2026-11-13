@@ -199,10 +199,10 @@
 					onclick={() => selectMain(id)}
 					class="flex flex-col items-start gap-6 border-2 border-black p-8 bg-white transition-all hover:bg-black hover:text-white group {activeMainId === id ? 'bg-black text-white shadow-[12px_12px_0_0_#3b82f6]' : 'shadow-[8px_8px_0_0_#000]'}">
 					<Icon icon={menu.icon} class="h-10 w-10 {activeMainId === id ? 'text-blue-400' : 'opacity-20 group-hover:opacity-100'}" />
-					<div class="text-left">
-						<p class="text-[10px] font-black uppercase opacity-40 tracking-widest group-hover:opacity-70">Category</p>
-						<p class="font-black uppercase tracking-tighter text-2xl">{menu.label}</p>
-					</div>
+					<span class="block text-left">
+						<span class="block text-[10px] font-black uppercase opacity-40 tracking-widest group-hover:opacity-70">Category</span>
+						<span class="block font-black uppercase tracking-tighter text-2xl">{menu.label}</span>
+					</span>
 				</button>
 			{/each}
 		</div>

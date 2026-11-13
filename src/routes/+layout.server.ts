@@ -1,4 +1,5 @@
 import type { LayoutServerLoad } from './$types';
+import { getKstTimeSnapshot } from '$lib/utils/serverTime';
 
 /**
  * ============================================================================
@@ -28,6 +29,7 @@ export const load: LayoutServerLoad = async ({ locals, url }) => {
 	return {
 		user: currentUser,
 		isDev,
+		serverTime: getKstTimeSnapshot(),
 		metaTheme: {
 			themeColor: isDev ? '#d97706' : '#0f172a',
 			favicon: isDev ? '/favicon-dev.png' : '/favicon.png',

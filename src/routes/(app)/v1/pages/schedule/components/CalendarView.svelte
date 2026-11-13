@@ -3,12 +3,28 @@
      * @file CalendarView.svelte
      * @description [v1.0] 일정 관리를 위한 프리미엄 캘린더 뷰 (Colocated)
      */
+    import { onMount, untrack } from 'svelte';
     import Icon from '@iconify/svelte';
     import { formatDDay } from '$lib/utils';
+    import { getKstTimeSnapshot, parseDateStrAsLocalDate } from '$lib/utils/serverTime';
 
-    let { schedules = [], onDateClick = () => {}, onScheduleClick = () => {} } = $props();
+    let {
+        schedules = [],
+        initialDateStr = null,
+        onDateClick = () => {},
+        onScheduleClick = () => {}
+    } = $props();
 
-    let currentDate = $state(new Date());
+    const baseDate = parseDateStrAsLocalDate(untrack(() => initialDateStr) ?? getKstTimeSnapshot().dateStr);
+    let todayDate = $state(baseDate);
+    let currentDate = $state(new Date(baseDate));
+
+    onMount(() => {
+        const liveToday = parseDateStrAsLocalDate(getKstTimeSnapshot().dateStr);
+        if (liveToday.getTime() !== todayDate.getTime()) {
+            todayDate = liveToday;
+        }
+    });
     let viewMode = $state('month'); // month, week, day
 
     const daysOfWeek = ['일', '월', '화', '수', '목', '금', '토'];
@@ -65,10 +81,9 @@
     }
 
     function isToday(date) {
-        const today = new Date();
-        return date.getDate() === today.getDate() &&
-               date.getMonth() === today.getMonth() &&
-               date.getFullYear() === today.getFullYear();
+        return date.getDate() === todayDate.getDate() &&
+               date.getMonth() === todayDate.getMonth() &&
+               date.getFullYear() === todayDate.getFullYear();
     }
 </script>
 
@@ -162,23 +177,23 @@
                             class="text-[10px] sm:text-xs p-1.5 rounded-lg truncate text-left transition-transform hover:scale-[1.02] active:scale-95 shadow-sm border-l-4 {colorClass}"
                             onclick={(e) => { e.stopPropagation(); onScheduleClick(schedule); }}
                         >
-                            <div class="flex items-center justify-between gap-1">
-                                <div class="flex items-center gap-1 truncate">
+                            <span class="flex items-center justify-between gap-1">
+                                <span class="flex items-center gap-1 truncate">
                                     {#if schedule.is_dday}
                                         <span class="bg-black text-white px-1.5 py-0.5 rounded text-[8px] font-black italic shrink-0">
-                                            {formatDDay(schedule.date)}
+                                            {formatDDay(schedule.date, todayDate)}
                                         </span>
                                     {/if}
                                     <span class="font-black truncate">{schedule.title}</span>
-                                </div>
+                                </span>
                                 {#if schedule.importance > 0}
-                                    <div class="flex gap-0.5">
+                                    <span class="flex gap-0.5">
                                         {#each Array(schedule.importance) as _}
-                                            <div class="w-1 h-1 rounded-full bg-current opacity-60"></div>
+                                            <span class="block w-1 h-1 rounded-full bg-current opacity-60"></span>
                                         {/each}
-                                    </div>
+                                    </span>
                                 {/if}
-                            </div>
+                            </span>
                         </button>
                     {/each}
                 </div>

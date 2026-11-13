@@ -8,7 +8,7 @@ import type { Actions, PageServerLoad } from './$types';
  */
 export const load: PageServerLoad = async ({ locals }) => {
 	if (!locals.user) {
-		throw redirect(302, '/login');
+		throw redirect(302, '/');
 	}
 	return { username: locals.user.username };
 };
@@ -25,6 +25,6 @@ export const actions: Actions = {
 		cookies.delete('accessToken', SESSION_COOKIE_OPTIONS);
 		cookies.delete('refreshToken', SESSION_COOKIE_OPTIONS);
 
-		throw redirect(303, '/login');
+		throw redirect(303, '/');
 	}
 };

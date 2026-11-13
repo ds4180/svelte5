@@ -826,12 +826,12 @@
 										icon={folder.is_hidden ? "ph:folder-dotted-duotone" : "ph:folder-duotone"} 
 										class="text-5xl {folder.is_hidden ? 'text-amber-500/60' : 'text-rose-600/30'} group-hover:text-rose-600 transition-colors mb-2" 
 									/>
-									<p class="text-xs font-black truncate w-full text-center tracking-tight text-slate-700 group-hover:text-rose-600">
+									<span class="block text-xs font-black truncate w-full text-center tracking-tight text-slate-700 group-hover:text-rose-600">
 										{#if folder.is_hidden}
 											<span class="text-amber-600 font-mono text-[9px] mr-1">[숨김]</span>
 										{/if}
 										{folder.name}
-									</p>
+									</span>
 								</button>
 								<button 
 									class="absolute right-4 top-4 h-6 w-6 z-10 rounded-full border-2 border-slate-200 flex items-center justify-center transition-all {selectedFolders.has(folder.path) ? 'bg-rose-600 border-rose-600 scale-110 shadow-lg' : 'bg-white opacity-0 group-hover:opacity-100'}" 

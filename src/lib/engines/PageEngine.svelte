@@ -12,6 +12,7 @@
 	import { formatApiError } from '$lib/utils/error';
 	import * as api from '$lib/api/page';
 	import TiptapEditor from '$lib/components/TiptapEditor.svelte';
+	import SafeHtml from '$lib/components/SafeHtml.svelte';
 	import Icon from '@iconify/svelte';
 
 	const auth = getAuthContext();
@@ -184,9 +185,10 @@
 						</div>
 					{/if}
 
-					<div class="prose prose-xl max-w-none prose-headings:font-black prose-headings:italic prose-headings:uppercase prose-p:leading-relaxed">
-						{@html page.content}
-					</div>
+					<SafeHtml
+						html={page.content}
+						class="prose prose-xl max-w-none prose-headings:font-black prose-headings:italic prose-headings:uppercase prose-p:leading-relaxed"
+					/>
 				</article>
 			{:else}
 				<div class="flex h-60 flex-col items-center justify-center gap-4 opacity-20">

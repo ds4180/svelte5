@@ -13,6 +13,7 @@
 	import * as engines from '$lib/index';
 	import { goto } from '$app/navigation';
 	import TiptapEditor from '$lib/components/TiptapEditor.svelte';
+	import SafeHtml from '$lib/components/SafeHtml.svelte';
 	import { getAuthContext } from '$lib/runes/auth.svelte';
 	import { toast } from '$lib/runes/toast.svelte';
 	import { formatDate } from '$lib/utils';
@@ -494,11 +495,10 @@
 							<section
 								class="mb-12 border-4 border-black bg-white p-8 shadow-[16px_16px_0_rgba(0,0,0,0.04)] md:p-14"
 							>
-								<div
+								<SafeHtml
+									html={post.content}
 									class="prose prose-lg max-w-none font-['Noto_Sans_KR'] leading-relaxed"
-								>
-									{@html post.content}
-								</div>
+								/>
 							</section>
 
 							<!-- 🗂 extra_data 필드 표시 -->

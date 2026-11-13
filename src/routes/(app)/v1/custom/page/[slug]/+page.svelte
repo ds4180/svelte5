@@ -4,6 +4,7 @@
 	 * @description [CUSTOM 앱] DB CMS 페이지 개별 본문 열람 뷰어 (SSR 즉각 렌더링)
 	 */
 	import { formatDate } from '$lib/utils';
+	import SafeHtml from '$lib/components/SafeHtml.svelte';
 
 	let { data } = $props();
 	let pageData = $derived(data.pageData);
@@ -34,9 +35,10 @@
 			</header>
 
 			<!-- 본문 콘텐츠 -->
-			<div class="prose max-w-none pt-8 text-base font-medium leading-relaxed text-slate-800">
-				{@html pageData.content || ''}
-			</div>
+			<SafeHtml
+				html={pageData.content || ''}
+				class="prose max-w-none pt-8 text-base font-medium leading-relaxed text-slate-800"
+			/>
 
 			<!-- 하단 푸터 -->
 			<footer class="mt-12 flex justify-between border-t border-slate-200 pt-6">

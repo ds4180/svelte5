@@ -17,6 +17,7 @@
 	 *    - 한 날짜에 일정이 3개 이상 겹쳐도 셀 높이가 늘어나거나 연속선에 단차가 생기지 않도록,
 	 *      우측 상단에 `...` 배지를 띄우고 마우스 호버/클릭 시 전체 일정을 툴팁으로 보여줍니다.
 	 */
+	import { onMount, untrack } from 'svelte';
 	import Calendar, {
 		type CalendarEvent,
 		type CalendarDayCell
@@ -24,12 +25,22 @@
 	import { getSiteTitle } from '$lib/config/site';
 	import { toast } from '$lib/runes/toast.svelte';
 	import { timestampToDateString } from '$lib/utils';
+	import { getKstTimeSnapshot } from '$lib/utils/serverTime';
 	import Icon from '@iconify/svelte';
 
-	const now = new Date();
-	const currentYear = now.getFullYear();
-	const currentMonth = now.getMonth();
-	const todayStr = timestampToDateString(now.getTime());
+	let { data } = $props();
+
+	const initialServerTime = untrack(() => data.serverTime ?? getKstTimeSnapshot());
+	const currentYear = initialServerTime.year;
+	const currentMonth = initialServerTime.month;
+	let todayStr = $state(initialServerTime.dateStr);
+
+	onMount(() => {
+		const liveToday = getKstTimeSnapshot().dateStr;
+		if (liveToday !== todayStr) {
+			todayStr = liveToday;
+		}
+	});
 
 	/** 현재 월의 특정 일자('YYYY-MM-DD') 생성 헬퍼 */
 	function makeMonthDate(day: number): string {
@@ -40,8 +51,8 @@
 	// 📌 캘린더 바인딩 상태
 	let year = $state(currentYear);
 	let month = $state(currentMonth);
-	let selectedDate = $state<string | null>(todayStr);
-	let selectedDates = $state<string[]>([todayStr]);
+	let selectedDate = $state<string | null>(initialServerTime.dateStr);
+	let selectedDates = $state<string[]>([initialServerTime.dateStr]);
 	let selectionMode = $state<'single' | 'range' | 'multiple'>('single');
 	let fullBleedMobile = $state(true);
 
@@ -160,8 +171,8 @@
 
 	// 📌 우측 빠른 등록 폼 상태
 	let newTitle = $state('');
-	let newStartDate = $state(todayStr);
-	let newEndDate = $state(todayStr);
+	let newStartDate = $state(initialServerTime.dateStr);
+	let newEndDate = $state(initialServerTime.dateStr);
 	let newDisplay = $state<'bar' | 'background'>('bar');
 	let newBgPosition = $state<'auto' | 'top' | 'bottom' | 'full'>('auto');
 	let newLineSlot = $state<'auto' | 0 | 1>('auto');
@@ -413,6 +424,7 @@
 				bind:selectedDates
 				bind:lineAlign
 				bind:lineThickness
+				{todayStr}
 				{events}
 				{selectionMode}
 				{fullBleedMobile}

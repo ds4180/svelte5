@@ -1,6 +1,8 @@
 <script>
-	import { onMount } from 'svelte';
+	import { onMount, untrack } from 'svelte';
 	import { toast } from '$lib/runes/toast.svelte';
+
+	let { data } = $props();
 
 	// ========================================
 	// 1. 정거장 정의 (Station Nodes)
@@ -289,10 +291,11 @@
 	// - 0분 = 00:00 (자정)
 	// - 720분 = 12:00 (정오)
 	// - 1440분 = 24:00 (다음날 자정)
-	let currentTime = $state(new Date().getHours() * 60 + new Date().getMinutes());
+	// SSR <-> CSR 분 경계/캐시/타임존 차이에 의한 하이드레이션 불일치 방지를 위해 서버 기준 분을 초기값으로 사용하고 onMount에서 동기화
+	let currentTime = $state(untrack(() => data?.serverTime?.minutesOfDay ?? 0));
 
 	onMount(() => {
-		// 초기화 완료 후 필요한 경우 추가 로직 수행
+		goToCurrentTime();
 	});
 
 	// 애니메이션 재생 상태 (true: 재생 중, false: 정지)

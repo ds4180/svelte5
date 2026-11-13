@@ -44,8 +44,10 @@ interface OutboxTask {
 	jsonBody?: Record<string, any>;
 }
 
-// 사전 캐싱할 전체 자산 목록 (레거시 수동 sw.js 제외 + 루트 App Shell '/' 및 오프라인 폴백 페이지 포함)
-const ASSETS = ['/', '/offline.html', ...build, ...files.filter((f) => !f.endsWith('/sw.js'))];
+// 사전 캐싱할 전체 자산 목록 (레거시 수동 sw.js 및 SSR 리다이렉트 루트 '/' 제외 + 오프라인 폴백 포함)
+const ASSETS = Array.from(
+	new Set(['/offline.html', ...build, ...files.filter((f) => !f.endsWith('/sw.js'))])
+);
 const ASSET_SET = new Set(ASSETS);
 
 // 1. 설치(Install): 빌드된 모든 페이지 청크와 정적 자산을 캐시에 일괄 적재 (dev 환경에서는 캐싱 생략)
@@ -97,14 +99,34 @@ if (build.length > 0) {
 			const cache = await caches.open(CACHE);
 
 			// [A] 빌드된 정적 자산(build + files)은 설치 시 이미 캐싱되었으므로 Cache-First로 즉시 반환
-			if (url.pathname !== '/' && ASSET_SET.has(url.pathname)) {
+			if (ASSET_SET.has(url.pathname)) {
 				const cachedAsset = await cache.match(url.pathname);
 				if (cachedAsset) {
 					return cachedAsset;
 				}
 			}
 
-			// [B] 그 외 페이지/데이터 요청은 Network-First 수행 후 오프라인 시 캐시 반환
+			// [B] SSR HTML 문서(navigate) / version.json / __data.json 은 절대 캐시하지 않고 네트워크 직통 처리
+			//     (오프라인 navigate 실패 시에만 정적 /offline.html 폴백 -> HTML-JS 버전 스큐/하이드레이션 불일치 방지)
+			if (
+				event.request.mode === 'navigate' ||
+				url.pathname === '/_app/version.json' ||
+				url.pathname.endsWith('/__data.json')
+			) {
+				try {
+					return await fetch(event.request);
+				} catch (err) {
+					if (event.request.mode === 'navigate') {
+						const offlinePage = await cache.match('/offline.html');
+						if (offlinePage) {
+							return offlinePage;
+						}
+					}
+					throw err;
+				}
+			}
+
+			// [C] 그 외 정적/공개 GET 요청은 Network-First 수행 (HTML 응답은 캐시 오염 방지를 위해 제외)
 			try {
 				const response = await fetch(event.request);
 
@@ -112,7 +134,8 @@ if (build.length > 0) {
 					throw new Error('Invalid response from fetch');
 				}
 
-				if (response.status === 200) {
+				const contentType = response.headers.get('content-type') || '';
+				if (response.status === 200 && !contentType.includes('text/html')) {
 					cache.put(event.request, response.clone());
 				}
 
@@ -126,18 +149,6 @@ if (build.length > 0) {
 					return cachedResponse;
 				}
 
-				// [C] 오프라인 상태에서 주소창 직접 입력/새로고침(navigate) 시 폴백
-				if (event.request.mode === 'navigate') {
-					const rootShell = await cache.match('/');
-					if (rootShell) {
-						return rootShell;
-					}
-					const offlinePage = await cache.match('/offline.html');
-					if (offlinePage) {
-						return offlinePage;
-					}
-				}
-
 				throw err;
 			}
 		}
@@ -147,8 +158,8 @@ if (build.length > 0) {
 }
 
 // 3-1. 클라이언트 메시지 처리
-// - CLEAR_USER_CACHE: 로그아웃 시 사용자별 런타임 캐시 삭제 및 비로그인 App Shell 복원
-const STATIC_ASSET_SET = new Set([...build, ...files]);
+// - CLEAR_USER_CACHE: 로그아웃 시 정적 자산 외 런타임 캐시 삭제
+const STATIC_ASSET_SET = new Set(['/offline.html', ...build, ...files]);
 
 sw.addEventListener('message', (event: ExtendableMessageEvent) => {
 	if (event.data?.type !== 'CLEAR_USER_CACHE') return;
@@ -161,7 +172,6 @@ sw.addEventListener('message', (event: ExtendableMessageEvent) => {
 					await cache.delete(request);
 				}
 			}
-			await cache.add('/').catch(() => {});
 		})()
 	);
 });

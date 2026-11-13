@@ -544,8 +544,8 @@
 							}}
 							class="w-full text-left transition-all duration-300 hover:-translate-y-0.5 active:scale-98"
 						>
-							<div class="relative overflow-hidden rounded-3xl border-2 p-5 shadow-sm transition-all duration-300 {selectedId === master.id ? 'border-indigo-600 bg-indigo-50/55 shadow-md ring-2 ring-indigo-400/30' : 'border-slate-200 bg-white hover:border-slate-400'}">
-								<div class="flex items-center justify-between mb-3">
+							<span class="block relative overflow-hidden rounded-3xl border-2 p-5 shadow-sm transition-all duration-300 {selectedId === master.id ? 'border-indigo-600 bg-indigo-50/55 shadow-md ring-2 ring-indigo-400/30' : 'border-slate-200 bg-white hover:border-slate-400'}">
+								<span class="flex items-center justify-between mb-3">
 									{#if master.route_type === 'REGULAR'}
 										<span class="inline-flex items-center gap-1.5 rounded-full bg-blue-100 px-3 py-1 text-[10px] font-black tracking-tight text-blue-800">
 											<span class="h-2 w-2 rounded-full bg-blue-500 animate-pulse"></span>
@@ -561,27 +561,27 @@
 									<span class="inline-flex items-center gap-1 rounded-md bg-slate-900 px-2 py-0.5 text-[10px] font-bold text-white tracking-widest uppercase">
 										{master.version}
 									</span>
-								</div>
+								</span>
 
-								<h3 class="text-xl font-black tracking-tight text-slate-900">
+								<span class="block text-xl font-black tracking-tight text-slate-900">
 									{master.route_name}
-								</h3>
+								</span>
 
-								<div class="mt-4 flex items-center justify-between border-t border-slate-100 pt-3 text-xs">
-									<div class="flex items-center gap-1 text-slate-500 font-bold">
+								<span class="mt-4 flex items-center justify-between border-t border-slate-100 pt-3 text-xs">
+									<span class="flex items-center gap-1 text-slate-500 font-bold">
 										<Icon icon="mdi:calendar-range" class="h-4 w-4 text-slate-400" />
 										<span>{master.start_date.slice(5)}</span>
 										<span>~</span>
 										<span>{master.end_date ? master.end_date.slice(5) : '진행중'}</span>
-									</div>
+									</span>
 									
-									<div class="flex items-center gap-2">
+									<span class="flex items-center gap-2">
 										<span class="font-extrabold text-indigo-600 bg-indigo-100/50 px-2 py-0.5 rounded-lg text-[11px]">
 											로번 {master.vehicle_count}개
 										</span>
-									</div>
-								</div>
-							</div>
+									</span>
+								</span>
+							</span>
 						</button>
 					{/each}
 				{/if}

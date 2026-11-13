@@ -14,6 +14,7 @@
 	 *          아름답고 반응형(PC/모바일)으로 그리는 디자인 역할에만 100% 집중합니다.
 	 */
 	import { page } from '$app/state';
+	import { enhance } from '$app/forms';
 	import { onMount, untrack } from 'svelte';
 	import { alertState } from '$lib/runes/alert.svelte';
 	import { getAuthContext } from '$lib/runes/auth.svelte'; // 최상위 Root가 주입한 안전 인증 Context 사용
@@ -21,12 +22,12 @@
 	import { miniappStore } from '$lib/runes/miniapps.svelte';
 	import { websocket } from '$lib/runes/websocket.svelte';
 	import { offlineSync } from '$lib/runes/offlineSync.svelte';
-	import { hardReset, unsubscribePushOnLogout } from '$lib/pwa/serviceWorker';
+	import { hardReset } from '$lib/pwa/serviceWorker';
 	import { enterCameraFullscreen } from '$lib/utils/fullscreen';
+	import { createLogoutSubmitHandler } from '$lib/utils/logout';
 	import { toast } from '$lib/runes/toast.svelte';
 	import DynamicSidebar from '$lib/components/Nav/DynamicSidebar.svelte';
 	import SmartIcon from '$lib/components/SmartIcon.svelte';
-	import '../layout.css';
 	import Icon from '@iconify/svelte';
 
 	// 📌 Root 및 상위 레이아웃에서 전달받은 데이터(메뉴 트리 등)와 자식 컴포넌트(실제 페이지)
@@ -56,9 +57,19 @@
 	});
 
 	// --- [상태 관리] ---
-	// 💡 [모바일 퍼스트] 초기 렌더링 시 모바일 환경에서는 닫힌 상태(w-0)로 시작하여 열린 채 로딩되는 현상을 방지
-	let isMobile = $state(typeof window !== 'undefined' ? window.innerWidth < 1200 : true);
-	let isLeftOpen = $state(typeof window !== 'undefined' ? window.innerWidth >= 1200 : false);
+	// 💡 [하이드레이션 일관성] SSR과 클라이언트 초기 렌더링 값을 동일하게 유지한 뒤, onMount에서 즉시 뷰포트에 맞춰 동기화
+	let isMobile = $state(true);
+	let isLeftOpen = $state(false);
+	let isLoggingOut = $state(false);
+	const handleLogoutSubmit = createLogoutSubmitHandler({
+		auth,
+		onSubmittingChange: (v) => {
+			isLoggingOut = v;
+		},
+		onSuccess: () => {
+			isUserMenuOpen = false;
+		}
+	});
 	let isRightOpen = $state(false);
 	let isScrolled = $state(false);
 	/** @type {Record<string|number, boolean>} */
@@ -245,7 +256,7 @@
 					aria-label="네트워크 및 웹소켓 상태 상세 보기"
 				>
 					<!-- 상태 아이콘 & 펄스 박스 (H-6 W-6 / H-7 W-7 사용자 아바타와 규격 통일) -->
-					<div
+					<span
 						class="flex h-6 w-6 md:h-7 md:w-7 items-center justify-center rounded-lg md:rounded-xl border {
 							!offlineSync.isOnline
 								? 'bg-rose-50 border-rose-200 text-rose-600'
@@ -264,10 +275,10 @@
 						{:else}
 							<Icon icon="ph:arrows-clockwise-bold" class="text-xs md:text-sm animate-spin text-amber-600" />
 						{/if}
-					</div>
+					</span>
 
 					<!-- 2줄 텍스트 구조 (사용자 프로필 뱃지와 동일 위계) -->
-					<div class="hidden flex-col md:flex">
+					<span class="hidden flex-col md:flex">
 						<span class="text-xs font-black leading-none {
 							!offlineSync.isOnline
 								? 'text-rose-700'
@@ -284,7 +295,7 @@
 								{!offlineSync.isOnline ? '인터넷 단절' : websocket.status === 'connected' ? '실시간 동기화' : '재연결 중'}
 							{/if}
 						</span>
-					</div>
+					</span>
 
 					<!-- 📮 오프라인 임시 우체통 대기 건수 실시간 배지 -->
 					{#if offlineSync.pendingCount > 0}
@@ -445,17 +456,17 @@
 						aria-label="사용자 계정 팝업 메뉴"
 					>
 						<!-- 직급 아바타 이니셜 -->
-						<div class="flex h-6 w-6 md:h-7 md:w-7 items-center justify-center rounded-lg md:rounded-xl bg-slate-900 text-xs font-black text-white">
+						<span class="flex h-6 w-6 md:h-7 md:w-7 items-center justify-center rounded-lg md:rounded-xl bg-slate-900 text-xs font-black text-white">
 							{(auth.user.real_name || auth.user.username || '?')[0]}
-						</div>
-						<div class="hidden flex-col md:flex">
+						</span>
+						<span class="hidden flex-col md:flex">
 							<span class="text-xs font-black text-slate-900 leading-none">
 								{auth.user.real_name || auth.user.username}
 							</span>
 							<span class="mt-0.5 text-[10px] font-bold text-blue-600 leading-none">
 								{auth.user.role_name || getUserRankLabel(auth.user.rank_level)}
 							</span>
-						</div>
+						</span>
 						<Icon icon="ph:caret-down-bold" class="text-[10px] md:text-xs text-slate-400 transition-transform {isUserMenuOpen ? 'rotate-180' : ''}" />
 					</button>
 
@@ -574,17 +585,16 @@
 								<form
 									method="POST"
 									action="/logout"
-									onsubmit={() => {
-										auth.clear();
-										unsubscribePushOnLogout();
-									}}
+									use:enhance={handleLogoutSubmit}
 								>
+									<input type="hidden" name="action" value="logout" />
 									<button
 										type="submit"
-										class="flex w-full items-center justify-center gap-2 rounded-2xl border border-rose-200 bg-rose-50 py-2.5 text-xs font-black text-rose-700 hover:bg-rose-600 hover:text-white transition cursor-pointer"
+										disabled={isLoggingOut}
+										class="flex w-full items-center justify-center gap-2 rounded-2xl border border-rose-200 bg-rose-50 py-2.5 text-xs font-black text-rose-700 hover:bg-rose-600 hover:text-white disabled:opacity-60 transition cursor-pointer"
 									>
 										<Icon icon="ph:sign-out-bold" class="text-sm" />
-										로그아웃 (Sign Out)
+										{isLoggingOut ? '로그아웃 중...' : '로그아웃 (Sign Out)'}
 									</button>
 								</form>
 							</div>
@@ -664,14 +674,14 @@
 										onclick={() => toggleMenu(menuKey)}
 									>
 										<span class="flex items-center gap-3.5">
-											<div class="flex h-8 w-8 items-center justify-center rounded-xl bg-slate-800 transition-colors {(openMenus[menuKey] ?? true) ? 'text-blue-400 bg-blue-500/10' : 'text-slate-500'}">
+											<span class="flex h-8 w-8 items-center justify-center rounded-xl bg-slate-800 transition-colors {(openMenus[menuKey] ?? true) ? 'text-blue-400 bg-blue-500/10' : 'text-slate-500'}">
 												<SmartIcon
 													icon={m.icon_name}
 													fallback="ph:folder-fill"
 													class="h-4.5 w-4.5"
 													emojiClass="text-base leading-none"
 												/>
-											</div>
+											</span>
 											<span>{m.title}</span>
 										</span>
 										<Icon
@@ -813,14 +823,14 @@
 				: 'text-slate-500 hover:text-slate-900'}"
 			aria-label={isRightOpen ? '동적 폼 닫기' : '동적 폼 열기'}
 		>
-			<div class="relative flex items-center justify-center">
+			<span class="relative flex items-center justify-center">
 				<Icon icon="ph:magic-wand-fill" class="h-5 w-5 transition-transform group-active:scale-90" />
 				{#if miniappStore.counts.TOTAL > 0}
 					<span class="pointer-events-none absolute -top-1.5 -right-2.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-600 px-1 text-[9px] font-black text-white shadow-xs">
 						{miniappStore.counts.TOTAL > 99 ? '99+' : miniappStore.counts.TOTAL}
 					</span>
 				{/if}
-			</div>
+			</span>
 			<span class="mt-0.5 text-[10px] font-black tracking-tighter">동적 폼</span>
 		</button>
 

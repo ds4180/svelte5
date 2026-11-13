@@ -5,15 +5,16 @@
 	 *              승인 대기 목록(List), 월간 캘린더(Calendar), 월간 타임라인(Timeline), 선착순·정원 정책(Policy) 4가지 뷰를 제공합니다.
 	 * @standard Svelte 5 Runes ($state, $derived, $effect)
 	 */
-	import { onMount } from 'svelte';
+	import { onMount, untrack } from 'svelte';
 	import * as api from '$lib/api/admin';
 	import Icon from '@iconify/svelte';
 	import Calendar from '$lib/components/Calendar.svelte';
 	import { formatDateTime, timestampToDateString } from '$lib/utils';
+	import { getKstTimeSnapshot } from '$lib/utils/serverTime';
 	import { getSiteTitle } from '$lib/config/site';
 	import { toast } from '$lib/runes/toast.svelte';
 
-	let {} = $props();
+	let { data } = $props();
 
 	/**
 	 * @typedef {Object} DayoffEntry
@@ -32,8 +33,8 @@
 	 * @property {string} create_date - 등록 시각
 	 */
 
-	const now = new Date();
-	const currentYear = now.getFullYear();
+	const initialServerTime = untrack(() => data?.serverTime ?? getKstTimeSnapshot());
+	const currentYear = initialServerTime.year;
 	const yearOptions = [currentYear - 1, currentYear, currentYear + 1];
 
 	/** @type {DayoffEntry[]} 전체 데이터 저장용 상태 */
@@ -58,10 +59,10 @@
 	let selectedYear = $state(currentYear);
 
 	/** @type {number} 월간 조회를 위한 월 선택 (0-11, 캘린더/타임라인 공용 동기화) */
-	let selectedMonth = $state(now.getMonth());
+	let selectedMonth = $state(initialServerTime.month);
 
 	/** @type {string | null} 캘린더에서 선택된 날짜 ('YYYY-MM-DD') */
-	let selectedCalendarDate = $state(timestampToDateString(now.getTime()));
+	let selectedCalendarDate = $state(initialServerTime.dateStr);
 
 	/** @type {'ALL' | 'APPROVED' | 'REQUESTED'} 캘린더 상태 필터 */
 	let calendarStatusFilter = $state('ALL');
@@ -93,11 +94,11 @@
 	// =====================================================================
 	// ⚙️ 선착순(운전직) vs 승인제(사무직) 구분 및 Append-Only 정책 이력 상태
 	// =====================================================================
-	const todayStr = timestampToDateString(now.getTime());
+	let todayStr = $state(initialServerTime.dateStr);
 
 	/** @type {{ effective_date: string, classify_mode: string, fcfs_groups: string[], fcfs_ranks: number[], daily_quota: number, date_overrides: Record<string, number>, max_monthly_count: number, max_days_per_request: number, min_advance_days: number, max_advance_days: number, etc: Record<string, any> }} */
 	let policy = $state({
-		effective_date: todayStr,
+		effective_date: initialServerTime.dateStr,
 		classify_mode: 'BOTH',
 		fcfs_groups: ['운전직', '운수팀', '운수1팀', '운수2팀'],
 		fcfs_ranks: [1],
@@ -140,8 +141,8 @@
 	let savingPolicy = $state(false);
 
 	// 특정 날짜(또는 기간) 정원 예외 입력 폼 상태
-	let overrideStartDate = $state(todayStr);
-	let overrideEndDate = $state(todayStr);
+	let overrideStartDate = $state(initialServerTime.dateStr);
+	let overrideEndDate = $state(initialServerTime.dateStr);
 	let overrideQuotaInput = $state(3);
 
 	// 캘린더 우측 패널에서 선택한 날짜의 정원 즉시 수정 입력값
@@ -956,7 +957,13 @@
 		}
 	}
 
-	onMount(loadDayoffs);
+	onMount(() => {
+		const liveToday = getKstTimeSnapshot().dateStr;
+		if (liveToday !== todayStr) {
+			todayStr = liveToday;
+		}
+		loadDayoffs();
+	});
 
 	/** @param {number} dow */
 	const getDayColor = (dow) =>
@@ -1460,6 +1467,7 @@
 					bind:year={selectedYear}
 					bind:month={selectedMonth}
 					bind:selectedDate={selectedCalendarDate}
+					{todayStr}
 					events={calendarEvents}
 					selectionMode="single"
 					fullBleedMobile={true}

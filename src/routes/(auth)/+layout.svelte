@@ -7,7 +7,6 @@
 	import Alert from '$lib/components/Alert.svelte';
 	import { alertState } from '$lib/runes/alert.svelte';
 	import { getAuthContext } from '$lib/runes/auth.svelte';
-	import '../layout.css'; // 상위 디렉토리의 layout.css를 참조하도록 수정
 
 	let { data, children } = $props();
 	const auth = getAuthContext();

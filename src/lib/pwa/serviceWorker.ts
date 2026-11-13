@@ -38,14 +38,20 @@ export function urlBase64ToUint8Array(base64String: string): Uint8Array {
 export async function registerServiceWorker(): Promise<ServiceWorkerRegistration | undefined> {
 	if (!isSwSupported()) return undefined;
 
-	if (dev && 'caches' in window) {
-		const keys = await caches.keys();
-		await Promise.all(keys.map((k) => caches.delete(k)));
+	// dev 서버에서는 HMR·Vite 모듈 캐시 충돌 방지를 위해 기존 SW/캐시만 정리하고 등록하지 않음
+	if (dev) {
+		if ('caches' in window) {
+			const keys = await caches.keys();
+			await Promise.all(keys.map((k) => caches.delete(k)));
+		}
+		const regs = await navigator.serviceWorker.getRegistrations();
+		await Promise.all(regs.map((r) => r.unregister()));
+		return undefined;
 	}
 
 	try {
 		return await navigator.serviceWorker.register(SW_URL, {
-			type: dev ? 'module' : 'classic'
+			type: 'classic'
 		});
 	} catch (err) {
 		console.warn('⚠️ [PWA] Service Worker 등록 실패:', err);
@@ -57,7 +63,7 @@ export async function registerServiceWorker(): Promise<ServiceWorkerRegistration
  * 현재 활성화된 SW 등록 정보를 반환 (푸시 구독 등에서 사용)
  */
 export async function getActiveRegistration(): Promise<ServiceWorkerRegistration | null> {
-	if (!isSwSupported()) return null;
+	if (!isSwSupported() || dev) return null;
 	const existing = await navigator.serviceWorker.getRegistration();
 	if (!existing) await registerServiceWorker();
 	return navigator.serviceWorker.ready;

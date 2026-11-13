@@ -784,16 +784,16 @@
 								onclick={() => selectTaskType(item)}
 								class="flex items-start gap-3 rounded-xl border-2 p-4 text-left transition {newTask.task_type === item.type ? 'border-blue-600 bg-blue-50/40 shadow-sm ring-2 ring-blue-500/20' : 'border-slate-200 bg-white hover:border-slate-300'}"
 							>
-								<div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
+								<span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
 									<Icon icon={item.icon} class="text-xl" />
-								</div>
-								<div>
-									<div class="text-xs font-black text-slate-900">{item.label}</div>
-									<p class="mt-1 text-[11px] text-slate-500 leading-relaxed">{item.description}</p>
+								</span>
+								<span class="block">
+									<span class="block text-xs font-black text-slate-900">{item.label}</span>
+									<span class="mt-1 block text-[11px] text-slate-500 leading-relaxed">{item.description}</span>
 									<span class="mt-2 inline-block rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] text-slate-500">
 										{item.type}
 									</span>
-								</div>
+								</span>
 							</button>
 						{/each}
 					</div>

@@ -3,15 +3,18 @@
      * @file src/routes/(app)/v1/custom/dispatch/+page.svelte
      * @description 일반 임직원 및 기사용 전용 엑셀 격자형(Excel-Density Table) 배차 통합 뷰어
      */
-    import { onMount } from 'svelte';
+    import { onMount, untrack } from 'svelte';
     import { fade, scale } from 'svelte/transition';
     import Icon from '@iconify/svelte';
     import { formatDate } from '$lib/utils';
+    import { getKstTimeSnapshot, parseDateStrAsLocalDate, shiftCalendarDateStr } from '$lib/utils/serverTime';
     import { formatApiError } from '$lib/utils/error';
     import {
         customGetActiveRouteMasters,
         customGetDailyDispatch
     } from '$lib/api/custom';
+
+    let { data } = $props();
 
     let routes = $state([]); // 활성 노선 목록
     let selectedRoute = $state(null); // 선택된 노선 (기본값: 전체 노선)
@@ -20,15 +23,11 @@
     let errorMessage = $state('');
     let showLockScreen = $state(false);
 
-    // --- 날짜 관리 로직 ---
-    const getToday = () => {
-        const d = new Date();
-        d.setHours(0, 0, 0, 0);
-        return d;
-    };
-
-    let today = getToday();
-    let selectedDate = $state(new Date(getToday().getTime() + 86400000 * 3));
+    // --- 날짜 관리 로직 (SSR <-> CSR 하이드레이션 일관성 보장) ---
+    const initialDateStr = untrack(() => data?.serverTime?.dateStr ?? getKstTimeSnapshot().dateStr);
+    let todayStr = $state(initialDateStr);
+    let today = $derived(parseDateStrAsLocalDate(todayStr));
+    let selectedDate = $state(parseDateStrAsLocalDate(shiftCalendarDateStr(initialDateStr, 3)));
 
     const formatDateISO = (date) => formatDate(date);
 
@@ -191,6 +190,11 @@
     });
 
     onMount(() => {
+        const liveTodayStr = getKstTimeSnapshot().dateStr;
+        if (liveTodayStr !== todayStr) {
+            todayStr = liveTodayStr;
+            selectedDate = parseDateStrAsLocalDate(shiftCalendarDateStr(liveTodayStr, 3));
+        }
         syncData(selectedDateKey);
     });
 </script>
@@ -248,7 +252,7 @@
         <!-- ⚡ 빠른 날짜 전환 칩 버튼 그룹 (+3일 ~ +7일 범위 고정) -->
         <div class="flex items-center gap-1.5 overflow-x-auto pb-2.5 scrollbar-none">
             {#each [3, 4, 5, 6, 7] as offset}
-                {@const targetDate = new Date(getToday().getTime() + 86400000 * offset)}
+                {@const targetDate = parseDateStrAsLocalDate(shiftCalendarDateStr(todayStr, offset))}
                 {@const active = formatDateISO(selectedDate) === formatDateISO(targetDate)}
                 <button
                     class="px-3.5 py-1.5 text-[11px] font-extrabold rounded-lg transition-all shrink-0 active:scale-95 border shadow-sm

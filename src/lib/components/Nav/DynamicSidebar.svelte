@@ -8,11 +8,22 @@
 	import { navState } from '$lib/runes/nav.svelte';
 	import { getAuthContext } from '$lib/runes/auth.svelte';
 	import { miniappStore } from '$lib/runes/miniapps.svelte';
-	import { unsubscribePushOnLogout } from '$lib/pwa/serviceWorker';
+	import { createLogoutSubmitHandler } from '$lib/utils/logout';
+	import { enhance } from '$app/forms';
 	import { goto } from '$app/navigation';
 
 	// 📌 상위 Root 레이아웃에서 주입된 요청별 안전 인증 Context를 가져옵니다.
 	const auth = getAuthContext();
+	let isLoggingOut = $state(false);
+	const handleLogoutSubmit = createLogoutSubmitHandler({
+		auth,
+		onSubmittingChange: (v) => {
+			isLoggingOut = v;
+		},
+		onSuccess: () => {
+			onClose();
+		}
+	});
 
 	/**
 	 * @typedef {Object} Props
@@ -168,23 +179,23 @@
 						onclick={() => navigateTo('notifications')}
 						class="group flex w-full items-center justify-between rounded-2xl border-2 border-slate-200 bg-white p-3.5 shadow-sm transition-all hover:border-blue-400 hover:shadow-md active:scale-[0.99]"
 					>
-						<div class="flex items-center gap-3.5">
-							<div class="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-600 transition-colors group-hover:bg-blue-600 group-hover:text-white">
+						<span class="flex items-center gap-3.5">
+							<span class="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-600 transition-colors group-hover:bg-blue-600 group-hover:text-white">
 								<Icon icon="ph:bell-ringing-fill" class="h-5 w-5" />
-							</div>
-							<div class="text-left">
+							</span>
+							<span class="block text-left">
 								<span class="block text-sm font-black text-slate-900">알림 센터</span>
 								<span class="block text-[11px] font-medium text-slate-400">전사 공지 및 시스템 알림</span>
-							</div>
-						</div>
-						<div class="flex items-center gap-2">
+							</span>
+						</span>
+						<span class="flex items-center gap-2">
 							{#if miniappStore.counts.NOTIFICATION > 0}
 								<span class="rounded-full bg-rose-600 px-2 py-0.5 text-[11px] font-black text-white shadow-xs">
 									{miniappStore.counts.NOTIFICATION}
 								</span>
 							{/if}
 							<Icon icon="ph:caret-right-bold" class="text-xs text-slate-400 group-hover:text-blue-600 transition-colors" />
-						</div>
+						</span>
 					</button>
 
 					<button
@@ -192,23 +203,23 @@
 						onclick={() => navigateTo('alarms')}
 						class="group flex w-full items-center justify-between rounded-2xl border-2 border-slate-200 bg-white p-3.5 shadow-sm transition-all hover:border-rose-400 hover:shadow-md active:scale-[0.99]"
 					>
-						<div class="flex items-center gap-3.5">
-							<div class="flex h-10 w-10 items-center justify-center rounded-xl bg-rose-50 text-rose-600 transition-colors group-hover:bg-rose-600 group-hover:text-white">
+						<span class="flex items-center gap-3.5">
+							<span class="flex h-10 w-10 items-center justify-center rounded-xl bg-rose-50 text-rose-600 transition-colors group-hover:bg-rose-600 group-hover:text-white">
 								<Icon icon="ph:alarm-fill" class="h-5 w-5" />
-							</div>
-							<div class="text-left">
+							</span>
+							<span class="block text-left">
 								<span class="block text-sm font-black text-slate-900">긴급 알람</span>
 								<span class="block text-[11px] font-medium text-slate-400">일정 및 리마인더 경보</span>
-							</div>
-						</div>
-						<div class="flex items-center gap-2">
+							</span>
+						</span>
+						<span class="flex items-center gap-2">
 							{#if miniappStore.counts.ALARM > 0}
 								<span class="rounded-full bg-amber-500 px-2 py-0.5 text-[11px] font-black text-white shadow-xs">
 									{miniappStore.counts.ALARM}
 								</span>
 							{/if}
 							<Icon icon="ph:caret-right-bold" class="text-xs text-slate-400 group-hover:text-rose-600 transition-colors" />
-						</div>
+						</span>
 					</button>
 
 					<button
@@ -216,23 +227,23 @@
 						onclick={() => navigateTo('instructions')}
 						class="group flex w-full items-center justify-between rounded-2xl border-2 border-slate-200 bg-white p-3.5 shadow-sm transition-all hover:border-emerald-400 hover:shadow-md active:scale-[0.99]"
 					>
-						<div class="flex items-center gap-3.5">
-							<div class="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 transition-colors group-hover:bg-emerald-600 group-hover:text-white">
+						<span class="flex items-center gap-3.5">
+							<span class="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 transition-colors group-hover:bg-emerald-600 group-hover:text-white">
 								<Icon icon="ph:clipboard-text-fill" class="h-5 w-5" />
-							</div>
-							<div class="text-left">
+							</span>
+							<span class="block text-left">
 								<span class="block text-sm font-black text-slate-900">업무 지시사항</span>
 								<span class="block text-[11px] font-medium text-slate-400">전달된 업무 확인 및 처리</span>
-							</div>
-						</div>
-						<div class="flex items-center gap-2">
+							</span>
+						</span>
+						<span class="flex items-center gap-2">
 							{#if miniappStore.counts.INSTRUCTION > 0}
 								<span class="rounded-full bg-emerald-600 px-2 py-0.5 text-[11px] font-black text-white shadow-xs">
 									{miniappStore.counts.INSTRUCTION}
 								</span>
 							{/if}
 							<Icon icon="ph:caret-right-bold" class="text-xs text-slate-400 group-hover:text-emerald-600 transition-colors" />
-						</div>
+						</span>
 					</button>
 
 					<button
@@ -240,23 +251,23 @@
 						onclick={() => navigateTo('memo')}
 						class="group flex w-full items-center justify-between rounded-2xl border-2 border-slate-200 bg-white p-3.5 shadow-sm transition-all hover:border-amber-400 hover:shadow-md active:scale-[0.99]"
 					>
-						<div class="flex items-center gap-3.5">
-							<div class="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-50 text-amber-600 transition-colors group-hover:bg-amber-500 group-hover:text-white">
+						<span class="flex items-center gap-3.5">
+							<span class="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-50 text-amber-600 transition-colors group-hover:bg-amber-500 group-hover:text-white">
 								<Icon icon="ph:notepad-fill" class="h-5 w-5" />
-							</div>
-							<div class="text-left">
+							</span>
+							<span class="block text-left">
 								<span class="block text-sm font-black text-slate-900">개인 메모</span>
 								<span class="block text-[11px] font-medium text-slate-400">빠른 기록 및 할 일 노트</span>
-							</div>
-						</div>
-						<div class="flex items-center gap-2">
+							</span>
+						</span>
+						<span class="flex items-center gap-2">
 							{#if miniappStore.counts.MEMO > 0}
 								<span class="rounded-full bg-slate-900 px-2 py-0.5 text-[11px] font-black text-white shadow-xs">
 									{miniappStore.counts.MEMO}
 								</span>
 							{/if}
 							<Icon icon="ph:caret-right-bold" class="text-xs text-slate-400 group-hover:text-amber-600 transition-colors" />
-						</div>
+						</span>
 					</button>
 
 					<button
@@ -264,23 +275,23 @@
 						onclick={() => navigateTo('messaging')}
 						class="group flex w-full items-center justify-between rounded-2xl border-2 border-slate-200 bg-white p-3.5 shadow-sm transition-all hover:border-indigo-400 hover:shadow-md active:scale-[0.99]"
 					>
-						<div class="flex items-center gap-3.5">
-							<div class="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 transition-colors group-hover:bg-indigo-600 group-hover:text-white">
+						<span class="flex items-center gap-3.5">
+							<span class="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 transition-colors group-hover:bg-indigo-600 group-hover:text-white">
 								<Icon icon="ph:paper-plane-tilt-fill" class="h-5 w-5" />
-							</div>
-							<div class="text-left">
+							</span>
+							<span class="block text-left">
 								<span class="block text-sm font-black text-slate-900">사내 메세지</span>
 								<span class="block text-[11px] font-medium text-slate-400">동료 간 실시간 1:1/그룹 쪽지</span>
-							</div>
-						</div>
-						<div class="flex items-center gap-2">
+							</span>
+						</span>
+						<span class="flex items-center gap-2">
 							{#if miniappStore.counts.MESSAGE > 0}
 								<span class="rounded-full bg-indigo-600 px-2 py-0.5 text-[11px] font-black text-white shadow-xs">
 									{miniappStore.counts.MESSAGE}
 								</span>
 							{/if}
 							<Icon icon="ph:caret-right-bold" class="text-xs text-slate-400 group-hover:text-indigo-600 transition-colors" />
-						</div>
+						</span>
 					</button>
 				</div>
 			</section>
@@ -308,17 +319,16 @@
 							method="POST"
 							action="/logout"
 							class="contents"
-							onsubmit={() => {
-								auth.clear();
-								unsubscribePushOnLogout();
-							}}
+							use:enhance={handleLogoutSubmit}
 						>
+							<input type="hidden" name="action" value="logout" />
 							<button
 								type="submit"
-								class="group flex flex-col items-center justify-center gap-2 rounded-2xl border-2 border-rose-200 bg-rose-50 p-4 text-center text-rose-700 shadow-sm transition-all hover:border-rose-600 hover:bg-rose-600 hover:text-white cursor-pointer"
+								disabled={isLoggingOut}
+								class="group flex flex-col items-center justify-center gap-2 rounded-2xl border-2 border-rose-200 bg-rose-50 p-4 text-center text-rose-700 shadow-sm transition-all hover:border-rose-600 hover:bg-rose-600 hover:text-white disabled:opacity-60 cursor-pointer"
 							>
 								<Icon icon="ph:sign-out-bold" class="h-6 w-6 text-rose-500 transition-colors group-hover:text-white" />
-								<span class="text-xs font-black tracking-tight">로그아웃</span>
+								<span class="text-xs font-black tracking-tight">{isLoggingOut ? '로그아웃 중...' : '로그아웃'}</span>
 							</button>
 						</form>
 					</div>

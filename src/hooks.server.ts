@@ -5,6 +5,7 @@ import {
 	syncSessionCookieFromResponse,
 	buildBackendForwardHeaders
 } from '$lib/server/sessionCookie';
+import { applyDynamicNoStoreHeaders } from '$lib/server/cacheHeaders';
 
 /**
  * @file hooks.server.ts (Performance Optimized v3.1)
@@ -35,6 +36,9 @@ export const handle: Handle = async ({ event, resolve }) => {
 	}
 
 	const response = await resolve(event);
+
+	// 📌 SSR HTML / SvelteKit 데이터 / version.json / 동적 리다이렉트 캐시 금지 (버전 스큐·하이드레이션 오류 차단)
+	applyDynamicNoStoreHeaders(response, pathname, isStaticAsset);
 
 	// 📌 실행 시간 로그 (지연 원인 파악용)
 	const duration = Date.now() - start;

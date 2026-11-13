@@ -4,17 +4,24 @@
      * @description [v1.0] 일정 관리 통합 페이지 (랭킹별 분기 적용)
      * @route /v1/pages/schedule
      */
+    import { untrack } from 'svelte';
     import Icon from '@iconify/svelte';
     import CalendarView from './components/CalendarView.svelte';
     import RecurrenceEditor from './components/RecurrenceEditor.svelte';
     import { formatDDay, toLocalISOString } from '$lib/utils';
+    import { getKstTimeSnapshot, parseDateStrAsLocalDate } from '$lib/utils/serverTime';
+
+    let { data } = $props();
+
+    const initialDateStr = untrack(() => data?.serverTime?.dateStr ?? getKstTimeSnapshot().dateStr);
+    const initialTodayDate = parseDateStrAsLocalDate(initialDateStr);
 
     // 가상 데이터 및 상태 (추후 API 연동)
     let userRank = $state(4); // 테스트용: 4이상은 관리자 기능을 보여줌
     let schedules = $state([
-        { id: 1, date: new Date(), title: '석가탄신일', category: 'HOLIDAY', importance: 0, is_dday: false },
-        { id: 2, date: new Date(), title: '개인 운동', category: 'PERSONAL', importance: 2, is_dday: false },
-        { id: 3, date: new Date(), title: '프로젝트 마감', category: 'GLOBAL', importance: 5, is_dday: true },
+        { id: 1, date: new Date(initialTodayDate), title: '석가탄신일', category: 'HOLIDAY', importance: 0, is_dday: false },
+        { id: 2, date: new Date(initialTodayDate), title: '개인 운동', category: 'PERSONAL', importance: 2, is_dday: false },
+        { id: 3, date: new Date(initialTodayDate), title: '프로젝트 마감', category: 'GLOBAL', importance: 5, is_dday: true },
     ]);
 
     let showAddModal = $state(false);
@@ -64,6 +71,7 @@
     <main class="w-full">
         <CalendarView 
             {schedules} 
+            initialDateStr={initialDateStr}
             onDateClick={openAddModal}
             onScheduleClick={(s) => console.log('View detail', s)}
         />
@@ -125,7 +133,7 @@
                                 <div>
                                     <p class="text-xs font-bold opacity-40 mb-1 uppercase tracking-widest">{s.title}</p>
                                     <p class="text-5xl font-black italic">
-                                        {formatDDay(s.date)}
+                                        {formatDDay(s.date, initialTodayDate)}
                                     </p>
                                 </div>
                             {:else}

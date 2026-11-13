@@ -1,11 +1,18 @@
 <script>
 	import { getAuthContext } from '$lib/runes/auth.svelte';
-	import { unsubscribePushOnLogout } from '$lib/pwa/serviceWorker';
+	import { createLogoutSubmitHandler } from '$lib/utils/logout';
+	import { enhance } from '$app/forms';
 	import Icon from '@iconify/svelte';
 
 	let { data } = $props();
 	const auth = getAuthContext();
 	let submitting = $state(false);
+	const handleLogoutSubmit = createLogoutSubmitHandler({
+		auth,
+		onSubmittingChange: (v) => {
+			submitting = v;
+		}
+	});
 </script>
 
 <div class="flex min-h-[70vh] items-center justify-center px-4">
@@ -33,12 +40,9 @@
 				method="POST"
 				action="/logout"
 				class="flex-1"
-				onsubmit={() => {
-					submitting = true;
-					auth.clear();
-					unsubscribePushOnLogout();
-				}}
+				use:enhance={handleLogoutSubmit}
 			>
+				<input type="hidden" name="action" value="logout" />
 				<button
 					type="submit"
 					disabled={submitting}

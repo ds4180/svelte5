@@ -509,7 +509,7 @@
 									onclick={() => enterFolder(folder.path)}
 								>
 									<Icon icon="ph:folder-duotone" class="text-5xl text-rose-600/20 group-hover:text-rose-600 transition-colors mb-2" />
-									<p class="text-[10px] font-black truncate w-full text-center tracking-tight text-slate-600 group-hover:text-rose-600">{folder.name}</p>
+									<span class="block text-[10px] font-black truncate w-full text-center tracking-tight text-slate-600 group-hover:text-rose-600">{folder.name}</span>
 								</button>
 								<div class="absolute right-3 top-3 flex items-center gap-1">
 									<button

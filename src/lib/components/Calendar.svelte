@@ -41,8 +41,10 @@
 	 *      **플로팅 툴팁(Tooltip Popover)** 형태로 즉시 보여줍니다.
 	 */
 	import Icon from '@iconify/svelte';
-	import type { Snippet } from 'svelte';
+	import { onMount, untrack, type Snippet } from 'svelte';
+	import { page } from '$app/state';
 	import { formatDate, formatDDay, timestampToDateString } from '$lib/utils';
+	import { getKstTimeSnapshot } from '$lib/utils/serverTime';
 
 	export type CalendarEventType =
 		| 'PRIMARY'
@@ -181,20 +183,30 @@
 		minSelectableDate?: string | null;
 		/** 선택 가능한 최대 날짜 ('YYYY-MM-DD', 초과 날짜 선택 비활성화) */
 		maxSelectableDate?: string | null;
+		/** 기준 오늘 날짜 ('YYYY-MM-DD', SSR/CSR 하이드레이션 일관성용) */
+		todayStr?: string;
 		/** 선택 불가 날짜 클릭 시 콜백 */
 		onDisabledDateClick?: (cell: CalendarDayCell) => void;
 	}
 
-	const now = new Date();
-	const todayStr = timestampToDateString(now.getTime());
+	const initialServerTime = untrack(() => {
+		try {
+			return (page.data as { serverTime?: { year: number; month: number; dateStr: string } } | undefined)
+				?.serverTime;
+		} catch {
+			return undefined;
+		}
+	});
+	const fallbackSnapshot = initialServerTime ?? getKstTimeSnapshot();
 
 	let {
-		year = $bindable(now.getFullYear()),
-		month = $bindable(now.getMonth()),
+		year = $bindable(fallbackSnapshot.year),
+		month = $bindable(fallbackSnapshot.month),
 		events = [],
 		selectionMode = 'single',
-		selectedDate = $bindable<string | null>(todayStr),
+		selectedDate = $bindable<string | null>(fallbackSnapshot.dateStr),
 		selectedDates = $bindable<string[]>([]),
+		todayStr: todayStrProp,
 		fullBleedMobile = true,
 		maxVisibleEvents = 2,
 		lineAlign = $bindable<'top' | 'center' | 'bottom'>('center'),
@@ -213,6 +225,15 @@
 		maxSelectableDate = null,
 		onDisabledDateClick
 	}: Props = $props();
+
+	let liveTodayStr = $state(untrack(() => todayStrProp ?? fallbackSnapshot.dateStr));
+	const todayStr = $derived(todayStrProp ?? liveTodayStr);
+
+	onMount(() => {
+		if (!todayStrProp) {
+			liveTodayStr = getKstTimeSnapshot().dateStr;
+		}
+	});
 
 	const DAYS_OF_WEEK = ['일', '월', '화', '수', '목', '금', '토'];
 
@@ -643,13 +664,14 @@
 	}
 
 	function goToToday() {
-		const current = new Date();
-		year = current.getFullYear();
-		month = current.getMonth();
-		selectedDate = todayStr;
+		const current = getKstTimeSnapshot();
+		liveTodayStr = todayStrProp ?? current.dateStr;
+		year = current.year;
+		month = current.month;
+		selectedDate = todayStrProp ?? current.dateStr;
 		openTooltipDate = null;
 		if (selectionMode === 'single') {
-			selectedDates = [todayStr];
+			selectedDates = [selectedDate];
 		}
 		onMonthChange?.(year, month);
 	}
@@ -986,14 +1008,14 @@
 										style={ev.color ? `border-left-color: ${ev.color};` : ''}
 										title={ev.time ? `[${ev.time}] ${ev.title}` : ev.title}
 									>
-										<div class="flex items-center gap-1 min-w-0 flex-1">
+										<span class="flex items-center gap-1 min-w-0 flex-1">
 											{#if ev.isDday}
 												<span class="hidden sm:inline-block shrink-0 rounded bg-slate-900 px-1 text-[8px] font-black text-white">
-													{formatDDay(cell.dateStr)}
+													{formatDDay(cell.dateStr, todayStr)}
 												</span>
 											{/if}
 											<span class="truncate font-extrabold">{ev.title}</span>
-										</div>
+										</span>
 									</button>
 								{:else if slot.isStart}
 									<!-- ② 연속 일정의 '첫날(isStart)': -->
@@ -1128,13 +1150,13 @@
 							onclick={() => matchedCell && onEventClick?.(ev, matchedCell)}
 							class="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-3 text-left shadow-2xs transition hover:border-slate-400 active:scale-[0.99]"
 						>
-							<div class="flex items-center gap-2.5 min-w-0">
+							<span class="flex items-center gap-2.5 min-w-0">
 								<span
 									class="h-3 w-3 shrink-0 rounded-full {style.dot}"
 									style={ev.color ? `background-color: ${ev.color};` : ''}
 								></span>
-								<div class="min-w-0">
-									<div class="flex flex-wrap items-center gap-1.5">
+								<span class="block min-w-0">
+									<span class="flex flex-wrap items-center gap-1.5">
 										{#if isBg}
 											<span class="rounded bg-slate-900 px-1.5 py-0.2 text-[9px] font-black text-amber-300">
 												🔔 배경 알람
@@ -1147,20 +1169,20 @@
 										{/if}
 										{#if ev.isDday && selectedDate}
 											<span class="rounded bg-slate-900 px-1.5 py-0.2 text-[9px] font-black text-white">
-												{formatDDay(selectedDate)}
+												{formatDDay(selectedDate, todayStr)}
 											</span>
 										{/if}
 										<span class="truncate text-xs sm:text-sm font-black text-slate-900">
 											{ev.title}
 										</span>
-									</div>
+									</span>
 									{#if ev.endDate && normalizeDateKey(ev.endDate) !== normalizeDateKey(ev.date)}
-										<p class="mt-0.5 text-[10px] font-bold text-slate-400">
+										<span class="mt-0.5 block text-[10px] font-bold text-slate-400">
 											연속 기간: {normalizeDateKey(ev.date)} ~ {normalizeDateKey(ev.endDate)}
-										</p>
+										</span>
 									{/if}
-								</div>
-							</div>
+								</span>
+							</span>
 
 							{#if ev.time}
 								<span class="shrink-0 rounded-lg bg-slate-100 px-2 py-1 font-mono text-[11px] font-bold text-slate-600">

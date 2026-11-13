@@ -11,7 +11,7 @@
 	 * Node.js SSR 시 다른 사용자와 인증 메모리가 섞이는 대참사(Cross-user State Leak)를 막기 위해,
 	 * 매 요청마다 1:1 독립된 주머니인 `setAuthContext(data.user)`를 만들어 트리에 안전하게 주입합니다!
 	 */
-	import { onMount } from 'svelte';
+	import { onMount, untrack } from 'svelte';
 	import { browser } from '$app/environment';
 	import { beforeNavigate, goto } from '$app/navigation';
 	import { updated } from '$app/state';
@@ -39,7 +39,7 @@
 	// ----------------------------------------------------------------------------
 	// 서버(SSR)에서 첫 화면을 그릴 때부터 로그인 상태가 즉시 반영되도록 data.user 초기값을 바로 전달합니다.
 	// 이렇게 하면 서버 렌더링 시점과 브라우저 하이드레이션 시점 간의 화면 깜빡임(Mismatch)이 100% 사라집니다.
-	const auth = setAuthContext(data.user);
+	const auth = setAuthContext(untrack(() => data.user));
 
 	// $effect 로 이후 클라이언트 페이지 이동 시 유저 정보 변경사항을 자동 동기화합니다.
 	$effect(() => {

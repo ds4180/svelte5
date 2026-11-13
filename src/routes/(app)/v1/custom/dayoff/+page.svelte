@@ -3,11 +3,13 @@
 	 * @file (app)/v1/custom/dayoff/+page.svelte
 	 * @description [v3.1 TS] 근무자 전용 휴무 신청 및 관리 (공용 Calendar 컴포넌트 적용 / admin 기본 UI 기준)
 	 */
+	import { onMount, untrack } from 'svelte';
 	import { enhance } from '$app/forms';
 	import type { SubmitFunction } from '@sveltejs/kit';
 	import Calendar, { type CalendarDayCell, type CalendarEvent } from '$lib/components/Calendar.svelte';
 	import { fastApi } from '$lib/api';
 	import { timestampToDateString } from '$lib/utils';
+	import { getKstTimeSnapshot, shiftCalendarDateStr } from '$lib/utils/serverTime';
 	import { formatApiError } from '$lib/utils/error';
 	import { getSiteTitle } from '$lib/config/site';
 	import { toast } from '$lib/runes/toast.svelte';
@@ -22,12 +24,19 @@
 
 	let { data }: { data: PageData } = $props();
 
-	const now = new Date();
-	const todayStr = timestampToDateString(now.getTime());
+	const initialServerTime = untrack(() => data.serverTime ?? getKstTimeSnapshot());
+	let todayStr = $state(initialServerTime.dateStr);
 
 	// 📌 달력 연/월 상태 및 입력 상태 관리 ($state)
-	let calYear = $state(now.getFullYear());
-	let calMonth = $state(now.getMonth());
+	let calYear = $state(initialServerTime.year);
+	let calMonth = $state(initialServerTime.month);
+
+	onMount(() => {
+		const liveToday = getKstTimeSnapshot().dateStr;
+		if (liveToday !== todayStr) {
+			todayStr = liveToday;
+		}
+	});
 	/** 선택된 날짜 ('YYYY-MM-DD'[]) — range 모드에서 시작~종료 사이 전체 날짜가 담김 */
 	let selectedDates = $state<string[]>([]);
 	let selectedType = $state('ANNUAL');
@@ -97,9 +106,7 @@
 	 * 'YYYY-MM-DD' 문자열에 일수를 더한 날짜 문자열('YYYY-MM-DD') 반환
 	 */
 	function shiftDateStr(baseStr: string, offsetDays: number): string {
-		const [y, m, d] = String(baseStr || todayStr).slice(0, 10).split('-').map(Number);
-		const dt = new Date(y, (m || 1) - 1, (d || 1) + Number(offsetDays || 0));
-		return timestampToDateString(dt.getTime());
+		return shiftCalendarDateStr(baseStr || todayStr, offsetDays);
 	}
 
 	const minAllowedDate = $derived(requestWindow?.min_date || shiftDateStr(todayStr, minAdvanceDays));
@@ -503,6 +510,7 @@
 				bind:year={calYear}
 				bind:month={calMonth}
 				bind:selectedDates
+				{todayStr}
 				{events}
 				selectionMode="range"
 				fullBleedMobile={true}

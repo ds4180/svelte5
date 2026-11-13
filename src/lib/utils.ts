@@ -140,15 +140,28 @@ export function isExpired(expiresAt: DateInput): boolean {
 /**
  * 8. D-Day 계산 및 포맷팅 (예: "D-Day", "D-3", "D+5")
  * @param targetDate - 목표 일자
+ * @param referenceDate - 기준 일자 (SSR/CSR 일관성을 위해 전달 가능, 미전달 시 현재 로컬 날짜)
  * @returns 'D-Day' | 'D-N' | 'D+N' (유효하지 않을 경우 '-')
  */
-export function formatDDay(targetDate: DateInput): string {
-	if (!targetDate) return '-';
-	const date = targetDate instanceof Date ? targetDate : new Date(targetDate);
-	if (isNaN(date.getTime())) return '-';
+function toDayMidnightMs(input: DateInput): number {
+	if (!input) return NaN;
+	if (typeof input === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(input.trim())) {
+		const [y, m, d] = input.trim().split('-').map(Number);
+		return new Date(y, m - 1, d, 0, 0, 0, 0).getTime();
+	}
+	const date = input instanceof Date ? new Date(input.getTime()) : new Date(input);
+	if (isNaN(date.getTime())) return NaN;
+	return date.setHours(0, 0, 0, 0);
+}
 
-	const diff = new Date(date).setHours(0, 0, 0, 0) - new Date().setHours(0, 0, 0, 0);
-	const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+export function formatDDay(targetDate: DateInput, referenceDate?: DateInput): string {
+	const targetMs = toDayMidnightMs(targetDate);
+	if (isNaN(targetMs)) return '-';
+
+	const baseMs = toDayMidnightMs(referenceDate ?? new Date());
+	if (isNaN(baseMs)) return '-';
+
+	const days = Math.round((targetMs - baseMs) / (1000 * 60 * 60 * 24));
 	if (days === 0) return 'D-Day';
 	if (days > 0) return `D-${days}`;
 	return `D+${Math.abs(days)}`;
