@@ -1,32 +1,16 @@
 /**
- * 프로젝트 전역 설정 정보 (표준 주소 체계 반영)
+ * ============================================================================
+ * [하위 호환성 브릿지 모듈 (src/lib/api/config.js)]
+ * ============================================================================
+ * ⚠️ @deprecated
+ * 실제 설정 객체와 타입 정의는 `src/lib/api/config.ts`로 완전 이관되었습니다.
+ *
+ * 🗑️ 향후 삭제 가이드 (Safe Removal Guide):
+ * 1. 프로젝트 내 `.js` 확장자 명시 임포트 검색:
+ *    `grep -rn "\$lib/api/config\.js" src/`
+ * 2. 검색된 파일들의 import 경로를 `'$lib/api/config'`로 변경한 뒤,
+ *    이 파일(`src/lib/api/config.js`)을 삭제하면 됩니다.
+ * ============================================================================
  */
-export const config = {
-	siteName: 'Pybo',
-	siteDescription: 'A premium community platform for developers and enthusiasts.',
-	version: '1.1.0', // Svelte 5 마이그레이션 버전
-
-	// 환경 변수 통합 관리 (VITE_ prefix 권장)
-	apiBaseUrl: import.meta.env.VITE_API_SERVER || 'http://127.0.0.1:8000',
-
-	theme: {
-		primaryColor: '#6366f1',
-		secondaryColor: '#a855f7'
-	},
-
-	/**
-	 * 표준 라우팅(v2.0) 규격에 따른 네비게이션 경로 매핑
-	 * { version: v1, layer: app, instance: ..., action: ... }
-	 */
-	navigation: [
-		{ name: '달력', path: '/v1/app/calendar' },
-		{ name: '파일', path: '/v1/app/files' },
-		{ name: '결근계', path: '/v1/app/day-off' },
-		{ name: '차트', path: '/v1/app/chart' },
-		{ name: '배차', path: '/v1/app/dnd' },
-		{ name: '노선', path: '/v1/app/bus-line' }
-	]
-};
-
-// 기본 내보내기
-export default config;
+export * from './config.ts';
+export { default } from './config.ts';

@@ -13,6 +13,7 @@
 	import Icon from '@iconify/svelte';
 	import { toast } from '$lib/runes/toast.svelte.ts';
 	import { getSiteTitle } from '$lib/config/site';
+	import { formatDateTime } from '$lib/utils';
 	import { 
 		adminGetGroups, 
 		adminRefreshDynamicGroups, 
@@ -191,36 +192,6 @@
 			groupMembers = [];
 		} finally {
 			isLoadingMembers = false;
-		}
-	}
-
-	function formatDateTime(isoStr) {
-		if (!isoStr) return '-';
-		try {
-			const d = new Date(isoStr);
-			if (isNaN(d.getTime())) return '-';
-			const now = new Date();
-			const isToday = d.toDateString() === now.toDateString();
-			
-			const yesterday = new Date();
-			yesterday.setDate(now.getDate() - 1);
-			const isYesterday = d.toDateString() === yesterday.toDateString();
-
-			const pad = (n) => String(n).padStart(2, '0');
-			const hours = pad(d.getHours());
-			const mins = pad(d.getMinutes());
-
-			if (isToday) {
-				return `오늘 ${hours}:${mins}`;
-			} else if (isYesterday) {
-				return `어제 ${hours}:${mins}`;
-			} else {
-				const month = pad(d.getMonth() + 1);
-				const date = pad(d.getDate());
-				return `${month}/${date} ${hours}:${mins}`;
-			}
-		} catch (e) {
-			return '-';
 		}
 	}
 

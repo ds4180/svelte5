@@ -17,6 +17,8 @@
 		adminDeleteRouteMaster 
 	} from '$lib/api/admin';
 	import { getSiteTitle } from '$lib/config/site';
+	import { toast } from '$lib/runes/toast.svelte.ts';
+	import { formatDate } from '$lib/utils';
 	import Icon from '@iconify/svelte';
 
 	// ==========================================
@@ -143,7 +145,7 @@
 		pageMode = 'CREATE';
 		formRouteName = '';
 		formRouteType = 'REGULAR';
-		const today = new Date().toISOString().split('T')[0];
+		const today = formatDate(new Date());
 		formStartDate = today;
 		formEndDate = '';
 		formVehicleCount = 2; // 기본 로번 2개 세팅 -> $effect에 의해 시간표 2줄 자동 생성
@@ -217,7 +219,7 @@
 			await loadRouteMasters();
 		} catch (err) {
 			console.error('❌ 당연 근무 토글 중 오류 발생:', err);
-			alert(`당연 근무 상태 변경에 실패했습니다:\n${err.message}`);
+			toast.error(`당연 근무 상태 변경에 실패했습니다: ${err.detail || err.message}`);
 		}
 	}
 
@@ -249,23 +251,23 @@
 	 */
 	function validateForm() {
 		if (!formRouteName.trim()) {
-			alert('노선명을 입력해 주세요.');
+			toast.warning('노선명을 입력해 주세요.');
 			return false;
 		}
 		if (!formVersion.trim()) {
-			alert('버전을 입력해 주세요. (예: v1, v2)');
+			toast.warning('버전을 입력해 주세요. (예: v1, v2)');
 			return false;
 		}
 		if (!formStartDate) {
-			alert('적용 시작일을 선택해 주세요.');
+			toast.warning('적용 시작일을 선택해 주세요.');
 			return false;
 		}
 		if (formEndDate && formStartDate > formEndDate) {
-			alert('종료일은 시작일보다 이전일 수 없습니다.');
+			toast.warning('종료일은 시작일보다 이전일 수 없습니다.');
 			return false;
 		}
 		if (Number(formVehicleCount) <= 0) {
-			alert('최소 1개 이상의 로번 수가 할당되어야 합니다.');
+			toast.warning('최소 1개 이상의 로번 수가 할당되어야 합니다.');
 			return false;
 		}
 		
@@ -275,18 +277,18 @@
 			const t = formTimetables[i];
 			const vNum = t.seq;
 			if (!t.start_time || !t.end_time) {
-				alert(`${vNum}로번의 근무 시각을 올바르게 입력해 주세요.`);
+				toast.warning(`${vNum}로번의 근무 시각을 올바르게 입력해 주세요.`);
 				return false;
 			}
 			
 			// 24시 포맷 강제 검증 규칙 적용
 			if (!timeRegex.test(t.start_time) || !timeRegex.test(t.end_time)) {
-				alert(`${vNum}로번에 유효하지 않은 시간 형식이 포함되어 있습니다.\n반드시 24시간 형식(00:00 ~ 23:59, 예: 18:30)으로 기입해 주세요.`);
+				toast.warning(`${vNum}로번에 유효하지 않은 시간 형식이 포함되어 있습니다. 24시간 형식(00:00 ~ 23:59)으로 기입해 주세요.`);
 				return false;
 			}
 			
 			if (!t.start_location.trim() || !t.end_location.trim()) {
-				alert(`${vNum}로번의 주요 기점(출발지)과 종점(도착지)을 입력해 주세요.`);
+				toast.warning(`${vNum}로번의 주요 기점(출발지)과 종점(도착지)을 입력해 주세요.`);
 				return false;
 			}
 		}
@@ -312,17 +314,17 @@
 		try {
 			if (pageMode === 'CREATE') {
 				const response = await adminCreateRouteMaster(payload);
-				alert('🎉 새로운 노선 마스터 및 로번 근무스케줄이 성공적으로 등록되었습니다!');
+				toast.success('새로운 노선 마스터 및 로번 근무스케줄이 성공적으로 등록되었습니다!');
 				selectedId = response.id;
 			} else if (pageMode === 'EDIT') {
 				await adminUpdateRouteMaster(selectedId, payload);
-				alert('💾 로번 수 변경 및 운행 일정 마스터가 성공적으로 업데이트되었습니다.');
+				toast.success('로번 수 변경 및 운행 일정 마스터가 성공적으로 업데이트되었습니다.');
 			}
 			pageMode = 'VIEW';
 			await loadRouteMasters();
 		} catch (err) {
 			console.error('❌ 저장 중 오류 발생:', err);
-			alert(`저장에 실패했습니다:\n${err.message}`);
+			toast.error(`저장에 실패했습니다: ${err.detail || err.message}`);
 		}
 	}
 
@@ -338,13 +340,13 @@
 		if (confirm(confirmMsg)) {
 			try {
 				await adminDeleteRouteMaster(selectedRoute.id);
-				alert('🗑️ 노선 마스터 및 하위 로번 스케줄 일괄 삭제 완료.');
+				toast.success('노선 마스터 및 하위 로번 스케줄 일괄 삭제 완료.');
 				selectedId = null;
 				pageMode = 'VIEW';
 				await loadRouteMasters();
 			} catch (err) {
 				console.error('❌ 삭제 오류:', err);
-				alert(`삭제에 실패했습니다:\n${err.message}`);
+				toast.error(`삭제에 실패했습니다: ${err.detail || err.message}`);
 			}
 		}
 	}

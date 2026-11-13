@@ -14,6 +14,8 @@
 	import { goto } from '$app/navigation';
 	import TiptapEditor from '$lib/components/TiptapEditor.svelte';
 	import { getAuthContext } from '$lib/runes/auth.svelte.js';
+	import { toast } from '$lib/runes/toast.svelte.ts';
+	import { formatDate } from '$lib/utils';
 
 	/** @type {{ slug: string, appId?: string, initialData?: any }} */
 	let { slug, appId = 'board', initialData = null } = $props();
@@ -174,7 +176,7 @@
 	// --- [액션 핸들러] ---
 	async function handleSave() {
 		if (!editForm.title || !editForm.title.trim()) {
-			alert('제목을 입력해주세요.');
+			toast.warning('제목을 입력해주세요.');
 			return;
 		}
 		
@@ -183,7 +185,7 @@
 		const textContent = tempDiv.textContent || tempDiv.innerText || '';
 		
 		if (!textContent.trim() && !editForm.content.includes('<img')) {
-			alert('내용을 입력해주세요.');
+			toast.warning('내용을 입력해주세요.');
 			return;
 		}
 
@@ -197,7 +199,7 @@
 			goto(`/v1/app/board/${boardSlug}`, { invalidateAll: true });
 		} catch (e) {
 			const msg = e?.detail || e?.message || (typeof e === 'string' ? e : JSON.stringify(e));
-			alert('저장 실패: ' + msg);
+			toast.error('저장 실패: ' + msg);
 		} finally {
 			isLoading = false;
 		}
@@ -208,11 +210,11 @@
 		try {
 			isLoading = true;
 			await api.deletePost(postId);
-			window.alert('게시물이 삭제되었습니다.');
+			toast.success('게시물이 삭제되었습니다.');
 			goto(`/v1/app/board/${boardSlug}`, { invalidateAll: true });
 		} catch (e) {
 			const msg = e?.detail || e?.message || (typeof e === 'string' ? e : JSON.stringify(e));
-			alert('삭제 실패: ' + msg);
+			toast.error('삭제 실패: ' + msg);
 		} finally {
 			isLoading = false;
 		}
@@ -230,13 +232,6 @@
 	function handleSearch() {
 		currentPage = 1;
 		loadData(true);
-	}
-
-	/** 날짜 포맷팅 */
-	function formatDate(dateStr) {
-		if (!dateStr) return '-';
-		const d = new Date(dateStr);
-		return d.toLocaleDateString();
 	}
 </script>
 

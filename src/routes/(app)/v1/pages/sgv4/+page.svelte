@@ -1,5 +1,6 @@
 <script>
 	import { onMount } from 'svelte';
+	import { toast } from '$lib/runes/toast.svelte.ts';
 
 	// ========================================
 	// 1. 정거장 정의 (Station Nodes)
@@ -592,7 +593,7 @@
 
 	// 버스 클릭 이벤트 핸들러
 	function handleBusClick(busId) {
-		alert(`버스 클릭됨: ${busId}`);
+		toast.info(`버스 클릭됨: ${busId}`);
 	}
 
 	// 버스에 마우스 올렸을 때 (툴팁 표시)

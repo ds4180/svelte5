@@ -1,6 +1,5 @@
 import { error } from '@sveltejs/kit';
 import { env } from '$env/dynamic/private';
-import { requireAuthUser } from '$lib/server/sessionCookie.js';
 
 /**
  * @file /v1/app/[appId]/[...slug]/+page.server.js
@@ -19,9 +18,9 @@ import { requireAuthUser } from '$lib/server/sessionCookie.js';
  */
 
 /** @type {import('./$types').PageServerLoad} */
-export async function load({ params, fetch, locals, url }) {
+export async function load({ params, fetch, locals }) {
 	const { appId, slug } = params;
-	const user = requireAuthUser(locals, url);
+	const user = locals.user || null;
 
 	// appId → 컴포넌트 자동 추론 매핑 (AppRegistry 폴백용)
 	const AUTO_COMPONENT_MAP = {

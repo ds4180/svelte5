@@ -6,6 +6,7 @@
     import { onMount } from 'svelte';
     import { fade, scale } from 'svelte/transition';
     import Icon from '@iconify/svelte';
+    import { formatDate } from '$lib/utils';
     import {
         customGetActiveRouteMasters,
         customGetDailyDispatch
@@ -28,12 +29,7 @@
     let today = getToday();
     let selectedDate = $state(new Date(getToday().getTime() + 86400000 * 3));
 
-    const formatDateISO = (date) => {
-        const y = date.getFullYear();
-        const m = String(date.getMonth() + 1).padStart(2, '0');
-        const d = String(date.getDate()).padStart(2, '0');
-        return `${y}-${m}-${d}`;
-    };
+    const formatDateISO = (date) => formatDate(date);
 
     const formatDateDisplay = (date) => {
         const m = String(date.getMonth() + 1).padStart(2, '0');

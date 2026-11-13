@@ -6,10 +6,11 @@
 	import { onMount, untrack } from 'svelte';
 	import Alert from '$lib/components/Alert.svelte';
 	import { alertState } from '$lib/runes/alert.svelte.js';
-	import { auth } from '$lib/runes/auth.svelte.js';
+	import { getAuthContext } from '$lib/runes/auth.svelte.js';
 	import '../layout.css'; // 상위 디렉토리의 layout.css를 참조하도록 수정
 
 	let { data, children } = $props();
+	const auth = getAuthContext();
 
 	// [데이터 동기화] 서버 -> 클라이언트 RUNE
 	$effect(() => {

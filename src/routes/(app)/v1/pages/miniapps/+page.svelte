@@ -66,7 +66,7 @@
 	 */
 	async function handleSaveMemo() {
 		if (!memoContent.trim()) {
-			alert('메모 내용을 입력해 주세요.');
+			toast.warning('메모 내용을 입력해 주세요.');
 			return;
 		}
 
@@ -78,11 +78,9 @@
 			});
 			// 입력 폼 초기화
 			handleCancelMemo();
-			if (toast?.success) {
-				toast.success('새 메모가 안전하게 저장되었습니다.');
-			}
+			toast.success('새 메모가 안전하게 저장되었습니다.');
 		} catch (/** @type {any} */ e) {
-			alert('메모 저장에 실패했습니다: ' + e.message);
+			toast.error('메모 저장에 실패했습니다: ' + (e.detail || e.message));
 		} finally {
 			isSaving = false;
 		}
@@ -113,11 +111,9 @@
 			if (confirm('이 항목을 정말 삭제하시겠습니까?')) {
 				try {
 					await miniappStore.deleteItem(id);
-					if (toast?.success) {
-						toast.success('피드에서 삭제되었습니다.');
-					}
+					toast.success('피드에서 삭제되었습니다.');
 				} catch (/** @type {any} */ e) {
-					alert('삭제에 실패했습니다: ' + (e.message || '서버 오류'));
+					toast.error('삭제에 실패했습니다: ' + (e.detail || e.message || '서버 오류'));
 				}
 			}
 		} else if (action === 'reply') {
@@ -130,7 +126,7 @@
 						receiver_id: targetItem.sender_id,
 						title: `Re: ${targetItem.title || '메시지 답장'}`
 					});
-					alert('답장이 전송되었습니다.');
+					toast.success('답장이 전송되었습니다.');
 				}
 			}
 		}

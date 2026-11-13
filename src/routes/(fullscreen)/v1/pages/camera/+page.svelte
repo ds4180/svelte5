@@ -205,6 +205,9 @@
 		}
 	}
 
+	/**
+	 * @param {number | number[]} [duration=80]
+	 */
 	function triggerHaptic(duration = 80) {
 		if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
 			try { navigator.vibrate(duration); } catch {}

@@ -3,9 +3,11 @@
 	 * @file v1/pages/files/+page.svelte
 	 * @description [v3.2] 독립형 개인 파일 커맨드 센터
 	 */
-	import { auth } from '$lib/runes/auth.svelte.js';
+	import { getAuthContext } from '$lib/runes/auth.svelte.js';
 	import Icon from '@iconify/svelte';
 	import FileManager from '$lib/components/FileManager.svelte';
+
+	const auth = getAuthContext();
 </script>
 
 <div class="animate-fade-in space-y-8 font-['Outfit'] text-black pb-40">

@@ -7,6 +7,7 @@
 	import Calendar from './components/Calendar.svelte';
 	import { timestampToDateString } from '$lib/utils.js';
 	import { alertState } from '$lib/runes/alert.svelte.js';
+	import { toast } from '$lib/runes/toast.svelte.ts';
 	import Icon from '@iconify/svelte';
 
 	let { data, form } = $props();
@@ -155,13 +156,13 @@
 
 							// 🛡️ [무한 루프 방어] 동작(Action) 직후 한 번만 실행되는 명령형 알림
 							if (result.type === 'success') {
-								window.alert('휴무 신청이 성공적으로 완료되었습니다.');
+								toast.success('휴무 신청이 성공적으로 완료되었습니다.');
 								selectedDates = [];
 								startDate = null;
 								memo = '';
 							} else if (result.type === 'failure') {
 								// @ts-ignore
-								window.alert(result.data?.error || '신청에 실패했습니다.');
+								toast.error(result.data?.error || '신청에 실패했습니다.');
 							}
 						};
 					}}

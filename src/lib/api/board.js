@@ -1,17 +1,15 @@
-import { fastApi } from './index';
-
 /**
- * 게시판 관련 API 호출 모듈 (표준 v2.0 반영)
+ * ============================================================================
+ * [하위 호환성 브릿지 모듈 (src/lib/api/board.js)]
+ * ============================================================================
+ * ⚠️ @deprecated
+ * 실제 구현과 TypeScript 타입 정의는 `src/lib/api/board.ts`로 완전 이관되었습니다.
+ *
+ * 🗑️ 향후 삭제 가이드 (Safe Removal Guide):
+ * 1. 프로젝트 내 `.js` 확장자 명시 임포트 검색:
+ *    `grep -rn "\$lib/api/board\.js" src/`
+ * 2. 검색된 파일들의 import 경로를 `'$lib/api/board'`로 변경한 뒤,
+ *    이 파일(`src/lib/api/board.js`)을 삭제하면 됩니다.
+ * ============================================================================
  */
-
-// --- Board ---
-export const getBoardPosts = (slug, page, size, keyword) =>
-	fastApi('GET', `/api/v1/board/${slug}/posts`, { page, size, keyword });
-export const getBoardConfig = (slug) => fastApi('GET', `/api/v1/board/${slug}`);
-export const getPostDetail = (postId) => fastApi('GET', `/api/v1/board/post/${postId}`);
-export const createPost = (slug, data) => fastApi('POST', `/api/v1/board/create/${slug}`, data);
-export const updatePost = (postId, data) => fastApi('PUT', `/api/v1/board/update/${postId}`, data);
-export const deletePost = (postId) => fastApi('DELETE', `/api/v1/board/delete/${postId}`);
-
-// --- Comment (Lego Service - $lib/api/comment 단일 위임) ---
-export { getComments, createComment, updateComment, deleteComment } from './comment';
+export * from './board.ts';

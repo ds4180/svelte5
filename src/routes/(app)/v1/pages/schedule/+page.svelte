@@ -7,7 +7,7 @@
     import Icon from '@iconify/svelte';
     import CalendarView from './components/CalendarView.svelte';
     import RecurrenceEditor from './components/RecurrenceEditor.svelte';
-    import { formatDDay } from '$lib/utils';
+    import { formatDDay, toLocalISOString } from '$lib/utils';
 
     // 가상 데이터 및 상태 (추후 API 연동)
     let userRank = $state(4); // 테스트용: 4이상은 관리자 기능을 보여줌
@@ -34,8 +34,8 @@
     let timeMode = $state('timed'); // 'all-day' or 'timed'
 
     function openAddModal(date) {
-        newSchedule.start_at = date.toISOString().slice(0, 16);
-        newSchedule.end_at = date.toISOString().slice(0, 16);
+        newSchedule.start_at = toLocalISOString(date);
+        newSchedule.end_at = toLocalISOString(date);
         showAddModal = true;
     }
 

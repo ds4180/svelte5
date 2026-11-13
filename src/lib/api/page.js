@@ -1,29 +1,16 @@
-import { fastApi } from './index.js';
-
 /**
- * 페이지 엔진 API (v1.1)
+ * ============================================================================
+ * [하위 호환성 브릿지 모듈 (src/lib/api/page.js)]
+ * ============================================================================
+ * ⚠️ @deprecated
+ * 실제 구현과 TypeScript 인터페이스는 `src/lib/api/page.ts`로 완전 이관되었습니다.
+ * 기존 라우트(`from '$lib/api/page.js'`)의 무중단 호환을 위해 유지되는 브릿지입니다.
+ *
+ * 🗑️ 향후 삭제 가이드 (Safe Removal Guide):
+ * 1. 프로젝트 내 `.js` 확장자 명시 임포트 검색:
+ *    `grep -rn "\$lib/api/page\.js" src/`
+ * 2. 검색된 파일들의 import 경로를 `'$lib/api/page'`로 변경한 뒤,
+ *    이 파일(`src/lib/api/page.js`)을 삭제하면 됩니다.
+ * ============================================================================
  */
-
-// 1. 사용자용 페이지 상세 정보 조회
-export const getPageDetail = (slug) => 
-    fastApi('GET', `/api/v1/page/detail/${slug}`);
-
-// 1-1. 사용자용 공개 페이지 목록 조회
-export const getPublicPages = () =>
-    fastApi('GET', '/api/v1/page/public/list');
-
-// 2. 관리자용 페이지 목록 조회
-export const adminGetPages = () => 
-    fastApi('GET', '/api/v1/page/admin/list');
-
-// 3. 관리자용 페이지 생성
-export const adminCreatePage = (data) => 
-    fastApi('POST', '/api/v1/page/admin/create', data);
-
-// 4. 관리자용 페이지 수정
-export const adminUpdatePage = (data) => 
-    fastApi('PUT', '/api/v1/page/admin/update', data);
-
-// 5. 관리자용 페이지 삭제
-export const adminDeletePage = (pageId) => 
-    fastApi('DELETE', `/api/v1/page/admin/delete/${pageId}`);
+export * from './page.ts';

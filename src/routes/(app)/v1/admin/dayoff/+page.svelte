@@ -9,6 +9,7 @@
 	import Icon from '@iconify/svelte';
 	import { formatDateTime } from '$lib/utils.js';
 	import { getSiteTitle } from '$lib/config/site';
+	import { toast } from '$lib/runes/toast.svelte.ts';
 
 	let {} = $props();
 
@@ -91,7 +92,7 @@
 			dayoffs = Array.isArray(response) ? response : response.data || [];
 		} catch (error) {
 			const e = /** @type {Error} */ (error);
-			window.alert(`데이터 로드 실패: ${e.message}`);
+			toast.error(`데이터 로드 실패: ${e.message}`);
 		} finally {
 			loading = false;
 		}
@@ -104,11 +105,11 @@
 	async function updateStatus(id, status) {
 		try {
 			await api.adminUpdateDayoffStatus(id, status);
-			window.alert(`[${status}] 처리가 완료되었습니다.`);
+			toast.success(`[${status}] 처리가 완료되었습니다.`);
 			await loadDayoffs(); // 데이터 새로고침
 		} catch (error) {
 			const e = /** @type {Error} */ (error);
-			window.alert(`상태 변경 실패: ${e.message}`);
+			toast.error(`상태 변경 실패: ${e.message}`);
 		}
 	}
 

@@ -3,6 +3,7 @@
 	import * as api from '$lib/api/admin.js';
 	import { formatDateTime } from '$lib/utils';
 	import { getSiteTitle } from '$lib/config/site';
+	import { toast } from '$lib/runes/toast.svelte.ts';
 	import Icon from '@iconify/svelte';
 
 	let sessions = $state([]);
@@ -17,7 +18,7 @@
 		try {
 			sessions = await api.adminGetSessions();
 		} catch (e) {
-			alert('세션 목록을 불러오지 못했습니다: ' + e.message);
+			toast.error('세션 목록을 불러오지 못했습니다: ' + (e.detail || e.message));
 		} finally {
 			loading = false;
 		}
@@ -27,10 +28,10 @@
 		if (!confirm(`정말 이 세션(ID: ${sessionId})을 강제로 종료하시겠습니까?`)) return;
 		try {
 			await api.adminKickSession(sessionId);
-			alert('세션이 강제로 종료되었습니다.');
+			toast.success('세션이 강제로 종료되었습니다.');
 			await loadSessions();
 		} catch (e) {
-			alert('세션 종료 실패: ' + e.message);
+			toast.error('세션 종료 실패: ' + (e.detail || e.message));
 		}
 	}
 

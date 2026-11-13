@@ -1,12 +1,10 @@
-import { error, isHttpError, isRedirect } from '@sveltejs/kit';
-import { requireAuthUser } from '$lib/server/sessionCookie.js';
+import { error, isHttpError } from '@sveltejs/kit';
 
 /**
  * @file (app)/v1/custom/page/[slug]/+page.server.js
  * @description [CUSTOM 앱] DB CMS 페이지 개별 본문 SSR 로더
  */
-export async function load({ fetch, params, locals, url }) {
-	requireAuthUser(locals, url);
+export async function load({ fetch, params }) {
 	const { slug } = params;
 	try {
 		const res = await fetch(`/api/v1/page/detail/${slug}`);
@@ -17,7 +15,7 @@ export async function load({ fetch, params, locals, url }) {
 		const pageData = await res.json();
 		return { pageData };
 	} catch (e) {
-		if (isRedirect(e) || isHttpError(e)) throw e;
+		if (isHttpError(e)) throw e;
 		throw error(500, (e instanceof Error ? e.message : '') || '페이지 조회 중 서버 오류가 발생했습니다.');
 	}
 }

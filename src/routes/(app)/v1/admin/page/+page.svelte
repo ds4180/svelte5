@@ -10,6 +10,7 @@
 	import * as api from '$lib/api/page.js';
 	import { toast } from '$lib/runes/toast.svelte.js';
 	import { getSiteTitle } from '$lib/config/site';
+	import { toLocalISOString } from '$lib/utils';
 	import Icon from '@iconify/svelte';
 
 	let { data } = $props();
@@ -143,8 +144,8 @@
 			slug: page.slug,
 			status: page.status,
 			redirect_url: page.redirect_url || '',
-			published_at: page.published_at ? new Date(page.published_at).toISOString().slice(0, 16) : '',
-			expired_at: page.expired_at ? new Date(page.expired_at).toISOString().slice(0, 16) : '',
+			published_at: page.published_at ? toLocalISOString(page.published_at) : '',
+			expired_at: page.expired_at ? toLocalISOString(page.expired_at) : '',
 			min_rank: page.min_rank || 0,
 			is_active: page.is_active ?? true,
 			customOptions: customOpts

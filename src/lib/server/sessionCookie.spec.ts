@@ -3,7 +3,8 @@ import {
 	extractSessionCookieInstruction,
 	syncSessionCookieFromResponse,
 	requireAuthUser,
-	resolveSafeRedirect
+	resolveSafeRedirect,
+	buildBackendForwardHeaders
 } from './sessionCookie.js';
 
 describe('sessionCookie server helpers', () => {
@@ -49,5 +50,23 @@ describe('sessionCookie server helpers', () => {
 		expect(resolveSafeRedirect('//evil.example/phish')).toBe('/');
 		expect(resolveSafeRedirect('/logout')).toBe('/');
 		expect(resolveSafeRedirect('/login?redirect=/v1')).toBe('/');
+	});
+
+	it('forwards User-Agent, Cookie, and client IP headers to backend', () => {
+		const req = new Request('http://localhost/login', {
+			headers: {
+				'user-agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) Mobile/15E148',
+				cookie: 'session_id=old-jti-uuid',
+				'x-forwarded-for': '203.0.113.77'
+			}
+		});
+		const headers = buildBackendForwardHeaders(req, '172.18.0.2', {
+			'Content-Type': 'application/x-www-form-urlencoded'
+		});
+		expect(headers['user-agent']).toContain('iPhone');
+		expect(headers['cookie']).toBe('session_id=old-jti-uuid');
+		expect(headers['x-forwarded-for']).toBe('203.0.113.77');
+		expect(headers['x-real-ip']).toBe('203.0.113.77');
+		expect(headers['Content-Type']).toBe('application/x-www-form-urlencoded');
 	});
 });

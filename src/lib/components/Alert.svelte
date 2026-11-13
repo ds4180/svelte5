@@ -7,6 +7,7 @@
 	 */
 	import { alertState } from '$lib/runes/alert.svelte.js';
 	import { websocket } from '$lib/runes/websocket.svelte.js';
+	import { fastApi } from '$lib/api';
 	import { notifyAlert } from '$lib/utils/sound';
 	import { page } from '$app/state';
 	import { onMount } from 'svelte';
@@ -23,9 +24,8 @@
 	// 실시간 데이터 동기화 (Polling)
 	async function fetchActiveAlerts() {
 		try {
-			const response = await fetch('/api/alert/active');
-			if (response.ok) {
-				const serverAlerts = await response.json();
+			const serverAlerts = await fastApi('GET', '/api/alert/active', {}, { offline: false });
+			if (Array.isArray(serverAlerts)) {
 				const existingIds = new Set(alertState.all.map(oldA => oldA.id));
 				
 				// 🛡️ [데이터 병합] 서버 데이터를 돌면서 기존 로컬 상태 보존

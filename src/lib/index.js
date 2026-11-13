@@ -1,11 +1,14 @@
 /**
- * @file $lib/index.js
- * @description 시스템 엔진 지도 (Engine Registry)
- *   - AppRegistry DB의 main_component 문자열과 실제 컴포넌트를 매핑
- *   - 새 엔진 및 서비스(댓글 등) 추가 시 이 파일에 등록 필수
- *   - 💡 게시판(BoardEngine)은 도메인 응집(Colocation) 표준에 따라 routes/app/board 로 완전 이전됨.
+ * ============================================================================
+ * [하위 호환성 브릿지 모듈 (src/lib/index.js)]
+ * ============================================================================
+ * ⚠️ @deprecated
+ * 실제 구현과 타입 정의는 `src/lib/index.ts`로 완전 이관되었습니다.
+ *
+ * 🗑️ 향후 삭제 가이드 (Safe Removal Guide):
+ * 1. 프로젝트 내 명시적 `.js` 확장자 임포트가 없는지 확인:
+ *    `grep -rn "\$lib/index\.js" src/`
+ * 2. 위 검색 결과가 0건이면 이 파일(`src/lib/index.js`)을 즉시 삭제해도 안전합니다.
+ * ============================================================================
  */
-
-// 🥨 서비스 바인딩 (게시물 하단에 바인딩되어 호출됨)
-export { default as CommentEngine } from '$lib/engines/CommentEngine.svelte';
-export { default as UploadEngine } from '$lib/engines/UploadEngine.svelte';
+export * from './index.ts';

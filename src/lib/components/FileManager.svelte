@@ -11,6 +11,7 @@
 	import ImageUploader from './ImageUploader.svelte';
 	import Icon from '@iconify/svelte';
 	import { getAuthContext } from '$lib/runes/auth.svelte.js';
+	import { toast } from '$lib/runes/toast.svelte.ts';
 	import { portal } from '$lib/actions/portal';
 
 	const PUBLIC_SERVER_URL = env.PUBLIC_SERVER_URL || '';
@@ -111,7 +112,7 @@
 			}, { offline: false }); // 즉시 결과 확인이 필요하므로 오프라인 우체통 제외
 			await loadMedia();
 		} catch (err) {
-			alert('폴더 생성 실패: ' + (err.detail || '오류'));
+			toast.error('폴더 생성 실패: ' + (err.detail || err.message || '오류'));
 		}
 	}
 
@@ -129,7 +130,7 @@
 			selectedFolders = new Set();
 			await loadMedia();
 		} catch (err) {
-			alert('삭제 실패: ' + (err.detail || '오류'));
+			toast.error('삭제 실패: ' + (err.detail || err.message || '오류'));
 		}
 	}
 
@@ -145,7 +146,7 @@
 			selectedFolders = new Set(selectedFolders);
 			await loadMedia();
 		} catch (err) {
-			alert('폴더 삭제 실패: ' + (err.detail || '오류'));
+			toast.error('폴더 삭제 실패: ' + (err.detail || err.message || '오류'));
 		}
 	}
 
@@ -156,7 +157,7 @@
 			selectedAsset = null;
 			await loadMedia();
 		} catch (err) {
-			alert('삭제 실패: ' + (err.detail || '오류'));
+			toast.error('삭제 실패: ' + (err.detail || err.message || '오류'));
 		}
 	}
 
@@ -183,7 +184,7 @@
 			a.remove();
 			window.URL.revokeObjectURL(url);
 		} catch (err) {
-			alert('다운로드 실패: ' + err.message);
+			toast.error('다운로드 실패: ' + (err.message || '오류'));
 		}
 	}
 

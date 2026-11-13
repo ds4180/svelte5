@@ -1,5 +1,9 @@
 import { PUBLIC_API_ENDPOINT } from '$env/static/public';
-import { SESSION_COOKIE_OPTIONS, syncSessionCookieFromResponse } from '$lib/server/sessionCookie.js';
+import {
+	SESSION_COOKIE_OPTIONS,
+	syncSessionCookieFromResponse,
+	buildBackendForwardHeaders
+} from '$lib/server/sessionCookie.js';
 
 /**
  * @file hooks.server.js (Performance Optimized v3.1)
@@ -56,11 +60,19 @@ export async function handleFetch({ request, fetch, event }) {
 	}
 
 	const newRequest = new Request(internalUrl, request);
-	const originalCookieHeader = event.request.headers.get('cookie');
-	const originalUserAgent = event.request.headers.get('user-agent');
 
-	if (originalCookieHeader) newRequest.headers.set('cookie', originalCookieHeader);
-	if (originalUserAgent) newRequest.headers.set('user-agent', originalUserAgent);
+	// 🛡️ [보안 강화 2]: 브라우저의 Cookie, User-Agent 및 실제 클라이언트 IP(X-Forwarded-For / X-Real-IP)를
+	// 백엔드 FastAPI로 손실 없이 전파하여 모바일/PC 세션 바인딩 검증과 감사로그 실제 IP 기록을 보장합니다.
+	let clientIp = null;
+	try {
+		clientIp = event.getClientAddress();
+	} catch {
+		clientIp = null;
+	}
+	const forwardHeaders = buildBackendForwardHeaders(event.request, clientIp);
+	for (const [key, value] of Object.entries(forwardHeaders)) {
+		newRequest.headers.set(key, value);
+	}
 
 	const res = await fetch(newRequest);
 

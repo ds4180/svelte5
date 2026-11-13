@@ -3,9 +3,11 @@
 	 * @file v1/pages/profile/+page.svelte
 	 * @description [v4.0] 통합 사용자 센터 - 중첩 탭(Nested Tabs) 확장형 아키텍처
 	 */
-	import { auth } from '$lib/runes/auth.svelte.js';
+	import { getAuthContext } from '$lib/runes/auth.svelte.js';
 	import Icon from '@iconify/svelte';
 	import FileManager from '$lib/components/FileManager.svelte';
+
+	const auth = getAuthContext();
 
 	// 1. 전체 메뉴 및 중첩 탭 구성 데이터 (여기만 수정하면 무한 확장 가능)
 	const navigationMap = {

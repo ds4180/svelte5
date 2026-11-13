@@ -6,6 +6,7 @@
 	 */
 	import { onMount } from 'svelte';
 	import * as commentApi from '$lib/api/comment';
+	import { toast } from '$lib/runes/toast.svelte.ts';
 	import Icon from '@iconify/svelte';
 
 	// --- [Svelte 5 Props] ---
@@ -37,7 +38,7 @@
 			newComment = ''; // 입력창 초기화
 			await loadComments(); // 댓글 목록 새로고침
 		} catch (e) {
-			alert('댓글 작성 실패: ' + e.message);
+			toast.error('댓글 작성 실패: ' + (e.detail || e.message || '오류'));
 		}
 	}
 

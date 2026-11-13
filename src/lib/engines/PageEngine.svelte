@@ -6,10 +6,14 @@
 	import { page as pageState } from '$app/state';
 	import { onMount, onDestroy } from 'svelte';
 	import { goto, invalidateAll } from '$app/navigation';
-	import { auth } from '$lib/runes/auth.svelte.js';
+	import { getAuthContext } from '$lib/runes/auth.svelte.js';
+	import { toast } from '$lib/runes/toast.svelte.ts';
+	import { toLocalISOString } from '$lib/utils';
 	import * as api from '$lib/api/page.js';
 	import TiptapEditor from '$lib/components/TiptapEditor.svelte';
 	import Icon from '@iconify/svelte';
+
+	const auth = getAuthContext();
 
 	let { data = {} } = $props();
 
@@ -29,7 +33,7 @@
 		status: 'PUBLISHED',
 		is_active: true,
 		min_rank: 0,
-		published_at: new Date().toISOString().slice(0, 16),
+		published_at: toLocalISOString(),
 		expired_at: null,
 		redirect_url: ''
 	});
@@ -61,15 +65,15 @@
 			status: page.status || 'PUBLISHED',
 			is_active: page.is_active ?? true,
 			min_rank: page.min_rank || 0,
-			published_at: page.published_at ? new Date(page.published_at).toISOString().slice(0, 16) : new Date().toISOString().slice(0, 16),
-			expired_at: page.expired_at ? new Date(page.expired_at).toISOString().slice(0, 16) : null,
+			published_at: page.published_at ? toLocalISOString(page.published_at) : toLocalISOString(),
+			expired_at: page.expired_at ? toLocalISOString(page.expired_at) : null,
 			redirect_url: page.redirect_url || ''
 		};
 	}
 
 	async function handleSave() {
 		if (!editForm.title || !editForm.slug) {
-			alert('제목과 슬러그는 필수입니다.');
+			toast.warning('제목과 슬러그는 필수입니다.');
 			return;
 		}
 
@@ -77,17 +81,17 @@
 		try {
 			if (editForm.id) {
 				page = await api.adminUpdatePage(editForm);
-				alert('페이지가 성공적으로 수정되었습니다.');
+				toast.success('페이지가 성공적으로 수정되었습니다.');
 			} else {
 				page = await api.adminCreatePage(editForm);
-				alert('새 페이지가 생성되었습니다.');
+				toast.success('새 페이지가 생성되었습니다.');
 				// 생성 후 해당 슬러그 주소로 이동
 				goto(`/v1/custom/page/${page.slug}`, { replaceState: true });
 			}
 			mode = 'view';
 			invalidateAll();
 		} catch (e) {
-			alert('저장 실패: ' + (e.detail || e.message || '알 수 없는 오류'));
+			toast.error('저장 실패: ' + (e.detail || e.message || '알 수 없는 오류'));
 		} finally {
 			isLoading = false;
 		}
@@ -97,10 +101,10 @@
 		if (!confirm('정말로 이 페이지를 삭제하시겠습니까?')) return;
 		try {
 			await api.adminDeletePage(page.id);
-			alert('삭제되었습니다.');
+			toast.success('삭제되었습니다.');
 			goto('/v1/admin/apps/page/instances'); // 목록으로 이동
 		} catch (e) {
-			alert('삭제 실패: ' + e.detail);
+			toast.error('삭제 실패: ' + (e.detail || e.message || '오류'));
 		}
 	}
 

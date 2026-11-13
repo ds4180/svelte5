@@ -7,6 +7,8 @@
     import Icon from '@iconify/svelte';
     import { fade } from 'svelte/transition';
     import { getSiteTitle } from '$lib/config/site';
+    import { toast } from '$lib/runes/toast.svelte.ts';
+    import { formatDate } from '$lib/utils';
     import {
         adminGetActiveRouteMasters,
         adminGetDailyDispatch,
@@ -35,12 +37,7 @@
     let today = getToday();
     let selectedDate = $state(getToday());
 
-    const formatDateISO = (date) => {
-        const y = date.getFullYear();
-        const m = String(date.getMonth() + 1).padStart(2, '0');
-        const d = String(date.getDate()).padStart(2, '0');
-        return `${y}-${m}-${d}`;
-    };
+    const formatDateISO = (date) => formatDate(date);
 
     const formatDateDisplay = (date) => {
         const m = String(date.getMonth() + 1).padStart(2, '0');
@@ -455,7 +452,7 @@
     // 배차 일괄 저장 (DRAFT or CONFIRMED)
     async function saveDispatch(status) {
         if (!selectedRoute) {
-            alert('선택된 노선이 없습니다.');
+            toast.warning('선택된 노선이 없습니다.');
             return;
         }
         try {
@@ -495,12 +492,12 @@
                 };
                 await adminSaveDailyDispatch(payload);
             }
-            alert(status === 'CONFIRMED' ? '배차 정보가 17시 확정 공지되었습니다.' : '배차 정보가 성공적으로 임시저장되었습니다.');
+            toast.success(status === 'CONFIRMED' ? '배차 정보가 17시 확정 공지되었습니다.' : '배차 정보가 성공적으로 임시저장되었습니다.');
             
             // 데이터 재로딩
             await syncData(selectedDateKey, selectedRoute.id);
         } catch (err) {
-            alert('배차 저장 실패: ' + err.message);
+            toast.error('배차 저장 실패: ' + (err.detail || err.message || '오류'));
         }
     }
 
