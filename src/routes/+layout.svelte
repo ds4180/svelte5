@@ -29,6 +29,7 @@
 	import { initAudioUnlocker } from '$lib/utils/sound';
 	import Alert from '$lib/components/Alert.svelte';
 	import Toast from '$lib/components/Toast.svelte';
+	import '$lib/icons/register';
 	import './layout.css';
 
 	// 📌 상위(+layout.server.ts)에서 건네받은 data 와 자식 화면 children

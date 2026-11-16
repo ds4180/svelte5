@@ -1,34 +1,11 @@
 <script>
 	/**
-	 * @file +layout.svelte (하이드레이션 표준 쉘)
-	 * @description 전역 상태 관리 및 시스템 부팅 제어
+	 * @file (auth)/+layout.svelte (인증 화면 전용 레이아웃)
+	 * @description 전역 인증/알림/토스트는 최상위 +layout.svelte 에서 통합 관리하며,
+	 * 비로그인 인증 화면에서는 사내 Alert(/api/alert/active) 마운트를 생략합니다.
 	 */
-	import { onMount, untrack } from 'svelte';
-	import Alert from '$lib/components/Alert.svelte';
-	import { alertState } from '$lib/runes/alert.svelte';
-	import { getAuthContext } from '$lib/runes/auth.svelte';
-
-	let { data, children } = $props();
-	const auth = getAuthContext();
-
-	// [데이터 동기화] 서버 -> 클라이언트 RUNE
-	$effect(() => {
-		if (data.user) {
-			untrack(() => auth.setUser(data.user));
-		}
-	});
-
-	onMount(() => {
-		// 하이드레이션 완료 후 전역 상태 초기화
-		alertState.init();
-		auth.init();
-		console.log('🚀 [System] Hydration Completed & Infrastructure Bootstrapped');
-	});
+	let { children } = $props();
 </script>
-
-<!-- 🔔 전역 알림 레이어 (Alert 컴포넌트 내부에 browser 가드 적용됨) -->
-<Alert positionFilter="top" />
-<Alert positionFilter="modal" />
 
 <!-- 🚀 메인 콘텐츠 영역 -->
 {@render children()}

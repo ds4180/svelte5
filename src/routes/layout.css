@@ -1,5 +1,10 @@
 @import 'tailwindcss';
-@plugin 'daisyui';
+@source not "../../build";
+@source not "../../.svelte-kit";
+@plugin 'daisyui' {
+	themes: light --default;
+	exclude: megamenu, fileinput, otp, fab, steps, aura, drawer, dock, radialprogress, hovergallery, hover3d, mockup, validator, swap, textrotate, carousel, diff, chat;
+}
 @plugin '@tailwindcss/typography';
 
 /* 📌 프로젝트 전역 커스텀 스타일 */

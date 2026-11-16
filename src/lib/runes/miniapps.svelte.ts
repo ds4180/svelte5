@@ -30,6 +30,9 @@ class MiniappStore {
 		TOTAL: 0
 	});
 
+	private countsInFlight: Promise<void> | null = null;
+	private itemsInFlight: Promise<void> | null = null;
+
 	constructor() {
 		if (typeof window !== 'undefined') {
 			websocket.addMessageListener((msg: any) => {
@@ -38,7 +41,11 @@ class MiniappStore {
 					(msg?.type === 'MINIAPP_UPDATE' || msg?.type === 'ALERT_BROADCAST')
 				) {
 					console.log('🔔 [MiniappStore] 실시간 알림 신호 수신 -> 데이터 자동 동기화');
-					this.refresh();
+					if (this.items.length > 0) {
+						this.refresh();
+					} else {
+						this.loadCounts();
+					}
 				}
 			});
 		}
@@ -50,6 +57,8 @@ class MiniappStore {
 	reset(): void {
 		this.items = [];
 		this.loading = false;
+		this.countsInFlight = null;
+		this.itemsInFlight = null;
 		this.serverCounts = {
 			NOTIFICATION: 0,
 			INSTRUCTION: 0,
@@ -72,38 +81,59 @@ class MiniappStore {
 	}
 
 	/**
-	 * 📊 뱃지용 실시간 미결 건수 로드
+	 * 📊 뱃지용 실시간 미결 건수 로드 (중복 동시 호출 병합)
 	 */
 	async loadCounts(): Promise<void> {
 		if (!auth.isAuthenticated) return;
-		try {
-			const res = await api.getMiniappCounts();
-			if (res) this.serverCounts = res;
-		} catch {
-			// 비로그인 상태 등에서는 조용히 무시
-		}
+		if (this.countsInFlight) return this.countsInFlight;
+
+		this.countsInFlight = (async () => {
+			try {
+				const res = await api.getMiniappCounts();
+				if (res) this.serverCounts = res;
+			} catch {
+				// 비로그인 상태 등에서는 조용히 무시
+			} finally {
+				this.countsInFlight = null;
+			}
+		})();
+
+		return this.countsInFlight;
 	}
 
 	/**
-	 * 📋 미니앱 액션 피드 목록 로드
+	 * 📋 미니앱 액션 피드 목록 로드 (중복 동시 호출 병합)
 	 */
 	async loadItems(params: MiniappQueryParams = {}): Promise<void> {
 		if (!auth.isAuthenticated) return;
-		this.loading = true;
-		try {
-			const res = await api.getMiniappItems(params);
-			if (Array.isArray(res)) {
-				this.items = res.map((item) => ({
-					...item,
-					type: item.category,
-					is_done: item.status === 'COMPLETED'
-				}));
+		const isDefaultQuery = Object.keys(params).length === 0;
+		if (isDefaultQuery && this.itemsInFlight) return this.itemsInFlight;
+
+		const task = (async () => {
+			this.loading = true;
+			try {
+				const res = await api.getMiniappItems(params);
+				if (Array.isArray(res)) {
+					this.items = res.map((item) => ({
+						...item,
+						type: item.category,
+						is_done: item.status === 'COMPLETED'
+					}));
+				}
+			} catch (e) {
+				console.error('❌ [MiniappStore] 피드 로딩 실패:', e);
+			} finally {
+				this.loading = false;
+				if (isDefaultQuery) {
+					this.itemsInFlight = null;
+				}
 			}
-		} catch (e) {
-			console.error('❌ [MiniappStore] 피드 로딩 실패:', e);
-		} finally {
-			this.loading = false;
+		})();
+
+		if (isDefaultQuery) {
+			this.itemsInFlight = task;
 		}
+		return task;
 	}
 
 	/**

@@ -44,19 +44,28 @@ interface OutboxTask {
 	jsonBody?: Record<string, any>;
 }
 
-// 사전 캐싱할 전체 자산 목록 (레거시 수동 sw.js 및 SSR 리다이렉트 루트 '/' 제외 + 오프라인 폴백 포함)
-const ASSETS = Array.from(
-	new Set(['/offline.html', ...build, ...files.filter((f) => !f.endsWith('/sw.js'))])
+// 1) 설치 시 즉시 선적재할 최소 셸 자산 (오프라인 폴백 페이지 및 필수 아이콘만)
+const PRECACHE_ASSETS = Array.from(
+	new Set([
+		'/offline.html',
+		...files.filter((f) => f === '/favicon.png' || f === '/icons/icon-192.png')
+	])
 );
-const ASSET_SET = new Set(ASSETS);
 
-// 1. 설치(Install): 빌드된 모든 페이지 청크와 정적 자산을 캐시에 일괄 적재 (dev 환경에서는 캐싱 생략)
+// 2) 런타임 Cache-First 대상 전체 자산 집합 (빌드 해시 청크 + 정적 파일)
+const ASSET_SET = new Set([
+	'/offline.html',
+	...build,
+	...files.filter((f) => !f.endsWith('/sw.js'))
+]);
+
+// 1. 설치(Install): 최소 오프라인 셸만 즉시 캐싱 (나머지 청크는 실제 방문 시 온디맨드 캐싱)
 sw.addEventListener('install', (event: ExtendableEvent) => {
 	async function addFilesToCache() {
 		if (build.length === 0) return;
 		const cache = await caches.open(CACHE);
-		if (ASSETS.length > 0) {
-			await cache.addAll(ASSETS);
+		if (PRECACHE_ASSETS.length > 0) {
+			await cache.addAll(PRECACHE_ASSETS);
 		}
 	}
 
@@ -98,12 +107,18 @@ if (build.length > 0) {
 		async function respond(): Promise<Response> {
 			const cache = await caches.open(CACHE);
 
-			// [A] 빌드된 정적 자산(build + files)은 설치 시 이미 캐싱되었으므로 Cache-First로 즉시 반환
+			// [A] 빌드된 해시 청크(build) 및 정적 파일(files)은 온디맨드 Cache-First로 응답·저장
 			if (ASSET_SET.has(url.pathname)) {
 				const cachedAsset = await cache.match(url.pathname);
 				if (cachedAsset) {
 					return cachedAsset;
 				}
+
+				const networkResponse = await fetch(event.request);
+				if (networkResponse.status === 200) {
+					cache.put(url.pathname, networkResponse.clone());
+				}
+				return networkResponse;
 			}
 
 			// [B] SSR HTML 문서(navigate) / version.json / __data.json 은 절대 캐시하지 않고 네트워크 직통 처리

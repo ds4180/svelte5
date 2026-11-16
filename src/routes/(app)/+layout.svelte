@@ -50,7 +50,7 @@
 
 	$effect(() => {
 		if (auth.isAuthenticated) {
-			miniappStore.refresh();
+			miniappStore.loadCounts();
 		} else {
 			miniappStore.reset();
 		}

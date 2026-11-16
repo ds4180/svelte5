@@ -32,15 +32,29 @@ export const load: PageServerLoad = async ({ params, fetch, locals }) => {
 		dayoff: 'DayOffEngine'
 	};
 
-	// 1. AppRegistry 에서 앱 정보 조회
-	let appInfo: AppInfo | null = null;
-	try {
-		const appRes = await fetch(`/api/v1/admin/apps/${appId}`);
-		if (appRes.ok) {
-			appInfo = await appRes.json();
-		}
-	} catch (e) {
+	// 1. AppRegistry 조회와 (slug 존재 시) 범용 데이터 조회를 병렬 시작하여 직렬 워터폴 지연 제거
+	const appResPromise = fetch(`/api/v1/admin/apps/${appId}`).catch((e) => {
 		console.warn(`⚠️ [SSR] AppRegistry fetch error:`, e instanceof Error ? e.message : String(e));
+		return null;
+	});
+	const dataResPromise = slug
+		? fetch(`/api/v1/app/data/${appId}/${slug}`).catch((e) => {
+				console.warn(
+					'⚠️ [SSR Preload] Generic data fetch failed:',
+					e instanceof Error ? e.message : String(e)
+				);
+				return null;
+			})
+		: Promise.resolve(null);
+
+	let appInfo: AppInfo | null = null;
+	const appRes = await appResPromise;
+	if (appRes && appRes.ok) {
+		try {
+			appInfo = await appRes.json();
+		} catch (e) {
+			console.warn(`⚠️ [SSR] AppRegistry parse error:`, e instanceof Error ? e.message : String(e));
+		}
 	}
 
 	if (!appInfo) {
@@ -93,40 +107,41 @@ export const load: PageServerLoad = async ({ params, fetch, locals }) => {
 		throw error(403, `해당 앱("${appInfo.title || appId}")에 접근할 권한이 없습니다.`);
 	}
 
-	// 2. [Data-Driven] 범용 데이터 로딩 (Hardcoding Zero 기반)
+	// 2. [Data-Driven] 범용 데이터 로딩 (병렬 시작된 응답 수신)
 	let initialData: Record<string, unknown> | null = null;
 	if (slug) {
 		try {
-			// ✅ 특정 엔진을 체크하는 if 문 없이, 범용 엔드포인트 호출
-			const res = await fetch(`/api/v1/app/data/${appId}/${slug}`);
-			if (res.status === 403) {
-				let errDetail = `해당 앱("${appInfo.title || appId}") 데이터에 접근할 권한이 없습니다.`;
-				try {
-					const errJson = await res.json();
-					errDetail = formatApiError(errJson, errDetail);
-				} catch {
-					// 기본 권한 안내 메시지 유지
+			const res = await dataResPromise;
+			if (res) {
+				if (res.status === 403) {
+					let errDetail = `해당 앱("${appInfo.title || appId}") 데이터에 접근할 권한이 없습니다.`;
+					try {
+						const errJson = await res.json();
+						errDetail = formatApiError(errJson, errDetail);
+					} catch {
+						// 기본 권한 안내 메시지 유지
+					}
+					throw error(403, errDetail);
 				}
-				throw error(403, errDetail);
-			}
-			if (res.ok) {
-				const data = await res.json();
-				// [Data-Driven] 엔진의 기대 규격에 맞게 맵핑
-				if (data.instance && data.instance.posts) {
-					// 📋 목록 모드인 경우 (posts 리스트가 포함됨)
-					initialData = {
-						posts: data.instance.posts,
-						total: data.instance.total || 0,
-						board: data.parent_config,
-						bindings: data.bindings || []
-					};
-				} else {
-					// 📄 상세 모드인 경우
-					initialData = {
-						post: data.instance,
-						board: data.parent_config,
-						bindings: data.bindings || []
-					};
+				if (res.ok) {
+					const data = await res.json();
+					// [Data-Driven] 엔진의 기대 규격에 맞게 맵핑
+					if (data.instance && data.instance.posts) {
+						// 📋 목록 모드인 경우 (posts 리스트가 포함됨)
+						initialData = {
+							posts: data.instance.posts,
+							total: data.instance.total || 0,
+							board: data.parent_config,
+							bindings: data.bindings || []
+						};
+					} else {
+						// 📄 상세 모드인 경우
+						initialData = {
+							post: data.instance,
+							board: data.parent_config,
+							bindings: data.bindings || []
+						};
+					}
 				}
 			}
 		} catch (e) {

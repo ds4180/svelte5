@@ -9,8 +9,17 @@ import type { LayoutServerLoad } from './$types';
  *   - 비로그인(Guest, Rank 0) 상태에서도 기본 페이지(`/`) 및 공개 메뉴(min_read_rank=0)에
  *     정상 진입할 수 있도록 강제 로그인 리다이렉트 없이 `locals.user || null`을 전달합니다.
  */
-export const load: LayoutServerLoad = async ({ fetch, locals }) => {
+export const load: LayoutServerLoad = async ({ fetch, locals, url, depends }) => {
+	depends('app:menus');
 	let menus: MenuItem[] = [];
+
+	// 루트('/') 경로는 (app)/+page.server.ts 에서 즉시 302 리다이렉트되므로 중복 메뉴 조회 생략
+	if (url.pathname === '/') {
+		return {
+			menus,
+			user: locals.user || null
+		};
+	}
 
 	try {
 		// 1. 백엔드 공개 메뉴 트리 조회 (로그인 시 세션 쿠키 포함, 비로그인 시 Rank 0 공개 메뉴 반환)
