@@ -45,34 +45,34 @@ export interface PageUpsertPayload {
  * 1. [Public] 슬러그로 특정 페이지 상세 정보 조회
  */
 export const getPageDetail = <T = PageItem>(slug: string) =>
-	fastApi<T>('GET', `/api/v1/pages/detail/${slug}`);
+	fastApi<T>('GET', `/api/v1/page/detail/${encodeURIComponent(slug)}`);
 
 /**
  * 2. [Public] 현재 활성화된 모든 공개 페이지 목록 조회 (사이드바 등)
  */
 export const getPublicPages = <T = PageItem[]>() =>
-	fastApi<T>('GET', '/api/v1/pages/list');
+	fastApi<T>('GET', '/api/v1/page/public/list');
 
 /**
  * 3. [Admin] 전체 페이지 목록 조회 (비활성/예약 포함)
  */
 export const adminGetPages = <T = PageItem[]>() =>
-	fastApi<T>('GET', '/api/v1/admin/pages');
+	fastApi<T>('GET', '/api/v1/page/admin/list');
 
 /**
  * 4. [Admin] 새 페이지 생성
  */
 export const adminCreatePage = <T = PageItem>(pageData: PageUpsertPayload) =>
-	fastApi<T>('POST', '/api/v1/admin/pages', pageData);
+	fastApi<T>('POST', '/api/v1/page/admin/create', pageData);
 
 /**
  * 5. [Admin] 페이지 정보 수정
  */
 export const adminUpdatePage = <T = PageItem>(pageData: PageUpsertPayload) =>
-	fastApi<T>('PUT', '/api/v1/admin/pages', pageData);
+	fastApi<T>('PUT', '/api/v1/page/admin/update', pageData);
 
 /**
  * 6. [Admin] 페이지 삭제
  */
 export const adminDeletePage = <T = { success?: boolean; message?: string }>(pageId: number | string) =>
-	fastApi<T>('DELETE', `/api/v1/admin/pages/${pageId}`);
+	fastApi<T>('DELETE', `/api/v1/page/admin/delete/${pageId}`);

@@ -41,7 +41,7 @@
 	});
 
 	// 권한 체크
-	let isAdmin = $derived(auth.rank >= 4);
+	let isAdmin = $derived((auth.user?.rank_level ?? 0) >= 4);
 
 	// 초기화
 	onMount(() => {
