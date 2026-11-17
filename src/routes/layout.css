@@ -26,3 +26,11 @@ body {
 	color: #0f172a !important;
 	-webkit-font-smoothing: antialiased;
 }
+
+@media print {
+	html, body {
+		height: auto !important;
+		overflow: visible !important;
+		background-color: #ffffff !important;
+	}
+}

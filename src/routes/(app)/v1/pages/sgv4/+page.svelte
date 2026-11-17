@@ -808,7 +808,7 @@
 	}
 </script>
 
-<div class="mx-auto max-w-6xl space-y-6 px-4 py-6 font-['Noto_Sans_KR',sans-serif] md:px-8">
+<div class="mx-auto max-w-6xl space-y-6 pb-20 font-['Noto_Sans_KR',sans-serif] md:pb-8">
 	<!-- 상단 헤더 & 상태 요약 -->
 	<div
 		class="flex flex-col justify-between gap-4 border-b-2 border-slate-900 pb-5 md:flex-row md:items-end"

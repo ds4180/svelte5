@@ -21,3 +21,9 @@ export const customGetActiveRouteMasters = <T = any>(date: string) =>
  */
 export const customGetDailyDispatch = <T = any>(date: string, routeMasterId: number | string) => 
 	fastApi<T>('GET', `${BASE_URL}/dispatch`, { target_date: date, route_master_id: routeMasterId });
+
+/**
+ * 로그인한 운전원 본인의 당일 및 명일(17시 이후) 배차 브리핑 조회
+ */
+export const customGetMyDispatchBriefing = <T = any>() =>
+	fastApi<T>('GET', `${BASE_URL}/my-dispatch-briefing`);

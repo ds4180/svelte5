@@ -132,6 +132,17 @@
 			icon: 'mdi:robot-industrial',
 			color: 'bg-violet-600'
 		},
+		{
+			type: 'SYSTEM',
+			category: 'CORE',
+			appId: 'backup',
+			minRank: 8,
+			title: '백업 관리',
+			desc: '설치된 앱별 DB 레코드 표 형식 물리 프린트 백업 및 증분 출력 이력 관리',
+			link: '/v1/admin/backup',
+			icon: 'mdi:printer-check',
+			color: 'bg-emerald-700'
+		},
 		// 🌟 운영팀 위임 가능 모듈 (Lv.4 일반 관리자 허용)
 		{
 			type: 'SYSTEM',
@@ -210,6 +221,15 @@
 			link: '/v1/admin/dayoff',
 			icon: 'mdi:calendar-check-outline',
 			color: 'bg-amber-600'
+		},
+		{
+			type: 'CUSTOM',
+			appId: 'blackbox',
+			title: '블랙박스 비디오 관리',
+			desc: '비디오 장부(고유·육안번호), 현재 위치 추적, 본체 스펙(LED), 교체 요청 및 사용이력 역조회 (사용자: /v1/custom/blackbox)',
+			link: '/v1/admin/blackbox',
+			icon: 'mdi:video-box',
+			color: 'bg-slate-800'
 		},
 		{
 			type: 'INSTANCE',

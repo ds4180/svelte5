@@ -392,3 +392,29 @@ export {
 	adminUpdatePage,
 	adminDeletePage
 } from './page';
+
+// 🗄️ 물리 백업 프린트 관리 API
+export const adminGetBackupApps = <T = any>() => request<T>(`${BASE_URL}/backup/apps`);
+export const adminFetchBackupPrintData = <T = any>(data: Record<string, any>) =>
+	request<T>(`${BASE_URL}/backup/print-data`, 'POST', data);
+export const adminGetBackupPrintLogs = <T = any>(appId?: string) =>
+	request<T>(`${BASE_URL}/backup/print-logs${appId ? `?app_id=${encodeURIComponent(appId)}` : ''}`);
+export const adminSaveBackupPrintLog = <T = any>(data: Record<string, any>) =>
+	request<T>(`${BASE_URL}/backup/print-logs`, 'POST', data);
+
+export const adminDeleteBackupPrintLog = <T = any>(logId: number | string) =>
+	request<T>(`${BASE_URL}/backup/print-logs/${logId}`, 'DELETE');
+
+export async function adminDownloadBackupPrintXlsx(data: Record<string, any>): Promise<Blob> {
+	const res = await fetch(`${BASE_URL}/backup/print-xlsx`, {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		credentials: 'include',
+		body: JSON.stringify(data)
+	});
+	if (!res.ok) {
+		const errText = await res.text().catch(() => '');
+		throw new Error(errText || `엑셀 파일 생성 실패 (${res.status})`);
+	}
+	return res.blob();
+}

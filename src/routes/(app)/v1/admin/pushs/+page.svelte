@@ -16,6 +16,7 @@
 	import { syncPushSubscription } from '$lib/pwa/serviceWorker';
 	import { toast } from '$lib/runes/toast.svelte';
 	import { getSiteTitle } from '$lib/config/site';
+	import PrintAssist from '$lib/components/PrintAssist.svelte';
 	import Icon from '@iconify/svelte';
 
 	let subscriptions = $state(/** @type {any[]} */ ([]));
@@ -175,7 +176,7 @@
 	<!-- ===================================================================== -->
 	<!-- 1. 헤더 영역 (기본값: 새로고침 + 관리자 홈) -->
 	<!-- ===================================================================== -->
-	<div class="flex flex-col gap-4 border-b-2 border-slate-900 pb-6 md:flex-row md:items-end md:justify-between md:border-b-4 md:pb-8">
+	<div class="flex flex-col gap-4 border-b-2 border-slate-900 pb-6 md:flex-row md:items-end md:justify-between md:border-b-4 md:pb-8 print:hidden">
 		<div>
 			<div class="flex items-center gap-2">
 				<span class="inline-flex items-center gap-1.5 rounded-full bg-slate-900 px-3 py-1 text-[11px] font-black tracking-widest text-pink-400 uppercase">
@@ -220,6 +221,8 @@
 				<span>구독 전체 삭제 ({subscriptions.length})</span>
 			</button>
 
+			<PrintAssist title="웹 푸시 구독 현황" subtitle="푸시·구독 관리 · /v1/admin/pushs" />
+
 			<button
 				onclick={loadSubscriptions}
 				class="flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 active:scale-95"
@@ -241,7 +244,7 @@
 	<!-- ===================================================================== -->
 	<!-- 2. 통계 지표 카드 -->
 	<!-- ===================================================================== -->
-	<div class="grid grid-cols-2 gap-4 md:grid-cols-4 md:gap-5">
+	<div data-print-section="플랫폼별 구독 통계" class="grid grid-cols-2 gap-4 md:grid-cols-4 md:gap-5 print:break-inside-avoid">
 		<!-- 카드 1: 전체 구독 기기 -->
 		<div class="rounded-2xl border-2 border-slate-200 bg-white p-5 shadow-sm">
 			<div class="flex items-center justify-between">
@@ -323,7 +326,7 @@
 	<!-- ===================================================================== -->
 	<!-- 3. 검색 및 필터 툴바 -->
 	<!-- ===================================================================== -->
-	<div class="rounded-2xl border-2 border-slate-200 bg-white p-4 shadow-sm">
+	<div class="rounded-2xl border-2 border-slate-200 bg-white p-4 shadow-sm print:hidden">
 		<div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
 			<div class="flex flex-1 flex-wrap items-center gap-3">
 				<!-- 검색창 -->
@@ -358,7 +361,7 @@
 	<!-- ===================================================================== -->
 	<!-- 4. 구독자 목록 테이블 -->
 	<!-- ===================================================================== -->
-	<div class="overflow-hidden rounded-2xl border-2 border-slate-200 bg-white shadow-sm">
+	<div data-print-section="구독자 기기 목록" class="overflow-hidden rounded-2xl border-2 border-slate-200 bg-white shadow-sm print:overflow-visible print:border-slate-300 print:shadow-none">
 		{#if loading}
 			<div class="flex flex-col items-center justify-center py-20 text-slate-400">
 				<Icon icon="solar:refresh-circle-bold-duotone" class="h-10 w-10 animate-spin text-pink-600" />
@@ -370,7 +373,7 @@
 				<p class="mt-2 text-sm font-bold">조건에 해당하는 활성 푸시 구독 기기가 없습니다.</p>
 			</div>
 		{:else}
-			<div class="overflow-x-auto">
+			<div class="overflow-x-auto print:overflow-visible">
 				<table class="w-full text-left text-xs">
 					<thead class="border-b border-slate-200 bg-slate-50/80 font-black text-slate-500 uppercase tracking-wider">
 						<tr>
@@ -378,7 +381,7 @@
 							<th class="px-4 py-3.5">소속 그룹</th>
 							<th class="px-4 py-3.5">기기 / 브라우저 플랫폼</th>
 							<th class="px-4 py-3.5">엔드포인트 (Preview)</th>
-							<th class="px-5 py-3.5 text-right">구독 제어</th>
+							<th class="px-5 py-3.5 text-right print:hidden">구독 제어</th>
 						</tr>
 					</thead>
 					<tbody class="divide-y divide-slate-100 font-medium text-slate-700">
@@ -426,7 +429,7 @@
 										</span>
 										<button
 											onclick={() => copyEndpoint(sub.endpoint)}
-											class="text-slate-400 transition hover:text-slate-700"
+											class="text-slate-400 transition hover:text-slate-700 print:hidden"
 											title="엔드포인트 URL 전체 복사"
 										>
 											<Icon icon="solar:copy-linear" class="text-sm" />
@@ -435,7 +438,7 @@
 								</td>
 
 								<!-- 제어 버튼 -->
-								<td class="px-5 py-4 text-right">
+								<td class="px-5 py-4 text-right print:hidden">
 									<button
 										onclick={() => deleteSubscription(sub.id, sub.real_name || sub.username)}
 										class="inline-flex items-center gap-1 rounded-xl border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-bold text-rose-700 shadow-sm transition hover:bg-rose-600 hover:text-white active:scale-95"

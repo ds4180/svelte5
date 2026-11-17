@@ -197,7 +197,7 @@
 	}
 
 	/** @param {any} path */
-	function isActive(path) {
+	function isActive(path, exact = false) {
 		if (!path || path === '#') return false;
 		const currentPath = page.url.pathname;
 		let targetPath;
@@ -207,7 +207,7 @@
 			targetPath = path;
 		}
 		if (currentPath === targetPath) return true;
-		if (targetPath !== '/' && currentPath.startsWith(targetPath)) {
+		if (!exact && targetPath !== '/' && currentPath.startsWith(targetPath)) {
 			const nextChar = currentPath.charAt(targetPath.length);
 			if (nextChar === '/' || nextChar === '') return true;
 		}
@@ -216,11 +216,11 @@
 </script>
 
 <div
-	class="relative flex h-screen h-[100dvh] max-h-[100dvh] w-full max-w-full flex-col overflow-hidden bg-slate-50 font-['Noto_Sans_KR','Outfit'] text-slate-900 antialiased selection:bg-blue-100 selection:text-blue-700"
+	class="relative flex h-screen h-[100dvh] max-h-[100dvh] w-full max-w-full flex-col overflow-hidden bg-slate-50 font-['Noto_Sans_KR','Outfit'] text-slate-900 antialiased selection:bg-blue-100 selection:text-blue-700 print:block print:h-auto print:max-h-none print:overflow-visible print:bg-white"
 >
 	<!-- 🌐 Premium Navbar (Global Header) -->
 	<header
-		class="z-[1000] flex h-14 md:h-16 min-h-0 w-full max-w-full flex-none items-center justify-between border-b-2 md:border-b-4 border-slate-900 bg-white px-2.5 sm:px-4 md:px-6 transition-all {isScrolled
+		class="z-[1000] flex h-14 md:h-16 min-h-0 w-full max-w-full flex-none items-center justify-between border-b-2 md:border-b-4 border-slate-900 bg-white px-2.5 sm:px-4 md:px-6 transition-all print:hidden {isScrolled
 			? 'shadow-xl'
 			: ''}"
 	>
@@ -634,7 +634,7 @@
 		</div>
 	</header>
 
-	<div class="relative flex flex-1 w-full max-w-full min-w-0 min-h-0 overflow-hidden">
+	<div class="relative flex flex-1 w-full max-w-full min-w-0 min-h-0 overflow-hidden print:block print:h-auto print:overflow-visible">
 		<!-- ⬅️ 왼쪽 네비게이션 사이드바 (모바일/태블릿 Scrim 백드롭 포함) -->
 		{#if isMobile && isLeftOpen}
 			<!-- svelte-ignore a11y_click_events_have_key_events -->
@@ -646,7 +646,7 @@
 			></div>
 		{/if}
 		<aside
-			class="z-[995] flex-none h-full overflow-hidden bg-slate-900 text-slate-300 shadow-2xl
+			class="z-[995] flex-none h-full overflow-hidden bg-slate-900 text-slate-300 shadow-2xl print:hidden
                       {isMounted ? 'transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]' : 'transition-none'}
                       {isMobile ? 'absolute top-0 bottom-0 left-0 h-full' : ''} 
                       {isLeftOpen ? 'w-72 border-r-4 border-slate-900' : 'w-0 border-r-0'}"
@@ -750,11 +750,11 @@
 
 		<!-- 🚀 가운데 본문 영역 (가로 넘침 시 정상 스크롤바 지원 overflow-x-auto, 모바일 사이드바 오픈 시 배경 스크롤 잠금) -->
 		<main
-			class="custom-scrollbar relative flex flex-1 min-w-0 min-h-0 flex-col bg-slate-50
+			class="custom-scrollbar relative flex flex-1 min-w-0 min-h-0 flex-col bg-slate-50 print:block print:h-auto print:overflow-visible print:bg-white
                    {isMounted ? 'transition-all duration-500' : 'transition-none'}
                    {isMobile && isLeftOpen ? 'overflow-hidden pointer-events-none' : 'overflow-y-auto overflow-x-auto'}"
 		>
-			<div class="mx-auto min-h-full w-full max-w-[1700px] p-4 pb-24 sm:p-6 sm:pb-24 md:p-8 md:pb-12 lg:p-10 lg:pb-16 min-w-0">
+			<div class="mx-auto min-h-full w-full max-w-[1700px] p-4 pb-[calc(6rem+env(safe-area-inset-bottom,0px))] sm:p-6 sm:pb-[calc(6rem+env(safe-area-inset-bottom,0px))] md:p-8 md:pb-12 lg:p-10 lg:pb-16 min-w-0 print:max-w-none print:p-0">
 				{@render children?.()}
 			</div>
 		</main>
@@ -762,7 +762,7 @@
 
 	<!-- 📱 모바일 세로 모드 전용 하단 퀵 내비게이션 바 (레이아웃 셸 z-[1020]: 동적 폼 z-1010 위, use:portal z-9999 아래 간섭 방지) -->
 	<nav
-		class="fixed bottom-0 left-0 right-0 z-[1020] flex h-16 w-full items-center justify-around border-t-2 border-slate-200 bg-white/95 px-2 backdrop-blur-md shadow-[0_-8px_24px_rgba(15,23,42,0.06)] pb-[env(safe-area-inset-bottom,0px)] md:hidden"
+		class="fixed bottom-0 left-0 right-0 z-[1020] flex h-16 w-full items-center justify-around border-t-2 border-slate-200 bg-white/95 px-2 backdrop-blur-md shadow-[0_-8px_24px_rgba(15,23,42,0.06)] pb-[env(safe-area-inset-bottom,0px)] md:hidden print:hidden"
 		aria-label="모바일 하단 퀵 메뉴"
 	>
 		<!-- 1. 홈 (대시보드) -->
@@ -772,11 +772,11 @@
 				isRightOpen = false;
 				if (isMobile) isLeftOpen = false;
 			}}
-			class="group flex flex-1 flex-col items-center justify-center rounded-xl py-1.5 transition-colors {isActive('/v1')
+			class="group flex flex-1 flex-col items-center justify-center rounded-xl py-1.5 transition-colors {isActive('/v1', true)
 				? 'text-blue-600 bg-blue-50/70'
 				: 'text-slate-500 hover:text-slate-900'}"
 		>
-			<Icon icon={isActive('/v1') ? 'ph:house-fill' : 'ph:house-bold'} class="h-5 w-5 transition-transform group-active:scale-90" />
+			<Icon icon={isActive('/v1', true) ? 'ph:house-fill' : 'ph:house-bold'} class="h-5 w-5 transition-transform group-active:scale-90" />
 			<span class="mt-0.5 text-[10px] font-black tracking-tighter">홈</span>
 		</a>
 
@@ -858,7 +858,9 @@
 </div>
 
 <!-- 🍱 동적 폼 (독립 컴포넌트: Scrim 포함) -->
-<DynamicSidebar {isMobile} isOpen={isRightOpen} {isMounted} onClose={toggleRight} />
+<div class="print:hidden">
+	<DynamicSidebar {isMobile} isOpen={isRightOpen} {isMounted} onClose={toggleRight} />
+</div>
 
 <style>
 	.custom-scrollbar {
