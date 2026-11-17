@@ -300,9 +300,22 @@
 
 	// 애니메이션 재생 상태 (true: 재생 중, false: 정지)
 	let isPlaying = $state(false);
+	// 시뮬레이션 배속 (-0.5x, 1x, 1.5x, 2x)
+	let playbackSpeed = $state(1);
+	// 슬라이더 드래그 중 여부 (재생 중 드래그 충돌 방지)
+	let isDraggingTime = $state(false);
+	/** @type {string | null} 선택된 버스 ID (하단 시간표 표시용) */
+	let selectedBusId = $state(null);
 
 	// 애니메이션 프레임 ID (requestAnimationFrame 반환값)
 	let animationFrame;
+
+	/** @param {number} hhmm HHMM 숫자를 "HH:MM" 문자열로 변환 */
+	function formatHHMM(hhmm) {
+		const h = Math.floor(hhmm / 100);
+		const m = hhmm % 100;
+		return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+	}
 
 	// 시간을 HH:MM 형식으로 포맷팅하는 derived 상태
 	// 예: 510분 → "08:30", 1439분 → "23:59"
@@ -409,19 +422,22 @@
 					const count = garageCount.get(startStationId) || 0;
 					garageCount.set(startStationId, count + 1); // 카운트 증가
 
-					// 정거장 위치에 따라 차고지 위치 결정
+					// 정거장 위치에 따라 차고지 위치 결정 (3열 격자로 배치해 화면 이탈 방지)
 					// y ≤ 150: 상단 라인 → 정거장 위쪽에 차고지
 					// y > 150: 하단 라인 → 정거장 아래쪽에 차고지
 					const isTopRow = startStation.y <= 150;
+					const col = count % 3;
+					const row = Math.floor(count / 3);
 
 					buses.push({
 						id: `${bus.id} (${tripIndex + 1}회차)`, // 표시용 ID
-						x: startStation.x, // 정거장 x 좌표
+						baseId: bus.id,
+						x: startStation.x + (col - 1) * 38,
 						y: isTopRow
-							? startStation.y - 40 - count * 25 // 위쪽: 정거장 위에 배치
-							: startStation.y + 40 + count * 25, // 아래쪽: 정거장 아래에 배치
+							? startStation.y - 46 - row * 26 // 위쪽: 정거장 위에 배치
+							: startStation.y + 46 + row * 26, // 아래쪽: 정거장 아래에 배치
 						facing: 1, // 방향 (1: 오른쪽, -1: 왼쪽)
-						color: bus.color, // 버스 색상
+						color: '#f59e0b', // 대기 중 색상
 						status: 'waiting', // 상태: 대기 중
 						stationId: startStationId // 차고지 정거장 ID
 					});
@@ -478,10 +494,11 @@
 
 							buses.push({
 								id: `${bus.id} (${tripIndex + 1}회차)`,
+								baseId: bus.id,
 								x, // 보간된 x 좌표
 								y, // 보간된 y 좌표
 								facing, // 이동 방향
-								color: bus.color,
+								color: facing === 1 ? '#2563eb' : '#059669', // 상행: 파랑, 하행: 초록
 								status: 'active' // 상태: 운행 중
 							});
 							busPlaced = true;
@@ -516,17 +533,20 @@
 						const count = garageCount.get(endStationId) || 0;
 						garageCount.set(endStationId, count + 1);
 
-						// 정거장 위치에 따라 차고지 위치 결정
+						// 정거장 위치에 따라 차고지 위치 결정 (3열 격자)
 						const isTopRow = endStation.y <= 150;
+						const col = count % 3;
+						const row = Math.floor(count / 3);
 
 						buses.push({
 							id: bus.id, // 회차 표시 없음 (최종 주차)
-							x: endStation.x,
+							baseId: bus.id,
+							x: endStation.x + (col - 1) * 38,
 							y: isTopRow
-								? endStation.y - 40 - count * 25 // 위쪽 차고지
-								: endStation.y + 40 + count * 25, // 아래쪽 차고지
+								? endStation.y - 46 - row * 26 // 위쪽 차고지
+								: endStation.y + 46 + row * 26, // 아래쪽 차고지
 							facing: -1, // 왼쪽 방향 (복귀)
-							color: bus.color,
+							color: '#64748b', // 운행 종료 색상
 							status: 'finished', // 상태: 운행 종료
 							stationId: endStationId // 차고지 정거장 ID
 						});
@@ -538,6 +558,24 @@
 		});
 		return buses; // 계산된 모든 버스 위치 반환
 	});
+
+	// 운행 상태 요약 카운트
+	let busStats = $derived.by(() => {
+		let active = 0;
+		let waiting = 0;
+		let finished = 0;
+		for (const b of activeBuses) {
+			if (b.status === 'active') active++;
+			else if (b.status === 'waiting') waiting++;
+			else if (b.status === 'finished') finished++;
+		}
+		return { active, waiting, finished };
+	});
+
+	// 선택된 버스의 전체 스케줄
+	let selectedBus = $derived(
+		selectedBusId ? busSchedules.find((b) => b.id === selectedBusId) ?? null : null
+	);
 
 	// ========================================
 	// 8. 애니메이션 컨트롤
@@ -562,10 +600,13 @@
 	function play() {
 		if (!isPlaying) return; // 정지 상태면 종료
 
-		currentTime += 0.1; // 시간 0.1분 증가 (0.1배속)
+		if (!isDraggingTime) {
+			currentTime += 0.1 * playbackSpeed; // 배속 반영 (음수면 역재생)
 
-		// 24시간(1440분)을 넘으면 0으로 리셋 (루프)
-		if (currentTime > 1440) currentTime = 0;
+			// 24시간(0~1440분) 범위 순환
+			if (currentTime > 1440) currentTime = 0;
+			else if (currentTime < 0) currentTime = 1440;
+		}
 
 		// 다음 프레임 요청 (재귀 호출)
 		animationFrame = requestAnimationFrame(play);
@@ -574,11 +615,133 @@
 	// ========================================
 	// 9. SVG ViewBox 관리 (Pan & Zoom)
 	// ========================================
-	// SVG 뷰포트 설정
-	// x, y: 좌상단 시작 좌표
-	// width, height: 보이는 영역의 크기
-	let viewBox = $state({ x: 0, y: 0, width: 1100, height: 400 });
-	let svgElement; // SVG 요소 참조 (bind:this로 연결)
+	const DEFAULT_VIEWBOX = { x: -20, y: -40, width: 1120, height: 480 };
+	const MIN_VIEWBOX_WIDTH = 280; // 최대 약 400% 확대
+	const MAX_VIEWBOX_WIDTH = 1600; // 최소 약 70% 축소
+
+	let viewBox = $state({ ...DEFAULT_VIEWBOX });
+	/** @type {SVGSVGElement | undefined} */
+	let svgElement = $state();
+
+	let zoomPercent = $derived(Math.round((DEFAULT_VIEWBOX.width / viewBox.width) * 100));
+
+	/** @type {Map<number, { x: number, y: number }>} */
+	const activePointers = new Map();
+	let isPanning = $state(false);
+	let didPan = false;
+
+	/**
+	 * 특정 화면 좌표(또는 중앙)를 기준으로 viewBox 확대/축소
+	 * @param {number} factor 1보다 작으면 확대, 크면 축소
+	 * @param {number} [clientX]
+	 * @param {number} [clientY]
+	 */
+	function zoomViewBox(factor, clientX, clientY) {
+		const nextWidth = Math.min(
+			MAX_VIEWBOX_WIDTH,
+			Math.max(MIN_VIEWBOX_WIDTH, viewBox.width * factor)
+		);
+		const actualFactor = nextWidth / viewBox.width;
+		const nextHeight = viewBox.height * actualFactor;
+
+		let anchorX = viewBox.x + viewBox.width / 2;
+		let anchorY = viewBox.y + viewBox.height / 2;
+
+		if (svgElement && clientX !== undefined && clientY !== undefined) {
+			const rect = svgElement.getBoundingClientRect();
+			if (rect.width > 0 && rect.height > 0) {
+				anchorX = viewBox.x + ((clientX - rect.left) / rect.width) * viewBox.width;
+				anchorY = viewBox.y + ((clientY - rect.top) / rect.height) * viewBox.height;
+			}
+		}
+
+		const ratioX = (anchorX - viewBox.x) / viewBox.width;
+		const ratioY = (anchorY - viewBox.y) / viewBox.height;
+
+		viewBox = {
+			x: anchorX - ratioX * nextWidth,
+			y: anchorY - ratioY * nextHeight,
+			width: nextWidth,
+			height: nextHeight
+		};
+	}
+
+	function resetViewBox() {
+		viewBox = { ...DEFAULT_VIEWBOX };
+	}
+
+	/** @param {PointerEvent} e */
+	function handleSvgPointerDown(e) {
+		// 버튼 등 컨트롤 클릭은 무시
+		if (e.button !== 0 && e.pointerType === 'mouse') return;
+		activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+		svgElement?.setPointerCapture?.(e.pointerId);
+		if (activePointers.size === 1) {
+			isPanning = true;
+			didPan = false;
+		}
+	}
+
+	/** @param {PointerEvent} e */
+	function handleSvgPointerMove(e) {
+		if (!activePointers.has(e.pointerId) || !svgElement) return;
+
+		const prev = activePointers.get(e.pointerId);
+		if (!prev) return;
+
+		const rect = svgElement.getBoundingClientRect();
+		if (rect.width === 0 || rect.height === 0) return;
+
+		if (activePointers.size === 1) {
+			const dx = e.clientX - prev.x;
+			const dy = e.clientY - prev.y;
+			if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
+				didPan = true;
+			}
+			viewBox = {
+				...viewBox,
+				x: viewBox.x - (dx / rect.width) * viewBox.width,
+				y: viewBox.y - (dy / rect.height) * viewBox.height
+			};
+			activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+		} else if (activePointers.size === 2) {
+			didPan = true;
+			const entries = Array.from(activePointers.entries());
+			const otherEntry = entries.find(([id]) => id !== e.pointerId);
+			if (!otherEntry) return;
+			const other = otherEntry[1];
+
+			const prevDist = Math.hypot(prev.x - other.x, prev.y - other.y);
+			const nextDist = Math.hypot(e.clientX - other.x, e.clientY - other.y);
+			activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+			if (prevDist > 0 && nextDist > 0) {
+				const midX = (e.clientX + other.x) / 2;
+				const midY = (e.clientY + other.y) / 2;
+				zoomViewBox(prevDist / nextDist, midX, midY);
+			}
+		}
+	}
+
+	/** @param {PointerEvent} e */
+	function handleSvgPointerUp(e) {
+		activePointers.delete(e.pointerId);
+		if (activePointers.size === 0) {
+			isPanning = false;
+			if (didPan) {
+				setTimeout(() => {
+					didPan = false;
+				}, 0);
+			}
+		}
+	}
+
+	/** @param {WheelEvent} e */
+	function handleSvgWheel(e) {
+		e.preventDefault();
+		const factor = e.deltaY > 0 ? 1.12 : 0.89;
+		zoomViewBox(factor, e.clientX, e.clientY);
+	}
 
 	// ========================================
 	// 10. 툴팁 및 인터랙션
@@ -594,9 +757,11 @@
 		busId: '' // 버스 ID
 	});
 
-	// 버스 클릭 이벤트 핸들러
-	function handleBusClick(busId) {
-		toast.info(`버스 클릭됨: ${busId}`);
+	/** @param {{ baseId: string, id: string }} bus 버스 클릭 이벤트 핸들러 */
+	function handleBusClick(bus) {
+		if (didPan) return;
+		selectedBusId = bus.baseId;
+		toast.info(`버스 선택됨: ${bus.id}`);
 	}
 
 	// 버스에 마우스 올렸을 때 (툴팁 표시)
@@ -643,20 +808,90 @@
 	}
 </script>
 
-<div class="container">
-	<div class="controls">
-		<button onclick={togglePlay}>{isPlaying ? 'Stop' : 'Play'}</button>
-		<button onclick={goToCurrentTime}>Current Time</button>
-		<div class="time-control">
-			<span class="time-display">{formattedTime}</span>
+<div class="mx-auto max-w-6xl space-y-6 px-4 py-6 font-['Noto_Sans_KR',sans-serif] md:px-8">
+	<!-- 상단 헤더 & 상태 요약 -->
+	<div
+		class="flex flex-col justify-between gap-4 border-b-2 border-slate-900 pb-5 md:flex-row md:items-end"
+	>
+		<div>
+			<span class="mb-1 block text-xs font-bold tracking-wider text-slate-400">
+				실시간 노선 시뮬레이터 · SVG v4
+			</span>
+			<h1 class="text-2xl font-black text-slate-900 md:text-4xl">
+				제주 <span class="text-blue-600">202번</span> 버스 운행 현황
+			</h1>
+		</div>
+
+		<div class="flex flex-wrap items-center gap-2 text-xs font-bold">
+			<span class="badge gap-1.5 badge-lg border-blue-200 bg-blue-50 text-blue-700">
+				<span class="h-2 w-2 rounded-full bg-blue-600"></span>
+				운행 중 {busStats.active}대
+			</span>
+			<span class="badge gap-1.5 badge-lg border-amber-200 bg-amber-50 text-amber-700">
+				<span class="h-2 w-2 rounded-full bg-amber-500"></span>
+				대기 {busStats.waiting}대
+			</span>
+			<span class="badge gap-1.5 badge-lg border-slate-200 bg-slate-100 text-slate-600">
+				<span class="h-2 w-2 rounded-full bg-slate-500"></span>
+				종료 {busStats.finished}대
+			</span>
+		</div>
+	</div>
+
+	<!-- 컨트롤 바 -->
+	<div class="space-y-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:p-5">
+		<div class="flex flex-wrap items-center justify-between gap-3">
+			<div class="flex flex-wrap items-center gap-2">
+				<button
+					class="btn btn-sm md:btn-md {isPlaying ? 'btn-error text-white' : 'btn-primary'}"
+					onclick={togglePlay}
+				>
+					{isPlaying ? '일시정지' : '재생'}
+				</button>
+				<button class="btn btn-outline btn-sm md:btn-md" onclick={goToCurrentTime}>
+					현재 시각
+				</button>
+				<div class="join ml-1">
+					{#each [-0.5, 1, 1.5, 2] as speed}
+						<button
+							class="btn join-item btn-xs md:btn-sm {playbackSpeed === speed
+								? 'btn-neutral'
+								: 'btn-ghost border-slate-200'}"
+							onclick={() => (playbackSpeed = speed)}
+						>
+							{speed}x
+						</button>
+					{/each}
+				</div>
+			</div>
+
+			<span class="font-mono text-2xl font-black text-slate-900 md:text-3xl">
+				{formattedTime}
+			</span>
+		</div>
+
+		<!-- 전체 너비 시간 슬라이더 (드래그 용이성 개선) -->
+		<div class="pt-1">
 			<input
 				type="range"
+				aria-label="시뮬레이션 시각 조절"
 				min="240"
 				max="1440"
 				step="1"
 				bind:value={currentTime}
-				style="width: 400px;"
+				onpointerdown={() => (isDraggingTime = true)}
+				onpointerup={() => (isDraggingTime = false)}
+				onpointercancel={() => (isDraggingTime = false)}
+				onchange={() => (isDraggingTime = false)}
+				class="range w-full cursor-pointer py-2 range-primary range-md"
 			/>
+			<div class="mt-1 flex justify-between px-1 font-mono text-[11px] font-medium text-slate-400">
+				<span>04:00</span>
+				<span>09:00</span>
+				<span>14:00</span>
+				<span>19:00</span>
+				<span>24:00</span>
+			</div>
 		</div>
 	</div>
 
@@ -670,116 +905,217 @@
 		</div>
 	{/if}
 
-	<svg
-		bind:this={svgElement}
-		width="100%"
-		height="600"
-		viewBox="{viewBox.x} {viewBox.y} {viewBox.width} {viewBox.height}"
-		style="border: 1px solid #ccc; background: #f9f9f9;"
-	>
-		<!-- 1. 연결 선 (Tracks) 그리기 -->
-		{#each tracks as [startId, endId]}
-			{@const s1 = stationMap.get(startId)}
-			{@const s2 = stationMap.get(endId)}
-			<line
-				x1={s1.x}
-				y1={s1.y}
-				x2={s2.x}
-				y2={s2.y}
-				stroke="#ddd"
-				stroke-width="4"
-				stroke-linecap="round"
-			/>
-		{/each}
-
-		<!-- 2. 정거장 (Nodes) 그리기 -->
-		{#each stations as station}
-			<g transform="translate({station.x}, {station.y})">
-				<circle r="15" fill="white" stroke="#333" stroke-width="2" />
-				<text y="5" text-anchor="middle" font-size="12" font-weight="bold" fill="#333"
-					>{station.label}</text
-				>
-			</g>
-		{/each}
-
-		<!-- 3. 차고지 영역 그리기 (한번 생성되면 계속 유지) -->
-		{#each usedGarageStations as stationId}
-			{@const station = stationMap.get(stationId)}
-			{@const isTopRow = station.y <= 150}
-
-			<!-- 간단한 차고지 표시 -->
-			<text
-				x={station.x}
-				y={isTopRow ? station.y - 25 : station.y + 35}
-				text-anchor="middle"
-				font-size="16"
+	<!-- 노선도 SVG 카드 -->
+	<div class="relative overflow-hidden rounded-3xl border-2 border-slate-900 bg-white p-3 shadow-lg md:p-5">
+		<!-- 노선도 확대/축소/초기화 컨트롤 -->
+		<div class="absolute top-5 right-5 z-10 flex items-center gap-1 rounded-xl border border-slate-200 bg-white/90 p-1 shadow-sm backdrop-blur-xs md:top-7 md:right-7">
+			<button
+				type="button"
+				class="btn btn-ghost btn-xs font-bold"
+				aria-label="노선도 축소"
+				onclick={() => zoomViewBox(1.2)}
 			>
-				🅿️
-			</text>
-		{/each}
-
-		<!-- 4. 버스 그리기 -->
-		{#each activeBuses as bus}
-			<!-- svelte-ignore a11y_click_events_have_key_events -->
-			<g
-				transform="translate({bus.x}, {bus.y})"
-				onmouseenter={(e) => handleBusMouseEnter(e, bus)}
-				onmouseleave={handleBusMouseLeave}
-				onclick={() => handleBusClick(bus.id)}
-				role="button"
-				tabindex="0"
-				class="bus-group"
+				−
+			</button>
+			<span class="min-w-[44px] text-center font-mono text-xs font-bold text-slate-700">
+				{zoomPercent}%
+			</span>
+			<button
+				type="button"
+				class="btn btn-ghost btn-xs font-bold"
+				aria-label="노선도 확대"
+				onclick={() => zoomViewBox(0.8)}
 			>
-				<g transform="scale({bus.facing}, 1)">
-					<rect x="-15" y="-10" width="30" height="20" rx="5" fill={bus.color} stroke="black" />
-					<!-- 창문 -->
-					<rect x="5" y="-5" width="5" height="10" fill="white" />
+				+
+			</button>
+			<button
+				type="button"
+				class="btn btn-ghost btn-xs text-slate-500"
+				onclick={resetViewBox}
+			>
+				초기화
+			</button>
+		</div>
+
+		<svg
+			bind:this={svgElement}
+			class="h-[460px] w-full touch-none rounded-2xl bg-slate-50 select-none md:h-[560px] {isPanning
+				? 'cursor-grabbing'
+				: 'cursor-grab'}"
+			viewBox="{viewBox.x} {viewBox.y} {viewBox.width} {viewBox.height}"
+			onpointerdown={handleSvgPointerDown}
+			onpointermove={handleSvgPointerMove}
+			onpointerup={handleSvgPointerUp}
+			onpointercancel={handleSvgPointerUp}
+			onwheel={handleSvgWheel}
+		>
+			<!-- 1. 연결 선 (Tracks) 그리기 -->
+			{#each tracks as [startId, endId]}
+				{@const s1 = stationMap.get(startId)}
+				{@const s2 = stationMap.get(endId)}
+				<line
+					x1={s1.x}
+					y1={s1.y}
+					x2={s2.x}
+					y2={s2.y}
+					stroke="#cbd5e1"
+					stroke-width="6"
+					stroke-linecap="round"
+				/>
+			{/each}
+
+			<!-- 2. 정거장 (Nodes) 그리기 -->
+			{#each stations as station}
+				{@const isMajor = station.id === 'A' || station.id === 'G' || station.id === 'M'}
+				{@const isGosan = station.id === 'G'}
+				{@const isTopRow = station.y <= 150}
+				<g transform="translate({station.x}, {station.y})">
+					<circle
+						r={isMajor ? 11 : 8}
+						fill={isMajor ? '#1e293b' : '#ffffff'}
+						stroke={isMajor ? '#2563eb' : '#334155'}
+						stroke-width="3"
+					/>
+					<text
+						x={isGosan ? 18 : 0}
+						y={isGosan ? 5 : isTopRow ? 26 : -18}
+						text-anchor={isGosan ? 'start' : 'middle'}
+						font-size="13"
+						font-weight="700"
+						fill="#0f172a"
+					>
+						{station.label}
+					</text>
 				</g>
-				<text y="-15" text-anchor="middle" font-size="10" fill="black">{bus.id}</text>
-			</g>
-		{/each}
+			{/each}
 
-		<!-- 4. SVG 툴팁 (SVG 내부 요소로 렌더링) -->
-		{#if tooltip.visible}
-			<g transform="translate({tooltip.x}, {tooltip.y - 40})" style="pointer-events: none;">
-				<rect x="-60" y="-15" width="120" height="30" rx="5" fill="rgba(0,0,0,0.8)" />
-				<text x="0" y="5" text-anchor="middle" fill="white" font-size="12">
-					[SVG] {tooltip.text}
+			<!-- 3. 차고지 영역 그리기 (한번 생성되면 계속 유지) -->
+			{#each usedGarageStations as stationId}
+				{@const station = stationMap.get(stationId)}
+				{@const isTopRow = station.y <= 150}
+
+				<!-- 간단한 차고지 표시 -->
+				<text
+					x={station.x}
+					y={isTopRow ? station.y - 22 : station.y + 30}
+					text-anchor="middle"
+					font-size="14"
+				>
+					🅿️
 				</text>
-				<!-- 말풍선 꼬리 -->
-				<path d="M -5 15 L 0 20 L 5 15" fill="rgba(0,0,0,0.8)" />
-			</g>
-		{/if}
-	</svg>
-	<div class="legend">202</div>
+			{/each}
+
+			<!-- 4. 버스 그리기 -->
+			{#each activeBuses as bus}
+				{@const isSelected = selectedBusId === bus.baseId}
+				<!-- svelte-ignore a11y_click_events_have_key_events -->
+				<g
+					transform="translate({bus.x}, {bus.y})"
+					onmouseenter={(e) => handleBusMouseEnter(e, bus)}
+					onmouseleave={handleBusMouseLeave}
+					onclick={() => handleBusClick(bus)}
+					role="button"
+					tabindex="0"
+					class="bus-group"
+				>
+					<g transform="scale({bus.facing}, 1)">
+						<rect
+							x="-14"
+							y="-9"
+							width="28"
+							height="18"
+							rx="5"
+							fill={bus.color}
+							stroke={isSelected ? '#facc15' : '#0f172a'}
+							stroke-width={isSelected ? 3 : 1.5}
+						/>
+						<!-- 창문 -->
+						<rect x="4" y="-5" width="6" height="10" rx="1.5" fill="white" opacity="0.9" />
+					</g>
+					<text y="-13" text-anchor="middle" font-size="10" font-weight="700" fill="#1e293b">
+						{bus.id}
+					</text>
+				</g>
+			{/each}
+
+			<!-- 4. SVG 툴팁 (SVG 내부 요소로 렌더링) -->
+			{#if tooltip.visible}
+				<g transform="translate({tooltip.x}, {tooltip.y - 40})" style="pointer-events: none;">
+					<rect x="-60" y="-15" width="120" height="30" rx="5" fill="rgba(0,0,0,0.8)" />
+					<text x="0" y="5" text-anchor="middle" fill="white" font-size="12">
+						[SVG] {tooltip.text}
+					</text>
+					<!-- 말풍선 꼬리 -->
+					<path d="M -5 15 L 0 20 L 5 15" fill="rgba(0,0,0,0.8)" />
+				</g>
+			{/if}
+		</svg>
+
+		<!-- 범례 -->
+		<div class="mt-3 flex flex-wrap items-center justify-between gap-2 px-2 text-xs font-medium text-slate-600">
+			<div class="flex flex-wrap items-center gap-4">
+				<span class="flex items-center gap-1.5">
+					<span class="inline-block h-3 w-4 rounded bg-[#2563eb]"></span> 상행 운행 (→)
+				</span>
+				<span class="flex items-center gap-1.5">
+					<span class="inline-block h-3 w-4 rounded bg-[#059669]"></span> 하행 운행 (←)
+				</span>
+				<span class="flex items-center gap-1.5">
+					<span class="inline-block h-3 w-4 rounded bg-[#f59e0b]"></span> 차고지 대기
+				</span>
+				<span class="flex items-center gap-1.5">
+					<span class="inline-block h-3 w-4 rounded bg-[#64748b]"></span> 운행 종료
+				</span>
+			</div>
+			<span class="text-slate-400">버스를 클릭하면 아래에 전체 운행 시간표가 표시됩니다.</span>
+		</div>
+	</div>
+
+	<!-- 선택된 버스 시간표 패널 -->
+	{#if selectedBus}
+		<div class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+			<div class="mb-4 flex items-center justify-between">
+				<div>
+					<h2 class="text-lg font-black text-slate-900">
+						{selectedBus.id}번 로번 전체 운행 시간표
+					</h2>
+					<p class="text-xs text-slate-500">총 {selectedBus.trips.length}회차 운행</p>
+				</div>
+				<button class="btn btn-ghost btn-sm" onclick={() => (selectedBusId = null)}>닫기</button>
+			</div>
+
+			<div class="grid gap-3 md:grid-cols-2">
+				{#each selectedBus.trips as trip, idx}
+					{@const firstId = trip.route[0]}
+					{@const lastId = trip.route[trip.route.length - 1]}
+					<div class="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+						<div class="mb-2 flex items-center justify-between">
+							<span class="badge badge-sm font-bold badge-neutral">{idx + 1}회차</span>
+							<span class="font-mono text-xs font-bold text-slate-700">
+								{formatHHMM(trip.times[0])} ~ {formatHHMM(trip.times[trip.times.length - 1])}
+							</span>
+						</div>
+						<div class="mb-2 text-sm font-bold text-slate-800">
+							{stationMap.get(firstId)?.label ?? firstId} → {stationMap.get(lastId)?.label ?? lastId}
+						</div>
+						<div class="flex flex-wrap gap-1.5">
+							{#each trip.route as stId, stIdx}
+								<span class="rounded-md bg-white px-2 py-0.5 text-[11px] text-slate-600 shadow-xs">
+									{stationMap.get(stId)?.label ?? stId}
+									<span class="font-mono text-slate-400">{formatHHMM(trip.times[stIdx])}</span>
+								</span>
+							{/each}
+						</div>
+					</div>
+				{/each}
+			</div>
+		</div>
+	{/if}
 </div>
 
 <style>
-	.container {
-		padding: 20px;
-		font-family: sans-serif;
-	}
-	.controls {
-		margin-bottom: 10px;
-		display: flex;
-		gap: 10px;
-		align-items: center;
-	}
-	.legend {
-		margin-top: 10px;
-		color: #555;
-	}
 	.bus-group {
 		cursor: pointer;
-	}
-	.time-control {
-		display: flex;
-		align-items: center;
-		gap: 10px;
-		background: #fff;
-		padding: 5px 10px;
-		border: 1px solid #ddd;
-		border-radius: 4px;
 	}
 	.html-tooltip {
 		position: fixed; /* 브라우저 뷰포트 기준 */
@@ -792,12 +1128,5 @@
 		pointer-events: none;
 		font-size: 12px;
 		font-weight: bold;
-	}
-	.time-display {
-		font-family: monospace;
-		font-weight: 900; /* 더 굵게 */
-		font-size: 2em; /* 더 크게 */
-		color: #333;
-		margin-right: 10px;
 	}
 </style>
