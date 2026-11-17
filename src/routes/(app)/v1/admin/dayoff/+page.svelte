@@ -9,6 +9,8 @@
 	import * as api from '$lib/api/admin';
 	import Icon from '@iconify/svelte';
 	import Calendar from '$lib/components/Calendar.svelte';
+	import DayoffPolicyModal from '$lib/components/DayoffPolicyModal.svelte';
+	import DayoffDateOverrideModal from '$lib/components/DayoffDateOverrideModal.svelte';
 	import { formatDateTime, timestampToDateString } from '$lib/utils';
 	import { getKstTimeSnapshot } from '$lib/utils/serverTime';
 	import { getSiteTitle } from '$lib/config/site';
@@ -55,6 +57,9 @@
 	/** @type {boolean} 선착순·정원 정책 설정 모달 표시 상태 */
 	let showPolicyModal = $state(false);
 
+	/** @type {boolean} 특정일 예외 정원 관리 모달 표시 상태 */
+	let showOverrideModal = $state(false);
+
 	/** @type {number} 월간 조회를 위한 연도 선택 (캘린더/타임라인 공용 동기화) */
 	let selectedYear = $state(currentYear);
 
@@ -92,18 +97,17 @@
 	let hoveredSpanKey = $state(null);
 
 	// =====================================================================
-	// ⚙️ 선착순(운전직) vs 승인제(사무직) 구분 및 Append-Only 정책 이력 상태
+	// ⚙️ 선착순(운전직) vs 승인제(사무직) 오늘 적용 정책 · 예약(1건) · 예외 정원 상태
 	// =====================================================================
 	let todayStr = $state(initialServerTime.dateStr);
 
-	/** @type {{ effective_date: string, classify_mode: string, fcfs_groups: string[], fcfs_ranks: number[], daily_quota: number, date_overrides: Record<string, number>, max_monthly_count: number, max_days_per_request: number, min_advance_days: number, max_advance_days: number, etc: Record<string, any> }} */
+	/** @type {{ effective_date: string, classify_mode: string, fcfs_groups: string[], fcfs_ranks: number[], daily_quota: number, max_monthly_count: number, max_days_per_request: number, min_advance_days: number, max_advance_days: number, etc: Record<string, any> }} */
 	let policy = $state({
 		effective_date: initialServerTime.dateStr,
 		classify_mode: 'BOTH',
 		fcfs_groups: ['운전직', '운수팀', '운수1팀', '운수2팀'],
 		fcfs_ranks: [1],
 		daily_quota: 3,
-		date_overrides: {},
 		max_monthly_count: 0,
 		max_days_per_request: 0,
 		min_advance_days: 0,
@@ -111,25 +115,11 @@
 		etc: {}
 	});
 
-	/**
-	 * 'YYYY-MM-DD' 기준 offset 일수만큼 이동한 로컬 날짜 문자열을 반환합니다.
-	 * @param {string} baseStr
-	 * @param {number} offsetDays
-	 */
-	function shiftDateStr(baseStr, offsetDays) {
-		const [y, m, d] = String(baseStr || todayStr).slice(0, 10).split('-').map(Number);
-		const dt = new Date(y, (m || 1) - 1, (d || 1) + Number(offsetDays || 0));
-		return timestampToDateString(dt.getTime());
-	}
+	/** @type {any | null} 오늘 이후 적용 예정인 예약 정책 (최대 1건) */
+	let reservedPolicy = $state(null);
 
-	/** @type {any[]} 등록된 전체 Append-Only 정책 이력 행 */
-	let policyHistory = $state([]);
-
-	/** @type {number | null} null이면 새 레코드 추가(Append-Only), 숫자면 해당 ID 행 수정 */
-	let editingPolicyId = $state(null);
-
-	/** @type {string} 확장 JSONB(etc) 편집 문자열 */
-	let etcJsonText = $state('{}');
+	/** @type {Record<string, number>} 특정일 예외 정원 맵 (정책 이력과 완전 분리) */
+	let dateOverrides = $state({});
 
 	/** @type {string[]} 선택 가능한 그룹 후보 목록 */
 	let availableGroups = $state(['운전직', '운수팀', '사무직', '관리팀']);
@@ -137,55 +127,8 @@
 	/** @type {Record<string, any>} 선택된 월의 일자별 정원/신청 현황 */
 	let monthlyQuotaDays = $state({});
 
-	let newGroupInput = $state('');
-	let savingPolicy = $state(false);
-
-	// 특정 날짜(또는 기간) 정원 예외 입력 폼 상태
-	let overrideStartDate = $state(initialServerTime.dateStr);
-	let overrideEndDate = $state(initialServerTime.dateStr);
-	let overrideQuotaInput = $state(3);
-
 	// 캘린더 우측 패널에서 선택한 날짜의 정원 즉시 수정 입력값
 	let selectedDateQuotaInput = $state(3);
-
-	/**
-	 * 적용날짜 <= 기준날짜 인 미삭제 레코드 중 최신 1건 선택 (pick 규칙)
-	 * @param {any[]} rows
-	 * @param {string} dateStr
-	 */
-	function pickPolicyForDate(rows, dateStr) {
-		if (!Array.isArray(rows) || rows.length === 0) return null;
-		const valid = rows.filter((r) => !r.is_deleted && r.effective_date && r.effective_date <= dateStr);
-		if (valid.length === 0) return rows[rows.length - 1];
-		return valid.reduce((best, cur) => {
-			if (cur.effective_date > best.effective_date) return cur;
-			if (cur.effective_date === best.effective_date && (cur.id || 0) > (best.id || 0)) return cur;
-			return best;
-		});
-	}
-
-	/**
-	 * 정책 데이터를 편집 폼 상태에 반영
-	 * @param {any} src
-	 * @param {string | null} overrideEffDate
-	 */
-	function applyPolicyForm(src, overrideEffDate = null) {
-		if (!src) return;
-		policy = {
-			effective_date: overrideEffDate || src.effective_date || todayStr,
-			classify_mode: src.classify_mode || 'BOTH',
-			fcfs_groups: Array.isArray(src.fcfs_groups) ? [...src.fcfs_groups] : [],
-			fcfs_ranks: Array.isArray(src.fcfs_ranks) ? [...src.fcfs_ranks] : [],
-			daily_quota: Number(src.daily_quota ?? 3),
-			date_overrides: { ...(src.date_overrides || {}) },
-			max_monthly_count: Number(src.max_monthly_count ?? 0),
-			max_days_per_request: Number(src.max_days_per_request ?? 0),
-			min_advance_days: Number(src.min_advance_days ?? 0),
-			max_advance_days: Number(src.max_advance_days ?? 0),
-			etc: { ...(src.etc || {}) }
-		};
-		etcJsonText = JSON.stringify(policy.etc || {}, null, 2);
-	}
 
 	/** @type {Record<string, string>} */
 	const TYPE_LABELS = { ANNUAL: '연차', SICK: '병가', SPECIAL: '경조사', OFFICIAL: '공가' };
@@ -389,14 +332,19 @@
 		);
 	});
 
-	/** 캘린더에서 선택한 날짜의 선착순 정원 상세 정보 (해당 일자 유효 정책 기준) */
+	/** 캘린더에서 선택한 날짜의 선착순 정원 상세 정보 (서버 monthlyQuotaDays · 분리된 dateOverrides 기준) */
 	let selectedDateQuotaInfo = $derived.by(() => {
 		if (!selectedCalendarDate) return null;
 		const dayFromServer = monthlyQuotaDays?.[selectedCalendarDate];
-		const dayPolicy = pickPolicyForDate(policyHistory, selectedCalendarDate) || policy;
-		const overrides = dayPolicy?.date_overrides || {};
-		const isOverride = dayFromServer ? Boolean(dayFromServer.is_override) : (selectedCalendarDate in overrides);
-		const quota = dayFromServer ? Number(dayFromServer.quota) : (isOverride ? Number(overrides[selectedCalendarDate]) : Number(dayPolicy?.daily_quota ?? 3));
+		const isOverride = dayFromServer
+			? Boolean(dayFromServer.is_override)
+			: selectedCalendarDate in (dateOverrides || {});
+		const baseQuota = Number(policy?.daily_quota ?? 3);
+		const quota = dayFromServer
+			? Number(dayFromServer.quota)
+			: isOverride
+				? Number(dateOverrides[selectedCalendarDate])
+				: baseQuota;
 		const approvedFcfsCount = dayoffs.filter(
 			(d) =>
 				d.date === selectedCalendarDate &&
@@ -406,8 +354,8 @@
 		return {
 			date: selectedCalendarDate,
 			quota,
-			baseQuota: Number(dayPolicy?.daily_quota ?? 3),
-			effectiveDate: dayFromServer?.effective_date || dayPolicy?.effective_date,
+			baseQuota,
+			effectiveDate: dayFromServer?.effective_date || policy?.effective_date,
 			isOverride,
 			approvedCount: approvedFcfsCount,
 			remaining: Math.max(0, quota - approvedFcfsCount),
@@ -421,17 +369,34 @@
 		}
 	});
 
-	/** 등록된 특정 날짜 정원 예외 목록 (날짜순 정렬) */
-	let sortedDateOverrides = $derived(
-		Object.entries(policy.date_overrides || {}).sort(([a], [b]) => a.localeCompare(b))
-	);
+	/** 예외 정원 개수 */
+	let dateOverrideCount = $derived(Object.keys(dateOverrides || {}).length);
 
-	/** 오늘 기준 실제 적용 중인 정책 행 ID */
-	let activeTodayPolicyId = $derived(pickPolicyForDate(policyHistory, todayStr)?.id ?? null);
+	/** 타임라인 시작일 (이번 달 선택 시 오늘 기준 D-5일부터, 다른 달 선택 시 해당 월 1일부터) */
+	let timelineStartStr = $derived.by(() => {
+		const [ty, tm, td] = String(todayStr).split('-').map(Number);
+		if (selectedYear === ty && selectedMonth === tm - 1) {
+			return timestampToDateString(new Date(ty, tm - 1, td - 5).getTime());
+		}
+		return `${selectedYear}-${String(selectedMonth + 1).padStart(2, '0')}-01`;
+	});
 
 	/** @type {Array<{ year: number, monthIndex: number, monthNum: number, key: string, label: string }>} 타임라인 연속 월 메타 목록 */
 	let timelineMonths = $derived.by(() => {
 		const list = [];
+		const startMonthStr = timelineStartStr.slice(0, 7);
+		const selectedMonthStr = `${selectedYear}-${String(selectedMonth + 1).padStart(2, '0')}`;
+		// D-5가 전달로 넘어간 경우 전달 정원 데이터도 함께 조회
+		if (startMonthStr < selectedMonthStr) {
+			const [py, pm] = startMonthStr.split('-').map(Number);
+			list.push({
+				year: py,
+				monthIndex: pm - 1,
+				monthNum: pm,
+				key: `${py}-${pm}`,
+				label: `${py}년 ${pm}월`
+			});
+		}
 		for (let offset = 0; offset < timelineMonthsCount; offset++) {
 			const dt = new Date(selectedYear, selectedMonth + offset, 1);
 			const y = dt.getFullYear();
@@ -461,7 +426,7 @@
 
 	/**
 	 * @derived timelineData
-	 * @description 시작 기준 월부터 연속 N개월(기본 3개월 -> 스크롤 연장)을 달 경계 없이 이어 붙이고,
+	 * @description 시작 기준일(이번 달은 D-5일, 다른 달은 1일)부터 연속 N개월을 달 경계 없이 이어 붙이고,
 	 *              Calendar.svelte의 단차 0px 트랙 배정 알고리즘으로 직선 레인(Track 0, 1, 2...)을 산출합니다.
 	 */
 	let timelineData = $derived.by(() => {
@@ -469,9 +434,8 @@
 			return { days: [], maxTrackCount: 0, totalEntries: 0 };
 		}
 
-		const firstMonth = timelineMonths[0];
 		const lastMonth = timelineMonths[timelineMonths.length - 1];
-		const rangeStartStr = `${firstMonth.year}-${String(firstMonth.monthNum).padStart(2, '0')}-01`;
+		const rangeStartStr = timelineStartStr;
 		const endMonthLastDay = new Date(lastMonth.year, lastMonth.monthIndex + 1, 0).getDate();
 		const rangeEndStr = `${lastMonth.year}-${String(lastMonth.monthNum).padStart(2, '0')}-${String(endMonthLastDay).padStart(2, '0')}`;
 
@@ -536,32 +500,29 @@
 			}
 		}
 
-		// 3. 달 경계로 끊기지 않는 연속 일자 행 배열 생성
+		// 3. 달 경계로 끊기지 않는 연속 일자 행 배열 생성 (rangeStartStr ~ rangeEndStr)
 		/** @type {Array<{ date: string, year: number, monthNum: number, day: number, dayOfWeek: number, isToday: boolean, isMonthStart: boolean, qInfo: any, tracks: Array<any | null>, activeCount: number }>} */
 		const days = [];
 		let totalEntries = 0;
 
-		for (const mItem of timelineMonths) {
-			const lastDay = new Date(mItem.year, mItem.monthIndex + 1, 0).getDate();
-			for (let i = 1; i <= lastDay; i++) {
-				const dateStr = `${mItem.year}-${String(mItem.monthNum).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
-				const dayOfWeek = new Date(mItem.year, mItem.monthIndex, i).getDay();
-				const tracks = tracksByDate.get(dateStr) || [];
-				const activeCount = tracks.reduce((acc, s) => (s ? acc + 1 : acc), 0);
-				totalEntries += activeCount;
-				days.push({
-					date: dateStr,
-					year: mItem.year,
-					monthNum: mItem.monthNum,
-					day: i,
-					dayOfWeek,
-					isToday: dateStr === todayStr,
-					isMonthStart: i === 1,
-					qInfo: timelineQuotaDays[dateStr],
-					tracks,
-					activeCount
-				});
-			}
+		for (const dateStr of getDatesInRange(rangeStartStr, rangeEndStr, 800)) {
+			const [y, mNum, d] = dateStr.split('-').map(Number);
+			const dayOfWeek = new Date(y, mNum - 1, d).getDay();
+			const tracks = tracksByDate.get(dateStr) || [];
+			const activeCount = tracks.reduce((acc, s) => (s ? acc + 1 : acc), 0);
+			totalEntries += activeCount;
+			days.push({
+				date: dateStr,
+				year: y,
+				monthNum: mNum,
+				day: d,
+				dayOfWeek,
+				isToday: dateStr === todayStr,
+				isMonthStart: d === 1,
+				qInfo: timelineQuotaDays[dateStr],
+				tracks,
+				activeCount
+			});
 		}
 
 		return { days, maxTrackCount, totalEntries };
@@ -650,12 +611,10 @@
 				api.adminGetDayoffPolicy(y, m)
 			]);
 			dayoffs = Array.isArray(dayoffRes) ? dayoffRes : dayoffRes.data || [];
-			if (Array.isArray(policyRes?.policies)) {
-				policyHistory = policyRes.policies;
-			}
-			if (policyRes?.policy && editingPolicyId === null) {
-				applyPolicyForm(policyRes.policy, todayStr);
-			}
+			const basePolicy = policyRes?.today_policy || policyRes?.policy;
+			if (basePolicy) policy = basePolicy;
+			reservedPolicy = policyRes?.reserved_policy ?? null;
+			dateOverrides = policyRes?.date_overrides || {};
 			if (Array.isArray(policyRes?.available_groups)) {
 				availableGroups = policyRes.available_groups;
 			}
@@ -684,12 +643,10 @@
 		api
 			.adminGetDayoffPolicy(y, m)
 			.then((res) => {
-				if (Array.isArray(res?.policies)) {
-					policyHistory = res.policies;
-				}
-				if (res?.policy && editingPolicyId === null && !showPolicyModal) {
-					applyPolicyForm(res.policy, todayStr);
-				}
+				const basePolicy = res?.today_policy || res?.policy;
+				if (basePolicy) policy = basePolicy;
+				reservedPolicy = res?.reserved_policy ?? null;
+				if (res?.date_overrides) dateOverrides = res.date_overrides;
 				if (res?.monthly_quota?.days) {
 					monthlyQuotaDays = res.monthly_quota.days;
 					quotaByMonthCache = { ...quotaByMonthCache, [key]: res.monthly_quota.days };
@@ -780,140 +737,6 @@
 	}
 
 	/**
-	 * 선착순 대상 그룹 토글
-	 * @param {string} gCode
-	 */
-	function toggleFcfsGroup(gCode) {
-		if (policy.fcfs_groups.includes(gCode)) {
-			policy.fcfs_groups = policy.fcfs_groups.filter((g) => g !== gCode);
-		} else {
-			policy.fcfs_groups = [...policy.fcfs_groups, gCode];
-		}
-	}
-
-	function addCustomGroup() {
-		const trimmed = newGroupInput.trim();
-		if (!trimmed) return;
-		if (!availableGroups.includes(trimmed)) {
-			availableGroups = [...availableGroups, trimmed];
-		}
-		if (!policy.fcfs_groups.includes(trimmed)) {
-			policy.fcfs_groups = [...policy.fcfs_groups, trimmed];
-		}
-		newGroupInput = '';
-	}
-
-	/**
-	 * 선착순 대상 랭크 토글
-	 * @param {number} rank
-	 */
-	function toggleFcfsRank(rank) {
-		if (policy.fcfs_ranks.includes(rank)) {
-			policy.fcfs_ranks = policy.fcfs_ranks.filter((r) => r !== rank);
-		} else {
-			policy.fcfs_ranks = [...policy.fcfs_ranks, rank].sort((a, b) => a - b);
-		}
-	}
-
-	/**
-	 * 특정 정책 행 수정 모드로 전환
-	 * @param {any} row
-	 */
-	function startEditPolicyRow(row) {
-		editingPolicyId = row.id;
-		applyPolicyForm(row, row.effective_date);
-	}
-
-	/** 수정 모드 해제 -> 새 Append-Only 레코드 추가 모드로 복귀 */
-	function cancelEditPolicyRow() {
-		editingPolicyId = null;
-		const activeRow = pickPolicyForDate(policyHistory, todayStr) || policyHistory[0] || policy;
-		applyPolicyForm(activeRow, todayStr);
-	}
-
-	/** 전체 정책 저장 (신규 Append-Only 추가 또는 선택 행 수정) */
-	async function handleSavePolicy() {
-		let parsedEtc = {};
-		try {
-			const rawTxt = (etcJsonText || '{}').trim();
-			const obj = rawTxt ? JSON.parse(rawTxt) : {};
-			if (typeof obj !== 'object' || obj === null || Array.isArray(obj)) {
-				toast.error('확장 설정(etc)은 JSON 객체({ ... }) 형식이어야 합니다.');
-				return;
-			}
-			parsedEtc = obj;
-		} catch {
-			toast.error('확장 설정(etc)의 JSON 문법이 올바르지 않습니다.');
-			return;
-		}
-
-		if (!policy.effective_date) {
-			toast.error('적용 날짜를 선택해 주세요.');
-			return;
-		}
-
-		const minAdv = Math.max(0, Number(policy.min_advance_days ?? 0));
-		const maxAdv = Math.max(0, Number(policy.max_advance_days ?? 0));
-		if (maxAdv > 0 && maxAdv < minAdv) {
-			toast.error(`최대 신청 가능일(D+${maxAdv})은 최소 신청 가능일(D+${minAdv})보다 작을 수 없습니다.`);
-			return;
-		}
-
-		const payload = {
-			...policy,
-			daily_quota: Math.max(0, Number(policy.daily_quota ?? 0)),
-			max_monthly_count: Math.max(0, Number(policy.max_monthly_count ?? 0)),
-			max_days_per_request: Math.max(0, Number(policy.max_days_per_request ?? 0)),
-			min_advance_days: minAdv,
-			max_advance_days: maxAdv,
-			etc: parsedEtc
-		};
-
-		savingPolicy = true;
-		try {
-			if (editingPolicyId !== null) {
-				await api.adminEditDayoffPolicyRow(editingPolicyId, payload);
-				toast.success(`정책 레코드 #${editingPolicyId}가 수정되었습니다.`);
-				editingPolicyId = null;
-			} else {
-				const res = await api.adminUpdateDayoffPolicy(payload);
-				toast.success(
-					`${res?.policy?.effective_date || policy.effective_date}부터 적용되는 새 정책(#${res?.policy?.id || ''})이 추가되었습니다.`
-				);
-			}
-			await loadDayoffs();
-		} catch (error) {
-			const e = /** @type {Error} */ (error);
-			toast.error(`정책 저장 실패: ${e.message}`);
-		} finally {
-			savingPolicy = false;
-		}
-	}
-
-	/**
-	 * 특정 정책 레코드 논리 삭제
-	 * @param {any} row
-	 */
-	async function handleDeletePolicyRow(row) {
-		if (policyHistory.length <= 1) {
-			toast.error('최소 1개의 기본 정책 레코드는 유지해야 합니다.');
-			return;
-		}
-		if (!confirm(`#${row.id} (${row.effective_date} 적용, 정원 ${row.daily_quota}명) 정책 레코드를 삭제하시겠습니까?`)) {
-			return;
-		}
-		try {
-			await api.adminDeleteDayoffPolicyRow(row.id);
-			if (editingPolicyId === row.id) editingPolicyId = null;
-			toast.success(`정책 레코드 #${row.id}가 삭제되었습니다.`);
-			await loadDayoffs();
-		} catch (error) {
-			const e = /** @type {Error} */ (error);
-			toast.error(`정책 삭제 실패: ${e.message}`);
-		}
-	}
-
-	/**
 	 * 시작일~종료일 날짜 배열 생성
 	 * @param {string} s
 	 * @param {string} e
@@ -944,7 +767,7 @@
 		if (!dates || dates.length === 0) return;
 		try {
 			const res = await api.adminUpdateDayoffDateOverride(dates, quota);
-			if (res?.policy) policy = res.policy;
+			if (res?.date_overrides) dateOverrides = res.date_overrides;
 			toast.success(
 				quota === null
 					? `${dates.length}개 날짜의 정원이 기본값(${policy.daily_quota}명)으로 복원되었습니다.`
@@ -1154,17 +977,24 @@
 				</button>
 			</div>
 
-			<button
-				type="button"
-				onclick={() => {
-					cancelEditPolicyRow();
-					showPolicyModal = true;
-				}}
-				class="inline-flex items-center gap-2 rounded-xl border-2 border-slate-900 bg-slate-900 px-4 py-2 text-xs font-black text-white shadow-sm transition hover:bg-blue-600 hover:border-blue-600 active:scale-95"
-			>
-				<Icon icon="solar:settings-bold-duotone" class="text-base text-emerald-400" />
-				<span>선착순·정원 설정</span>
-			</button>
+			<div class="flex flex-wrap items-center gap-2">
+				<button
+					type="button"
+					onclick={() => (showPolicyModal = true)}
+					class="inline-flex items-center gap-2 rounded-xl border-2 border-slate-900 bg-slate-900 px-4 py-2 text-xs font-black text-white shadow-sm transition hover:border-blue-600 hover:bg-blue-600 active:scale-95"
+				>
+					<Icon icon="solar:settings-bold-duotone" class="text-base text-emerald-400" />
+					<span>선착순·정원 설정</span>
+				</button>
+				<button
+					type="button"
+					onclick={() => (showOverrideModal = true)}
+					class="inline-flex items-center gap-2 rounded-xl border-2 border-amber-500 bg-amber-50 px-4 py-2 text-xs font-black text-amber-800 shadow-sm transition hover:bg-amber-100 active:scale-95"
+				>
+					<Icon icon="solar:calendar-mark-bold-duotone" class="text-base text-amber-600" />
+					<span>특정일 예외 정원{dateOverrideCount > 0 ? ` (${dateOverrideCount})` : ''}</span>
+				</button>
+			</div>
 		</div>
 
 		<div class="flex flex-wrap items-center gap-2 text-xs font-bold text-slate-500">
@@ -1186,14 +1016,14 @@
 					신청기간: D+{policy.min_advance_days} ~ {policy.max_advance_days > 0 ? `D+${policy.max_advance_days}` : '무제한'}
 				</span>
 			{/if}
-			{#if policyHistory.length > 1}
-				<span class="rounded-lg border border-slate-200 bg-slate-100 px-2.5 py-1 text-[11px] font-black text-slate-700">
-					📜 정책 이력 {policyHistory.length}건
+			{#if reservedPolicy}
+				<span class="rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-1 text-[11px] font-black text-blue-700">
+					📅 예약됨: {reservedPolicy.effective_date} (정원 {reservedPolicy.daily_quota}명)
 				</span>
 			{/if}
-			{#if sortedDateOverrides.length > 0}
+			{#if dateOverrideCount > 0}
 				<span class="rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] font-black text-amber-800">
-					⚡ 특정일 예외 정원: {sortedDateOverrides.length}일
+					⚡ 특정일 예외 정원: {dateOverrideCount}일
 				</span>
 			{/if}
 		</div>
@@ -2079,534 +1909,19 @@
 	</div>
 {/if}
 
-<svelte:window
-	onkeydown={(e) => {
-		if (e.key === 'Escape' && showPolicyModal) {
-			showPolicyModal = false;
-		}
-	}}
+<DayoffPolicyModal
+	bind:open={showPolicyModal}
+	{todayStr}
+	todayPolicy={policy}
+	{reservedPolicy}
+	{availableGroups}
+	onSaved={loadDayoffs}
 />
 
-<!-- ===================================================================== -->
-<!-- ⚙️ 선착순(운전직) vs 승인제(사무직) 구분 기준(그룹/랭크) 및 정원 설정 모달 -->
-<!-- ===================================================================== -->
-{#if showPolicyModal}
-	<div
-		class="fixed inset-0 z-[300] flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm"
-		role="dialog"
-		aria-modal="true"
-		aria-labelledby="dayoff-policy-modal-title"
-		tabindex="-1"
-		onclick={(e) => {
-			if (e.target === e.currentTarget) showPolicyModal = false;
-		}}
-		onkeydown={(e) => {
-			if (e.key === 'Escape') showPolicyModal = false;
-		}}
-	>
-		<div
-			class="flex max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-[2rem] border-2 border-slate-900 bg-white shadow-2xl"
-		>
-			<!-- 모달 헤더 -->
-			<div class="flex items-center justify-between border-b border-slate-200 bg-slate-900 px-6 py-5 text-white md:px-8">
-				<div>
-					<div class="flex items-center gap-2">
-						<span class="rounded-full bg-emerald-400/20 px-2.5 py-0.5 text-[10px] font-black tracking-widest text-emerald-300 uppercase">
-							Day-Off Policy & Quota Configuration
-						</span>
-					</div>
-					<h3 id="dayoff-policy-modal-title" class="mt-1 text-xl font-black tracking-tight text-white">
-						선착순(운전직) · 승인제(사무직) 기준 및 일일/특정일 정원 설정
-					</h3>
-				</div>
-
-				<button
-					type="button"
-					onclick={() => (showPolicyModal = false)}
-					class="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-800 text-slate-300 transition hover:bg-rose-500 hover:text-white"
-					aria-label="설정 모달 닫기"
-				>
-					<Icon icon="solar:close-circle-bold" class="text-2xl" />
-				</button>
-			</div>
-
-			<!-- 모달 본문 (스크롤 영역) -->
-			<div class="grid flex-1 grid-cols-1 gap-6 overflow-y-auto p-6 md:p-8 lg:grid-cols-12">
-				<!-- 좌측: 적용일 + 직군 구분 + 기본 정원 + 사용 제한 + 확장 JSONB(etc) -->
-				<div class="space-y-5 lg:col-span-7">
-					<!-- 0. Append-Only 적용 날짜(effective_date) & 모드 배너 -->
-					<div class="rounded-2xl border-2 {editingPolicyId !== null ? 'border-amber-400 bg-amber-50/50' : 'border-blue-200 bg-blue-50/40'} p-4">
-						<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-							<div>
-								<div class="flex items-center gap-2">
-									<span class="text-xs font-black {editingPolicyId !== null ? 'text-amber-900' : 'text-blue-900'}">
-										{editingPolicyId !== null ? `✏️ 정책 레코드 #${editingPolicyId} 수정 중` : '📅 적용 날짜 (Append-Only 신규 추가)'}
-									</span>
-									{#if editingPolicyId !== null}
-										<button
-											type="button"
-											onclick={cancelEditPolicyRow}
-											class="rounded-lg bg-white px-2 py-0.5 text-[10px] font-black text-slate-600 border border-slate-300 hover:bg-slate-100"
-										>
-											수정 취소
-										</button>
-									{/if}
-								</div>
-								<p class="mt-0.5 text-[11px] font-medium text-slate-600">
-									{editingPolicyId !== null
-										? '선택한 기존 정책 행의 오타나 설정값을 직접 수정합니다.'
-										: '기존 정책 값을 그대로 복사한 뒤 적용날짜와 변경값만 반영해 새 레코드를 추가합니다.'}
-								</p>
-							</div>
-							<input
-								type="date"
-								bind:value={policy.effective_date}
-								aria-label="정책 적용 날짜"
-								class="rounded-xl border-2 border-blue-400 bg-white px-3 py-2 text-xs font-black text-slate-900 focus:border-blue-600 focus:outline-none"
-							/>
-						</div>
-					</div>
-
-					<!-- 1. 판별 방식 선택 -->
-					<div class="space-y-2.5">
-						<span class="block text-xs font-black text-slate-800">
-							1. 운전직(선착순) 대상 판별 방식
-						</span>
-						<div class="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
-							{#each [
-								{ id: 'BOTH', label: '그룹 또는 랭크 (권장)', desc: '지정 그룹 소속이거나 지정 랭크면 선착순' },
-								{ id: 'GROUP', label: '소속 그룹 기준', desc: '지정된 그룹 소속 사원만 선착순' },
-								{ id: 'RANK', label: '권한 랭크 기준', desc: '지정된 랭크(Lv) 사원만 선착순' }
-							] as modeItem (modeItem.id)}
-								<button
-									type="button"
-									onclick={() => (policy.classify_mode = modeItem.id)}
-									class="flex flex-col items-start rounded-2xl border-2 p-3.5 text-left transition {policy.classify_mode === modeItem.id
-										? 'border-blue-600 bg-blue-50/50 text-blue-900 shadow-sm'
-										: 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'}"
-								>
-									<span class="text-xs font-black">{modeItem.label}</span>
-									<span class="mt-1 text-[10px] font-medium text-slate-500">{modeItem.desc}</span>
-								</button>
-							{/each}
-						</div>
-					</div>
-
-					<!-- 2. 선착순 적용 그룹(fcfs_groups) 선택 -->
-					{#if policy.classify_mode === 'BOTH' || policy.classify_mode === 'GROUP'}
-						<div class="space-y-3 rounded-2xl border border-slate-200 bg-slate-50/60 p-4">
-							<div class="flex items-center justify-between">
-								<span class="text-xs font-black text-slate-800">
-									2. 선착순(운전직) 대상 그룹 선택
-								</span>
-								<span class="text-[11px] font-bold text-emerald-700">
-									선택됨: {policy.fcfs_groups.length > 0 ? policy.fcfs_groups.join(', ') : '없음'}
-								</span>
-							</div>
-
-							<div class="flex flex-wrap gap-2">
-								{#each availableGroups as gCode (gCode)}
-									{@const active = policy.fcfs_groups.includes(gCode)}
-									<button
-										type="button"
-										onclick={() => toggleFcfsGroup(gCode)}
-										class="inline-flex items-center gap-1.5 rounded-xl border-2 px-3 py-1.5 text-xs font-black transition {active
-											? 'border-emerald-600 bg-emerald-600 text-white shadow-sm'
-											: 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'}"
-									>
-										<Icon icon={active ? 'solar:check-circle-bold' : 'solar:add-circle-linear'} />
-										<span>{gCode}</span>
-									</button>
-								{/each}
-							</div>
-
-							<div class="flex gap-2 pt-1">
-								<input
-									type="text"
-									placeholder="직접 그룹명 추가 (예: 승무1팀)"
-									bind:value={newGroupInput}
-									onkeydown={(e) => e.key === 'Enter' && (e.preventDefault(), addCustomGroup())}
-									class="flex-1 rounded-xl border border-slate-300 bg-white px-3 py-1.5 text-xs font-bold text-slate-800 focus:border-blue-500 focus:outline-none"
-								/>
-								<button
-									type="button"
-									onclick={addCustomGroup}
-									class="btn btn-sm rounded-xl border-none bg-slate-800 font-black text-white hover:bg-slate-900"
-								>
-									그룹 추가
-								</button>
-							</div>
-						</div>
-					{/if}
-
-					<!-- 3. 선착순 적용 권한 랭크(fcfs_ranks) 선택 -->
-					{#if policy.classify_mode === 'BOTH' || policy.classify_mode === 'RANK'}
-						<div class="space-y-3 rounded-2xl border border-slate-200 bg-slate-50/60 p-4">
-							<div class="flex items-center justify-between">
-								<span class="text-xs font-black text-slate-800">
-									3. 선착순(운전직) 대상 권한 랭크(Rank) 선택
-								</span>
-								<span class="text-[11px] font-bold text-emerald-700">
-									선택됨: {policy.fcfs_ranks.length > 0 ? policy.fcfs_ranks.map((r) => `Lv.${r}`).join(', ') : '없음'}
-								</span>
-							</div>
-							<p class="text-[11px] font-medium text-slate-500">
-								선택한 랭크(예: Lv.1 일반 운전사원)는 선착순 즉시 확정제로 운영되고, 선택하지 않은 상위 랭크(예: Lv.2~8 사무/관리직)는 승인제로 운영됩니다.
-							</p>
-							<div class="flex flex-wrap gap-2">
-								{#each [0, 1, 2, 3, 4, 5, 6, 7, 8] as rk (rk)}
-									{@const active = policy.fcfs_ranks.includes(rk)}
-									<button
-										type="button"
-										onclick={() => toggleFcfsRank(rk)}
-										class="rounded-xl border-2 px-3.5 py-2 text-xs font-black transition {active
-											? 'border-emerald-600 bg-emerald-600 text-white shadow-sm'
-											: 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'}"
-									>
-										Lv.{rk}
-									</button>
-								{/each}
-							</div>
-						</div>
-					{/if}
-
-					<!-- 4. 기본 일일 정원(daily_quota) 입력 -->
-					<div class="rounded-2xl border-2 border-emerald-200 bg-emerald-50/40 p-5">
-						<div class="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
-							<div>
-								<span class="text-xs font-black text-emerald-900">
-									4. 운전직 기본 일일 선착순 정원 (명 / 일)
-								</span>
-								<p class="mt-0.5 text-[11px] font-medium text-emerald-700">
-									특정일 예외 정원이 지정되지 않은 모든 날짜에 기본 적용되는 하루 최대 휴무 인원입니다.
-								</p>
-							</div>
-							<div class="flex items-center gap-2">
-								<button
-									type="button"
-									onclick={() => (policy.daily_quota = Math.max(0, Number(policy.daily_quota) - 1))}
-									class="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-300 bg-white text-lg font-black text-slate-700 hover:bg-slate-100"
-								>
-									-
-								</button>
-								<input
-									type="number"
-									min="0"
-									max="100"
-									bind:value={policy.daily_quota}
-									class="h-10 w-20 rounded-xl border-2 border-emerald-500 bg-white text-center text-lg font-black text-slate-900 focus:outline-none"
-								/>
-								<button
-									type="button"
-									onclick={() => (policy.daily_quota = Number(policy.daily_quota) + 1)}
-									class="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-300 bg-white text-lg font-black text-slate-700 hover:bg-slate-100"
-								>
-									+
-								</button>
-							</div>
-						</div>
-					</div>
-
-					<!-- 5. 결근계 사용 제한 (월 최대 횟수 · 1회 최대 일수 · 신청 가능 날짜 범위) -->
-					<div class="space-y-3 rounded-2xl border border-slate-200 bg-slate-50/60 p-4">
-						<div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
-							<div>
-								<label for="max-monthly-count" class="block text-xs font-black text-slate-800">
-									5-1. 월별 최대 사용 횟수 (회/월)
-								</label>
-								<p class="mt-0.5 mb-2 text-[10px] font-medium text-slate-500">
-									한 달에 결근계를 낼 수 있는 최대 횟수 (0 = 제한 없음)
-								</p>
-								<input
-									id="max-monthly-count"
-									type="number"
-									min="0"
-									max="31"
-									bind:value={policy.max_monthly_count}
-									class="w-full rounded-xl border-2 border-slate-300 bg-white px-3 py-2 text-sm font-black text-slate-900 focus:border-blue-500 focus:outline-none"
-								/>
-							</div>
-							<div>
-								<label for="max-days-per-req" class="block text-xs font-black text-slate-800">
-									5-2. 1회 신청 최대 일수 (일/회)
-								</label>
-								<p class="mt-0.5 mb-2 text-[10px] font-medium text-slate-500">
-									한 번에 신청할 수 있는 최대 일수 (0 = 제한 없음)
-								</p>
-								<input
-									id="max-days-per-req"
-									type="number"
-									min="0"
-									max="365"
-									bind:value={policy.max_days_per_request}
-									class="w-full rounded-xl border-2 border-slate-300 bg-white px-3 py-2 text-sm font-black text-slate-900 focus:border-blue-500 focus:outline-none"
-								/>
-							</div>
-							<div>
-								<label for="min-advance-days" class="block text-xs font-black text-slate-800">
-									5-3. 신청 가능 최소일 (D + X일 부터)
-								</label>
-								<p class="mt-0.5 mb-2 text-[10px] font-medium text-slate-500">
-									신청일(D) 기준 최소 며칠 후부터 가능 (0 = 오늘 D+0부터)
-								</p>
-								<input
-									id="min-advance-days"
-									type="number"
-									min="0"
-									max="365"
-									bind:value={policy.min_advance_days}
-									class="w-full rounded-xl border-2 border-slate-300 bg-white px-3 py-2 text-sm font-black text-slate-900 focus:border-blue-500 focus:outline-none"
-								/>
-							</div>
-							<div>
-								<label for="max-advance-days" class="block text-xs font-black text-slate-800">
-									5-4. 신청 가능 최대일 (D + Y일 까지)
-								</label>
-								<p class="mt-0.5 mb-2 text-[10px] font-medium text-slate-500">
-									신청일(D) 기준 최대 며칠 후까지 가능 (0 = 최대일 제한 없음)
-								</p>
-								<input
-									id="max-advance-days"
-									type="number"
-									min="0"
-									max="730"
-									bind:value={policy.max_advance_days}
-									class="w-full rounded-xl border-2 border-slate-300 bg-white px-3 py-2 text-sm font-black text-slate-900 focus:border-blue-500 focus:outline-none"
-								/>
-							</div>
-						</div>
-						<div class="rounded-xl border border-violet-200 bg-violet-50/70 px-3 py-2 text-[11px] font-bold text-violet-800">
-							{#if Number(policy.max_advance_days) > 0 && Number(policy.max_advance_days) < Number(policy.min_advance_days)}
-								<span class="text-rose-600">
-									⚠️ 최대 신청 가능일(D+{policy.max_advance_days})이 최소 신청 가능일(D+{policy.min_advance_days})보다 작습니다.
-								</span>
-							{:else}
-								📅 오늘({todayStr}) 신청 기준 허용 범위:
-								<span class="font-mono font-black">
-									{shiftDateStr(todayStr, Number(policy.min_advance_days || 0))} (D+{Number(policy.min_advance_days || 0)})
-									~
-									{Number(policy.max_advance_days || 0) > 0
-										? `${shiftDateStr(todayStr, Number(policy.max_advance_days))} (D+${Number(policy.max_advance_days)})`
-										: '제한 없음'}
-								</span>
-							{/if}
-						</div>
-					</div>
-
-					<!-- 6. 확장 JSONB(etc) 입력 -->
-					<div class="space-y-2 rounded-2xl border border-slate-200 bg-slate-50/60 p-4">
-						<div class="flex items-center justify-between">
-							<label for="policy-etc-json" class="text-xs font-black text-slate-800">
-								6. 확장 설정 (etc · JSONB)
-							</label>
-							<span class="font-mono text-[10px] font-bold text-slate-400">JSON Object</span>
-						</div>
-						<textarea
-							id="policy-etc-json"
-							rows="2"
-							bind:value={etcJsonText}
-							placeholder={'{"note": "추가 확장 옵션"}'}
-							class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 font-mono text-xs text-slate-800 focus:border-blue-500 focus:outline-none"
-						></textarea>
-					</div>
-
-					<button
-						type="button"
-						onclick={handleSavePolicy}
-						disabled={savingPolicy}
-						class="btn h-12 w-full rounded-2xl border-none {editingPolicyId !== null ? 'bg-amber-600 hover:bg-amber-700' : 'bg-slate-900 hover:bg-blue-600'} font-black text-white shadow-lg"
-					>
-						{#if savingPolicy}
-							<span class="loading loading-sm loading-spinner"></span>
-						{:else if editingPolicyId !== null}
-							<Icon icon="solar:pen-new-square-bold-duotone" class="mr-2 text-lg" />
-							정책 레코드 #{editingPolicyId} 수정 저장
-						{:else}
-							<Icon icon="solar:diskette-bold-duotone" class="mr-2 text-lg" />
-							{policy.effective_date} 기준 새 정책 레코드 추가
-						{/if}
-					</button>
-				</div>
-
-				<!-- 우측: 정책 이력(Append-Only) + 특정 날짜 지정 정원 수정 패널 -->
-				<div class="space-y-5 lg:col-span-5">
-					<!-- 7. Append-Only 정책 이력 레코드 목록 -->
-					<div class="space-y-3 rounded-2xl border-2 border-slate-200 bg-white p-4">
-						<div class="flex items-center justify-between">
-							<span class="text-xs font-black text-slate-800">
-								📜 등록된 정책 레코드 이력 ({policyHistory.length}건)
-							</span>
-							<span class="text-[10px] font-bold text-slate-400">적용일 최신순</span>
-						</div>
-
-						<div class="max-h-56 space-y-2 overflow-y-auto pr-1">
-							{#each policyHistory as row (row.id)}
-								{@const isCurrentActive = row.id === activeTodayPolicyId}
-								{@const isFuture = row.effective_date > todayStr}
-								<div
-									class="rounded-xl border p-3 transition {editingPolicyId === row.id
-										? 'border-amber-400 bg-amber-50'
-										: isCurrentActive
-											? 'border-emerald-300 bg-emerald-50/40'
-											: 'border-slate-200 bg-slate-50/70'}"
-								>
-									<div class="flex items-center justify-between gap-2">
-										<div class="flex flex-wrap items-center gap-1.5">
-											<span class="font-mono text-[10px] font-bold text-slate-400">#{row.id}</span>
-											<span class="font-mono text-xs font-black text-slate-900">{row.effective_date}~</span>
-											{#if isCurrentActive}
-												<span class="rounded-full bg-emerald-600 px-2 py-0.5 text-[9px] font-black text-white">현재적용</span>
-											{:else if isFuture}
-												<span class="rounded-full bg-blue-600 px-2 py-0.5 text-[9px] font-black text-white">예약</span>
-											{:else}
-												<span class="rounded-full bg-slate-200 px-2 py-0.5 text-[9px] font-black text-slate-600">과거</span>
-											{/if}
-										</div>
-										<div class="flex items-center gap-2 shrink-0">
-											<button
-												type="button"
-												onclick={() => startEditPolicyRow(row)}
-												class="text-[11px] font-black text-blue-600 hover:underline"
-											>
-												수정
-											</button>
-											{#if policyHistory.length > 1}
-												<button
-													type="button"
-													onclick={() => handleDeletePolicyRow(row)}
-													class="text-[11px] font-black text-rose-500 hover:underline"
-												>
-													삭제
-												</button>
-											{/if}
-										</div>
-									</div>
-									<div class="mt-1.5 flex flex-wrap gap-1.5 text-[10px] font-bold text-slate-600">
-										<span class="rounded bg-white px-1.5 py-0.5 border border-slate-200">정원 {row.daily_quota}명</span>
-										<span class="rounded bg-white px-1.5 py-0.5 border border-slate-200">
-											월 {row.max_monthly_count > 0 ? `${row.max_monthly_count}회` : '무제한'}
-										</span>
-										<span class="rounded bg-white px-1.5 py-0.5 border border-slate-200">
-											1회 {row.max_days_per_request > 0 ? `${row.max_days_per_request}일` : '무제한'}
-										</span>
-										<span class="rounded bg-white px-1.5 py-0.5 border border-slate-200">
-											D+{row.min_advance_days || 0} ~ {row.max_advance_days > 0 ? `D+${row.max_advance_days}` : '무제한'}
-										</span>
-									</div>
-								</div>
-							{/each}
-						</div>
-					</div>
-
-					<div class="space-y-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-						<div>
-							<span class="text-xs font-black text-slate-800">
-								특정 날짜 지정 정원 수정
-							</span>
-							<p class="mt-0.5 text-[11px] font-medium text-slate-500">
-								특정 날짜(또는 기간)에 기본 정원({policy.daily_quota}명) 대신 적용할 예외 정원을 설정합니다. (0명 입력 시 신청 차단)
-							</p>
-						</div>
-
-						<div class="grid grid-cols-2 gap-3">
-							<div>
-								<label for="ov-start" class="mb-1 block text-[11px] font-black text-slate-600">시작일</label>
-								<input
-									id="ov-start"
-									type="date"
-									bind:value={overrideStartDate}
-									onchange={() => {
-										if (overrideEndDate < overrideStartDate) overrideEndDate = overrideStartDate;
-									}}
-									class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-800"
-								/>
-							</div>
-							<div>
-								<label for="ov-end" class="mb-1 block text-[11px] font-black text-slate-600">종료일</label>
-								<input
-									id="ov-end"
-									type="date"
-									bind:value={overrideEndDate}
-									min={overrideStartDate}
-									class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-800"
-								/>
-							</div>
-						</div>
-
-						<div class="flex items-center justify-between gap-3">
-							<label for="ov-quota" class="text-xs font-black text-slate-700">
-								지정 정원 (명 / 일):
-							</label>
-							<input
-								id="ov-quota"
-								type="number"
-								min="0"
-								max="100"
-								bind:value={overrideQuotaInput}
-								class="w-24 rounded-xl border-2 border-slate-300 bg-white px-3 py-1.5 text-center text-sm font-black text-slate-900 focus:border-blue-500 focus:outline-none"
-							/>
-						</div>
-
-						<button
-							type="button"
-							onclick={() =>
-								applyDateOverride(
-									getDatesInRange(overrideStartDate, overrideEndDate),
-									Number(overrideQuotaInput)
-								)}
-							class="btn w-full rounded-xl border-none bg-blue-600 font-black text-white hover:bg-blue-700"
-						>
-							선택한 날짜 정원 적용
-						</button>
-					</div>
-
-					<!-- 등록된 특정일 예외 정원 목록 -->
-					<div class="space-y-2.5">
-						<div class="flex items-center justify-between">
-							<span class="text-xs font-black text-slate-700">
-								지정된 날짜별 예외 정원 ({sortedDateOverrides.length}건)
-							</span>
-						</div>
-
-						{#if sortedDateOverrides.length === 0}
-							<div class="rounded-2xl border border-dashed border-slate-200 py-8 text-center text-xs font-bold text-slate-400">
-								별도로 지정된 예외 정원 날짜가 없습니다.<br />(전 일자 기본 {policy.daily_quota}명 적용)
-							</div>
-						{:else}
-							<div class="max-h-60 space-y-2 overflow-y-auto pr-1">
-								{#each sortedDateOverrides as [dStr, qVal] (dStr)}
-									<div class="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50/70 px-4 py-2.5">
-										<div class="flex items-center gap-2.5">
-											<span class="font-mono text-xs font-black text-slate-800">{dStr}</span>
-											<span class="rounded-full px-2.5 py-0.5 text-[11px] font-black {qVal === 0 ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-800'}">
-												{qVal === 0 ? '신청불가 (0명)' : `정원 ${qVal}명`}
-											</span>
-										</div>
-										<button
-											type="button"
-											onclick={() => applyDateOverride([dStr], null)}
-											class="text-xs font-black text-rose-500 hover:underline"
-										>
-											기본값 복원
-										</button>
-									</div>
-								{/each}
-							</div>
-						{/if}
-					</div>
-				</div>
-			</div>
-
-			<!-- 모달 푸터 -->
-			<div class="flex items-center justify-end gap-3 border-t border-slate-200 bg-slate-50 px-6 py-4 md:px-8">
-				<button
-					type="button"
-					onclick={() => (showPolicyModal = false)}
-					class="btn rounded-xl border border-slate-300 bg-white px-6 text-xs font-black text-slate-700 hover:bg-slate-100"
-				>
-					닫기
-				</button>
-			</div>
-		</div>
-	</div>
-{/if}
+<DayoffDateOverrideModal
+	bind:open={showOverrideModal}
+	{todayStr}
+	defaultQuota={policy.daily_quota}
+	{dateOverrides}
+	onApply={applyDateOverride}
+/>

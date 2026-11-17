@@ -120,8 +120,6 @@ export const adminGetDayoffPolicy = <T = any>(year?: number, month?: number) => 
 };
 export const adminUpdateDayoffPolicy = <T = any>(data: Record<string, any>) =>
 	request<T>(`${BASE_URL}/dayoff-policy`, 'PUT', data);
-export const adminEditDayoffPolicyRow = <T = any>(policyId: number, data: Record<string, any>) =>
-	request<T>(`${BASE_URL}/dayoff-policy/${policyId}`, 'PUT', data);
 export const adminDeleteDayoffPolicyRow = <T = any>(policyId: number) =>
 	request<T>(`${BASE_URL}/dayoff-policy/${policyId}`, 'DELETE');
 export const adminUpdateDayoffDateOverride = <T = any>(dates: string[], quota: number | null) =>

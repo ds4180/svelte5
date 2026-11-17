@@ -27,7 +27,8 @@
 		today_change_count: 0,
 		today_error_alert_count: 0,
 		today_security_count: 0,
-		today_errors_count: 0
+		today_errors_count: 0,
+		app_options: /** @type {Array<{ id: string, name?: string }>} */ ([])
 	});
 
 	// 📑 5대 관제 탭: 'SESSIONS' | 'ACCESS' | 'CHANGE' | 'ERROR' | 'SECURITY'
@@ -53,29 +54,48 @@
 	let activeDiffLog = $state(/** @type {any} */ (null));
 	let activeErrorLog = $state(/** @type {any} */ (null));
 
-	// 🏷️ 18종 공식 앱 목록 (필터 드롭다운용 - admin_* 레거시 접두사 완전 제거)
-	const APP_OPTIONS = [
-		{ id: '', label: '전체 앱 (All Apps)' },
-		{ id: 'system', label: '⚙️ 시스템 코어 (system)' },
-		{ id: 'dashboard', label: '📊 관리자 대시보드 (dashboard)' },
-		{ id: 'menu', label: '🌐 메뉴 관리 (menu)' },
-		{ id: 'user_manage', label: '👤 사용자 랭크 관리 (user_manage)' },
-		{ id: 'group_manage', label: '🏛️ 조직·권한 그룹 (group_manage)' },
-		{ id: 'observability', label: '👁️ 접속기록·감사로그 (observability)' },
-		{ id: 'task_manage', label: '⏱️ 백그라운드 태스크 (task_manage)' },
-		{ id: 'dispatch', label: '🚐 배차 관리 (dispatch)' },
-		{ id: 'vehicle', label: '🚗 차량 관리 (vehicle)' },
-		{ id: 'route_master', label: '🗺️ 노선 마스터 (route_master)' },
-		{ id: 'dayoff', label: '🏖️ 휴무 관리 (dayoff)' },
-		{ id: 'boards', label: '📝 게시판 마스터 (boards)' },
-		{ id: 'page', label: '📄 페이지 관리 (page)' },
-		{ id: 'custom', label: '🧩 커스텀 앱 (custom)' },
-		{ id: 'pushs', label: '🚀 푸시 알림 발송 (pushs)' },
-		{ id: 'alerts', label: '🔔 알림·지시 관리 (alerts)' },
-		{ id: 'target_groups', label: '🎯 발송 대상 그룹 (target_groups)' },
-		{ id: 'media', label: '🖼️ 미디어 라이브러리 (media)' },
-		{ id: 'auth', label: '🔐 사용자 인증 (auth)' }
-	];
+	// 🏷️ 앱 ID별 아이콘/한글명 꾸미기 매핑 (목록 자체는 100% 백엔드 summary.app_options 기준)
+	/** @type {Record<string, string>} */
+	const APP_LABEL_MAP = {
+		system: '⚙️ 시스템 코어 (system)',
+		auth: '🔐 사용자 인증 (auth)',
+		dashboard: '📊 매니져 대시보드 (dashboard)',
+		apps: '🧩 앱 관리 (apps)',
+		app: '📦 커스텀·미니앱 (app)',
+		config: '🛠️ 환경설정 (config)',
+		services: '🔌 서비스 마스터 (services)',
+		menu: '🌐 메뉴 설정 (menu)',
+		user_manage: '👤 사용자 랭크 관리 (user_manage)',
+		group_manage: '🏛️ 그룹·권한 관리 (group_manage)',
+		observability: '👁️ 접속 기록·감사 로그 (observability)',
+		tasks: '⏱️ 예약 작업 관리 (tasks)',
+		dispatch: '🚐 차량 배차 관리 (dispatch)',
+		route_master: '🗺️ 노선 마스터 관리 (route_master)',
+		dayoff: '🏖️ 휴무(결근계) 관리 (dayoff)',
+		boards: '📝 게시판 인스턴스 관리 (boards)',
+		page: '📄 페이지 엔진 관리 (page)',
+		pushs: '🚀 푸시·구독 관리 (pushs)',
+		alerts: '🔔 알림·지시 관리 (alerts)',
+		target_groups: '🎯 임시 그룹 관리 (target_groups)',
+		media: '🖼️ 파일·사진 관리 (media)'
+	};
+
+	let appOptions = $derived.by(() => {
+		/** @type {Map<string, { id: string, label: string }>} */
+		const map = new Map([['', { id: '', label: '전체 앱 (All Apps)' }]]);
+		const serverApps = summary?.app_options || [];
+		for (const item of serverApps) {
+			if (!item?.id || map.has(item.id)) continue;
+			const label =
+				APP_LABEL_MAP[item.id] ||
+				(item.name && item.name !== item.id ? `${item.name} (${item.id})` : item.id);
+			map.set(item.id, { id: item.id, label });
+		}
+		if (appFilter && !map.has(appFilter)) {
+			map.set(appFilter, { id: appFilter, label: APP_LABEL_MAP[appFilter] || appFilter });
+		}
+		return Array.from(map.values());
+	});
 
 	// 🏷️ 탭 메타데이터 정의
 	const TABS = [
@@ -524,7 +544,7 @@
 							onchange={handleAppFilterChange}
 							class="rounded-xl border border-slate-300 bg-slate-50 px-3 py-1.5 text-xs font-bold text-slate-800 focus:border-blue-500 focus:bg-white focus:outline-none"
 						>
-							{#each APP_OPTIONS as opt}
+							{#each appOptions as opt (opt.id)}
 								<option value={opt.id}>{opt.label}</option>
 							{/each}
 						</select>
