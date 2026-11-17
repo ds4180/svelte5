@@ -855,7 +855,7 @@
 						handleCellClick(cell);
 					}
 				}}
-				class="group relative flex {dayFooter ? 'h-[98px] sm:h-[120px] md:h-[130px]' : 'h-[84px] sm:h-[106px] md:h-[120px]'} flex-col p-1 sm:p-1.5 md:p-2 text-left transition-colors outline-none select-none
+				class="group relative flex {dayFooter ? 'h-[106px] sm:h-[132px] md:h-[144px]' : 'h-[92px] sm:h-[118px] md:h-[134px]'} flex-col p-1 sm:p-1.5 md:p-2 text-left transition-colors outline-none select-none
 				       {disabledDate ? 'cursor-not-allowed bg-slate-100/80 opacity-50' : cell.isCurrentMonth || minSelectableDate || maxSelectableDate ? 'cursor-pointer bg-white hover:bg-slate-50/80' : 'cursor-pointer bg-slate-50/80 opacity-45'}
 				       {selected ? 'ring-2 ring-inset ring-blue-600 z-20' : ''}
 				       {cell.isToday && !selected ? 'ring-2 ring-inset ring-slate-900' : ''}"
@@ -881,11 +881,14 @@
 								style={bg.event.color ? `background-color: ${bg.event.color}33; border-color: ${bg.event.color};` : ''}
 							>
 								{#if bg.isStart || cell.dayOfWeek === 0}
-									<span
-										class="absolute {bg.slot === 1 && bg.splitHalf ? 'bottom-0.5' : 'top-0.5'} right-1 max-w-[68%] truncate rounded px-1 py-0.2 text-[8px] sm:text-[9px] font-black leading-none shadow-2xs {style.bgText}"
+									<div
+										class="absolute {bg.splitHalf ? (bg.slot === 1 ? 'bottom-1 left-1 right-1' : 'top-1 right-1 left-8 sm:left-10') : 'bottom-1.5 left-1.5 right-1.5'} inline-flex items-center gap-1 sm:gap-1.5 rounded-lg bg-white/80 px-1.5 py-0.5 sm:px-2 sm:py-1 shadow-xs backdrop-blur-[1px] {style.bgText}"
 									>
-										🔔 {bg.event.title}
-									</span>
+										<Icon icon="solar:bell-bing-bold" class="h-4 w-4 sm:h-5 sm:w-5 md:h-6 md:w-6 shrink-0" />
+										<span class="truncate text-[11px] sm:text-xs md:text-sm font-black leading-tight">
+											{bg.event.title}
+										</span>
+									</div>
 								{/if}
 							</div>
 						{/each}
@@ -896,9 +899,9 @@
 				<!-- [레이어 B] 셀 상단 고정 헤더 (높이 h-6 sm:h-7 완전 고정 -> 단차 원천 차단) -->
 				<!-- - 날짜 숫자 + 공휴일 라벨 + 3개 이상 일정 시 `...` 플로팅 툴팁 트리거 -->
 				<!-- =============================================================== -->
-				<div class="relative z-30 flex h-6 sm:h-7 shrink-0 items-center justify-between gap-0.5">
+				<div class="relative z-30 flex h-7 sm:h-8 md:h-9 shrink-0 items-center justify-between gap-0.5">
 					<span
-						class="inline-flex h-5 w-5 sm:h-6 sm:w-6 items-center justify-center rounded-lg text-[11px] sm:text-xs md:text-sm font-black leading-none
+						class="inline-flex h-6 w-6 sm:h-7 sm:w-7 md:h-8 md:w-8 items-center justify-center rounded-lg text-sm sm:text-base md:text-lg font-black leading-none
 						       {cell.isToday
 							? 'bg-slate-900 text-white shadow-xs'
 							: selected
@@ -1158,21 +1161,22 @@
 								<span class="block min-w-0">
 									<span class="flex flex-wrap items-center gap-1.5">
 										{#if isBg}
-											<span class="rounded bg-slate-900 px-1.5 py-0.2 text-[9px] font-black text-amber-300">
-												🔔 배경 알람
+											<span class="inline-flex items-center gap-1 rounded-md bg-slate-900 px-2 py-0.5 text-[11px] sm:text-xs font-black text-amber-300">
+												<Icon icon="solar:bell-bing-bold" class="h-4 w-4 sm:h-4.5 sm:w-4.5 shrink-0" />
+												<span>중요 알림</span>
 											</span>
 										{/if}
 										{#if ev.badge}
-											<span class="rounded px-1.5 py-0.2 text-[9px] font-black {style.badge}">
+											<span class="rounded px-1.5 py-0.2 text-[10px] sm:text-[11px] font-black {style.badge}">
 												{ev.badge}
 											</span>
 										{/if}
 										{#if ev.isDday && selectedDate}
-											<span class="rounded bg-slate-900 px-1.5 py-0.2 text-[9px] font-black text-white">
+											<span class="rounded bg-slate-900 px-1.5 py-0.2 text-[10px] font-black text-white">
 												{formatDDay(selectedDate, todayStr)}
 											</span>
 										{/if}
-										<span class="truncate text-xs sm:text-sm font-black text-slate-900">
+										<span class="truncate {isBg ? 'text-sm sm:text-base' : 'text-xs sm:text-sm'} font-black text-slate-900">
 											{ev.title}
 										</span>
 									</span>

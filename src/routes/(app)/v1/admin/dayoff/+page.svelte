@@ -6,12 +6,21 @@
 	 * @standard Svelte 5 Runes ($state, $derived, $effect)
 	 */
 	import { onMount, untrack } from 'svelte';
-	import * as api from '$lib/api/admin';
+	import * as api from '$lib/api/dayoff';
 	import Icon from '@iconify/svelte';
 	import Calendar from '$lib/components/Calendar.svelte';
 	import DayoffPolicyModal from '$lib/components/DayoffPolicyModal.svelte';
 	import DayoffDateOverrideModal from '$lib/components/DayoffDateOverrideModal.svelte';
+	import DayoffDateQuotaCard from '$lib/components/DayoffDateQuotaCard.svelte';
 	import { formatDateTime, timestampToDateString } from '$lib/utils';
+	import {
+		getDayoffTypeLabel,
+		groupConsecutiveDayoffs,
+		getDatesInRange,
+		getDayColor,
+		getDayLabel,
+		getDayoffBadgeClass as getBadgeClass
+	} from '$lib/utils/dayoff';
 	import { getKstTimeSnapshot } from '$lib/utils/serverTime';
 	import { getSiteTitle } from '$lib/config/site';
 	import { toast } from '$lib/runes/toast.svelte';
@@ -127,13 +136,7 @@
 	/** @type {Record<string, any>} 선택된 월의 일자별 정원/신청 현황 */
 	let monthlyQuotaDays = $state({});
 
-	// 캘린더 우측 패널에서 선택한 날짜의 정원 즉시 수정 입력값
-	let selectedDateQuotaInput = $state(3);
-
-	/** @type {Record<string, string>} */
-	const TYPE_LABELS = { ANNUAL: '연차', SICK: '병가', SPECIAL: '경조사', OFFICIAL: '공가' };
-	/** @param {string} t */
-	const getTypeLabel = (t) => TYPE_LABELS[t] || t;
+	const getTypeLabel = getDayoffTypeLabel;
 
 	/** 직군 필터가 적용된 휴무 목록 */
 	let filteredDayoffs = $derived.by(() => {
@@ -187,81 +190,6 @@
 			}
 		};
 	});
-
-	/**
-	 * 'YYYY-MM-DD' 다음 날짜 문자열
-	 * @param {string} dateStr
-	 */
-	function nextDayStr(dateStr) {
-		const [y, m, d] = dateStr.split('-').map(Number);
-		return timestampToDateString(new Date(y, m - 1, d + 1).getTime());
-	}
-
-	/**
-	 * 동일 신청 묶음(사원 + group_id + 휴무유형 + 상태) 중 연속 날짜를 하나의 Span으로 병합합니다.
-	 * 월간 캘린더 이벤트와 세로 타임라인 직선 트랙 배정에서 공통으로 사용합니다.
-	 * @param {DayoffEntry[]} list
-	 * @param {string} statusFilter
-	 */
-	function groupConsecutiveDayoffs(list, statusFilter) {
-		/** @type {Map<string, DayoffEntry[]>} */
-		const buckets = new Map();
-
-		for (const d of list || []) {
-			if (!d?.date || d.status === 'CANCELLED' || d.status === 'REJECTED') continue;
-			if (statusFilter !== 'ALL' && d.status !== statusFilter) continue;
-
-			const key = `${d.user_id}|${d.group_id ?? `single-${d.id}`}|${d.type}|${d.status}`;
-			const arr = buckets.get(key) || [];
-			arr.push(d);
-			buckets.set(key, arr);
-		}
-
-		/** @type {Array<{ spanKey: string, startDate: string, endDate: string, isMultiDay: boolean, firstEntry: DayoffEntry, entries: DayoffEntry[], entryByDate: Map<string, DayoffEntry> }>} */
-		const spans = [];
-
-		for (const [key, rows] of buckets) {
-			const sorted = [...rows].sort((a, b) => a.date.localeCompare(b.date));
-			let runRows = [sorted[0]];
-			let prev = sorted[0];
-
-			/** @param {DayoffEntry[]} groupRows */
-			const pushRun = (groupRows) => {
-				const startRow = groupRows[0];
-				const endRow = groupRows[groupRows.length - 1];
-				/** @type {Map<string, DayoffEntry>} */
-				const entryByDate = new Map();
-				for (const r of groupRows) {
-					if (!entryByDate.has(r.date)) entryByDate.set(r.date, r);
-				}
-				spans.push({
-					spanKey: `${key}@${startRow.date}`,
-					startDate: startRow.date,
-					endDate: endRow.date,
-					isMultiDay: endRow.date !== startRow.date,
-					firstEntry: startRow,
-					entries: groupRows,
-					entryByDate
-				});
-			};
-
-			for (let i = 1; i < sorted.length; i++) {
-				const cur = sorted[i];
-				if (cur.date === prev.date) continue;
-				if (cur.date === nextDayStr(prev.date)) {
-					runRows.push(cur);
-					prev = cur;
-				} else {
-					pushRun(runRows);
-					runRows = [cur];
-					prev = cur;
-				}
-			}
-			pushRun(runRows);
-		}
-
-		return spans;
-	}
 
 	/**
 	 * 전체 사원 휴무 이력 + 일자별 선착순 정원/마감 현황을 공용 Calendar 이벤트로 변환합니다.
@@ -361,12 +289,6 @@
 			remaining: Math.max(0, quota - approvedFcfsCount),
 			isFull: approvedFcfsCount >= quota
 		};
-	});
-
-	$effect(() => {
-		if (selectedDateQuotaInfo) {
-			selectedDateQuotaInput = selectedDateQuotaInfo.quota;
-		}
 	});
 
 	/** 예외 정원 개수 */
@@ -737,28 +659,6 @@
 	}
 
 	/**
-	 * 시작일~종료일 날짜 배열 생성
-	 * @param {string} s
-	 * @param {string} e
-	 * @param {number} [maxDays]
-	 */
-	function getDatesInRange(s, e, maxDays = 180) {
-		if (!s) return [];
-		const end = e && e >= s ? e : s;
-		const [sy, sm, sd] = s.split('-').map(Number);
-		const [ey, em, ed] = end.split('-').map(Number);
-		const cur = new Date(sy, sm - 1, sd);
-		const last = new Date(ey, em - 1, ed);
-		/** @type {string[]} */
-		const list = [];
-		while (cur <= last && list.length < maxDays) {
-			list.push(timestampToDateString(cur.getTime()));
-			cur.setDate(cur.getDate() + 1);
-		}
-		return list;
-	}
-
-	/**
 	 * 특정 날짜(또는 기간) 정원 예외 설정 / 해제
 	 * @param {string[]} dates
 	 * @param {number | null} quota (null이면 기본 정원으로 복원)
@@ -787,19 +687,6 @@
 		}
 		loadDayoffs();
 	});
-
-	/** @param {number} dow */
-	const getDayColor = (dow) =>
-		dow === 0 ? 'text-rose-500' : dow === 6 ? 'text-blue-500' : 'text-slate-900';
-	/** @param {number} dow */
-	const getDayLabel = (dow) => ['일', '월', '화', '수', '목', '금', '토'][dow];
-	/** @param {string} s */
-	const getBadgeClass = (s) => {
-		if (s === 'REQUESTED') return 'bg-amber-100 text-amber-700 border-amber-200';
-		if (s === 'APPROVED') return 'bg-emerald-100 text-emerald-700 border-emerald-200';
-		if (s === 'REJECTED') return 'bg-rose-100 text-rose-700 border-rose-200';
-		return 'bg-slate-100 text-slate-500 border-slate-200';
-	};
 </script>
 
 <svelte:head>
@@ -1365,73 +1252,12 @@
 
 			<!-- 우측: 선택한 날짜의 선착순 정원 즉시 수정 + 사원별 휴무 상세 -->
 			<div class="lg:col-span-4 space-y-5">
-				<!-- ① 선택한 날짜 운전직 선착순 정원 제어 박스 -->
-				{#if selectedCalendarDate && selectedDateQuotaInfo}
-					<div class="overflow-hidden rounded-xl border-2 border-emerald-200 bg-white shadow-md md:rounded-[1.75rem]">
-						<div class="flex items-center justify-between border-b border-emerald-100 bg-emerald-50/60 px-5 py-4">
-							<div>
-								<span class="text-[10px] font-black tracking-widest text-emerald-700 uppercase">
-									🚌 운전직 일일 선착순 정원 제어
-								</span>
-								<h4 class="text-base font-black text-slate-900">
-									{selectedCalendarDate}
-								</h4>
-							</div>
-							{#if selectedDateQuotaInfo.isOverride}
-								<span class="rounded-full bg-amber-100 px-2.5 py-0.5 text-[10px] font-black text-amber-800 border border-amber-300">
-									⚡ 특정일 예외 정원
-								</span>
-							{:else}
-								<span class="rounded-full bg-slate-100 px-2.5 py-0.5 text-[10px] font-bold text-slate-600">
-									기본 정원 적용 중
-								</span>
-							{/if}
-						</div>
-
-						<div class="p-5 space-y-4">
-							<div class="flex items-center justify-between rounded-xl bg-slate-50 px-4 py-3 border border-slate-200">
-								<span class="text-xs font-bold text-slate-600">현재 운전직 확정 / 정원</span>
-								<span class="text-lg font-black {selectedDateQuotaInfo.isFull ? 'text-rose-600' : 'text-emerald-600'}">
-									{selectedDateQuotaInfo.approvedCount} / {selectedDateQuotaInfo.quota}명
-									<span class="ml-1 text-xs font-bold">
-										({selectedDateQuotaInfo.isFull ? '마감' : `잔여 ${selectedDateQuotaInfo.remaining}명`})
-									</span>
-								</span>
-							</div>
-
-							<div class="flex items-center gap-2">
-								<label for="date-quota-input" class="text-xs font-black text-slate-700 shrink-0">
-									정원 수정(명):
-								</label>
-								<input
-									id="date-quota-input"
-									type="number"
-									min="0"
-									max="100"
-									bind:value={selectedDateQuotaInput}
-									class="w-20 rounded-xl border-2 border-slate-200 px-3 py-1.5 text-center text-sm font-black text-slate-900 focus:border-emerald-500 focus:outline-none"
-								/>
-								<button
-									type="button"
-									onclick={() => applyDateOverride([selectedCalendarDate], Number(selectedDateQuotaInput))}
-									class="btn btn-sm flex-1 rounded-xl border-none bg-emerald-600 font-black text-white hover:bg-emerald-700"
-								>
-									이 날짜 정원 저장
-								</button>
-							</div>
-
-							{#if selectedDateQuotaInfo.isOverride}
-								<button
-									type="button"
-									onclick={() => applyDateOverride([selectedCalendarDate], null)}
-									class="w-full rounded-xl border border-slate-200 bg-slate-50 py-1.5 text-[11px] font-bold text-slate-500 transition hover:bg-slate-100 hover:text-slate-800"
-								>
-									기본 정원({selectedDateQuotaInfo.baseQuota}명)으로 복원
-								</button>
-							{/if}
-						</div>
-					</div>
-				{/if}
+				<!-- ① 선택한 날짜 운전직 선착순 정원 제어 카드 -->
+				<DayoffDateQuotaCard
+					selectedDate={selectedCalendarDate}
+					quotaInfo={selectedDateQuotaInfo}
+					onApplyOverride={applyDateOverride}
+				/>
 
 				<!-- ② 선택한 날짜의 사원별 휴무 목록 -->
 				<div class="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg md:rounded-[2rem] md:shadow-2xl">
