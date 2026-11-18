@@ -511,39 +511,41 @@
 <style>
     .excel-table {
         border-collapse: collapse;
-        width: 100%;
+        width: auto;
         table-layout: fixed;
     }
     .excel-table th, .excel-table td {
         box-sizing: border-box;
         border: 1px solid #ddd;
-        padding: 0;
-        height: 25px;
-        font-size: 11px;
-        letter-spacing: -0.05em;
-        line-height: 25px;
+        padding: 0 !important;
+        height: 38px;
+        font-size: 16.5px;
+        letter-spacing: -0.03em;
+        line-height: 38px;
+        text-align: center;
     }
     .excel-table th {
         background-color: #f8fafc;
         font-weight: 800;
         color: #64748b;
         text-transform: uppercase;
-        font-size: 10px;
-        letter-spacing: -0.05em;
+        font-size: 15px;
+        letter-spacing: -0.03em;
     }
     .excel-input {
         box-sizing: border-box;
         width: 100%;
         height: 100%;
         border: none;
-        padding: 0 !important;
+        padding: 0 1px !important;
         margin: 0 !important;
-        font-size: 11px;
-        letter-spacing: -0.05em;
-        line-height: 25px;
+        font-size: 16.5px;
+        letter-spacing: -0.03em;
+        line-height: 38px;
         outline: none;
         background: transparent;
         font-weight: 600;
+        text-align: center;
     }
     .excel-input:focus {
         background-color: #f0f7ff;
@@ -553,8 +555,8 @@
         background-color: #fffbeb;
         font-weight: 900;
         text-align: center;
-        letter-spacing: -0.05em;
-        line-height: 25px;
+        letter-spacing: -0.03em;
+        line-height: 38px;
     }
 </style>
 
@@ -562,7 +564,7 @@
     <title>{getSiteTitle('차량 배차 관리')}</title>
 </svelte:head>
 
-<div class="mx-auto max-w-7xl space-y-6 px-4 py-8 pb-24 font-['Noto_Sans_KR','Outfit'] md:space-y-8 md:px-6 lg:px-8">
+<div class="mx-auto w-full max-w-[1800px] space-y-6 px-2 py-6 pb-24 font-['Noto_Sans_KR','Outfit'] md:space-y-8 md:px-3 lg:px-4">
     <!-- ===================================================================== -->
     <!-- 1. 페이지 헤더 & 액션 바 (기본값: 새로고침 + 관리자 홈) -->
     <!-- ===================================================================== -->
@@ -688,12 +690,12 @@
         </button>
     </div>
 
-    <!-- 날짜 네비게이션 -->
-    <div class="mb-4 flex items-center justify-between bg-white p-1.5 rounded-xl border-2 border-slate-900 shadow-[3px_3px_0_rgba(0,0,0,1)]">
-        <div class="flex items-center gap-1">
+    <!-- 날짜 네비게이션 (반응형) -->
+    <div class="mb-4 flex flex-col gap-2 bg-white p-2 rounded-xl border-2 border-slate-900 shadow-[3px_3px_0_rgba(0,0,0,1)] md:flex-row md:items-center md:justify-between">
+        <div class="flex flex-wrap items-center justify-center gap-1.5 sm:justify-start">
             <!-- 이전 날짜 -->
             <button 
-                class="px-3 py-1.5 text-xs font-black rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-900 transition-all flex flex-col items-center"
+                class="px-2.5 sm:px-3 py-1.5 text-xs font-black rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-900 transition-all flex flex-col items-center"
                 onclick={() => moveDate(-1)}
             >
                 <span class="text-[9px] uppercase tracking-tighter opacity-70">{getRelativeLabel(prevDate)}</span>
@@ -704,20 +706,20 @@
             </button>
 
             <!-- 선택된 날짜 -->
-            <div class="px-5 py-2 bg-slate-900 text-white rounded-lg shadow-md flex flex-col items-center group relative overflow-hidden">
+            <div class="px-3 sm:px-5 py-2 bg-slate-900 text-white rounded-lg shadow-md flex flex-col items-center group relative overflow-hidden">
                 <div class="absolute inset-0 bg-blue-600/10 translate-y-full group-hover:translate-y-0 transition-transform"></div>
                 <span class="text-[9px] font-black uppercase tracking-[0.2em] text-blue-400 mb-0.5 z-10">
                     {getRelativeLabel(selectedDate)} Target
                 </span>
-                <div class="flex items-center gap-2.5 z-10">
-                    <Icon icon="ph:calendar-star-fill" class="text-blue-400 text-base" />
+                <div class="flex items-center gap-2 z-10">
+                    <Icon icon="ph:calendar-star-fill" class="text-blue-400 text-sm sm:text-base" />
                     <span class="text-xs font-black tracking-tight">{selectedFullDate}</span>
                 </div>
             </div>
 
             <!-- 다음 날짜 -->
             <button 
-                class="px-3 py-1.5 text-xs font-black rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-900 transition-all flex flex-col items-center"
+                class="px-2.5 sm:px-3 py-1.5 text-xs font-black rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-900 transition-all flex flex-col items-center"
                 onclick={() => moveDate(1)}
             >
                 <span class="text-[9px] uppercase tracking-tighter opacity-70">{getRelativeLabel(nextDate)}</span>
@@ -727,30 +729,30 @@
                 </div>
             </button>
 
-            <div class="w-[2px] h-8 bg-slate-100 mx-3"></div>
+            <div class="hidden sm:block w-[2px] h-8 bg-slate-100 mx-1"></div>
 
             <!-- 오늘로 복귀 -->
             <button 
-                class="px-3 py-2 text-[10px] font-black rounded-lg border-2 border-slate-900 hover:bg-slate-900 hover:text-white transition-all uppercase tracking-tighter flex items-center gap-1.5"
+                class="px-3 py-2 text-[11px] font-black rounded-lg border-2 border-slate-900 hover:bg-slate-900 hover:text-white transition-all tracking-tight flex items-center justify-center gap-1.5"
                 onclick={() => setDate(today)}
             >
                 <Icon icon="ph:arrow-u-up-left-bold" />
-                Jump to Today
+                <span>오늘로</span>
             </button>
         </div>
 
-        <div class="flex items-center gap-6 px-6">
-            <div class="flex flex-col items-end">
-                <span class="text-[9px] font-black text-slate-400 uppercase tracking-tighter">Drivers Active</span>
+        <div class="flex items-center justify-around md:justify-end gap-4 px-2 sm:px-4 pt-2 md:pt-0 border-t md:border-t-0 border-slate-100">
+            <div class="flex items-center gap-2 md:flex-col md:items-end md:gap-0">
+                <span class="text-[10px] font-black text-slate-400 tracking-tight">배정 기사</span>
                 <div class="flex items-baseline gap-1">
-                    <span class="text-lg font-black text-emerald-600">{assignedDrivers.length}</span>
-                    <span class="text-[10px] font-bold text-slate-400">/ {driverData.length}</span>
+                    <span class="text-base sm:text-lg font-black text-emerald-600">{assignedDrivers.length}</span>
+                    <span class="text-[11px] font-bold text-slate-400">/ {driverData.length}</span>
                 </div>
             </div>
-            <div class="w-[1px] h-8 bg-slate-200"></div>
-            <div class="flex flex-col items-end">
-                <span class="text-[9px] font-black text-slate-400 uppercase tracking-tighter">Live Routes</span>
-                <span class="text-lg font-black text-slate-900">{routes.length}</span>
+            <div class="w-[1px] h-6 md:h-8 bg-slate-200"></div>
+            <div class="flex items-center gap-2 md:flex-col md:items-end md:gap-0">
+                <span class="text-[10px] font-black text-slate-400 tracking-tight">운행 노선</span>
+                <span class="text-base sm:text-lg font-black text-slate-900">{routes.length}</span>
             </div>
         </div>
     </div>
@@ -793,8 +795,8 @@
             <p class="text-xs text-slate-400 mt-2">노선 마스터 관리 페이지에서 이 날짜에 해당하는 유효한 노선을 먼저 등록해주세요.</p>
         </div>
     {:else}
-        <main class="w-full bg-white rounded-2xl border-2 border-slate-900 shadow-[5px_5px_0_rgba(0,0,0,1)] p-5 overflow-hidden" transition:fade>
-            <div class="flex flex-col gap-2 mb-4">
+        <main class="w-full space-y-4" transition:fade>
+            <div class="flex flex-col gap-2">
                 <div class="flex justify-between items-center">
                     <h2 class="text-xl font-black text-slate-900 flex items-center gap-2">
                         <div class="w-2.5 h-6 bg-blue-600 rounded-full"></div>
@@ -813,12 +815,13 @@
                 </div>
             </div>
 
-            <!-- 🚐 [Density Excel Sheet] 전면 격자 노선별 표 분할 렌더링 -->
-            <div class="mt-2">
+            <!-- 🚐 [Density Excel Sheet + 인라인 기사 보드] 좌우 병렬 배치 (공간 부족 시 자동 줄바꿈) -->
+            <div class="mt-2 flex flex-wrap items-start gap-4">
+                <div class="w-full max-w-full lg:w-[820px] lg:flex-none">
                 {#each activeRoutesForRender as route}
                     {@const routeRowsCount = dispatchRows.filter(row => row.route_id === route.id).length}
                     {#if routeRowsCount > 0}
-                        <div class="mb-8">
+                        <div class="mb-6">
                             <!-- 🏷️ 노선 전용 구분 헤더 -->
                             <div class="flex items-center justify-between mb-2 px-1">
                                 <h3 class="text-sm font-extrabold text-slate-800 flex items-center gap-1.5">
@@ -830,32 +833,32 @@
                                 </span>
                             </div>
 
-                            <div class="overflow-x-auto border-2 border-slate-900 rounded-xl shadow-[2px_2px_0_rgba(0,0,0,1)] bg-white">
-                                <table class="excel-table w-full text-left border-collapse min-w-[1000px]">
+                            <div class="w-full overflow-x-auto border-2 border-slate-900 rounded-xl shadow-[2px_2px_0_rgba(0,0,0,1)] bg-white">
+                                <table class="excel-table w-full text-center border-collapse" style="width: 100%;">
                                     <thead>
-                                        <tr class="bg-slate-100 border-b border-slate-200 text-[11px] text-slate-600 font-extrabold uppercase">
-                                            <th style="width: 120px;">차량 번호</th>
-                                            <th style="width: 60px;">로번</th>
-                                            <th style="width: 80px;">출발 시각</th>
-                                            <th style="width: 80px;">종료 시각</th>
-                                            <th style="width: 150px;">시작 위치</th>
-                                            <th style="width: 150px;">종료 위치</th>
-                                            <th style="width: 120px; background-color: #ecfdf5; color: #047857;">기사</th>
-                                            <th style="width: 120px; background-color: #f5f3ff; color: #4338ca;">다음 날 기사</th>
-                                            <th style="width: 250px;">비고/메모</th>
+                                        <tr class="bg-slate-100 border-b border-slate-200 text-slate-600 font-extrabold uppercase">
+                                            <th style="width: 72px;">차량 번호</th>
+                                            <th style="width: 48px;">로번</th>
+                                            <th style="width: 72px;">출발 시각</th>
+                                            <th style="width: 72px;">종료 시각</th>
+                                            <th style="width: 115px;">시작 위치</th>
+                                            <th style="width: 115px;">종료 위치</th>
+                                            <th style="width: 90px; background-color: #ecfdf5; color: #047857;">기사</th>
+                                            <th style="width: 90px; background-color: #f5f3ff; color: #4338ca;">다음 날 기사</th>
+                                            <th style="width: 140px;">비고/메모</th>
                                         </tr>
                                     </thead>
                                     <tbody class="divide-y divide-slate-200">
                                         {#each dispatchRows as row}
                                             {#if row.route_id === route.id}
-                                                <tr class="hover:bg-indigo-50/20 text-xs transition-all {row.is_regular_duty ? 'bg-indigo-50/10' : ''}">
+                                                <tr class="hover:bg-indigo-50/20 transition-all {row.is_regular_duty ? 'bg-indigo-50/10' : ''}">
                                                     <!-- 차량 번호 -->
                                                     <td class="bg-blue-50/10">
                                                         <input type="text" bind:value={row.vehicle_no} oninput={() => row.is_inherited = false} placeholder="차량 번호" class="excel-input {row.is_inherited ? 'text-indigo-700 italic' : 'text-blue-700'} text-center font-bold" />
                                                     </td>
                                                     
                                                     <!-- 로번 (turn index, seq) -->
-                                                    <td class="turn-cell bg-amber-50/20 text-center text-amber-900 font-extrabold text-sm relative border-r">
+                                                    <td class="turn-cell bg-amber-50/20 text-center text-amber-900 font-extrabold text-lg relative border-r">
                                                         {row.seq}
                                                         {#if row.is_regular_duty}
                                                             <div class="absolute top-0.5 right-0.5 w-1.5 h-1.5 bg-indigo-600 rounded-full" title="당연 근무"></div>
@@ -873,12 +876,12 @@
                                                     </td>
                                                     
                                                     <!-- 시작 위치 (start_location) -->
-                                                    <td class="bg-slate-50/40 px-3 border-r">
+                                                    <td class="bg-slate-50/40 border-r">
                                                         <input type="text" value={row.start_location || ''} class="excel-input text-slate-500 font-semibold pointer-events-none" readonly />
                                                     </td>
                                                     
                                                     <!-- 종료 위치 (end_location) -->
-                                                    <td class="bg-slate-50/40 px-3 border-r">
+                                                    <td class="bg-slate-50/40 border-r">
                                                         <input type="text" value={row.end_location || ''} class="excel-input text-center text-slate-500 font-semibold pointer-events-none" readonly />
                                                     </td>
                                                     
@@ -889,7 +892,7 @@
                                                     >
                                                         <input type="text" value={(isHideRecommendations && row.is_inherited) ? '' : (row.driver_name || '')} placeholder={selectedDriver ? '배정하기' : '기사 배정'} class="excel-input text-center {row.is_inherited ? 'text-indigo-700 italic' : 'text-emerald-700'} font-black pointer-events-none" readonly />
                                                         {#if row.is_inherited && !isHideRecommendations}
-                                                            <span class="absolute top-[1px] right-1 text-[7px] text-indigo-500 font-extrabold tracking-tighter leading-none scale-90 origin-top-right">승계</span>
+                                                            <span class="absolute top-[1px] right-1 text-[11px] text-indigo-500 font-extrabold tracking-tighter leading-none scale-90 origin-top-right">승계</span>
                                                         {/if}
                                                     </td>
                                                     
@@ -900,13 +903,13 @@
                                                     >
                                                         <input type="text" value={(isHideRecommendations && row.is_tomorrow_inherited) ? '' : (row.tomorrow_driver_name || '')} placeholder={selectedDriver ? '배정하기' : '기사 지정'} class="excel-input text-center {row.is_tomorrow_inherited ? 'text-indigo-600/70 italic' : 'text-indigo-800'} font-black pointer-events-none" readonly />
                                                         {#if row.is_tomorrow_inherited && !isHideRecommendations}
-                                                            <span class="absolute top-[1px] right-1 text-[7px] text-indigo-500 font-extrabold tracking-tighter leading-none scale-90 origin-top-right">자동</span>
+                                                            <span class="absolute top-[1px] right-1 text-[11px] text-indigo-500 font-extrabold tracking-tighter leading-none scale-90 origin-top-right">자동</span>
                                                         {/if}
                                                     </td>
 
                                                     <!-- 비고/메모 -->
-                                                    <td class="px-2">
-                                                        <input type="text" bind:value={row.memo} class="excel-input text-slate-600 text-xs font-semibold px-1" placeholder="메모 입력" />
+                                                    <td>
+                                                        <input type="text" bind:value={row.memo} class="excel-input text-slate-600 font-semibold" placeholder="메모 입력" />
                                                     </td>
                                                 </tr>
                                             {/if}
@@ -917,11 +920,11 @@
                         </div>
                     {/if}
                 {/each}
-            </div>
+                </div>
 
-            <!-- 기사 리소스 보드 (하단에 넓게 가로 그리드 배치) -->
-            <div class="mt-8 border-t-2 border-slate-200 pt-6">
-                <div class="bg-white rounded-2xl border-2 border-slate-900 shadow-[3px_3px_0_rgba(0,0,0,1)] overflow-hidden flex flex-col">
+                <!-- 기사 리소스 보드 (최소 폭 360px 보장, 미만 시 자동 아래 줄로 이동) -->
+                <div class="w-full flex-1 min-w-[min(100%,360px)] lg:sticky lg:top-4">
+                    <div class="bg-white rounded-2xl border-2 border-slate-900 shadow-[3px_3px_0_rgba(0,0,0,1)] overflow-hidden flex flex-col">
                     <div class="bg-slate-100 px-4 py-3 border-b-2 border-slate-900 flex justify-between items-center">
                         <h3 class="text-xs font-black text-slate-800 flex items-center gap-2 uppercase tracking-tight">
                             <Icon icon="ph:users-four-fill" class="text-indigo-600 text-lg" />
@@ -932,35 +935,71 @@
                         </span>
                     </div>
                     
-                    <div class="p-4 bg-slate-50/50">
-                        <div class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2 max-h-[220px] overflow-y-auto">
-                            {#each availableDrivers as driver}
-                                <button 
-                                    class="flex items-center justify-between p-2 rounded-xl border-2 transition-all text-xs group shadow-sm
-                                        {selectedDriver?.name === driver.name 
-                                            ? 'bg-indigo-600 border-indigo-600 text-white shadow-md' 
-                                            : 'bg-white border-slate-200 hover:border-indigo-400 hover:bg-indigo-50 text-slate-700'}"
-                                    onclick={() => selectDriver(driver)}
-                                >
-                                    <div class="flex flex-col items-start gap-0.5 text-left">
-                                        <div class="flex items-center gap-1">
-                                            <span class="font-black tracking-tight">{driver.name}</span>
-                                            {#if driver.role === 'MAIN'}
-                                                <span class="px-1 py-0.2 text-[8px] font-black rounded bg-blue-100 text-blue-800 uppercase tracking-tighter">주</span>
-                                            {:else}
-                                                <span class="px-1 py-0.2 text-[8px] font-black rounded bg-amber-100 text-amber-800 uppercase tracking-tighter">보</span>
-                                            {/if}
+                    <div class="p-3 bg-slate-50/50">
+                        {#if availableDrivers.length === 0}
+                            <div class="py-6 text-center text-xs font-bold text-slate-400">
+                                현재 투입 대기 중인 기사가 없습니다.
+                            </div>
+                        {:else}
+                            {@const reserveDrivers = availableDrivers.filter((/** @type {any} */ d) => !String(d.vehicle_no || '').trim())}
+                            {@const vehicleDrivers = availableDrivers.filter((/** @type {any} */ d) => Boolean(String(d.vehicle_no || '').trim()))}
+                            <div class="space-y-3 min-h-[480px] max-h-[75vh] overflow-y-auto overflow-x-hidden">
+                                <!-- 1. 상단: 예비기사 (차량 번호 없음 -> '예' 아이콘 + 시원한 파랑 카드) -->
+                                {#if reserveDrivers.length > 0}
+                                    <div class="space-y-2">
+                                        <div class="flex items-center gap-2 border-b border-sky-200 pb-1">
+                                            <span class="text-xs font-black text-sky-700">예비기사 ({reserveDrivers.length})</span>
                                         </div>
-                                        {#if driver.vehicle_no}
-                                            <span class="text-[9px] font-bold text-slate-400 group-hover:text-slate-500 {selectedDriver?.name === driver.name ? 'text-indigo-200' : ''}">
-                                                {driver.vehicle_no}
-                                            </span>
-                                        {/if}
+                                        <div class="flex flex-wrap items-start content-start gap-2">
+                                            {#each reserveDrivers as driver}
+                                                <button
+                                                    type="button"
+                                                    class="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl border transition-all text-[18px] leading-tight font-bold shadow-xs
+                                                        {selectedDriver?.name === driver.name
+                                                            ? 'bg-blue-600 border-blue-600 text-white shadow-sm'
+                                                            : 'bg-sky-50 border-sky-200 hover:border-sky-400 hover:bg-sky-100 text-sky-900'}"
+                                                    onclick={() => selectDriver(driver)}
+                                                >
+                                                    <span class="font-black tracking-tight">{driver.name}</span>
+                                                    <span class="px-1.5 py-0.5 text-[13px] font-black rounded {selectedDriver?.name === driver.name ? 'bg-white/20 text-white' : 'bg-sky-600 text-white'}">
+                                                        예
+                                                    </span>
+                                                </button>
+                                            {/each}
+                                        </div>
                                     </div>
-                                    <Icon icon="ph:check-circle-fill" class="{selectedDriver?.name === driver.name ? 'text-white' : 'text-slate-200 group-hover:text-indigo-500'} text-sm transition-colors" />
-                                </button>
-                            {/each}
-                        </div>
+                                {/if}
+
+                                <!-- 2. 분리선 + 나머지 차량 배정 기사 -->
+                                {#if vehicleDrivers.length > 0}
+                                    <div class="space-y-2 {reserveDrivers.length > 0 ? 'border-t-2 border-slate-200 pt-3' : ''}">
+                                        <div class="flex items-center gap-2 border-b border-slate-200 pb-1">
+                                            <span class="text-xs font-black text-slate-600">차량 기사 ({vehicleDrivers.length})</span>
+                                        </div>
+                                        <div class="flex flex-wrap items-start content-start gap-2">
+                                            {#each vehicleDrivers as driver}
+                                                <button
+                                                    type="button"
+                                                    class="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl border transition-all text-[18px] leading-tight font-bold shadow-xs
+                                                        {selectedDriver?.name === driver.name
+                                                            ? 'bg-indigo-600 border-indigo-600 text-white shadow-sm'
+                                                            : 'bg-white border-slate-200 hover:border-indigo-400 hover:bg-indigo-50 text-slate-700'}"
+                                                    onclick={() => selectDriver(driver)}
+                                                >
+                                                    <span class="font-black tracking-tight">{driver.name}</span>
+                                                    <span class="px-1.5 py-0.5 text-[13px] font-black rounded {selectedDriver?.name === driver.name ? 'bg-white/20 text-white' : driver.role === 'MAIN' ? 'bg-blue-100 text-blue-800' : 'bg-amber-100 text-amber-800'}">
+                                                        {driver.role === 'MAIN' ? '주' : '보'}
+                                                    </span>
+                                                    <span class="text-[15px] font-mono {selectedDriver?.name === driver.name ? 'text-indigo-100' : 'text-slate-400'}">
+                                                        {driver.vehicle_no}
+                                                    </span>
+                                                </button>
+                                            {/each}
+                                        </div>
+                                    </div>
+                                {/if}
+                            </div>
+                        {/if}
                     </div>
                     
                     <div class="px-4 py-2 border-t border-slate-200 bg-white">
@@ -973,11 +1012,12 @@
                         </p>
                     </div>
                 </div>
+                </div>
             </div>
 
-            <!-- 하단 플로팅 저장 버튼 그룹 -->
-            <div class="mt-6 flex justify-end gap-3">
-                <button class="btn {isAutoFilled ? 'bg-rose-50 hover:bg-rose-100 text-rose-700 border-rose-200' : 'bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border-indigo-200'} border-2 rounded-xl px-6 font-black flex items-center gap-1.5 transition-all shadow-sm" onclick={autoFillDrivers}>
+            <!-- 하단 저장 버튼 그룹 (반응형) -->
+            <div class="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:flex-wrap sm:justify-end sm:gap-3">
+                <button class="btn w-full sm:w-auto justify-center {isAutoFilled ? 'bg-rose-50 hover:bg-rose-100 text-rose-700 border-rose-200' : 'bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border-indigo-200'} border-2 rounded-xl px-5 font-black flex items-center gap-1.5 transition-all shadow-sm" onclick={autoFillDrivers}>
                     {#if isAutoFilled}
                         <Icon icon="ph:x-circle-fill" class="h-4.5 w-4.5" />
                         채우기 취소
@@ -986,10 +1026,10 @@
                         자동 채우기
                     {/if}
                 </button>
-                <button class="btn bg-white hover:bg-slate-50 text-slate-800 border-slate-200 border-2 rounded-xl px-6 font-black" onclick={() => saveDispatch('DRAFT')}>
+                <button class="btn w-full sm:w-auto justify-center bg-white hover:bg-slate-50 text-slate-800 border-slate-200 border-2 rounded-xl px-5 font-black" onclick={() => saveDispatch('DRAFT')}>
                     임시저장
                 </button>
-                <button class="btn bg-slate-900 hover:bg-black text-white border-none rounded-xl px-8 font-black shadow-lg" onclick={() => saveDispatch('CONFIRMED')}>
+                <button class="btn w-full sm:w-auto justify-center bg-slate-900 hover:bg-black text-white border-none rounded-xl px-6 font-black shadow-lg" onclick={() => saveDispatch('CONFIRMED')}>
                     공지 발행 (확정)
                 </button>
             </div>
