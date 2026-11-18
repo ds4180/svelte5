@@ -9,4 +9,8 @@
  */
 
 export { default as CommentEngine } from '$lib/engines/CommentEngine.svelte';
+export { default as CommentFileUploadEngine } from '$lib/engines/CommentFileUploadEngine.svelte';
+export { default as coment_ext_fileupload } from '$lib/engines/CommentFileUploadEngine.svelte';
 export { default as UploadEngine } from '$lib/engines/UploadEngine.svelte';
+export { default as ReactionEngine } from '$lib/engines/ReactionEngine.svelte';
+export { default as ReadReceiptEngine } from '$lib/engines/ReadReceiptEngine.svelte';

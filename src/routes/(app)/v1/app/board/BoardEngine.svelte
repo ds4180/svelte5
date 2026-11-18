@@ -5,18 +5,23 @@
 	 * @prop {string} slug  - URL 슬러그 (예: "notice", "notice/42", "notice/42/edit")
 	 * @prop {string} appId - 앱 식별자 (기본값: "board")
 	 */
-	import { untrack } from 'svelte';
+	import { onDestroy, untrack } from 'svelte';
 	import { fade, fly } from 'svelte/transition';
 	import Icon from '@iconify/svelte';
 	import * as api from '$lib/api/board';
-	import { adminGetAppData } from '$lib/api/admin';
+	import { adminGetAppData, adminUpdateBoard } from '$lib/api/admin';
+	import { buildOptionMenuItems } from '$lib/utils/dynamicOptions';
 	import * as engines from '$lib/index';
 	import { goto, invalidateAll } from '$app/navigation';
 	import TiptapEditor from '$lib/components/TiptapEditor.svelte';
 	import SafeHtml from '$lib/components/SafeHtml.svelte';
 	import SearchFilterBar from '$lib/components/SearchFilterBar.svelte';
 	import Pagination from '$lib/components/Pagination.svelte';
+	import BoardListLayout from './layouts/BoardListLayout.svelte';
+	import BoardGalleryLayout from './layouts/BoardGalleryLayout.svelte';
+	import BoardBlogLayout from './layouts/BoardBlogLayout.svelte';
 	import { getAuthContext } from '$lib/runes/auth.svelte';
+	import { navState } from '$lib/runes/nav.svelte';
 	import { toast } from '$lib/runes/toast.svelte';
 	import { formatDate } from '$lib/utils';
 	import { formatApiError } from '$lib/utils/error';
@@ -67,6 +72,14 @@
 						(post.author_id && post.author_id === auth.user?.id))))
 	);
 
+	let ActiveListLayout = $derived(
+		board?.layout_type === 'gallery'
+			? BoardGalleryLayout
+			: board?.layout_type === 'blog'
+				? BoardBlogLayout
+				: BoardListLayout
+	);
+
 	// --- [폼 상태] ---
 	let editForm = $state({
 		title: '',
@@ -109,6 +122,43 @@
 	// 초기 파싱
 	parsePath();
 
+	/** @param {string} key @param {any} nextValue */
+	async function handleBoardOptionChange(key, nextValue) {
+		if (!board) return;
+		const prevOptions = board.options && typeof board.options === 'object' ? board.options : {};
+		const nextOptions = { ...prevOptions, [key]: nextValue };
+		board = { ...board, options: nextOptions };
+
+		if ((auth.user?.rank_level ?? 0) >= 4 && board.id) {
+			try {
+				await adminUpdateBoard(board.id, { options: nextOptions });
+				toast.success(`세부 옵션('${key}')이 저장되었습니다.`);
+			} catch (e) {
+				board = { ...board, options: prevOptions };
+				toast.error('옵션 저장 실패: ' + formatApiError(e));
+			}
+		} else {
+			toast.info(`세부 옵션('${key}')이 현재 화면에 적용되었습니다.`);
+		}
+	}
+
+	// 📌 우측 다이나믹 폼(DynamicSidebar) 상단 구역에 게시판 세부 옵션(options JSON)만 주입
+	$effect(() => {
+		const slugVal = boardSlug;
+		const b = board;
+
+		if (!slugVal || !b) {
+			navState.clearPageMenus();
+			return;
+		}
+
+		navState.setPageMenus(buildOptionMenuItems(b.options, handleBoardOptionChange));
+	});
+
+	onDestroy(() => {
+		navState.clearPageMenus();
+	});
+
 	// 🔄 initialData 변경(invalidateAll 등) 시 목록/상세 상태 즉시 동기화
 	$effect(() => {
 		if (initialData) {
@@ -125,8 +175,15 @@
 	$effect(() => {
 		if (slug !== currentSlug) {
 			untrack(() => {
+				const prevBoardSlug = boardSlug;
 				currentSlug = slug;
 				parsePath();
+
+				if (boardSlug !== prevBoardSlug) {
+					keyword = '';
+					sort = 'latest';
+					currentPage = 1;
+				}
 
 				if (initialData) {
 					posts = initialData.posts || [];
@@ -136,7 +193,7 @@
 					total = initialData.total || 0;
 				}
 
-				loadData();
+				loadData(true);
 			});
 		}
 	});
@@ -262,7 +319,13 @@
 				await api.updatePost(postId, payload);
 				toast.success('게시글이 수정되었습니다.');
 			}
+			if (mode === 'write') {
+				currentPage = 1;
+				keyword = '';
+				sort = 'latest';
+			}
 			resetEditForm();
+			isLoading = false;
 			await goto(`/v1/app/board/${boardSlug}`, { invalidateAll: true });
 			await invalidateAll();
 		} catch (e) {
@@ -278,6 +341,7 @@
 			isLoading = true;
 			await api.deletePost(postId);
 			toast.success('게시물이 삭제되었습니다.');
+			isLoading = false;
 			await goto(`/v1/app/board/${boardSlug}`, { invalidateAll: true });
 			await invalidateAll();
 		} catch (e) {
@@ -425,49 +489,7 @@
 								<p class="text-sm font-bold">등록된 게시글이 없습니다.</p>
 							</div>
 						{:else}
-							<div class="grid grid-cols-1 gap-4">
-								{#each posts as p}
-									<a
-										href="/v1/app/board/{boardSlug}/{p.id}"
-										class="board-fullbleed-card group block rounded-2xl border-2 border-slate-200 bg-white p-5 shadow-2xs transition hover:border-blue-400 hover:shadow-sm sm:p-6"
-									>
-										<div class="mb-2 flex items-start justify-between gap-3">
-											<div class="flex flex-wrap items-center gap-2">
-												<span
-													class="rounded-lg bg-slate-100 px-2 py-0.5 font-mono text-[11px] font-bold text-slate-600"
-												>
-													NO.{p.id}
-												</span>
-												{#if p.user_name || p.author_name}
-													<span class="inline-flex items-center gap-1 rounded-lg bg-slate-50 px-2 py-0.5 text-[11px] font-bold text-slate-600">
-														<Icon icon="ph:user-bold" class="h-3 w-3 text-slate-400" />
-														<span>{p.user_name || p.author_name}</span>
-													</span>
-												{/if}
-											</div>
-											<div class="flex shrink-0 flex-col items-end gap-0.5 text-right">
-												<span class="inline-flex items-center gap-1 text-xs font-bold text-slate-500">
-													<Icon icon="ph:eye-bold" class="h-3.5 w-3.5 text-slate-400" />
-													<span>{p.view_count || 0}</span>
-												</span>
-												<span class="text-[11px] font-medium text-slate-400">
-													{formatDate(p.create_date || p.created_at)}
-												</span>
-											</div>
-										</div>
-										<h3
-											class="mb-1.5 line-clamp-1 text-lg font-black tracking-tight text-slate-900 transition-colors group-hover:text-blue-600 sm:text-xl"
-										>
-											{p.title}
-										</h3>
-										<p
-											class="line-clamp-2 max-w-3xl text-xs leading-relaxed font-medium text-slate-500 sm:text-sm"
-										>
-											{p.content.replace(/<[^>]*>/g, '') || '본문 내용이 없습니다.'}
-										</p>
-									</a>
-								{/each}
-							</div>
+							<ActiveListLayout {posts} {boardSlug} />
 
 							<!-- 🔢 PAGINATION (공용 Pagination 컴포넌트) -->
 							<Pagination
@@ -591,7 +613,7 @@
 							<!-- 💬 Dynamic Service Bindings (댓글 등) -->
 							{#if bindings && bindings.length > 0}
 								<div class="mt-8 space-y-6 pb-16">
-									{#each bindings as binding (binding.service_component)}
+									{#each bindings as binding, idx (binding.engine_id + '-' + idx)}
 										{#if engines[binding.service_component]}
 											{@const DynComp = engines[binding.service_component]}
 											<div
@@ -603,6 +625,8 @@
 													{appId}
 													instanceId={postId}
 													config={binding.config}
+													accessLevel={Number(board?.min_read_rank ?? 0) === 0 ? 'PUBLIC' : 'PROTECTED'}
+													{boardSlug}
 												/>
 											</div>
 										{/if}
@@ -720,7 +744,7 @@
 <style>
 	/* 📱 모바일 세로 모드 + 하단 퀵 내비게이션 바 활성화(< 768px) 구간: 게시판 카드 좌우 여백 0 */
 	@media (max-width: 767px) and (orientation: portrait) {
-		.board-fullbleed-card {
+		:global(.board-fullbleed-card) {
 			width: 100vw;
 			max-width: 100vw;
 			margin-left: calc(50% - 50vw);

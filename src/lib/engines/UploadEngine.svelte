@@ -9,7 +9,7 @@
 	import ImageUploader from '$lib/components/ImageUploader.svelte';
 	import Icon from '@iconify/svelte';
 
-	let { post, config = {} } = $props();
+	let { post, config = {}, appId = 'board' } = $props();
 
 	// 게시물에 이미 연결된 파일들이 있다면 표시 (extra_data 또는 별도 테이블 연동 예정)
 	// 현재는 간단히 ImageUploader의 내부 상태로 관리하거나 부모로부터 넘겨받음
@@ -36,6 +36,8 @@
 	<ImageUploader 
 		bind:uploadedFiles 
 		multiple={config.multiple !== false}
+		app_id={appId}
+		target_id={post?.id ? String(post.id) : null}
 	/>
 
 	{#if uploadedFiles.length === 0}

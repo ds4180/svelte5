@@ -49,9 +49,13 @@
 
 	onMount(loadAll);
 
+	// 사용 가능한 프론트엔드 서비스 플러그인 목록 ($lib/index.ts 기준)
+	const AVAILABLE_PLUGINS = ['CommentEngine', 'CommentFileUploadEngine', 'UploadEngine', 'ReactionEngine', 'ReadReceiptEngine'];
+
 	// --- [CRUD Helpers] ---
 	let showModal = $state(false);
 	let modalType = $state(''); // registry, engine, app, instance
+	let isEditMode = $state(false);
 	let formData = $state(/** @type {any} */ ({}));
 
 	/**
@@ -60,29 +64,137 @@
 	 */
 	function openModal(type, target = null) {
 		modalType = type;
-		formData = target ? { ...target } : {};
-		if (type === 'app' && target?.config) {
-			formData.config_str = JSON.stringify(target.config, null, 2);
-		}
-		if (type === 'instance' && !target) {
-			formData.service_app_ids = [];
+		isEditMode = Boolean(target);
+		if (type === 'registry') {
+			formData = target
+				? { id: target.id, name: target.name || '', description: target.description || '' }
+				: { id: '', name: '', description: '' };
+		} else if (type === 'engine') {
+			formData = target
+				? {
+						...target,
+						version: target.version || '1.0.0',
+						is_active: target.is_active ?? true,
+						config_schema_str: JSON.stringify(target.config_schema || {}, null, 2)
+					}
+				: {
+						id: '',
+						registry_id: registries[0]?.id || '',
+						version: '1.0.0',
+						frontend_plugin: '',
+						config_schema_str: '{}',
+						is_active: true
+					};
+		} else if (type === 'app') {
+			formData = target
+				? {
+						id: target.id,
+						name: target.name || '',
+						engine_id: target.engine_id || '',
+						is_active: target.is_active ?? true,
+						config_str: JSON.stringify(target.config || {}, null, 2)
+					}
+				: {
+						name: '',
+						engine_id: engines[0]?.id || '',
+						is_active: true,
+						config_str: '{}'
+					};
+		} else if (type === 'instance') {
+			formData = target
+				? {
+						id: target.id,
+						name: target.name || '',
+						service_app_ids: [...(target.service_app_ids || [])],
+						is_active: target.is_active ?? true
+					}
+				: {
+						name: '',
+						service_app_ids: [],
+						is_active: true
+					};
 		}
 		showModal = true;
+	}
+
+	/**
+	 * 번들에 포함된 서비스 앱의 렌더링 순서를 위/아래로 이동합니다.
+	 * @param {number} idx
+	 * @param {number} delta
+	 */
+	function moveBundleApp(idx, delta) {
+		const list = [...(formData.service_app_ids || [])];
+		const nextIdx = idx + delta;
+		if (nextIdx < 0 || nextIdx >= list.length) return;
+		[list[idx], list[nextIdx]] = [list[nextIdx], list[idx]];
+		formData.service_app_ids = list;
 	}
 
 	async function handleSubmit() {
 		try {
 			if (modalType === 'registry') {
-				await api.adminCreateServiceRegistry(formData);
+				if (!formData.id?.trim() || !formData.name?.trim()) {
+					toast.warning('분류 ID와 표시 이름을 입력하세요.');
+					return;
+				}
+				if (isEditMode) {
+					await api.adminUpdateServiceRegistry(formData.id.trim(), {
+						name: formData.name.trim(),
+						description: formData.description || null
+					});
+				} else {
+					await api.adminCreateServiceRegistry({
+						id: formData.id.trim(),
+						name: formData.name.trim(),
+						description: formData.description || null
+					});
+				}
 			} else if (modalType === 'engine') {
-				await api.adminCreateServiceEngine({
-					...formData,
-					config_schema: formData.config_schema_str ? JSON.parse(formData.config_schema_str) : {}
-				});
+				if (!formData.id?.trim() || !formData.registry_id) {
+					toast.warning('엔진 ID와 소속 서비스 분류(레지스트리)를 입력하세요.');
+					return;
+				}
+				let parsedSchema = {};
+				try {
+					parsedSchema = formData.config_schema_str ? JSON.parse(formData.config_schema_str) : {};
+				} catch {
+					toast.error('엔진 설정 스키마(config_schema)가 올바른 JSON 형식이 아닙니다.');
+					return;
+				}
+				if (isEditMode) {
+					await api.adminUpdateServiceEngine(formData.id.trim(), {
+						version: formData.version || '1.0.0',
+						frontend_plugin: formData.frontend_plugin?.trim() || null,
+						config_schema: parsedSchema,
+						is_active: Boolean(formData.is_active ?? true)
+					});
+				} else {
+					await api.adminCreateServiceEngine({
+						id: formData.id.trim(),
+						registry_id: formData.registry_id,
+						version: formData.version || '1.0.0',
+						frontend_plugin: formData.frontend_plugin?.trim() || null,
+						config_schema: parsedSchema,
+						is_active: Boolean(formData.is_active ?? true)
+					});
+				}
 			} else if (modalType === 'app') {
+				if (!formData.name?.trim() || !formData.engine_id) {
+					toast.warning('모듈 이름과 기반 엔진을 선택하세요.');
+					return;
+				}
+				let parsedConfig = {};
+				try {
+					parsedConfig = formData.config_str ? JSON.parse(formData.config_str) : {};
+				} catch {
+					toast.error('옵션 설정(JSON)이 올바른 JSON 형식이 아닙니다.');
+					return;
+				}
 				const data = {
-					...formData,
-					config: formData.config_str ? JSON.parse(formData.config_str) : {}
+					name: formData.name.trim(),
+					engine_id: formData.engine_id,
+					config: parsedConfig,
+					is_active: Boolean(formData.is_active ?? true)
 				};
 				if (formData.id) {
 					await api.adminUpdateServiceApp(formData.id, data);
@@ -90,10 +202,19 @@
 					await api.adminCreateServiceApp(data);
 				}
 			} else if (modalType === 'instance') {
+				if (!formData.name?.trim()) {
+					toast.warning('번들 명칭을 입력하세요.');
+					return;
+				}
+				const payload = {
+					name: formData.name.trim(),
+					service_app_ids: formData.service_app_ids || [],
+					is_active: Boolean(formData.is_active ?? true)
+				};
 				if (formData.id) {
-					await api.adminUpdateServiceInstance(formData.id, formData);
+					await api.adminUpdateServiceInstance(formData.id, payload);
 				} else {
-					await api.adminCreateServiceInstance(formData);
+					await api.adminCreateServiceInstance(payload);
 				}
 			}
 			toast.success('성공적으로 저장되었습니다.');
@@ -194,56 +315,34 @@
 	</header>
 
 	<!-- ===================================================================== -->
-	<!-- 2. 알림/요약 지표 카드 (최대 4개, 최소 1개 규격) -->
+	<!-- 2. 4단계 조립 파이프라인 요약 카드 (1단계 분류 → 2단계 엔진 → 3단계 설정 모듈 → 4단계 조립 번들) -->
 	<!-- ===================================================================== -->
 	<section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-5">
-		<!-- 카드 1: 서비스 번들 -->
+		<!-- 1단계: 서비스 분류 (레지스트리) -->
 		<button
-			onclick={() => (activeTab = 'instances')}
-			class="text-left relative overflow-hidden rounded-[1.75rem] border-2 bg-white p-5 shadow-sm transition group {activeTab === 'instances' ? 'border-rose-500 bg-rose-50/20 ring-2 ring-rose-500/20' : 'border-slate-100 hover:border-rose-300'}"
+			onclick={() => (activeTab = 'registries')}
+			class="text-left relative overflow-hidden rounded-[1.75rem] border-2 bg-white p-5 shadow-sm transition group {activeTab === 'registries' ? 'border-amber-500 bg-amber-50/20 ring-2 ring-amber-500/20' : 'border-slate-100 hover:border-amber-300'}"
 		>
 			<div class="flex items-center justify-between mb-3">
-				<span class="text-xs font-black tracking-widest uppercase text-slate-400 group-hover:text-rose-600">Service Bundles</span>
-				<div class="flex h-10 w-10 items-center justify-center rounded-2xl bg-rose-50 text-rose-600 group-hover:scale-110 transition-transform">
-					<Icon icon="ph:package-bold" class="text-2xl" />
+				<span class="text-[11px] font-black tracking-wide text-amber-700 bg-amber-50 px-2 py-0.5 rounded-lg">1단계 · 서비스 분류</span>
+				<div class="flex h-10 w-10 items-center justify-center rounded-2xl bg-amber-50 text-amber-600 group-hover:scale-110 transition-transform">
+					<Icon icon="ph:books-bold" class="text-2xl" />
 				</div>
 			</div>
 			<div class="text-3xl font-black text-slate-900 tracking-tight">
-				{loading ? '...' : countInstances}
-				<span class="text-sm font-bold text-slate-400 ml-1">개 번들</span>
+				{loading ? '...' : countRegistries}
+				<span class="text-sm font-bold text-slate-400 ml-1">개 분류</span>
 			</div>
-			<div class="mt-2 flex items-center gap-2 text-xs font-bold text-rose-600">
-				<span class="rounded-lg bg-rose-50 px-2 py-0.5 font-mono">조합 세트</span>
-			</div>
+			<p class="mt-2 text-[11px] font-bold text-slate-500">댓글·업로드 등 기능 카테고리 정의</p>
 		</button>
 
-		<!-- 카드 2: 서비스 앱 -->
-		<button
-			onclick={() => (activeTab = 'apps')}
-			class="text-left relative overflow-hidden rounded-[1.75rem] border-2 bg-white p-5 shadow-sm transition group {activeTab === 'apps' ? 'border-purple-500 bg-purple-50/20 ring-2 ring-purple-500/20' : 'border-slate-100 hover:border-purple-300'}"
-		>
-			<div class="flex items-center justify-between mb-3">
-				<span class="text-xs font-black tracking-widest uppercase text-slate-400 group-hover:text-purple-600">Service Apps</span>
-				<div class="flex h-10 w-10 items-center justify-center rounded-2xl bg-purple-50 text-purple-600 group-hover:scale-110 transition-transform">
-					<Icon icon="ph:puzzle-piece-bold" class="text-2xl" />
-				</div>
-			</div>
-			<div class="text-3xl font-black text-slate-900 tracking-tight">
-				{loading ? '...' : countApps}
-				<span class="text-sm font-bold text-slate-400 ml-1">개 모듈</span>
-			</div>
-			<div class="mt-2 flex items-center gap-2 text-xs font-bold text-purple-600">
-				<span class="rounded-lg bg-purple-50 px-2 py-0.5 font-mono">독립 기능</span>
-			</div>
-		</button>
-
-		<!-- 카드 3: 구동 엔진 -->
+		<!-- 2단계: 구현 엔진 (플러그인) -->
 		<button
 			onclick={() => (activeTab = 'engines')}
 			class="text-left relative overflow-hidden rounded-[1.75rem] border-2 bg-white p-5 shadow-sm transition group {activeTab === 'engines' ? 'border-emerald-500 bg-emerald-50/20 ring-2 ring-emerald-500/20' : 'border-slate-100 hover:border-emerald-300'}"
 		>
 			<div class="flex items-center justify-between mb-3">
-				<span class="text-xs font-black tracking-widest uppercase text-slate-400 group-hover:text-emerald-600">Engines</span>
+				<span class="text-[11px] font-black tracking-wide text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-lg">2단계 · 구현 엔진</span>
 				<div class="flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600 group-hover:scale-110 transition-transform">
 					<Icon icon="ph:cpu-bold" class="text-2xl" />
 				</div>
@@ -252,59 +351,73 @@
 				{loading ? '...' : countEngines}
 				<span class="text-sm font-bold text-slate-400 ml-1">개 엔진</span>
 			</div>
-			<div class="mt-2 flex items-center gap-2 text-xs font-bold text-emerald-600">
-				<span class="rounded-lg bg-emerald-50 px-2 py-0.5 font-mono">런타임 코어</span>
-			</div>
+			<p class="mt-2 text-[11px] font-bold text-slate-500">실제 화면 Svelte 플러그인 연결</p>
 		</button>
 
-		<!-- 카드 4: 레지스트리 -->
+		<!-- 3단계: 엔진 인스턴스 (서비스 앱) -->
 		<button
-			onclick={() => (activeTab = 'registries')}
-			class="text-left relative overflow-hidden rounded-[1.75rem] border-2 bg-white p-5 shadow-sm transition group {activeTab === 'registries' ? 'border-amber-500 bg-amber-50/20 ring-2 ring-amber-500/20' : 'border-slate-100 hover:border-amber-300'}"
+			onclick={() => (activeTab = 'apps')}
+			class="text-left relative overflow-hidden rounded-[1.75rem] border-2 bg-white p-5 shadow-sm transition group {activeTab === 'apps' ? 'border-purple-500 bg-purple-50/20 ring-2 ring-purple-500/20' : 'border-slate-100 hover:border-purple-300'}"
 		>
 			<div class="flex items-center justify-between mb-3">
-				<span class="text-xs font-black tracking-widest uppercase text-slate-400 group-hover:text-amber-600">Registries</span>
-				<div class="flex h-10 w-10 items-center justify-center rounded-2xl bg-amber-50 text-amber-600 group-hover:scale-110 transition-transform">
-					<Icon icon="ph:books-bold" class="text-2xl" />
+				<span class="text-[11px] font-black tracking-wide text-purple-700 bg-purple-50 px-2 py-0.5 rounded-lg">3단계 · 엔진 인스턴스</span>
+				<div class="flex h-10 w-10 items-center justify-center rounded-2xl bg-purple-50 text-purple-600 group-hover:scale-110 transition-transform">
+					<Icon icon="ph:puzzle-piece-bold" class="text-2xl" />
 				</div>
 			</div>
 			<div class="text-3xl font-black text-slate-900 tracking-tight">
-				{loading ? '...' : countRegistries}
-				<span class="text-sm font-bold text-slate-400 ml-1">개 등록소</span>
+				{loading ? '...' : countApps}
+				<span class="text-sm font-bold text-slate-400 ml-1">개 인스턴스</span>
 			</div>
-			<div class="mt-2 flex items-center gap-2 text-xs font-bold text-amber-600">
-				<span class="rounded-lg bg-amber-50 px-2 py-0.5 font-mono">프로토콜 규격</span>
+			<p class="mt-2 text-[11px] font-bold text-slate-500">엔진에 옵션(JSON)을 넣어 생성한 인스턴스</p>
+		</button>
+
+		<!-- 4단계: 조립 번들 (완성 패키지) -->
+		<button
+			onclick={() => (activeTab = 'instances')}
+			class="text-left relative overflow-hidden rounded-[1.75rem] border-2 bg-white p-5 shadow-sm transition group {activeTab === 'instances' ? 'border-rose-500 bg-rose-50/20 ring-2 ring-rose-500/20' : 'border-slate-100 hover:border-rose-300'}"
+		>
+			<div class="flex items-center justify-between mb-3">
+				<span class="text-[11px] font-black tracking-wide text-rose-700 bg-rose-50 px-2 py-0.5 rounded-lg">4단계 · 조립 번들</span>
+				<div class="flex h-10 w-10 items-center justify-center rounded-2xl bg-rose-50 text-rose-600 group-hover:scale-110 transition-transform">
+					<Icon icon="ph:package-bold" class="text-2xl" />
+				</div>
 			</div>
+			<div class="text-3xl font-black text-slate-900 tracking-tight">
+				{loading ? '...' : countInstances}
+				<span class="text-sm font-bold text-slate-400 ml-1">개 번들</span>
+			</div>
+			<p class="mt-2 text-[11px] font-bold text-slate-500">인스턴스를 순서대로 묶어 게시판에 장착</p>
 		</button>
 	</section>
 
 	<!-- ===================================================================== -->
-	<!-- 3. 모드 탭 바 (최소 1개, 일관성 및 확장성) -->
+	<!-- 3. 모드 탭 바 (조립 순서 1→2→3→4) -->
 	<!-- ===================================================================== -->
 	<nav class="flex gap-2 border-b-2 border-slate-200 overflow-x-auto no-scrollbar">
 		<button
-			onclick={() => (activeTab = 'instances')}
-			class="px-6 py-3.5 text-xs font-black uppercase tracking-widest transition-all whitespace-nowrap {activeTab === 'instances' ? 'border-b-4 border-rose-600 text-rose-700 bg-rose-50/60 rounded-t-2xl' : 'text-slate-400 hover:text-slate-700'}"
+			onclick={() => (activeTab = 'registries')}
+			class="px-5 py-3.5 text-xs font-black tracking-wide transition-all whitespace-nowrap {activeTab === 'registries' ? 'border-b-4 border-amber-600 text-amber-800 bg-amber-50/60 rounded-t-2xl' : 'text-slate-400 hover:text-slate-700'}"
 		>
-			서비스 번들 ({serviceInstances.length})
-		</button>
-		<button
-			onclick={() => (activeTab = 'apps')}
-			class="px-6 py-3.5 text-xs font-black uppercase tracking-widest transition-all whitespace-nowrap {activeTab === 'apps' ? 'border-b-4 border-rose-600 text-rose-700 bg-rose-50/60 rounded-t-2xl' : 'text-slate-400 hover:text-slate-700'}"
-		>
-			서비스 앱 ({serviceApps.length})
+			1. 레지스트리 · 추상화 ({registries.length})
 		</button>
 		<button
 			onclick={() => (activeTab = 'engines')}
-			class="px-6 py-3.5 text-xs font-black uppercase tracking-widest transition-all whitespace-nowrap {activeTab === 'engines' ? 'border-b-4 border-rose-600 text-rose-700 bg-rose-50/60 rounded-t-2xl' : 'text-slate-400 hover:text-slate-700'}"
+			class="px-5 py-3.5 text-xs font-black tracking-wide transition-all whitespace-nowrap {activeTab === 'engines' ? 'border-b-4 border-emerald-600 text-emerald-800 bg-emerald-50/60 rounded-t-2xl' : 'text-slate-400 hover:text-slate-700'}"
 		>
-			구동 엔진 ({engines.length})
+			2. 구현 엔진 ({engines.length})
 		</button>
 		<button
-			onclick={() => (activeTab = 'registries')}
-			class="px-6 py-3.5 text-xs font-black uppercase tracking-widest transition-all whitespace-nowrap {activeTab === 'registries' ? 'border-b-4 border-rose-600 text-rose-700 bg-rose-50/60 rounded-t-2xl' : 'text-slate-400 hover:text-slate-700'}"
+			onclick={() => (activeTab = 'apps')}
+			class="px-5 py-3.5 text-xs font-black tracking-wide transition-all whitespace-nowrap {activeTab === 'apps' ? 'border-b-4 border-purple-600 text-purple-800 bg-purple-50/60 rounded-t-2xl' : 'text-slate-400 hover:text-slate-700'}"
 		>
-			레지스트리 ({registries.length})
+			3. 엔진 인스턴스 ({serviceApps.length})
+		</button>
+		<button
+			onclick={() => (activeTab = 'instances')}
+			class="px-5 py-3.5 text-xs font-black tracking-wide transition-all whitespace-nowrap {activeTab === 'instances' ? 'border-b-4 border-rose-600 text-rose-700 bg-rose-50/60 rounded-t-2xl' : 'text-slate-400 hover:text-slate-700'}"
+		>
+			4. 조립 번들 ({serviceInstances.length})
 		</button>
 	</nav>
 
@@ -394,14 +507,14 @@
 						</div>
 						<h3 class="text-xl font-black text-slate-900 tracking-tight">{app.name}</h3>
 						<div class="mt-3 space-y-1 text-xs text-slate-500">
-							<p><span class="font-bold text-slate-400">엔진:</span> {app.engine_id}</p>
-							<p><span class="font-bold text-slate-400">체인:</span> {app.child_app_id || '없음'}</p>
+							<p><span class="font-bold text-slate-400">기반 엔진:</span> <span class="font-mono">{app.engine_id}</span></p>
+							<p class="truncate"><span class="font-bold text-slate-400">옵션:</span> <span class="font-mono">{JSON.stringify(app.config || {})}</span></p>
 						</div>
 					</div>
 
 					<div class="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between">
-						<span class="text-[10px] font-bold bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded border border-emerald-200">
-							Active
+						<span class="text-[10px] font-bold px-2 py-0.5 rounded border {app.is_active !== false ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-slate-100 text-slate-500 border-slate-200'}">
+							{app.is_active !== false ? '활성' : '비활성'}
 						</span>
 						<span class="text-xs text-slate-400 font-mono">id: {app.id}</span>
 					</div>
@@ -439,7 +552,10 @@
 									{engine.frontend_plugin || '-'}
 								</span>
 							</td>
-							<td class="px-6 py-4 text-right">
+							<td class="px-6 py-4 text-right space-x-3">
+								<button onclick={() => openModal('engine', engine)} class="text-blue-600 hover:underline font-bold">
+									수정
+								</button>
 								<button onclick={() => handleDelete('engine', engine.id)} class="text-rose-500 hover:underline font-bold">
 									삭제
 								</button>
@@ -469,13 +585,22 @@
 							<span class="text-xs font-black text-rose-600 uppercase tracking-widest font-mono bg-rose-50 px-2.5 py-0.5 rounded-lg border border-rose-200">
 								{reg.id}
 							</span>
-							<button
-								type="button"
-								onclick={() => handleDelete('registry', reg.id)}
-								class="px-2.5 py-1 text-xs font-bold text-rose-500 hover:bg-rose-50 rounded-lg transition"
-							>
-								삭제
-							</button>
+							<div class="flex items-center gap-1.5">
+								<button
+									type="button"
+									onclick={() => openModal('registry', reg)}
+									class="px-2.5 py-1 text-xs font-bold text-blue-600 hover:bg-blue-50 rounded-lg transition"
+								>
+									수정
+								</button>
+								<button
+									type="button"
+									onclick={() => handleDelete('registry', reg.id)}
+									class="px-2.5 py-1 text-xs font-bold text-rose-500 hover:bg-rose-50 rounded-lg transition"
+								>
+									삭제
+								</button>
+							</div>
 						</div>
 						<h4 class="text-lg font-black text-slate-900">{reg.name}</h4>
 						<p class="text-xs text-slate-500 mt-1.5 leading-relaxed">{reg.description || '등록된 설명이 없습니다.'}</p>
@@ -512,8 +637,16 @@
 			<header class="flex items-center justify-between border-b border-slate-100 bg-slate-50 px-6 py-5 sm:px-8">
 				<div>
 					<span class="text-[10px] font-black tracking-widest text-rose-600 uppercase">Service Architecture</span>
-					<h3 class="text-xl font-black text-slate-900 uppercase">
-						{formData.id && modalType !== 'registry' && modalType !== 'engine' ? '수정' : '신규 생성'} ({modalType})
+					<h3 class="text-xl font-black text-slate-900">
+						{#if modalType === 'registry'}
+							1단계 · 서비스 분류(레지스트리) {isEditMode ? '수정' : '등록'}
+						{:else if modalType === 'engine'}
+							2단계 · 구현 엔진(플러그인) {isEditMode ? '수정' : '등록'}
+						{:else if modalType === 'app'}
+							3단계 · 엔진 인스턴스 {formData.id ? '수정' : '생성'}
+						{:else}
+							4단계 · 조립 번들(장착 세트) {formData.id ? '수정' : '생성'}
+						{/if}
 					</h3>
 				</div>
 				<button type="button" onclick={() => (showModal = false)} class="text-slate-400 hover:text-slate-700 p-1">
@@ -524,17 +657,18 @@
 			<div class="p-6 sm:p-8 space-y-5 overflow-y-auto">
 				{#if modalType === 'registry'}
 					<div>
-						<label for="reg-id-input" class="block text-xs font-black text-slate-700 mb-1.5">Registry ID (Key)</label>
+						<label for="reg-id-input" class="block text-xs font-black text-slate-700 mb-1.5">분류 ID (영문 키)</label>
 						<input
 							id="reg-id-input"
 							type="text"
 							bind:value={formData.id}
-							class="w-full px-4 py-3 rounded-2xl border-2 border-slate-200 text-xs font-mono font-bold focus:border-rose-600 focus:outline-none transition"
-							placeholder="예: comment, upload"
+							disabled={isEditMode}
+							class="w-full px-4 py-3 rounded-2xl border-2 border-slate-200 text-xs font-mono font-bold focus:border-rose-600 focus:outline-none transition disabled:bg-slate-100 disabled:text-slate-500"
+							placeholder="예: comment, upload, reaction"
 						/>
 					</div>
 					<div>
-						<label for="reg-name-input" class="block text-xs font-black text-slate-700 mb-1.5">Display Name</label>
+						<label for="reg-name-input" class="block text-xs font-black text-slate-700 mb-1.5">표시 이름</label>
 						<input
 							id="reg-name-input"
 							type="text"
@@ -543,24 +677,36 @@
 							placeholder="예: 댓글 서비스"
 						/>
 					</div>
+					<div>
+						<label for="reg-desc-input" class="block text-xs font-black text-slate-700 mb-1.5">설명</label>
+						<textarea
+							id="reg-desc-input"
+							bind:value={formData.description}
+							rows="2"
+							class="w-full px-4 py-3 rounded-2xl border-2 border-slate-200 text-xs font-medium focus:border-rose-600 focus:outline-none transition"
+							placeholder="이 서비스 분류의 역할을 간단히 입력하세요."
+						></textarea>
+					</div>
 				{:else if modalType === 'engine'}
 					<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
 						<div>
-							<label for="engine-id-input" class="block text-xs font-black text-slate-700 mb-1.5">Engine ID</label>
+							<label for="engine-id-input" class="block text-xs font-black text-slate-700 mb-1.5">엔진 ID</label>
 							<input
 								id="engine-id-input"
 								type="text"
 								bind:value={formData.id}
-								class="w-full px-4 py-3 rounded-2xl border-2 border-slate-200 text-xs font-mono font-bold focus:border-rose-600 focus:outline-none transition"
+								disabled={isEditMode}
+								class="w-full px-4 py-3 rounded-2xl border-2 border-slate-200 text-xs font-mono font-bold focus:border-rose-600 focus:outline-none transition disabled:bg-slate-100 disabled:text-slate-500"
 								placeholder="예: comment_v1"
 							/>
 						</div>
 						<div>
-							<label for="engine-reg-select" class="block text-xs font-black text-slate-700 mb-1.5">Registry Group</label>
+							<label for="engine-reg-select" class="block text-xs font-black text-slate-700 mb-1.5">소속 서비스 분류</label>
 							<select
 								id="engine-reg-select"
 								bind:value={formData.registry_id}
-								class="w-full px-4 py-3 rounded-2xl border-2 border-slate-200 text-xs font-bold bg-white focus:border-rose-600 focus:outline-none transition"
+								disabled={isEditMode}
+								class="w-full px-4 py-3 rounded-2xl border-2 border-slate-200 text-xs font-bold bg-white focus:border-rose-600 focus:outline-none transition disabled:bg-slate-100 disabled:text-slate-500"
 							>
 								<option value="">-- 레지스트리 선택 --</option>
 								{#each registries as r}
@@ -569,19 +715,56 @@
 							</select>
 						</div>
 					</div>
-					<div>
-						<label for="engine-plugin-input" class="block text-xs font-black text-slate-700 mb-1.5">Frontend Plugin (Svelte Component)</label>
-						<input
-							id="engine-plugin-input"
-							type="text"
-							bind:value={formData.frontend_plugin}
-							class="w-full px-4 py-3 rounded-2xl border-2 border-slate-200 text-xs font-mono font-bold focus:border-rose-600 focus:outline-none transition"
-							placeholder="예: CommentEngine"
-						/>
+					<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+						<div>
+							<label for="engine-plugin-input" class="block text-xs font-black text-slate-700 mb-1.5">프론트엔드 플러그인 (Svelte)</label>
+							<input
+								id="engine-plugin-input"
+								type="text"
+								bind:value={formData.frontend_plugin}
+								class="w-full px-4 py-3 rounded-2xl border-2 border-slate-200 text-xs font-mono font-bold focus:border-rose-600 focus:outline-none transition"
+								placeholder="예: CommentEngine"
+							/>
+							<div class="mt-1.5 flex flex-wrap gap-1.5">
+								{#each AVAILABLE_PLUGINS as pluginName}
+									<button
+										type="button"
+										onclick={() => (formData.frontend_plugin = pluginName)}
+										class="rounded-lg border border-slate-200 bg-slate-50 px-2 py-0.5 font-mono text-[10px] font-bold text-slate-600 hover:border-emerald-400 hover:bg-emerald-50 hover:text-emerald-700"
+									>
+										{pluginName}
+									</button>
+								{/each}
+							</div>
+						</div>
+						<div>
+							<label for="engine-version-input" class="block text-xs font-black text-slate-700 mb-1.5">버전</label>
+							<input
+								id="engine-version-input"
+								type="text"
+								bind:value={formData.version}
+								class="w-full px-4 py-3 rounded-2xl border-2 border-slate-200 text-xs font-mono font-bold focus:border-rose-600 focus:outline-none transition"
+								placeholder="1.0.0"
+							/>
+						</div>
 					</div>
+					<div>
+						<label for="engine-schema-input" class="block text-xs font-black text-slate-700 mb-1.5">설정 스키마 (config_schema JSON)</label>
+						<textarea
+							id="engine-schema-input"
+							bind:value={formData.config_schema_str}
+							rows="3"
+							placeholder={'{}'}
+							class="w-full rounded-2xl border-2 border-slate-200 bg-slate-50 p-3 font-mono text-xs focus:bg-white focus:border-rose-600 focus:outline-none transition"
+						></textarea>
+					</div>
+					<label class="inline-flex cursor-pointer items-center gap-2 text-xs font-bold text-slate-700">
+						<input type="checkbox" bind:checked={formData.is_active} class="h-4 w-4 rounded border-slate-300 text-emerald-600" />
+						<span>엔진 활성화</span>
+					</label>
 				{:else if modalType === 'app'}
 					<div>
-						<label for="app-name-input" class="block text-xs font-black text-slate-700 mb-1.5">App Name</label>
+						<label for="app-name-input" class="block text-xs font-black text-slate-700 mb-1.5">모듈 이름</label>
 						<input
 							id="app-name-input"
 							type="text"
@@ -590,36 +773,21 @@
 							placeholder="예: 자유게시판 댓글"
 						/>
 					</div>
-					<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-						<div>
-							<label for="app-engine-select" class="block text-xs font-black text-slate-700 mb-1.5">Base Engine</label>
-							<select
-								id="app-engine-select"
-								bind:value={formData.engine_id}
-								class="w-full px-4 py-3 rounded-2xl border-2 border-slate-200 text-xs font-bold bg-white focus:border-rose-600 focus:outline-none transition"
-							>
-								<option value="">-- 기본 엔진 선택 --</option>
-								{#each engines as e}
-									<option value={e.id}>{e.id} ({e.version || 'v1'})</option>
-								{/each}
-							</select>
-						</div>
-						<div>
-							<label for="app-child-select" class="block text-xs font-black text-slate-700 mb-1.5">Child (Chain)</label>
-							<select
-								id="app-child-select"
-								bind:value={formData.child_app_id}
-								class="w-full px-4 py-3 rounded-2xl border-2 border-slate-200 text-xs font-bold bg-white focus:border-rose-600 focus:outline-none transition"
-							>
-								<option value={null}>None (단독 실행)</option>
-								{#each serviceApps.filter((a) => a.id !== formData.id) as a}
-									<option value={a.id}>{a.name}</option>
-								{/each}
-							</select>
-						</div>
+					<div>
+						<label for="app-engine-select" class="block text-xs font-black text-slate-700 mb-1.5">기반 구현 엔진</label>
+						<select
+							id="app-engine-select"
+							bind:value={formData.engine_id}
+							class="w-full px-4 py-3 rounded-2xl border-2 border-slate-200 text-xs font-bold bg-white focus:border-rose-600 focus:outline-none transition"
+						>
+							<option value="">-- 기본 엔진 선택 --</option>
+							{#each engines as e}
+								<option value={e.id}>{e.id} ({e.frontend_plugin || '플러그인 미지정'} · {e.version || 'v1'})</option>
+							{/each}
+						</select>
 					</div>
 					<div>
-						<label for="app-config-input" class="block text-xs font-black text-slate-700 mb-1.5">JSON Configuration</label>
+						<label for="app-config-input" class="block text-xs font-black text-slate-700 mb-1.5">모듈 옵션 설정 (JSON)</label>
 						<textarea
 							id="app-config-input"
 							bind:value={formData.config_str}
@@ -628,30 +796,36 @@
 							class="w-full rounded-2xl border-2 border-slate-200 bg-slate-50 p-4 font-mono text-xs focus:bg-white focus:border-rose-600 focus:outline-none transition"
 						></textarea>
 					</div>
+					<label class="inline-flex cursor-pointer items-center gap-2 text-xs font-bold text-slate-700">
+						<input type="checkbox" bind:checked={formData.is_active} class="h-4 w-4 rounded border-slate-300 text-purple-600" />
+						<span>모듈 활성화</span>
+					</label>
 				{:else if modalType === 'instance'}
 					<div>
-						<label for="bundle-name-input" class="block text-xs font-black text-slate-700 mb-1.5">Bundle Name (번들 명칭)</label>
+						<label for="bundle-name-input" class="block text-xs font-black text-slate-700 mb-1.5">번들 명칭</label>
 						<input
 							id="bundle-name-input"
 							type="text"
 							bind:value={formData.name}
 							class="w-full px-4 py-3 rounded-2xl border-2 border-slate-200 text-xs font-bold focus:border-rose-600 focus:outline-none transition"
-							placeholder="예: Standard Board Plugin Set"
+							placeholder="예: 표준 게시판 플러그인 세트"
 						/>
 					</div>
 
 					<div class="space-y-2.5">
-						<span class="block text-xs font-black text-slate-700">Included Service Apps (Select & Order)</span>
+						<span class="block text-xs font-black text-slate-700">포함할 기능 모듈 선택 및 순서</span>
 						<div class="space-y-2 max-h-60 overflow-y-auto rounded-2xl border-2 border-slate-100 bg-slate-50/50 p-2.5">
 							{#each serviceApps as app}
-								<label
-									class="flex items-center gap-3 p-3 rounded-xl border transition-all cursor-pointer {formData.service_app_ids?.includes(app.id)
+								{@const orderIdx = (formData.service_app_ids || []).indexOf(app.id)}
+								{@const isSelected = orderIdx !== -1}
+								<div
+									class="flex items-center gap-3 p-3 rounded-xl border transition-all {isSelected
 										? 'bg-rose-50 border-rose-200 shadow-xs'
 										: 'bg-white border-slate-100 hover:border-slate-300'}"
 								>
 									<input
 										type="checkbox"
-										checked={formData.service_app_ids?.includes(app.id)}
+										checked={isSelected}
 										onchange={(e) => {
 											if (!formData.service_app_ids) formData.service_app_ids = [];
 											if (e.currentTarget.checked) {
@@ -660,22 +834,46 @@
 												formData.service_app_ids = formData.service_app_ids.filter((/** @type {any} */ id) => id !== app.id);
 											}
 										}}
-										class="h-4 w-4 rounded border-slate-300 text-rose-600 focus:ring-rose-500"
+										class="h-4 w-4 rounded border-slate-300 text-rose-600 focus:ring-rose-500 cursor-pointer"
 									/>
 									<div class="flex-1 min-w-0">
 										<div class="text-xs font-black text-slate-900 truncate">{app.name}</div>
 										<div class="text-[10px] font-bold uppercase text-slate-400 font-mono">{app.engine_id}</div>
 									</div>
-									{#if formData.service_app_ids?.includes(app.id)}
-										<span class="text-[10px] font-black text-rose-600 bg-white px-2.5 py-1 rounded-lg border border-rose-200 shadow-xs">
-											Order: {formData.service_app_ids.indexOf(app.id) + 1}
-										</span>
+									{#if isSelected}
+										<div class="flex items-center gap-1">
+											<span class="text-[10px] font-black text-rose-600 bg-white px-2 py-1 rounded-lg border border-rose-200 shadow-xs">
+												{orderIdx + 1}번
+											</span>
+											<button
+												type="button"
+												onclick={() => moveBundleApp(orderIdx, -1)}
+												disabled={orderIdx === 0}
+												class="rounded-lg border border-slate-200 bg-white px-1.5 py-1 text-[10px] font-black text-slate-600 hover:bg-slate-100 disabled:opacity-30"
+												title="위로"
+											>
+												▲
+											</button>
+											<button
+												type="button"
+												onclick={() => moveBundleApp(orderIdx, 1)}
+												disabled={orderIdx === (formData.service_app_ids?.length || 0) - 1}
+												class="rounded-lg border border-slate-200 bg-white px-1.5 py-1 text-[10px] font-black text-slate-600 hover:bg-slate-100 disabled:opacity-30"
+												title="아래로"
+											>
+												▼
+											</button>
+										</div>
 									{/if}
-								</label>
+								</div>
 							{/each}
 						</div>
-						<p class="text-[11px] font-medium text-slate-400">※ 체크한 순서대로 화면에 렌더링됩니다.</p>
+						<p class="text-[11px] font-medium text-slate-400">※ 지정된 순서(1번 → 2번…)대로 게시글/페이지 하단에 렌더링됩니다.</p>
 					</div>
+					<label class="inline-flex cursor-pointer items-center gap-2 text-xs font-bold text-slate-700">
+						<input type="checkbox" bind:checked={formData.is_active} class="h-4 w-4 rounded border-slate-300 text-rose-600" />
+						<span>번들 활성화</span>
+					</label>
 				{/if}
 			</div>
 

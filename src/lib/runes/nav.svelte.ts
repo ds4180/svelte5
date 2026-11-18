@@ -3,11 +3,29 @@
  * @description DB 연동형 동적 메뉴 및 페이지 맥락 상태 관리 RUNE (Svelte 5)
  */
 
+export interface MenuOption {
+	label: string;
+	value: string | number;
+}
+
 export interface MenuItem {
 	id?: number | string;
 	title: string;
+	description?: string;
+	badge?: string;
+	type?: 'link' | 'button' | 'toggle' | 'slider' | 'select' | 'text';
 	path?: string;
+	url?: string;
 	icon?: string;
+	icon_name?: string;
+	value?: any;
+	min?: number;
+	max?: number;
+	step?: number;
+	unit?: string;
+	options?: MenuOption[];
+	onClick?: () => void | Promise<void>;
+	onChange?: (value: any) => void | Promise<void>;
 	order?: number;
 	rank_level?: number;
 	category?: string;
@@ -19,7 +37,7 @@ export class NavState {
 	// 📌 1. 전역 레이아웃 메뉴 리스트 (중간 레이어)
 	menus = $state<MenuItem[]>([]);
 
-	// 📌 2. 본문 페이지별 동적 메뉴 리스트 (최상단 레이어)
+	// 📌 2. 본문 페이지별 동적 폼/맥락 컨트롤 리스트 (우측 사이드바 상단)
 	pageMenus = $state<MenuItem[]>([]);
 
 	isLoading = $state<boolean>(false);

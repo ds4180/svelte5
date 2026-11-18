@@ -60,6 +60,8 @@ export const adminGetServiceRegistries = <T = any>() =>
 	request<T>(`${BASE_URL}/service-registries`);
 export const adminCreateServiceRegistry = <T = any>(data: Record<string, any>) =>
 	request<T>(`${BASE_URL}/service-registries`, 'POST', data);
+export const adminUpdateServiceRegistry = <T = any>(id: number | string, data: Record<string, any>) =>
+	request<T>(`${BASE_URL}/service-registries/${id}`, 'PUT', data);
 export const adminDeleteServiceRegistry = <T = any>(id: number | string) =>
 	request<T>(`${BASE_URL}/service-registries/${id}`, 'DELETE');
 
@@ -68,6 +70,8 @@ export const adminGetServiceEngines = <T = any>() =>
 	request<T>(`${BASE_URL}/service-engines`);
 export const adminCreateServiceEngine = <T = any>(data: Record<string, any>) =>
 	request<T>(`${BASE_URL}/service-engines`, 'POST', data);
+export const adminUpdateServiceEngine = <T = any>(id: number | string, data: Record<string, any>) =>
+	request<T>(`${BASE_URL}/service-engines/${id}`, 'PUT', data);
 export const adminDeleteServiceEngine = <T = any>(id: number | string) =>
 	request<T>(`${BASE_URL}/service-engines/${id}`, 'DELETE');
 

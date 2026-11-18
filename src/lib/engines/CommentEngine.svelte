@@ -5,18 +5,24 @@
 	 * @prop {{ id: number }} post - 부모 게시물 객체 (id 필수)
 	 */
 	import * as commentApi from '$lib/api/comment';
+	import { getAuthContext } from '$lib/runes/auth.svelte';
 	import { toast } from '$lib/runes/toast.svelte';
 	import { formatDateTime } from '$lib/utils';
 	import { formatApiError } from '$lib/utils/error';
 	import Icon from '@iconify/svelte';
 
+	const auth = getAuthContext();
+
 	// --- [Svelte 5 Props] ---
 	let { post } = $props();
 
 	// --- [상태 관리] ---
-	let comments = $state([]);
+	let comments = $state(/** @type {any[]} */ ([]));
 	let newComment = $state('');
 	let loading = $state(true);
+	let editingId = $state(/** @type {number | null} */ (null));
+	let editContent = $state('');
+	let savingEdit = $state(false);
 
 	// --- [데이터 로드] ---
 	async function loadComments() {
@@ -31,7 +37,7 @@
 		}
 	}
 
-	// --- [댓글 등록 핸들러] ---
+	/** @param {Event} event */
 	async function handleCommentSubmit(event) {
 		event.preventDefault();
 		if (!newComment.trim()) return;
@@ -41,6 +47,51 @@
 			await loadComments(); // 댓글 목록 새로고침
 		} catch (e) {
 			toast.error('댓글 작성 실패: ' + formatApiError(e, '오류'));
+		}
+	}
+
+	/** @param {any} comment */
+	function canModify(comment) {
+		if (!auth.user) return false;
+		return comment.user_id === auth.user.id || (auth.user.rank_level ?? 0) >= 4;
+	}
+
+	/** @param {any} comment */
+	function startEdit(comment) {
+		editingId = comment.id;
+		editContent = comment.content || '';
+	}
+
+	function cancelEdit() {
+		editingId = null;
+		editContent = '';
+	}
+
+	/** @param {number} commentId */
+	async function saveEdit(commentId) {
+		if (!editContent.trim() || savingEdit) return;
+		savingEdit = true;
+		try {
+			await commentApi.updateComment(commentId, { content: editContent.trim() });
+			toast.success('댓글이 수정되었습니다.');
+			cancelEdit();
+			await loadComments();
+		} catch (e) {
+			toast.error('댓글 수정 실패: ' + formatApiError(e, '오류'));
+		} finally {
+			savingEdit = false;
+		}
+	}
+
+	/** @param {number} commentId */
+	async function handleDelete(commentId) {
+		if (!confirm('댓글을 삭제하시겠습니까?')) return;
+		try {
+			await commentApi.deleteComment(commentId);
+			toast.success('댓글이 삭제되었습니다.');
+			await loadComments();
+		} catch (e) {
+			toast.error('댓글 삭제 실패: ' + formatApiError(e, '오류'));
 		}
 	}
 
@@ -107,15 +158,57 @@
 					</div>
 					<!-- 내용 -->
 					<div class="flex-1">
-						<div class="mb-1 flex items-center justify-between">
-							<span class="text-sm font-bold">{comment.user?.username || '익명'}</span>
-							<span class="text-xs text-base-content/40">
-								{formatDateTime(comment.create_date)}
-							</span>
+						<div class="mb-1 flex items-center justify-between gap-2">
+							<div class="flex items-center gap-2">
+								<span class="text-sm font-bold">{comment.user?.username || '익명'}</span>
+								<span class="text-xs text-base-content/40">
+									{formatDateTime(comment.create_date)}
+								</span>
+							</div>
+							{#if canModify(comment) && editingId !== comment.id}
+								<div class="flex items-center gap-1.5 text-xs">
+									<button
+										type="button"
+										onclick={() => startEdit(comment)}
+										class="font-bold text-blue-600 hover:underline"
+									>
+										수정
+									</button>
+									<button
+										type="button"
+										onclick={() => handleDelete(comment.id)}
+										class="font-bold text-rose-500 hover:underline"
+									>
+										삭제
+									</button>
+								</div>
+							{/if}
 						</div>
-						<p class="rounded-lg bg-base-200 p-3 text-sm text-base-content/80">
-							{comment.content}
-						</p>
+
+						{#if editingId === comment.id}
+							<div class="space-y-2 rounded-lg border border-slate-200 bg-base-200 p-3">
+								<textarea
+									rows="3"
+									bind:value={editContent}
+									class="textarea-bordered textarea w-full resize-none text-sm"
+								></textarea>
+								<div class="flex justify-end gap-1.5">
+									<button type="button" onclick={cancelEdit} class="btn btn-xs btn-ghost">취소</button>
+									<button
+										type="button"
+										disabled={savingEdit}
+										onclick={() => saveEdit(comment.id)}
+										class="btn btn-xs btn-primary"
+									>
+										{savingEdit ? '저장 중...' : '저장'}
+									</button>
+								</div>
+							</div>
+						{:else}
+							<p class="rounded-lg bg-base-200 p-3 text-sm text-base-content/80">
+								{comment.content}
+							</p>
+						{/if}
 					</div>
 				</div>
 			{/each}

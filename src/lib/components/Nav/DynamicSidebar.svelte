@@ -101,7 +101,7 @@
 		</header>
 
 		<div class="flex flex-col gap-6 p-5 sm:p-6">
-			<!-- [1] 상단 구역: Context Action (본문 전용 메뉴) -->
+			<!-- [1] 상단 구역: Context Action (본문 전용 동적 컨트롤: 버튼·토글·슬라이더·선택·링크) -->
 			<section class="flex flex-col gap-3">
 				<div class="flex items-center justify-between">
 					<h3 class="flex items-center gap-2 text-xs font-black tracking-widest text-emerald-700 uppercase">
@@ -119,29 +119,188 @@
 
 				{#if navState.pageMenus && navState.pageMenus.length > 0}
 					<div class="grid grid-cols-1 gap-2.5">
-						{#each navState.pageMenus as pc (pc.title + (pc.url || pc.path))}
-							<a
-								href={pc.url || pc.path || '#'}
-								onclick={onClose}
-								class="group flex items-center justify-between rounded-2xl border-2 border-slate-200 bg-white p-3.5 shadow-sm transition-all hover:border-blue-500 hover:shadow-md"
-							>
-								<div class="flex items-center gap-3">
-									<div class="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 transition-colors group-hover:bg-blue-600 group-hover:text-white">
-										<SmartIcon
-											icon={pc.icon || pc.icon_name}
-											fallback="ph:lightning-fill"
-											class="h-4.5 w-4.5"
-											emojiClass="text-base leading-none"
-										/>
+						{#each navState.pageMenus as pc (pc.id ?? pc.title + (pc.url || pc.path || pc.type || ''))}
+							{#if pc.type === 'toggle'}
+								<div class="flex items-center justify-between rounded-2xl border-2 border-slate-200 bg-white p-3.5 shadow-sm">
+									<div class="flex items-center gap-3 min-w-0">
+										<div class="flex h-9 w-9 flex-none items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
+											<SmartIcon
+												icon={pc.icon || pc.icon_name}
+												fallback="ph:sliders-horizontal-bold"
+												class="h-4.5 w-4.5"
+												emojiClass="text-base leading-none"
+											/>
+										</div>
+										<div class="min-w-0">
+											<div class="truncate text-sm font-black tracking-tight text-slate-800">{pc.title}</div>
+											{#if pc.description}
+												<div class="truncate text-[11px] font-medium text-slate-400">{pc.description}</div>
+											{/if}
+										</div>
 									</div>
-									<span class="text-sm font-black tracking-tight text-slate-800 group-hover:text-blue-600 transition-colors">
-										{pc.title}
-									</span>
+									<button
+										type="button"
+										role="switch"
+										aria-checked={Boolean(pc.value)}
+										aria-label={pc.title}
+										onclick={() => pc.onChange?.(!pc.value)}
+										class="relative inline-flex h-6 w-11 flex-none items-center rounded-full transition-colors {pc.value ? 'bg-blue-600' : 'bg-slate-300'}"
+									>
+										<span
+											class="inline-block h-4.5 w-4.5 transform rounded-full bg-white shadow transition-transform {pc.value ? 'translate-x-5.5' : 'translate-x-1'}"
+										></span>
+									</button>
 								</div>
-								<div class="flex h-7 w-7 items-center justify-center rounded-xl bg-slate-50 text-slate-400 transition-all group-hover:bg-blue-600 group-hover:text-white">
-									<Icon icon="ph:caret-right-bold" class="h-3.5 w-3.5" />
+							{:else if pc.type === 'slider'}
+								<div class="flex flex-col gap-2.5 rounded-2xl border-2 border-slate-200 bg-white p-3.5 shadow-sm">
+									<div class="flex items-center justify-between gap-2">
+										<div class="flex items-center gap-2.5 min-w-0">
+											<div class="flex h-8 w-8 flex-none items-center justify-center rounded-xl bg-blue-50 text-blue-600">
+												<SmartIcon
+													icon={pc.icon || pc.icon_name}
+													fallback="ph:faders-bold"
+													class="h-4 w-4"
+													emojiClass="text-sm leading-none"
+												/>
+											</div>
+											<span class="truncate text-sm font-black tracking-tight text-slate-800">{pc.title}</span>
+										</div>
+										<span class="rounded-lg bg-blue-50 px-2 py-0.5 text-xs font-black text-blue-700">
+											{pc.value ?? pc.min ?? 0}{pc.unit || ''}
+										</span>
+									</div>
+									<input
+										type="range"
+										min={pc.min ?? 0}
+										max={pc.max ?? 100}
+										step={pc.step ?? 1}
+										value={pc.value ?? pc.min ?? 0}
+										oninput={(e) => pc.onChange?.(Number(e.currentTarget.value))}
+										aria-label={pc.title}
+										class="h-2 w-full cursor-pointer appearance-none rounded-lg bg-slate-200 accent-blue-600"
+									/>
 								</div>
-							</a>
+							{:else if pc.type === 'select'}
+								<div class="flex flex-col gap-2 rounded-2xl border-2 border-slate-200 bg-white p-3.5 shadow-sm">
+									<div class="flex items-center gap-2.5">
+										<div class="flex h-8 w-8 flex-none items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
+											<SmartIcon
+												icon={pc.icon || pc.icon_name}
+												fallback="ph:squares-four-bold"
+												class="h-4 w-4"
+												emojiClass="text-sm leading-none"
+											/>
+										</div>
+										<span class="text-sm font-black tracking-tight text-slate-800">{pc.title}</span>
+									</div>
+									{#if (pc.options?.length || 0) <= 4}
+										<div class="grid gap-1.5" style={`grid-template-columns: repeat(${Math.max(1, pc.options?.length || 1)}, minmax(0, 1fr))`}>
+											{#each pc.options || [] as opt}
+												<button
+													type="button"
+													onclick={() => pc.onChange?.(opt.value)}
+													class="rounded-xl border px-2.5 py-1.5 text-xs font-black transition-all {pc.value === opt.value
+														? 'border-blue-600 bg-blue-600 text-white shadow-sm'
+														: 'border-slate-200 bg-slate-50 text-slate-600 hover:border-slate-300'}"
+												>
+													{opt.label}
+												</button>
+											{/each}
+										</div>
+									{:else}
+										<select
+											value={pc.value}
+											onchange={(e) => pc.onChange?.(e.currentTarget.value)}
+											aria-label={pc.title}
+											class="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-bold text-slate-800 focus:border-blue-500 focus:outline-none"
+										>
+											{#each pc.options || [] as opt}
+												<option value={opt.value}>{opt.label}</option>
+											{/each}
+										</select>
+									{/if}
+								</div>
+							{:else if pc.type === 'text'}
+								<div class="flex flex-col gap-2 rounded-2xl border-2 border-slate-200 bg-white p-3.5 shadow-sm">
+									<div class="flex items-center gap-2.5">
+										<div class="flex h-8 w-8 flex-none items-center justify-center rounded-xl bg-slate-100 text-slate-600">
+											<SmartIcon
+												icon={pc.icon || pc.icon_name}
+												fallback="ph:textbox-bold"
+												class="h-4 w-4"
+												emojiClass="text-sm leading-none"
+											/>
+										</div>
+										<div class="min-w-0">
+											<span class="block truncate text-sm font-black tracking-tight text-slate-800">{pc.title}</span>
+											{#if pc.description}
+												<span class="block truncate text-[11px] font-medium text-slate-400">{pc.description}</span>
+											{/if}
+										</div>
+									</div>
+									<input
+										type="text"
+										value={pc.value ?? ''}
+										onchange={(e) => pc.onChange?.(e.currentTarget.value)}
+										aria-label={pc.title}
+										class="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-bold text-slate-800 focus:border-blue-500 focus:bg-white focus:outline-none"
+									/>
+								</div>
+							{:else if pc.type === 'button' || (typeof pc.onClick === 'function' && !pc.url && !pc.path)}
+								<button
+									type="button"
+									onclick={() => {
+										pc.onClick?.();
+										onClose();
+									}}
+									class="group flex w-full items-center justify-between rounded-2xl border-2 border-slate-200 bg-white p-3.5 text-left shadow-sm transition-all hover:border-blue-500 hover:shadow-md"
+								>
+									<div class="flex items-center gap-3">
+										<div class="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-50 text-blue-600 transition-colors group-hover:bg-blue-600 group-hover:text-white">
+											<SmartIcon
+												icon={pc.icon || pc.icon_name}
+												fallback="ph:lightning-fill"
+												class="h-4.5 w-4.5"
+												emojiClass="text-base leading-none"
+											/>
+										</div>
+										<div>
+											<span class="block text-sm font-black tracking-tight text-slate-800 group-hover:text-blue-600 transition-colors">
+												{pc.title}
+											</span>
+											{#if pc.description}
+												<span class="block text-[11px] font-medium text-slate-400">{pc.description}</span>
+											{/if}
+										</div>
+									</div>
+									<div class="flex h-7 w-7 items-center justify-center rounded-xl bg-slate-50 text-slate-400 transition-all group-hover:bg-blue-600 group-hover:text-white">
+										<Icon icon="ph:caret-right-bold" class="h-3.5 w-3.5" />
+									</div>
+								</button>
+							{:else}
+								<a
+									href={pc.url || pc.path || '#'}
+									onclick={onClose}
+									class="group flex items-center justify-between rounded-2xl border-2 border-slate-200 bg-white p-3.5 shadow-sm transition-all hover:border-blue-500 hover:shadow-md"
+								>
+									<div class="flex items-center gap-3">
+										<div class="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 transition-colors group-hover:bg-blue-600 group-hover:text-white">
+											<SmartIcon
+												icon={pc.icon || pc.icon_name}
+												fallback="ph:lightning-fill"
+												class="h-4.5 w-4.5"
+												emojiClass="text-base leading-none"
+											/>
+										</div>
+										<span class="text-sm font-black tracking-tight text-slate-800 group-hover:text-blue-600 transition-colors">
+											{pc.title}
+										</span>
+									</div>
+									<div class="flex h-7 w-7 items-center justify-center rounded-xl bg-slate-50 text-slate-400 transition-all group-hover:bg-blue-600 group-hover:text-white">
+										<Icon icon="ph:caret-right-bold" class="h-3.5 w-3.5" />
+									</div>
+								</a>
+							{/if}
 						{/each}
 					</div>
 				{:else}

@@ -7,16 +7,27 @@
 	 *              - 브라우저 탭 단일 진실 공급원(SSOT) 환경설정 타이틀 연동
 	 *              - 탭 기반 네비게이션 (명부 조회 / 새 인스턴스 생성 및 설정)
 	 */
-	import { onMount } from 'svelte';
+	import { onDestroy, onMount } from 'svelte';
 	import * as api from '$lib/api/admin';
 	import { toast } from '$lib/runes/toast.svelte';
+	import { navState } from '$lib/runes/nav.svelte';
+	import { buildOptionMenuItems } from '$lib/utils/dynamicOptions';
 	import { getSiteTitle } from '$lib/config/site';
 	import Icon from '@iconify/svelte';
 
 	let boards = $state(/** @type {any[]} */ ([]));
+	let serviceInstances = $state(/** @type {any[]} */ ([]));
+	let serviceApps = $state(/** @type {any[]} */ ([]));
+	let serviceEngines = $state(/** @type {any[]} */ ([]));
+	let serviceRegistries = $state(/** @type {any[]} */ ([]));
+	let serviceSearchQuery = $state('');
 	let loading = $state(true);
 	let activeTab = $state('list'); // 'list' | 'create'
 	let filterLayout = $state('ALL'); // 'ALL' | 'list' | 'gallery' | 'blog'
+	let fieldsJsonMode = $state(false);
+	let fieldsJsonText = $state('[]');
+	let optionsJsonMode = $state(false);
+	let optionsJsonText = $state('{\n  "use_list": true,\n  "use_view": true\n}');
 
 	let editingBoard = $state({
 		id: /** @type {number|null} */ (null),
@@ -27,6 +38,10 @@
 		items_per_page: 10,
 		min_read_rank: 0,
 		min_write_rank: 2,
+		service_instance_id: /** @type {number|null} */ (null),
+		service_app_ids: /** @type {number[]} */ ([]),
+		fields_def: /** @type {any[]} */ ([]),
+		options: /** @type {Record<string, any>} */ ({ use_list: true, use_view: true }),
 		is_active: true
 	});
 
@@ -43,10 +58,48 @@
 			: boards.filter((b) => (b.layout_type || 'list') === filterLayout)
 	);
 
+	// 📌 생성/수정 탭에서 게시판 세부 옵션(options JSON)을 우측 다이나믹 폼 상단에 실시간 동기화
+	$effect(() => {
+		if (activeTab !== 'create') {
+			navState.clearPageMenus();
+			return;
+		}
+		try {
+			const parsed = JSON.parse(optionsJsonText || '{}');
+			if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+				const items = buildOptionMenuItems(parsed, (key, nextVal) => {
+					const updated = { ...parsed, [key]: nextVal };
+					editingBoard.options = updated;
+					optionsJsonText = JSON.stringify(updated, null, 2);
+				});
+				navState.setPageMenus(items);
+			} else {
+				navState.clearPageMenus();
+			}
+		} catch {
+			// JSON 편집 중 문법 오류 시 기존 메뉴 유지
+		}
+	});
+
+	onDestroy(() => {
+		navState.clearPageMenus();
+	});
+
 	async function loadBoards() {
 		loading = true;
 		try {
-			boards = await api.adminGetBoards();
+			const [boardList, instanceList, appList, engineList, regList] = await Promise.all([
+				api.adminGetBoards(),
+				api.adminGetServiceInstances().catch(() => []),
+				api.adminGetServiceApps().catch(() => []),
+				api.adminGetServiceEngines().catch(() => []),
+				api.adminGetServiceRegistries().catch(() => [])
+			]);
+			boards = boardList;
+			serviceInstances = Array.isArray(instanceList) ? instanceList : [];
+			serviceApps = Array.isArray(appList) ? appList : [];
+			serviceEngines = Array.isArray(engineList) ? engineList : [];
+			serviceRegistries = Array.isArray(regList) ? regList : [];
 		} catch (/** @type {any} */ e) {
 			toast.error('게시판 목록 로드 실패: ' + (e.message || '오류가 발생했습니다.'));
 		} finally {
@@ -57,6 +110,11 @@
 	onMount(loadBoards);
 
 	function resetForm() {
+		fieldsJsonMode = false;
+		optionsJsonMode = false;
+		serviceSearchQuery = '';
+		fieldsJsonText = '[]';
+		optionsJsonText = JSON.stringify({ use_list: true, use_view: true }, null, 2);
 		editingBoard = {
 			id: null,
 			slug: '',
@@ -66,6 +124,10 @@
 			items_per_page: 10,
 			min_read_rank: 0,
 			min_write_rank: 2,
+			service_instance_id: null,
+			service_app_ids: [],
+			fields_def: [],
+			options: { use_list: true, use_view: true },
 			is_active: true
 		};
 	}
@@ -79,14 +141,216 @@
 	 * @param {any} b
 	 */
 	function startEdit(b) {
+		const nextFields = Array.isArray(b.fields_def) ? b.fields_def : [];
+		const nextOptions = b.options && typeof b.options === 'object' ? b.options : { use_list: true, use_view: true };
+		fieldsJsonMode = false;
+		optionsJsonMode = false;
+		serviceSearchQuery = '';
+		fieldsJsonText = JSON.stringify(nextFields, null, 2);
+		optionsJsonText = JSON.stringify(nextOptions, null, 2);
 		editingBoard = {
 			...b,
 			layout_type: b.layout_type || 'list',
 			min_read_rank: Number(b.min_read_rank ?? 0),
 			min_write_rank: Number(b.min_write_rank ?? 2),
+			service_instance_id: b.service_instance_id ?? null,
+			service_app_ids: Array.isArray(b.service_app_ids) ? [...b.service_app_ids] : [],
+			fields_def: nextFields,
+			options: nextOptions,
 			is_active: b.is_active ?? true
 		};
 		activeTab = 'create';
+	}
+
+	/** @param {number} appId */
+	function toggleBoardServiceApp(appId) {
+		const current = editingBoard.service_app_ids || [];
+		if (current.includes(appId)) {
+			editingBoard.service_app_ids = current.filter((id) => id !== appId);
+		} else {
+			editingBoard.service_app_ids = [...current, appId];
+		}
+	}
+
+	/**
+	 * @param {number} idx
+	 * @param {number} delta
+	 */
+	function moveBoardServiceApp(idx, delta) {
+		const list = [...(editingBoard.service_app_ids || [])];
+		const nextIdx = idx + delta;
+		if (nextIdx < 0 || nextIdx >= list.length) return;
+		[list[idx], list[nextIdx]] = [list[nextIdx], list[idx]];
+		editingBoard.service_app_ids = list;
+	}
+
+	/** @param {number | null} bundleId */
+	function applyBundlePreset(bundleId) {
+		if (!bundleId) return;
+		const bundle = serviceInstances.find((i) => Number(i.id) === Number(bundleId));
+		if (!bundle) return;
+		editingBoard.service_app_ids = [...(bundle.service_app_ids || [])];
+		toast.info(`'${bundle.name}' 번들 구성을 프리셋으로 불러왔습니다. 필요에 맞게 조정하세요.`);
+	}
+
+	function getGroupedServiceApps() {
+		const q = serviceSearchQuery.trim().toLowerCase();
+		const engineMap = new Map(serviceEngines.map((e) => [e.id, e]));
+		const regMap = new Map(serviceRegistries.map((r) => [r.id, r]));
+		/** @type {Record<string, { registryId: string, registryName: string, apps: any[] }>} */
+		const groups = {};
+
+		for (const app of serviceApps) {
+			const eng = engineMap.get(app.engine_id);
+			const regId = eng?.registry_id || 'etc';
+			const reg = regMap.get(regId);
+			const regName = reg?.name || regId;
+
+			if (q) {
+				const haystack = `${app.name} ${app.engine_id} ${regName} ${regId}`.toLowerCase();
+				if (!haystack.includes(q)) continue;
+			}
+
+			if (!groups[regId]) {
+				groups[regId] = { registryId: regId, registryName: regName, apps: [] };
+			}
+			groups[regId].apps.push({ ...app, _plugin: eng?.frontend_plugin || '' });
+		}
+
+		return Object.values(groups).sort((a, b) => a.registryName.localeCompare(b.registryName, 'ko'));
+	}
+
+	function addCustomField() {
+		const next = [
+			...(editingBoard.fields_def || []),
+			{ key: `field_${(editingBoard.fields_def?.length || 0) + 1}`, label: '새 항목', type: 'text', placeholder: '', options_text: '' }
+		];
+		editingBoard.fields_def = next;
+		fieldsJsonText = JSON.stringify(next, null, 2);
+	}
+
+	/**
+	 * @param {number} idx
+	 */
+	function removeCustomField(idx) {
+		const next = (editingBoard.fields_def || []).filter((_, i) => i !== idx);
+		editingBoard.fields_def = next;
+		fieldsJsonText = JSON.stringify(next, null, 2);
+	}
+
+	function toggleFieldsJsonMode() {
+		if (!fieldsJsonMode) {
+			fieldsJsonText = JSON.stringify(editingBoard.fields_def || [], null, 2);
+			fieldsJsonMode = true;
+		} else {
+			try {
+				const parsed = JSON.parse(fieldsJsonText || '[]');
+				if (!Array.isArray(parsed)) throw new Error('배열 형식이어야 합니다.');
+				editingBoard.fields_def = parsed;
+				fieldsJsonMode = false;
+			} catch (/** @type {any} */ err) {
+				toast.error('동적 필드 JSON 형식 오류: ' + (err.message || '올바른 JSON 배열을 입력하세요.'));
+			}
+		}
+	}
+
+	function getOptionEntries() {
+		const opts = editingBoard.options && typeof editingBoard.options === 'object' ? editingBoard.options : {};
+		return Object.entries(opts).map(([key, raw]) => {
+			const isObj = raw !== null && typeof raw === 'object' && !Array.isArray(raw) && ('value' in raw || 'type' in raw);
+			if (isObj) {
+				const inferredType =
+					raw.type ||
+					(typeof raw.value === 'boolean' ? 'toggle' : typeof raw.value === 'number' ? 'slider' : 'text');
+				return {
+					key,
+					label: String(raw.label ?? raw.title ?? ''),
+					type: inferredType,
+					value: raw.value ?? (inferredType === 'toggle' ? false : inferredType === 'slider' ? 0 : ''),
+					dynamic_form: raw.dynamic_form !== false && raw.show_in_dynamic_form !== false && raw.visible !== false,
+					raw
+				};
+			}
+			const inferredType = typeof raw === 'boolean' ? 'toggle' : typeof raw === 'number' ? 'slider' : 'text';
+			return {
+				key,
+				label: '',
+				type: inferredType,
+				value: raw ?? '',
+				dynamic_form: true,
+				raw: null
+			};
+		});
+	}
+
+	/** @param {Record<string, any>} nextOpts */
+	function syncOptionsState(nextOpts) {
+		editingBoard.options = nextOpts;
+		optionsJsonText = JSON.stringify(nextOpts, null, 2);
+	}
+
+	function addOptionEntry() {
+		const cur = { ...(editingBoard.options || {}) };
+		let idx = Object.keys(cur).length + 1;
+		while (`option_${idx}` in cur) idx++;
+		cur[`option_${idx}`] = {
+			label: `옵션 ${idx}`,
+			type: 'toggle',
+			value: true,
+			dynamic_form: true
+		};
+		syncOptionsState(cur);
+	}
+
+	/**
+	 * @param {string} oldKey
+	 * @param {string} newKey
+	 * @param {{ label: string, type: string, value: any, dynamic_form: boolean, raw?: any }} entry
+	 */
+	function updateOptionEntry(oldKey, newKey, entry) {
+		const cur = { ...(editingBoard.options || {}) };
+		const cleanKey = (newKey || '').trim() || oldKey;
+		if (cleanKey !== oldKey) {
+			delete cur[oldKey];
+		}
+		let normalizedVal = entry.value;
+		if (entry.type === 'toggle') normalizedVal = Boolean(entry.value);
+		else if (entry.type === 'slider') normalizedVal = Number(entry.value || 0);
+		else normalizedVal = String(entry.value ?? '');
+
+		cur[cleanKey] = {
+			...(entry.raw && typeof entry.raw === 'object' ? entry.raw : {}),
+			label: entry.label || cleanKey,
+			type: entry.type,
+			value: normalizedVal,
+			dynamic_form: Boolean(entry.dynamic_form)
+		};
+		syncOptionsState(cur);
+	}
+
+	/** @param {string} key */
+	function removeOptionEntry(key) {
+		const cur = { ...(editingBoard.options || {}) };
+		delete cur[key];
+		syncOptionsState(cur);
+	}
+
+	function toggleOptionsJsonMode() {
+		if (!optionsJsonMode) {
+			optionsJsonText = JSON.stringify(editingBoard.options || {}, null, 2);
+			optionsJsonMode = true;
+		} else {
+			try {
+				const parsed = JSON.parse(optionsJsonText || '{}');
+				if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+					throw new Error('JSON 객체 형식이어야 합니다.');
+				}
+				editingBoard.options = parsed;
+				optionsJsonMode = false;
+			} catch (/** @type {any} */ err) {
+				toast.error('세부 옵션 JSON 형식 오류: ' + (err.message || '올바른 JSON 객체를 입력하세요.'));
+			}
+		}
 	}
 
 	async function handleSave() {
@@ -94,12 +358,45 @@
 			toast.warning('게시판 주소(슬러그)와 이름은 필수 항목입니다.');
 			return;
 		}
+
+		let finalFields = editingBoard.fields_def || [];
+		if (fieldsJsonMode) {
+			try {
+				const parsed = JSON.parse(fieldsJsonText || '[]');
+				if (!Array.isArray(parsed)) throw new Error('fields_def는 JSON 배열이어야 합니다.');
+				finalFields = parsed;
+			} catch (/** @type {any} */ err) {
+				toast.error('동적 필드 JSON 오류: ' + (err.message || 'JSON 형식을 확인하세요.'));
+				return;
+			}
+		}
+
+		let finalOptions = editingBoard.options || {};
+		try {
+			const parsedOpt = JSON.parse(optionsJsonText || '{}');
+			if (!parsedOpt || typeof parsedOpt !== 'object' || Array.isArray(parsedOpt)) {
+				throw new Error('options는 JSON 객체여야 합니다.');
+			}
+			finalOptions = parsedOpt;
+		} catch (/** @type {any} */ err) {
+			toast.error('세부 옵션 JSON 오류: ' + (err.message || 'JSON 형식을 확인하세요.'));
+			return;
+		}
+
+		const payload = {
+			...editingBoard,
+			service_instance_id: editingBoard.service_instance_id ? Number(editingBoard.service_instance_id) : null,
+			service_app_ids: (editingBoard.service_app_ids || []).map((id) => Number(id)),
+			fields_def: finalFields,
+			options: finalOptions
+		};
+
 		try {
 			if (!editingBoard.id) {
-				await api.adminCreateBoard(editingBoard);
+				await api.adminCreateBoard(payload);
 				toast.success(`[${editingBoard.name}] 게시판 인스턴스가 성공적으로 생성되었습니다.`);
 			} else {
-				await api.adminUpdateBoard(editingBoard.id, editingBoard);
+				await api.adminUpdateBoard(editingBoard.id, payload);
 				toast.success(`[${editingBoard.name}] 게시판 설정이 업데이트되었습니다.`);
 			}
 			resetForm();
@@ -497,6 +794,374 @@
 						<Icon icon="ph:shield-check-bold" class="text-sm" />
 						<span>그룹별 허용/차단(allow/deny) 세부 관리 →</span>
 					</a>
+				</div>
+
+				<!-- 서비스 연결 (공통 번들 연결 + 이 게시판 전용 직접 조립) -->
+				<div class="space-y-4 rounded-2xl border-2 border-slate-200 bg-slate-50/70 p-4 sm:p-5">
+					<div class="flex flex-wrap items-center justify-between gap-2">
+						<div>
+							<h4 class="text-xs font-black text-slate-800">게시판 서비스 연결 (댓글 · 반응 · 열람확인 · 업로드 등)</h4>
+							<p class="text-[11px] text-slate-500">
+								공통 번들을 연결하거나, 이 게시판에 필요한 서비스만 직접 체크해 순서를 지정할 수 있습니다.
+							</p>
+						</div>
+						{#if (editingBoard.service_app_ids || []).length > 0}
+							<span class="rounded-full border border-blue-200 bg-blue-50 px-2.5 py-0.5 text-[11px] font-black text-blue-700">
+								직접 구성 우선 적용 중 ({editingBoard.service_app_ids.length}개)
+							</span>
+						{:else if editingBoard.service_instance_id}
+							<span class="rounded-full border border-rose-200 bg-rose-50 px-2.5 py-0.5 text-[11px] font-black text-rose-700">
+								공통 번들 적용 중
+							</span>
+						{/if}
+					</div>
+
+					<!-- 1) 공통 번들 선택 + 프리셋 불러오기 -->
+					<div class="grid grid-cols-1 gap-2 sm:grid-cols-12 sm:items-end">
+						<div class="sm:col-span-8 space-y-1">
+							<label for="board-service-bundle" class="block text-[11px] font-bold text-slate-600">
+								공통 조립 번들 (여러 게시판에 동일 세트 일괄 적용 시)
+							</label>
+							<select
+								id="board-service-bundle"
+								bind:value={editingBoard.service_instance_id}
+								class="w-full px-4 py-2.5 rounded-xl border-2 border-slate-200 text-xs font-bold text-slate-800 bg-white focus:border-blue-600 focus:outline-none transition"
+							>
+								<option value={null}>연결 안 함</option>
+								{#each serviceInstances as inst}
+									<option value={inst.id}>{inst.name} (ID: {inst.id})</option>
+								{/each}
+							</select>
+						</div>
+						<div class="sm:col-span-4 flex gap-2">
+							<button
+								type="button"
+								disabled={!editingBoard.service_instance_id}
+								onclick={() => applyBundlePreset(editingBoard.service_instance_id)}
+								class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-[11px] font-black text-slate-700 hover:bg-slate-100 disabled:opacity-40"
+							>
+								번들 구성을 프리셋으로 복사
+							</button>
+						</div>
+					</div>
+
+					<!-- 2) 이 게시판 전용 직접 조립 (선택 순서 + 카테고리별 그룹 체크) -->
+					<div class="space-y-3 rounded-xl border border-slate-200 bg-white p-3.5">
+						<div class="flex flex-wrap items-center justify-between gap-2">
+							<span class="text-xs font-black text-slate-800">이 게시판 전용 서비스 직접 선택 (선택 시 번들보다 우선 적용)</span>
+							{#if (editingBoard.service_app_ids || []).length > 0}
+								<button
+									type="button"
+									onclick={() => (editingBoard.service_app_ids = [])}
+									class="text-[11px] font-bold text-rose-500 hover:underline"
+								>
+									직접 선택 비우기 (공통 번들 사용)
+								</button>
+							{/if}
+						</div>
+
+						{#if (editingBoard.service_app_ids || []).length > 0}
+							<div class="flex flex-wrap gap-1.5 rounded-xl border border-blue-100 bg-blue-50/50 p-2.5">
+								{#each editingBoard.service_app_ids as appId, idx (appId + '-' + idx)}
+									{@const appObj = serviceApps.find((a) => a.id === appId)}
+									<div class="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-white px-2.5 py-1 text-xs shadow-xs">
+										<span class="font-black text-blue-600">{idx + 1}.</span>
+										<span class="font-bold text-slate-800">{appObj?.name || `모듈 #${appId}`}</span>
+										<button
+											type="button"
+											disabled={idx === 0}
+											onclick={() => moveBoardServiceApp(idx, -1)}
+											class="px-1 text-[10px] font-black text-slate-500 hover:text-slate-900 disabled:opacity-30"
+											title="앞으로"
+										>
+											◀
+										</button>
+										<button
+											type="button"
+											disabled={idx === editingBoard.service_app_ids.length - 1}
+											onclick={() => moveBoardServiceApp(idx, 1)}
+											class="px-1 text-[10px] font-black text-slate-500 hover:text-slate-900 disabled:opacity-30"
+											title="뒤로"
+										>
+											▶
+										</button>
+										<button
+											type="button"
+											onclick={() => toggleBoardServiceApp(appId)}
+											class="px-1 text-[10px] font-black text-rose-500 hover:text-rose-700"
+											title="제거"
+										>
+											✕
+										</button>
+									</div>
+								{/each}
+							</div>
+						{/if}
+
+						<input
+							type="text"
+							bind:value={serviceSearchQuery}
+							placeholder="서비스 모듈 검색 (예: 댓글, 좋아요, 열람...)"
+							class="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-medium text-slate-800 focus:border-blue-500 focus:bg-white focus:outline-none"
+						/>
+
+						{#if serviceApps.length === 0}
+							<p class="py-3 text-center text-xs text-slate-400">
+								등록된 3단계 서비스 인스턴스가 없습니다. (`/v1/admin/services`에서 먼저 생성하세요.)
+							</p>
+						{:else}
+							<div class="max-h-64 space-y-3 overflow-y-auto pr-1">
+								{#each getGroupedServiceApps() as group (group.registryId)}
+									<div class="space-y-1.5">
+										<div class="flex items-center gap-2 text-[11px] font-black text-slate-500">
+											<span class="rounded bg-slate-100 px-2 py-0.5 text-slate-700">{group.registryName}</span>
+											<span class="font-mono text-[10px] text-slate-400">({group.registryId})</span>
+										</div>
+										<div class="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+											{#each group.apps as app (app.id)}
+												{@const checked = (editingBoard.service_app_ids || []).includes(app.id)}
+												<label
+													class="flex cursor-pointer items-center gap-2.5 rounded-xl border p-2.5 text-xs transition {checked
+														? 'border-blue-300 bg-blue-50/60'
+														: 'border-slate-200 bg-white hover:border-slate-300'}"
+												>
+													<input
+														type="checkbox"
+														{checked}
+														onchange={() => toggleBoardServiceApp(app.id)}
+														class="h-4 w-4 rounded border-slate-300 text-blue-600"
+													/>
+													<div class="min-w-0 flex-1">
+														<div class="truncate font-black text-slate-800">{app.name}</div>
+														<div class="truncate font-mono text-[10px] text-slate-400">{app.engine_id}</div>
+													</div>
+												</label>
+											{/each}
+										</div>
+									</div>
+								{/each}
+							</div>
+						{/if}
+					</div>
+				</div>
+
+				<!-- 동적 커스텀 폼 필드 정의 (fields_def) -->
+				<div class="space-y-3 rounded-2xl border-2 border-slate-200 bg-slate-50/70 p-4 sm:p-5">
+					<div class="flex flex-wrap items-center justify-between gap-2">
+						<div>
+							<h4 class="text-xs font-black text-slate-800">동적 커스텀 필드 (fields_def)</h4>
+							<p class="text-[11px] text-slate-500">글 작성 폼에 추가 입력 필드(텍스트·숫자·날짜·선택)를 동적으로 구성합니다.</p>
+						</div>
+						<div class="flex items-center gap-2">
+							<button
+								type="button"
+								onclick={toggleFieldsJsonMode}
+								class="rounded-xl border border-slate-300 bg-white px-3 py-1.5 text-[11px] font-bold text-slate-700 hover:bg-slate-100 transition"
+							>
+								{fieldsJsonMode ? '시각적 편집기로 보기' : 'JSON 직접 편집'}
+							</button>
+							{#if !fieldsJsonMode}
+								<button
+									type="button"
+									onclick={addCustomField}
+									class="rounded-xl bg-slate-900 px-3 py-1.5 text-[11px] font-black text-white hover:bg-blue-600 transition"
+								>
+									+ 필드 추가
+								</button>
+							{/if}
+						</div>
+					</div>
+
+					{#if fieldsJsonMode}
+						<textarea
+							bind:value={fieldsJsonText}
+							rows="6"
+							class="w-full rounded-xl border-2 border-slate-200 bg-white p-3 font-mono text-xs text-slate-800 focus:border-blue-600 focus:outline-none"
+							placeholder={`[{"key": "department", "label": "부서", "type": "text", "placeholder": "예: 운수팀"}]`}
+						></textarea>
+					{:else if !editingBoard.fields_def || editingBoard.fields_def.length === 0}
+						<p class="rounded-xl border border-dashed border-slate-300 bg-white/80 py-4 text-center text-xs font-medium text-slate-400">
+							추가된 커스텀 필드가 없습니다. (+ 필드 추가 또는 JSON 직접 편집)
+						</p>
+					{:else}
+						<div class="space-y-2.5">
+							{#each editingBoard.fields_def as field, idx}
+								<div class="grid grid-cols-1 gap-2 rounded-xl border border-slate-200 bg-white p-3 sm:grid-cols-12 sm:items-center">
+									<input
+										type="text"
+										bind:value={field.key}
+										placeholder="키 (영문)"
+										class="sm:col-span-2 rounded-lg border border-slate-200 px-2.5 py-1.5 font-mono text-xs font-bold"
+									/>
+									<input
+										type="text"
+										bind:value={field.label}
+										placeholder="라벨명"
+										class="sm:col-span-3 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-bold"
+									/>
+									<select
+										bind:value={field.type}
+										class="sm:col-span-2 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs font-bold"
+									>
+										<option value="text">텍스트</option>
+										<option value="number">숫자</option>
+										<option value="date">날짜</option>
+										<option value="select">선택(Select)</option>
+									</select>
+									{#if field.type === 'select'}
+										<input
+											type="text"
+											bind:value={field.options_text}
+											placeholder="옵션 (쉼표 구분)"
+											class="sm:col-span-4 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs"
+										/>
+									{:else}
+										<input
+											type="text"
+											bind:value={field.placeholder}
+											placeholder="안내 문구(placeholder)"
+											class="sm:col-span-4 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs"
+										/>
+									{/if}
+									<button
+										type="button"
+										onclick={() => removeCustomField(idx)}
+										class="sm:col-span-1 rounded-lg px-2 py-1.5 text-xs font-bold text-rose-500 hover:bg-rose-50"
+										title="필드 삭제"
+									>
+										삭제
+									</button>
+								</div>
+							{/each}
+						</div>
+					{/if}
+				</div>
+
+				<!-- 세부 옵션 (options JSON) -->
+				<div class="space-y-3 rounded-2xl border-2 border-slate-200 bg-slate-50/70 p-4 sm:p-5">
+					<div class="flex flex-wrap items-center justify-between gap-2">
+						<div>
+							<h4 class="text-xs font-black text-slate-800">게시판 세부 옵션 (options JSON)</h4>
+							<p class="text-[11px] text-slate-500">한글 라벨(`label`)과 우측 다이나믹 폼 표시 여부(`dynamic_form`)를 설정합니다.</p>
+						</div>
+						<div class="flex items-center gap-2">
+							<button
+								type="button"
+								onclick={toggleOptionsJsonMode}
+								class="rounded-xl border border-slate-300 bg-white px-3 py-1.5 text-[11px] font-bold text-slate-700 hover:bg-slate-100"
+							>
+								{optionsJsonMode ? '폼 빌더로 보기' : 'JSON 직접 편집'}
+							</button>
+							{#if !optionsJsonMode}
+								<button
+									type="button"
+									onclick={addOptionEntry}
+									class="rounded-xl bg-blue-600 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-blue-700"
+								>
+									+ 옵션 추가
+								</button>
+							{/if}
+						</div>
+					</div>
+
+					{#if optionsJsonMode}
+						<textarea
+							bind:value={optionsJsonText}
+							rows="5"
+							class="w-full rounded-xl border-2 border-slate-200 bg-white p-3 font-mono text-xs text-slate-800 focus:border-blue-600 focus:outline-none"
+						></textarea>
+					{:else}
+						{@const optionEntries = getOptionEntries()}
+						{#if optionEntries.length === 0}
+							<p class="rounded-xl border border-dashed border-slate-300 bg-white py-4 text-center text-xs text-slate-400">
+								정의된 세부 옵션이 없습니다. `+ 옵션 추가`로 항목을 추가하세요.
+							</p>
+						{:else}
+							<div class="space-y-2">
+								{#each optionEntries as entry (entry.key)}
+									<div class="grid grid-cols-1 gap-2 rounded-xl border border-slate-200 bg-white p-2.5 sm:grid-cols-12 sm:items-center">
+										<input
+											type="text"
+											value={entry.key}
+											onchange={(e) => updateOptionEntry(entry.key, e.currentTarget.value, entry)}
+											placeholder="키 (예: use_comment)"
+											class="sm:col-span-3 rounded-lg border border-slate-200 px-2.5 py-1.5 font-mono text-xs"
+										/>
+										<input
+											type="text"
+											value={entry.label}
+											onchange={(e) => updateOptionEntry(entry.key, entry.key, { ...entry, label: e.currentTarget.value })}
+											placeholder="한글 라벨 (예: 댓글 허용)"
+											class="sm:col-span-3 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs"
+										/>
+										<select
+											value={entry.type}
+											onchange={(e) => {
+												const nextType = e.currentTarget.value;
+												const nextVal =
+													nextType === 'toggle'
+														? Boolean(entry.value)
+														: nextType === 'slider'
+															? Number(entry.value || 0)
+															: String(entry.value ?? '');
+												updateOptionEntry(entry.key, entry.key, { ...entry, type: nextType, value: nextVal });
+											}}
+											class="sm:col-span-2 rounded-lg border border-slate-200 px-2 py-1.5 text-xs font-bold"
+										>
+											<option value="toggle">토글</option>
+											<option value="slider">슬라이더</option>
+											<option value="text">텍스트</option>
+										</select>
+										<div class="sm:col-span-2 flex items-center">
+											{#if entry.type === 'toggle'}
+												<label class="inline-flex cursor-pointer items-center gap-1.5 text-xs font-bold text-slate-700">
+													<input
+														type="checkbox"
+														checked={Boolean(entry.value)}
+														onchange={(e) => updateOptionEntry(entry.key, entry.key, { ...entry, value: e.currentTarget.checked })}
+														class="h-4 w-4 rounded border-slate-300 text-blue-600"
+													/>
+													<span>{entry.value ? '활성' : '비활성'}</span>
+												</label>
+											{:else if entry.type === 'slider'}
+												<input
+													type="number"
+													value={Number(entry.value || 0)}
+													onchange={(e) => updateOptionEntry(entry.key, entry.key, { ...entry, value: Number(e.currentTarget.value) })}
+													class="w-full rounded-lg border border-slate-200 px-2 py-1.5 text-xs"
+												/>
+											{:else}
+												<input
+													type="text"
+													value={String(entry.value ?? '')}
+													onchange={(e) => updateOptionEntry(entry.key, entry.key, { ...entry, value: e.currentTarget.value })}
+													placeholder="기본값"
+													class="w-full rounded-lg border border-slate-200 px-2 py-1.5 text-xs"
+												/>
+											{/if}
+										</div>
+										<label class="sm:col-span-1 inline-flex cursor-pointer items-center justify-center gap-1 text-[11px] font-bold text-slate-600" title="우측 다이나믹 폼에 표시">
+											<input
+												type="checkbox"
+												checked={entry.dynamic_form}
+												onchange={(e) => updateOptionEntry(entry.key, entry.key, { ...entry, dynamic_form: e.currentTarget.checked })}
+												class="h-3.5 w-3.5 rounded border-slate-300 text-emerald-600"
+											/>
+											<span class="sm:hidden">동적폼</span>
+										</label>
+										<button
+											type="button"
+											onclick={() => removeOptionEntry(entry.key)}
+											class="sm:col-span-1 rounded-lg px-2 py-1.5 text-xs font-bold text-rose-500 hover:bg-rose-50"
+											title="옵션 삭제"
+										>
+											삭제
+										</button>
+									</div>
+								{/each}
+							</div>
+						{/if}
+					{/if}
 				</div>
 
 				<div class="pt-6 border-t border-slate-100 flex flex-wrap items-center gap-3">

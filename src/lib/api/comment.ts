@@ -16,33 +16,49 @@ export interface CommentItem {
 	author_rank?: number;
 	created_at?: string;
 	updated_at?: string;
+	attachments?: Array<{
+		id: number;
+		original_name: string;
+		mime_type: string;
+		file_size?: number;
+		access_level?: string;
+		meta_info?: Record<string, any>;
+	}>;
 	[key: string]: any;
 }
 
 export interface CommentCreatePayload {
 	content: string;
+	parent_id?: number | null;
+	media_ids?: number[];
+}
+
+export interface CommentUpdatePayload {
+	content: string;
+	media_ids?: number[];
+	remove_media_ids?: number[];
 }
 
 /**
  * 특정 게시물의 댓글 목록 조회
  */
 export const getComments = (postId: number | string) =>
-	fastApi<CommentItem[]>('GET', `/api/v1/posts/${postId}/comments`);
+	fastApi<CommentItem[]>('GET', `/api/v1/comment/${postId}`);
 
 /**
  * 댓글 작성
  */
 export const createComment = (postId: number | string, data: CommentCreatePayload) =>
-	fastApi<CommentItem, CommentCreatePayload>('POST', `/api/v1/posts/${postId}/comments`, data);
+	fastApi<CommentItem, CommentCreatePayload>('POST', `/api/v1/comment/${postId}`, data);
 
 /**
  * 댓글 수정
  */
-export const updateComment = (commentId: number | string, data: CommentCreatePayload) =>
-	fastApi<CommentItem, CommentCreatePayload>('PUT', `/api/v1/comments/${commentId}`, data);
+export const updateComment = (commentId: number | string, data: CommentUpdatePayload) =>
+	fastApi<CommentItem, CommentUpdatePayload>('PUT', `/api/v1/comment/${commentId}`, data);
 
 /**
  * 댓글 삭제
  */
 export const deleteComment = (commentId: number | string) =>
-	fastApi<{ success: boolean; message?: string }>('DELETE', `/api/v1/comments/${commentId}`);
+	fastApi<{ success: boolean; message?: string }>('DELETE', `/api/v1/comment/${commentId}`);
