@@ -1,986 +1,1022 @@
 <script>
 	/**
-	 * 🚐 [v5.0.0] 노선 마스터 및 로번별 근무시간표 통합 관리 페이지 (Svelte 5)
-	 * - 사용자의 피드백을 수렴하여 설계를 직관적으로 개편하였습니다:
-	 *   1. 1단계에서 지정한 '할당 배차 로번 수(vehicle_count)'와 2단계의 '시간표 행 수'가 실시간으로 동기화됩니다.
-	 *   2. 2단계는 각 로번이 하루 동안 운행하는 전체 요약 근무 일정(운행 시작 시각 ~ 종료 시각)을 로번 수만큼 보여줍니다.
-	 *   3. Svelte 5 $effect를 활용하여 로번 수를 조절하면 시간표 입력 필드가 실시간으로 늘어나거나 줄어듭니다.
-	 *   4. 🕒 배차표 시간 표기는 전적으로 "24시간 표기법(24H)"을 원칙으로 삼아 직관적으로 기입하도록 가이드를 보강했습니다.
-	 *   5. 💡 브라우저 기본 time 타입의 한글 '오전/오후' 강제 표기를 우회하고 신속한 실무 입력을 돕기 위해,
-	 *      시간 입력을 스마트 텍스트 입력창(자동 콜론 포맷팅 및 숫자 제약)으로 리팩토링했습니다!
+	 * @file (app)/v1/admin/route_master/+page.svelte
+	 * @description 노선 마스터 관리 (서비스 앱형 3단계 구조)
+	 *              1. 노선 정의 (Route Definition)
+	 *              2. 로번 생성 (Append-Only 날짜별 과거/현재/미래 이력 관리)
+	 *              3. 구간 시간 입력 (노선별 구간 및 소요 시간 관리)
 	 */
 	import { onMount } from 'svelte';
-	import { 
-		adminGetRouteMasters, 
-		adminCreateRouteMaster, 
-		adminUpdateRouteMaster, 
-		adminDeleteRouteMaster 
+	import {
+		adminGetRouteMasters,
+		adminCreateRouteMaster,
+		adminUpdateRouteMaster,
+		adminDeleteRouteMaster,
+		adminAppendRouteRoster,
+		adminGetRouteSegments,
+		adminSaveRouteSegments
 	} from '$lib/api/admin';
 	import { getSiteTitle } from '$lib/config/site';
 	import { toast } from '$lib/runes/toast.svelte';
-	import { formatDate } from '$lib/utils';
 	import { formatApiError } from '$lib/utils/error';
 	import Icon from '@iconify/svelte';
 
-	// ==========================================
-	// 🎨 상태 정의 (State Definitions via Runes)
-	// ==========================================
+	let routeMasters = $state(/** @type {any[]} */ ([]));
+	let allSegments = $state(/** @type {any[]} */ ([]));
+	let loading = $state(true);
+	let activeTab = $state(/** @type {'routes' | 'rosters' | 'segments'} */ ('routes'));
 
-	let routeMasters = $state([]);
-	let isLoading = $state(true);
-	let error = $state(null);
+	// 선택된 노선명 (탭 2, 탭 3 공통 기준)
+	let selectedRouteName = $state('');
 
-	const totalRoutes = $derived(routeMasters.length);
-	const regularRoutes = $derived(routeMasters.filter(m => m.route_type === 'REGULAR').length);
-	const temporaryRoutes = $derived(routeMasters.filter(m => m.route_type === 'TEMPORARY').length);
-	const totalVehicles = $derived(routeMasters.reduce((acc, m) => acc + (Number(m.vehicle_count) || 0), 0));
-
-	// 검색 및 필터 상태
-	let searchQuery = $state('');
-	let filterType = $state('ALL'); // 'ALL' | 'REGULAR' | 'TEMPORARY'
-
-	// 현재 선택된 노선 마스터 ID 및 상세 정보
-	let selectedId = $state(null);
-	let selectedRoute = $derived(
-		routeMasters.find(m => m.id === selectedId) || null
-	);
-
-	// 화면 모드 상태: 'VIEW' (상세조회) | 'CREATE' (등록) | 'EDIT' (수정)
-	let pageMode = $state('VIEW'); 
-
-	// 등록 및 수정 폼 상태
-	let formRouteName = $state('');
-	let formRouteType = $state('REGULAR'); // REGULAR | TEMPORARY
-	let formStartDate = $state('');
-	let formEndDate = $state('');
-	let formVehicleCount = $state(2); // 기본 로번 수 2개
-	let formVersion = $state('v1');
-	
-	// 로번별 일간 근무 요약 일정 배열 (RouteTimetable 모델의 각 행과 1:1 매핑)
-	// seq = 로번 순번 (1로번, 2로번...)
-	let formTimetables = $state([]);
-
-	// ==========================================
-	// ⚡ Svelte 5 $effect를 이용한 실시간 로번 수 - 시간표 동기화
-	// ==========================================
-	$effect(() => {
-		const targetCount = Math.max(0, Number(formVehicleCount) || 0);
-		const targetRowsCount = targetCount;
-		
-		if (formTimetables.length < targetRowsCount) {
-			const lastRow = formTimetables[formTimetables.length - 1];
-			const defaultStartLoc = lastRow ? lastRow.start_location : '제주터미널';
-			const defaultEndLoc = lastRow ? lastRow.end_location : '서귀포터미널';
-			const defaultStartGarage = lastRow ? lastRow.start_garage : '';
-			const defaultEndGarage = lastRow ? lastRow.end_garage : '';
-			const defaultIsRegularDuty = lastRow ? (lastRow.is_regular_duty !== undefined ? lastRow.is_regular_duty : false) : false;
-			
-			while (formTimetables.length < targetRowsCount) {
-				const nextSeq = formTimetables.length + 1;
-				formTimetables.push({
-					seq: nextSeq,
-					start_time: '06:00', // 기본 일과 시작
-					end_time: '22:00',   // 기본 일과 종료
-					start_location: defaultStartLoc,
-					end_location: defaultEndLoc,
-					start_garage: defaultStartGarage,
-					end_garage: defaultEndGarage,
-					is_regular_duty: defaultIsRegularDuty
-				});
-			}
-		} else if (formTimetables.length > targetRowsCount) {
-			formTimetables.splice(targetRowsCount);
-		}
+	// 탭 1: 노선 정의 검색/필터 및 모달
+	let routeSearch = $state('');
+	let filterType = $state('ALL'); // ALL | REGULAR | TEMPORARY
+	let showRouteModal = $state(false);
+	let editingRouteMasterId = $state(/** @type {number | null} */ (null));
+	let routeForm = $state({
+		route_name: '',
+		route_type: 'REGULAR',
+		start_date: new Date().toISOString().slice(0, 10),
+		vehicle_count: 2,
+		is_regular_duty: false
 	});
 
-	// ==========================================
-	// 🛠️ 비즈니스 로직 및 API 연동 함수 (Business Logic)
-	// ==========================================
+	// 탭 2: 로번 생성 (Append-Only) 상태
+	let rosterDateFilter = $state(''); // 특정 날짜 기준 활성 로번 확인용
+	let rosterScopeFilter = $state(/** @type {'ALL' | 'PAST' | 'ACTIVE' | 'FUTURE'} */ ('ALL'));
+	let inspectingVersionId = $state(/** @type {number | null} */ (null));
+	let showAppendForm = $state(false);
+	let appendForm = $state({
+		route_type: 'REGULAR',
+		start_date: new Date().toISOString().slice(0, 10),
+		end_date: '',
+		vehicle_count: 2,
+		version: '',
+		is_regular_duty: false
+	});
+	let appendTimetables = $state(/** @type {any[]} */ ([]));
+	let appending = $state(false);
 
-	/**
-	 * 백엔드로부터 최신 노선 마스터 데이터를 조회하여 상태를 업데이트합니다.
-	 */
-	async function loadRouteMasters() {
-		isLoading = true;
-		error = null;
-		try {
-			const data = await adminGetRouteMasters();
-			routeMasters = data;
-			
-			// 기존 선택 유지 혹은 첫번째 노선 자동 선택
-			if (routeMasters.length > 0) {
-				if (!selectedId || !routeMasters.some(m => m.id === selectedId)) {
-					selectedId = routeMasters[0].id;
-				}
-			} else {
-				selectedId = null;
-			}
-		} catch (err) {
-			console.error('❌ 노선 마스터 로딩 실패:', err);
-			error = err.message || '노선 목록을 불러오는 과정에서 오류가 발생했습니다.';
-		} finally {
-			isLoading = false;
+	// 탭 3: 구간 시간 입력 상태
+	let segmentRows = $state(/** @type {any[]} */ ([]));
+	let savingSegments = $state(false);
+
+	// --- [파생 상태] ---
+	const uniqueRoutes = $derived.by(() => {
+		/** @type {Record<string, any[]>} */
+		const grouped = {};
+		for (const m of routeMasters) {
+			if (!grouped[m.route_name]) grouped[m.route_name] = [];
+			grouped[m.route_name].push(m);
 		}
-	}
-
-	onMount(() => {
-		loadRouteMasters();
+		const today = new Date().toISOString().slice(0, 10);
+		return Object.entries(grouped)
+			.map(([name, versions]) => {
+				const sorted = [...versions].sort((a, b) => (a.start_date || '').localeCompare(b.start_date || ''));
+				const active =
+					sorted.find((v) => v.start_date <= today && (!v.end_date || v.end_date >= today)) ||
+					sorted[sorted.length - 1];
+				const segCount = allSegments.filter((s) => s.route_name === name).length;
+				return {
+					route_name: name,
+					route_type: active?.route_type || 'REGULAR',
+					is_regular_duty: Boolean(active?.is_regular_duty),
+					active_version: active,
+					versions: sorted,
+					version_count: sorted.length,
+					segment_count: segCount
+				};
+			})
+			.sort((a, b) => a.route_name.localeCompare(b.route_name, 'ko'));
 	});
 
-	/**
-	 * 검색 조건 및 타입 필터가 적용된 정렬 목록을 계산합니다.
-	 */
-	let filteredMasters = $derived(
-		routeMasters.filter(m => {
-			const matchesSearch = m.route_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-				m.version.toLowerCase().includes(searchQuery.toLowerCase());
-			const matchesType = filterType === 'ALL' || m.route_type === filterType;
-			return matchesSearch && matchesType;
+	const filteredRoutes = $derived(
+		uniqueRoutes.filter((r) => {
+			if (filterType !== 'ALL' && r.route_type !== filterType) return false;
+			if (routeSearch.trim() && !r.route_name.toLowerCase().includes(routeSearch.trim().toLowerCase())) {
+				return false;
+			}
+			return true;
 		})
 	);
 
-	/**
-	 * 신규 노선 등록 모드로 전환하며 폼 상태를 초기화합니다.
-	 */
-	function enterCreateMode() {
-		pageMode = 'CREATE';
-		formRouteName = '';
-		formRouteType = 'REGULAR';
-		const today = formatDate(new Date());
-		formStartDate = today;
-		formEndDate = '';
-		formVehicleCount = 2; // 기본 로번 2개 세팅 -> $effect에 의해 시간표 2줄 자동 생성
-		formVersion = 'v1';
-		formTimetables = [
-			{ seq: 1, start_time: '06:00', end_time: '22:00', start_location: '제주터미널', end_location: '서귀포터미널', start_garage: '', end_garage: '', is_regular_duty: false },
-			{ seq: 2, start_time: '06:00', end_time: '22:00', start_location: '제주터미널', end_location: '서귀포터미널', start_garage: '', end_garage: '', is_regular_duty: false }
+	const selectedRouteVersions = $derived.by(() => {
+		const today = new Date().toISOString().slice(0, 10);
+		const list = routeMasters
+			.filter((m) => m.route_name === selectedRouteName)
+			.sort((a, b) => (b.start_date || '').localeCompare(a.start_date || '') || b.id - a.id);
+
+		return list.filter((v) => {
+			if (rosterDateFilter) {
+				const okStart = v.start_date <= rosterDateFilter;
+				const okEnd = !v.end_date || v.end_date >= rosterDateFilter;
+				if (!(okStart && okEnd)) return false;
+			}
+			if (rosterScopeFilter === 'PAST') return Boolean(v.end_date && v.end_date < today);
+			if (rosterScopeFilter === 'FUTURE') return Boolean(v.start_date > today);
+			if (rosterScopeFilter === 'ACTIVE') return v.start_date <= today && (!v.end_date || v.end_date >= today);
+			return true;
+		});
+	});
+
+	const totalSegmentMinutes = $derived(
+		segmentRows.reduce((acc, s) => acc + Math.max(0, Number(s.duration_min) || 0), 0)
+	);
+
+	// --- [로번 행 수 동기화] ---
+	$effect(() => {
+		const count = Math.max(0, Number(appendForm.vehicle_count) || 0);
+		if (appendTimetables.length < count) {
+			const last = appendTimetables[appendTimetables.length - 1];
+			while (appendTimetables.length < count) {
+				appendTimetables.push({
+					seq: appendTimetables.length + 1,
+					start_time: last?.start_time || '06:00',
+					end_time: last?.end_time || '22:00',
+					start_location: last?.start_location || '제주터미널',
+					end_location: last?.end_location || '서귀포터미널',
+					start_garage: last?.start_garage || '',
+					end_garage: last?.end_garage || '',
+					is_regular_duty: last?.is_regular_duty ?? false
+				});
+			}
+		} else if (appendTimetables.length > count) {
+			appendTimetables.splice(count);
+		}
+	});
+
+	// 선택 노선 변경 시 구간 시간 행 동기화
+	$effect(() => {
+		const rname = selectedRouteName;
+		if (!rname) {
+			segmentRows = [];
+			return;
+		}
+		const found = allSegments
+			.filter((s) => s.route_name === rname)
+			.sort((a, b) => a.seq - b.seq)
+			.map((s) => ({ ...s }));
+		segmentRows = found;
+	});
+
+	async function loadAll() {
+		loading = true;
+		try {
+			const [masters, segs] = await Promise.all([
+				adminGetRouteMasters(),
+				adminGetRouteSegments().catch(() => [])
+			]);
+			routeMasters = Array.isArray(masters) ? masters : [];
+			allSegments = Array.isArray(segs) ? segs : [];
+			if (routeMasters.length > 0 && (!selectedRouteName || !routeMasters.some((m) => m.route_name === selectedRouteName))) {
+				selectedRouteName = routeMasters[0].route_name;
+			}
+		} catch (e) {
+			toast.error('노선 마스터 로드 실패: ' + formatApiError(e));
+		} finally {
+			loading = false;
+		}
+	}
+
+	onMount(loadAll);
+
+	/** @param {string} val */
+	function format24hTime(val) {
+		const digits = String(val || '').replace(/\D/g, '').slice(0, 4);
+		if (digits.length <= 2) return digits;
+		return `${digits.slice(0, 2)}:${digits.slice(2)}`;
+	}
+
+	// --- [탭 1: 노선 정의 CRUD] ---
+	/** @param {any} routeObj */
+	function openRouteModal(routeObj = null) {
+		if (routeObj) {
+			editingRouteMasterId = routeObj.active_version?.id || null;
+			routeForm = {
+				route_name: routeObj.route_name,
+				route_type: routeObj.route_type || 'REGULAR',
+				start_date: routeObj.active_version?.start_date || new Date().toISOString().slice(0, 10),
+				vehicle_count: routeObj.active_version?.vehicle_count || 2,
+				is_regular_duty: Boolean(routeObj.is_regular_duty)
+			};
+		} else {
+			editingRouteMasterId = null;
+			routeForm = {
+				route_name: '',
+				route_type: 'REGULAR',
+				start_date: new Date().toISOString().slice(0, 10),
+				vehicle_count: 2,
+				is_regular_duty: false
+			};
+		}
+		showRouteModal = true;
+	}
+
+	async function saveRouteDefinition() {
+		if (!routeForm.route_name.trim()) {
+			toast.warning('노선명을 입력하세요.');
+			return;
+		}
+		try {
+			if (editingRouteMasterId) {
+				await adminUpdateRouteMaster(editingRouteMasterId, {
+					route_name: routeForm.route_name.trim(),
+					route_type: routeForm.route_type,
+					is_regular_duty: routeForm.is_regular_duty
+				});
+				toast.success('노선 정의가 수정되었습니다.');
+			} else {
+				const count = Math.max(1, Number(routeForm.vehicle_count) || 1);
+				const initialTimetables = Array.from({ length: count }, (_, idx) => ({
+					seq: idx + 1,
+					start_time: '06:00',
+					end_time: '22:00',
+					start_location: '기점',
+					end_location: '종점',
+					start_garage: '',
+					end_garage: '',
+					is_regular_duty: routeForm.is_regular_duty
+				}));
+				await adminCreateRouteMaster({
+					route_name: routeForm.route_name.trim(),
+					route_type: routeForm.route_type,
+					start_date: routeForm.start_date,
+					end_date: null,
+					vehicle_count: count,
+					version: 'v1',
+					is_regular_duty: routeForm.is_regular_duty,
+					timetables: initialTimetables
+				});
+				selectedRouteName = routeForm.route_name.trim();
+				toast.success('새 노선이 정의되었습니다.');
+			}
+			showRouteModal = false;
+			await loadAll();
+		} catch (e) {
+			toast.error('노선 저장 실패: ' + formatApiError(e));
+		}
+	}
+
+	// --- [탭 2: Append-Only 로번 생성] ---
+	/** @param {any} sourceVersion */
+	function openAppendRoster(sourceVersion = null) {
+		const base =
+			sourceVersion ||
+			uniqueRoutes.find((r) => r.route_name === selectedRouteName)?.active_version ||
+			null;
+		const count = base ? Number(base.vehicle_count || base.timetables?.length || 2) : 2;
+		appendForm = {
+			route_type: base?.route_type || 'REGULAR',
+			start_date: new Date().toISOString().slice(0, 10),
+			end_date: '',
+			vehicle_count: count,
+			version: '',
+			is_regular_duty: Boolean(base?.is_regular_duty)
+		};
+		if (base?.timetables && base.timetables.length > 0) {
+			appendTimetables = base.timetables.map((/** @type {any} */ t) => ({
+				seq: t.seq,
+				start_time: t.start_time || '06:00',
+				end_time: t.end_time || '22:00',
+				start_location: t.start_location || '기점',
+				end_location: t.end_location || '종점',
+				start_garage: t.start_garage || '',
+				end_garage: t.end_garage || '',
+				is_regular_duty: Boolean(t.is_regular_duty)
+			}));
+		} else {
+			appendTimetables = [];
+		}
+		showAppendForm = true;
+	}
+
+	async function handleAppendRoster() {
+		if (!selectedRouteName) {
+			toast.warning('노선을 먼저 선택하세요.');
+			return;
+		}
+		if (!appendForm.start_date) {
+			toast.warning('적용 시작일을 입력하세요.');
+			return;
+		}
+		appending = true;
+		try {
+			const res = await adminAppendRouteRoster({
+				route_name: selectedRouteName,
+				route_type: appendForm.route_type,
+				start_date: appendForm.start_date,
+				end_date: appendForm.end_date || null,
+				vehicle_count: Number(appendForm.vehicle_count || appendTimetables.length),
+				version: appendForm.version.trim() || null,
+				is_regular_duty: appendForm.is_regular_duty,
+				timetables: appendTimetables.map((t, idx) => ({
+					seq: idx + 1,
+					start_time: t.start_time || '06:00',
+					end_time: t.end_time || '22:00',
+					start_location: t.start_location || '기점',
+					end_location: t.end_location || '종점',
+					start_garage: t.start_garage || null,
+					end_garage: t.end_garage || null,
+					is_regular_duty: Boolean(t.is_regular_duty)
+				}))
+			});
+			toast.success(`로번 버전(${res.version})이 Append-Only로 추가되었습니다.`);
+			showAppendForm = false;
+			await loadAll();
+		} catch (e) {
+			toast.error('로번 추가 실패: ' + formatApiError(e));
+		} finally {
+			appending = false;
+		}
+	}
+
+	/** @param {number} masterId */
+	async function handleDeleteRosterVersion(masterId) {
+		if (!confirm('이 로번 버전을 삭제하시겠습니까? (연결된 배차 스냅샷이 있으면 함께 삭제될 수 있습니다)')) return;
+		try {
+			await adminDeleteRouteMaster(masterId);
+			toast.success('로번 버전이 삭제되었습니다.');
+			await loadAll();
+		} catch (e) {
+			toast.error('삭제 실패: ' + formatApiError(e));
+		}
+	}
+
+	// --- [탭 3: 구간 시간 관리] ---
+	function addSegmentRow() {
+		const nextSeq = segmentRows.length + 1;
+		const prevEnd = segmentRows[segmentRows.length - 1]?.end_stop || '';
+		segmentRows = [
+			...segmentRows,
+			{
+				seq: nextSeq,
+				segment_name: prevEnd ? `${prevEnd} → ` : `구간 ${nextSeq}`,
+				start_stop: prevEnd,
+				end_stop: '',
+				duration_min: 10,
+				distance_km: '',
+				memo: ''
+			}
 		];
 	}
 
 	/**
-	 * 기존 노선 수정 모드로 전환하며 현재 선택된 데이터를 폼 상태에 로드합니다.
+	 * @param {number} idx
+	 * @param {number} delta
 	 */
-	function enterEditMode() {
-		if (!selectedRoute) return;
-		pageMode = 'EDIT';
-		formRouteName = selectedRoute.route_name;
-		formRouteType = selectedRoute.route_type;
-		formStartDate = selectedRoute.start_date;
-		formEndDate = selectedRoute.end_date || '';
-		formVehicleCount = selectedRoute.vehicle_count;
-		formVersion = selectedRoute.version;
-		
-		// 깊은 복사로 격리하여 폼 편집 유연성 확보
-		formTimetables = selectedRoute.timetables.map(t => ({
-			seq: t.seq,
-			start_time: t.start_time,
-			end_time: t.end_time,
-			start_location: t.start_location,
-			end_location: t.end_location,
-			start_garage: t.start_garage || '',
-			end_garage: t.end_garage || '',
-			is_regular_duty: t.is_regular_duty !== undefined ? t.is_regular_duty : false
-		}));
+	function moveSegmentRow(idx, delta) {
+		const next = [...segmentRows];
+		const target = idx + delta;
+		if (target < 0 || target >= next.length) return;
+		[next[idx], next[target]] = [next[target], next[idx]];
+		segmentRows = next.map((s, i) => ({ ...s, seq: i + 1 }));
 	}
 
-	/**
-	 * 상세조회 패널에서 특정 로번 시간표의 당연 근무 상태를 즉시 토글 업데이트합니다.
-	 */
-	async function toggleTimetableRegularDuty(timetable, currentVal) {
-		if (!selectedRoute) return;
-		
-		// 깊은 복사로 기존 시간표 목록 가져오기
-		const updatedTimetables = selectedRoute.timetables.map(t => {
-			const isTarget = t.id === timetable.id;
-			return {
-				seq: t.seq,
-				start_time: t.start_time,
-				end_time: t.end_time,
-				start_location: t.start_location,
-				end_location: t.end_location,
-				start_garage: t.start_garage || '',
-				end_garage: t.end_garage || '',
-				is_regular_duty: isTarget ? !currentVal : (t.is_regular_duty !== undefined ? t.is_regular_duty : false)
-			};
-		});
+	/** @param {number} idx */
+	function removeSegmentRow(idx) {
+		segmentRows = segmentRows.filter((_, i) => i !== idx).map((s, i) => ({ ...s, seq: i + 1 }));
+	}
 
-		const payload = {
-			route_name: selectedRoute.route_name,
-			route_type: selectedRoute.route_type,
-			start_date: selectedRoute.start_date,
-			end_date: selectedRoute.end_date || null,
-			vehicle_count: selectedRoute.vehicle_count,
-			version: selectedRoute.version,
-			timetables: updatedTimetables
-		};
-
+	async function handleSaveSegments() {
+		if (!selectedRouteName) {
+			toast.warning('노선을 선택하세요.');
+			return;
+		}
+		savingSegments = true;
 		try {
-			await adminUpdateRouteMaster(selectedRoute.id, payload);
-			// 목록 및 상세 정보 다시 로드
-			await loadRouteMasters();
-		} catch (err) {
-			console.error('❌ 당연 근무 토글 중 오류 발생:', err);
-			toast.error(`당연 근무 상태 변경에 실패했습니다: ${formatApiError(err)}`);
+			const activeMasterId =
+				uniqueRoutes.find((r) => r.route_name === selectedRouteName)?.active_version?.id || null;
+			await adminSaveRouteSegments({
+				route_name: selectedRouteName,
+				route_master_id: activeMasterId,
+				segments: segmentRows.map((s, i) => ({
+					seq: i + 1,
+					segment_name: (s.segment_name || '').trim() || `${s.start_stop || '출발'} → ${s.end_stop || '도착'}`,
+					start_stop: s.start_stop || null,
+					end_stop: s.end_stop || null,
+					duration_min: Math.max(0, Number(s.duration_min) || 0),
+					distance_km: s.distance_km || null,
+					memo: s.memo || null
+				}))
+			});
+			toast.success(`[${selectedRouteName}] 구간 시간이 저장되었습니다.`);
+			await loadAll();
+		} catch (e) {
+			toast.error('구간 시간 저장 실패: ' + formatApiError(e));
+		} finally {
+			savingSegments = false;
 		}
 	}
 
-	function cancelForm() {
-		pageMode = 'VIEW';
-	}
-
-	/**
-	 * 시간 문자열(HH:MM) 포맷 스마트 포매터 함수
-	 * - 숫자만 추출한 뒤 자동 콜론(:) 위치 보정 수행
-	 */
-	function handleTimeInput(e, timetable, field) {
-		let val = e.target.value.replace(/[^0-9]/g, ''); // 숫자 제외 문자 모두 소거
-		
-		if (val.length > 4) {
-			val = val.slice(0, 4);
-		}
-		
-		// 4자리가 들어오면 HH:MM 형식으로 조합
-		if (val.length > 2) {
-			val = val.slice(0, 2) + ':' + val.slice(2);
-		}
-		
-		timetable[field] = val;
-	}
-
-	/**
-	 * 노선 및 로번 근무 일정 폼의 유효성 검사를 수행합니다.
-	 */
-	function validateForm() {
-		if (!formRouteName.trim()) {
-			toast.warning('노선명을 입력해 주세요.');
-			return false;
-		}
-		if (!formVersion.trim()) {
-			toast.warning('버전을 입력해 주세요. (예: v1, v2)');
-			return false;
-		}
-		if (!formStartDate) {
-			toast.warning('적용 시작일을 선택해 주세요.');
-			return false;
-		}
-		if (formEndDate && formStartDate > formEndDate) {
-			toast.warning('종료일은 시작일보다 이전일 수 없습니다.');
-			return false;
-		}
-		if (Number(formVehicleCount) <= 0) {
-			toast.warning('최소 1개 이상의 로번 수가 할당되어야 합니다.');
-			return false;
-		}
-		
-		// 로번별 근무시간 및 노선 요약 정보 확인 (24시간 표기법 유효성 체크 포함)
-		const timeRegex = /^([01]\d|2[0-3]):[0-5]\d$/;
-		for (let i = 0; i < formTimetables.length; i++) {
-			const t = formTimetables[i];
-			const vNum = t.seq;
-			if (!t.start_time || !t.end_time) {
-				toast.warning(`${vNum}로번의 근무 시각을 올바르게 입력해 주세요.`);
-				return false;
-			}
-			
-			// 24시 포맷 강제 검증 규칙 적용
-			if (!timeRegex.test(t.start_time) || !timeRegex.test(t.end_time)) {
-				toast.warning(`${vNum}로번에 유효하지 않은 시간 형식이 포함되어 있습니다. 24시간 형식(00:00 ~ 23:59)으로 기입해 주세요.`);
-				return false;
-			}
-			
-			if (!t.start_location.trim() || !t.end_location.trim()) {
-				toast.warning(`${vNum}로번의 주요 기점(출발지)과 종점(도착지)을 입력해 주세요.`);
-				return false;
-			}
-		}
-		return true;
-	}
-
-	/**
-	 * 신규 등록 또는 수정 사항을 백엔드 DB에 보관합니다.
-	 */
-	async function saveRoute() {
-		if (!validateForm()) return;
-
-		const payload = {
-			route_name: formRouteName.trim(),
-			route_type: formRouteType,
-			start_date: formStartDate,
-			end_date: formEndDate ? formEndDate : null,
-			vehicle_count: Number(formVehicleCount),
-			version: formVersion.trim(),
-			timetables: formTimetables
-		};
-
-		try {
-			if (pageMode === 'CREATE') {
-				const response = await adminCreateRouteMaster(payload);
-				toast.success('새로운 노선 마스터 및 로번 근무스케줄이 성공적으로 등록되었습니다!');
-				selectedId = response.id;
-			} else if (pageMode === 'EDIT') {
-				await adminUpdateRouteMaster(selectedId, payload);
-				toast.success('로번 수 변경 및 운행 일정 마스터가 성공적으로 업데이트되었습니다.');
-			}
-			pageMode = 'VIEW';
-			await loadRouteMasters();
-		} catch (err) {
-			console.error('❌ 저장 중 오류 발생:', err);
-			toast.error(`저장에 실패했습니다: ${formatApiError(err)}`);
-		}
-	}
-
-	/**
-	 * 선택된 노선 마스터를 CASCADE 영구 삭제합니다.
-	 */
-	async function deleteRoute() {
-		if (!selectedRoute) return;
-		
-		const confirmMsg = `⚠️ 정말로 [${selectedRoute.route_name} (${selectedRoute.version})] 노선을 삭제하시겠습니까?\n` +
-			`이 노선에 배정된 로번 ${selectedRoute.vehicle_count}개의 하루 근무 시간표 정보가 모두 함께 영구 삭제됩니다!`;
-			
-		if (confirm(confirmMsg)) {
-			try {
-				await adminDeleteRouteMaster(selectedRoute.id);
-				toast.success('노선 마스터 및 하위 로번 스케줄 일괄 삭제 완료.');
-				selectedId = null;
-				pageMode = 'VIEW';
-				await loadRouteMasters();
-			} catch (err) {
-				console.error('❌ 삭제 오류:', err);
-				toast.error(`삭제에 실패했습니다: ${formatApiError(err)}`);
-			}
-		}
+	/** @param {any} v */
+	function getVersionBadge(v) {
+		const today = new Date().toISOString().slice(0, 10);
+		if (v.end_date && v.end_date < today) return { label: '과거 이력', cls: 'bg-slate-100 text-slate-500 border-slate-200' };
+		if (v.start_date > today) return { label: '미래 예정', cls: 'bg-amber-50 text-amber-700 border-amber-200' };
+		return { label: '현재 적용중', cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' };
 	}
 </script>
 
 <svelte:head>
-	<title>{getSiteTitle('노선 마스터 관리')}</title>
+	<title>노선 마스터 관리 | {getSiteTitle()}</title>
 </svelte:head>
 
-<div class="mx-auto max-w-7xl space-y-6 px-4 py-8 pb-24 font-['Noto_Sans_KR','Outfit'] md:space-y-8 md:px-6 lg:px-8">
-	<!-- ===================================================================== -->
-	<!-- 1. 페이지 헤더 & 액션 바 (기본값: 새로고침 + 관리자 홈) -->
-	<!-- ===================================================================== -->
-	<div class="flex flex-col gap-4 border-b-2 border-slate-900 pb-6 md:flex-row md:items-end md:justify-between md:border-b-4 md:pb-8">
-		<div>
-			<div class="flex items-center gap-2">
-				<span class="inline-flex items-center gap-1.5 rounded-full bg-slate-900 px-3 py-1 text-[11px] font-black tracking-widest text-emerald-400 uppercase">
-					<span class="h-2 w-2 rounded-full bg-emerald-400 animate-ping"></span>
-					Governance Fleet Database
-				</span>
-				<span class="text-xs font-bold text-slate-400">v1/admin/route_master</span>
+<div class="mx-auto max-w-7xl space-y-6 p-4 sm:p-6 lg:p-8">
+	<!-- 1. 헤더 -->
+	<header class="flex flex-col gap-4 rounded-3xl border-2 border-slate-200 bg-white p-6 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+		<div class="space-y-1">
+			<div class="inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-[10px] font-black tracking-widest text-blue-700 uppercase">
+				<Icon icon="ph:bus-bold" class="text-sm" />
+				<span>Route Master Architecture</span>
 			</div>
-			<h1 class="mt-2 text-3xl font-black tracking-tight text-slate-900 uppercase italic md:text-4xl">
-				노선 마스터 <span class="not-italic text-blue-600">관리</span>
-			</h1>
-			<p class="mt-1 text-sm font-medium text-slate-500">
-				정규/임시 노선의 로번 수만큼 로번별 운행 시작·종료 시각(근무시간) 및 노선 요약을 통제합니다. (🕒 24시간제)
+			<h1 class="text-2xl font-black tracking-tight text-slate-900 sm:text-3xl">노선 마스터 통합 관리</h1>
+			<p class="text-xs font-medium text-slate-500">
+				1단계 노선 정의 → 2단계 날짜별 로번(Append-Only 이력) → 3단계 구간 시간 입력 순서로 관리합니다.
 			</p>
 		</div>
-
-		<!-- 상단 버튼 그룹 (맨 우측 [관리자 홈], 그 좌측 [새로고침] 고정, 이후 버튼은 새로고침 좌측) -->
-		<div class="flex flex-wrap items-center gap-3">
+		<div class="flex flex-wrap items-center gap-2">
 			<button
-				onclick={enterCreateMode}
-				disabled={pageMode !== 'VIEW'}
-				class="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2 text-xs font-black text-white shadow-md transition hover:bg-blue-700 active:scale-95 disabled:bg-slate-300 disabled:text-slate-400"
+				type="button"
+				onclick={loadAll}
+				disabled={loading}
+				class="flex items-center gap-1.5 rounded-2xl border-2 border-slate-200 bg-white px-4 py-2.5 text-xs font-black text-slate-700 shadow-sm transition hover:border-slate-400 disabled:opacity-50"
 			>
-				<Icon icon="solar:add-circle-bold" class="text-base" />
-				<span>새 노선 등록</span>
-			</button>
-
-			<button
-				onclick={loadRouteMasters}
-				disabled={isLoading}
-				class="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 active:scale-95 disabled:opacity-50"
-			>
-				<Icon icon="solar:restart-bold" class="text-base {isLoading ? 'animate-spin' : ''}" />
+				<Icon icon="ph:arrows-clockwise-bold" class="text-base {loading ? 'animate-spin' : ''}" />
 				<span>새로고침</span>
 			</button>
-
 			<a
 				href="/v1/admin"
-				class="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 active:scale-95"
+				class="flex items-center gap-1.5 rounded-2xl border-2 border-slate-200 bg-white px-4 py-2.5 text-xs font-black text-slate-700 shadow-sm transition hover:border-slate-400"
 			>
-				<Icon icon="solar:home-smile-angle-bold-duotone" class="text-base text-slate-500" />
+				<Icon icon="ph:house-bold" class="text-base text-slate-500" />
 				<span>관리자 홈</span>
 			</a>
 		</div>
-	</div>
+	</header>
 
-	<!-- ===================================================================== -->
-	<!-- 2. 상단 4대 관제 지표 요약 카드 (Status Cards: 1~4개) -->
-	<!-- ===================================================================== -->
-	<div class="grid grid-cols-2 gap-4 md:grid-cols-4 md:gap-5">
-		<div class="flex flex-col justify-between rounded-[1.75rem] border-2 border-slate-200 bg-white p-5 shadow-sm">
-			<div class="flex items-center justify-between">
-				<span class="text-xs font-black tracking-wider text-slate-400 uppercase">Total Routes</span>
-				<div class="flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
-					<Icon icon="solar:route-bold-duotone" class="text-xl" />
-				</div>
-			</div>
-			<div class="mt-4">
-				<div class="text-3xl font-black text-slate-900">{totalRoutes} <span class="text-xs font-normal text-slate-500">개 노선</span></div>
-				<div class="mt-1 text-xs font-bold text-indigo-600">전체 등록 노선</div>
-			</div>
-		</div>
-
-		<div class="flex flex-col justify-between rounded-[1.75rem] border-2 border-slate-200 bg-white p-5 shadow-sm">
-			<div class="flex items-center justify-between">
-				<span class="text-xs font-black tracking-wider text-slate-400 uppercase">Regular Routes</span>
-				<div class="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
-					<Icon icon="solar:bus-bold-duotone" class="text-xl" />
-				</div>
-			</div>
-			<div class="mt-4">
-				<div class="text-3xl font-black text-blue-600">{regularRoutes} <span class="text-xs font-normal text-slate-500">개</span></div>
-				<div class="mt-1 text-xs font-bold text-slate-400">정규 운행 노선</div>
-			</div>
-		</div>
-
-		<div class="flex flex-col justify-between rounded-[1.75rem] border-2 border-slate-200 bg-white p-5 shadow-sm">
-			<div class="flex items-center justify-between">
-				<span class="text-xs font-black tracking-wider text-slate-400 uppercase">Temporary Routes</span>
-				<div class="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
-					<Icon icon="solar:clock-circle-bold-duotone" class="text-xl" />
-				</div>
-			</div>
-			<div class="mt-4">
-				<div class="text-3xl font-black text-amber-600">{temporaryRoutes} <span class="text-xs font-normal text-slate-500">개</span></div>
-				<div class="mt-1 text-xs font-bold text-slate-400">임시·지원 노선</div>
-			</div>
-		</div>
-
-		<div class="flex flex-col justify-between rounded-[1.75rem] border-2 border-slate-200 bg-white p-5 shadow-sm">
-			<div class="flex items-center justify-between">
-				<span class="text-xs font-black tracking-wider text-slate-400 uppercase">Total Duty Slots</span>
-				<div class="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
-					<Icon icon="solar:users-group-rounded-bold-duotone" class="text-xl" />
-				</div>
-			</div>
-			<div class="mt-4">
-				<div class="text-3xl font-black text-emerald-600">{totalVehicles} <span class="text-xs font-normal text-slate-500">개</span></div>
-				<div class="mt-1 text-xs font-bold text-slate-400">총 인가 로번 슬롯</div>
-			</div>
-		</div>
-	</div>
-
-	<!-- ===================================================================== -->
-	<!-- 3. 전사 공통 탭 바 (최소 1개 일관성 및 확장성) -->
-	<!-- ===================================================================== -->
-	<div class="flex items-center border-b-2 border-slate-200">
+	<!-- 2. 3단계 요약 카드 -->
+	<section class="grid grid-cols-1 gap-4 sm:grid-cols-3">
 		<button
 			type="button"
-			class="flex items-center gap-2 border-b-4 border-blue-600 bg-blue-50/50 px-6 py-3 text-xs font-black text-blue-600 rounded-t-2xl transition"
+			onclick={() => (activeTab = 'routes')}
+			class="group rounded-[1.75rem] border-2 bg-white p-5 text-left shadow-sm transition {activeTab === 'routes'
+				? 'border-blue-500 bg-blue-50/20 ring-2 ring-blue-500/20'
+				: 'border-slate-100 hover:border-blue-300'}"
 		>
-			<Icon icon="solar:bus-bold-duotone" class="text-base" />
-			<span>노선 및 로번 스케줄 마스터</span>
-		</button>
-	</div>
-
-	<!-- 🚦 2. 마스터-디테일 원패널 슬라이드 레이아웃 -->
-	<div class="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-12 md:gap-8">
-		
-		<!-- ========================================== -->
-		<!-- 📝 LEFT: 노선 마스터 목록 검색 및 사이드바 (4 cols) -->
-		<!-- ========================================== -->
-		<div class="flex flex-col gap-4 lg:col-span-4">
-			
-			<div class="rounded-3xl border-2 border-slate-900 bg-white p-4 shadow-[4px_4px_0px_0px_rgba(15,23,42,1)]">
-				<div class="relative w-full">
-					<span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
-						<Icon icon="mdi:magnify" class="h-5 w-5" />
-					</span>
-					<input 
-						type="text" 
-						placeholder="노선명 또는 버전 검색..." 
-						bind:value={searchQuery}
-						class="w-full rounded-2xl border-2 border-slate-200 bg-slate-50 py-2.5 pl-10 pr-4 text-sm font-bold text-black transition-all placeholder:text-slate-400 focus:border-indigo-500 focus:bg-white focus:outline-none"
-					/>
-				</div>
-				
-				<div class="mt-3 flex gap-1 rounded-2xl border-2 border-slate-200 bg-slate-50 p-1">
-					<button onclick={() => filterType = 'ALL'} class="flex-1 rounded-xl py-1.5 text-xs font-black transition-all {filterType === 'ALL' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-500 hover:text-indigo-600 hover:bg-slate-100'}">
-						전체 노선
-					</button>
-					<button onclick={() => filterType = 'REGULAR'} class="flex-1 rounded-xl py-1.5 text-xs font-black transition-all {filterType === 'REGULAR' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-500 hover:text-blue-600 hover:bg-slate-100'}">
-						정규노선
-					</button>
-					<button onclick={() => filterType = 'TEMPORARY'} class="flex-1 rounded-xl py-1.5 text-xs font-black transition-all {filterType === 'TEMPORARY' ? 'bg-amber-600 text-white shadow-sm' : 'text-slate-500 hover:text-amber-600 hover:bg-slate-100'}">
-						임시노선
-					</button>
+			<div class="mb-3 flex items-center justify-between">
+				<span class="rounded-lg bg-blue-50 px-2 py-0.5 text-[11px] font-black text-blue-700">1단계 · 노선 정의</span>
+				<div class="flex h-10 w-10 items-center justify-center rounded-2xl bg-blue-50 text-blue-600">
+					<Icon icon="ph:map-trifold-bold" class="text-2xl" />
 				</div>
 			</div>
+			<div class="text-3xl font-black text-slate-900">
+				{loading ? '...' : uniqueRoutes.length}
+				<span class="ml-1 text-sm font-bold text-slate-400">개 노선</span>
+			</div>
+			<p class="mt-2 text-[11px] font-bold text-slate-500">정규/임시 노선 마스터 정의</p>
+		</button>
 
-			<div class="flex flex-col gap-3 overflow-y-auto max-h-[620px] pr-1">
-				{#if isLoading}
-					<div class="flex flex-col items-center justify-center py-20 text-slate-400">
-						<span class="loading loading-spinner loading-lg text-indigo-600"></span>
-						<p class="mt-4 text-xs font-bold text-slate-500">배차 데이터를 조회하는 중...</p>
+		<button
+			type="button"
+			onclick={() => (activeTab = 'rosters')}
+			class="group rounded-[1.75rem] border-2 bg-white p-5 text-left shadow-sm transition {activeTab === 'rosters'
+				? 'border-emerald-500 bg-emerald-50/20 ring-2 ring-emerald-500/20'
+				: 'border-slate-100 hover:border-emerald-300'}"
+		>
+			<div class="mb-3 flex items-center justify-between">
+				<span class="rounded-lg bg-emerald-50 px-2 py-0.5 text-[11px] font-black text-emerald-700">2단계 · 로번 생성</span>
+				<div class="flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600">
+					<Icon icon="ph:calendar-check-bold" class="text-2xl" />
+				</div>
+			</div>
+			<div class="text-3xl font-black text-slate-900">
+				{loading ? '...' : routeMasters.length}
+				<span class="ml-1 text-sm font-bold text-slate-400">개 이력 버전</span>
+			</div>
+			<p class="mt-2 text-[11px] font-bold text-slate-500">날짜별 과거·현재·미래 Append-Only</p>
+		</button>
+
+		<button
+			type="button"
+			onclick={() => (activeTab = 'segments')}
+			class="group rounded-[1.75rem] border-2 bg-white p-5 text-left shadow-sm transition {activeTab === 'segments'
+				? 'border-amber-500 bg-amber-50/20 ring-2 ring-amber-500/20'
+				: 'border-slate-100 hover:border-amber-300'}"
+		>
+			<div class="mb-3 flex items-center justify-between">
+				<span class="rounded-lg bg-amber-50 px-2 py-0.5 text-[11px] font-black text-amber-700">3단계 · 구간 시간</span>
+				<div class="flex h-10 w-10 items-center justify-center rounded-2xl bg-amber-50 text-amber-600">
+					<Icon icon="ph:timer-bold" class="text-2xl" />
+				</div>
+			</div>
+			<div class="text-3xl font-black text-slate-900">
+				{loading ? '...' : allSegments.length}
+				<span class="ml-1 text-sm font-bold text-slate-400">개 등록 구간</span>
+			</div>
+			<p class="mt-2 text-[11px] font-bold text-slate-500">노선별 정류장 구간 및 소요시간</p>
+		</button>
+	</section>
+
+	<!-- 3. 3단계 탭 네비게이션 -->
+	<nav class="flex gap-2 overflow-x-auto border-b-2 border-slate-200 no-scrollbar">
+		<button
+			type="button"
+			onclick={() => (activeTab = 'routes')}
+			class="whitespace-nowrap px-6 py-3.5 text-xs font-black tracking-wide transition-all {activeTab === 'routes'
+				? 'rounded-t-2xl border-b-4 border-blue-600 bg-blue-50/60 text-blue-700'
+				: 'text-slate-400 hover:text-slate-700'}"
+		>
+			1. 노선 정의 ({uniqueRoutes.length})
+		</button>
+		<button
+			type="button"
+			onclick={() => (activeTab = 'rosters')}
+			class="whitespace-nowrap px-6 py-3.5 text-xs font-black tracking-wide transition-all {activeTab === 'rosters'
+				? 'rounded-t-2xl border-b-4 border-emerald-600 bg-emerald-50/60 text-emerald-700'
+				: 'text-slate-400 hover:text-slate-700'}"
+		>
+			2. 로번 생성 · 날짜별 이력 ({routeMasters.length})
+		</button>
+		<button
+			type="button"
+			onclick={() => (activeTab = 'segments')}
+			class="whitespace-nowrap px-6 py-3.5 text-xs font-black tracking-wide transition-all {activeTab === 'segments'
+				? 'rounded-t-2xl border-b-4 border-amber-600 bg-amber-50/60 text-amber-800'
+				: 'text-slate-400 hover:text-slate-700'}"
+		>
+			3. 구간 시간 입력 ({allSegments.length})
+		</button>
+	</nav>
+
+	<!-- 4. 탭 본문 -->
+	{#if loading}
+		<div class="flex justify-center py-20">
+			<div class="h-10 w-10 animate-spin rounded-full border-4 border-blue-600 border-t-transparent"></div>
+		</div>
+	{:else if activeTab === 'routes'}
+		<!-- [탭 1] 노선 정의 -->
+		<div class="space-y-4">
+			<div class="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-4">
+				<div class="flex flex-wrap items-center gap-2">
+					<input
+						type="text"
+						bind:value={routeSearch}
+						placeholder="노선명 검색..."
+						class="rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2 text-xs font-bold focus:border-blue-500 focus:bg-white focus:outline-none"
+					/>
+					<select
+						bind:value={filterType}
+						class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700"
+					>
+						<option value="ALL">전체 유형</option>
+						<option value="REGULAR">정규 노선</option>
+						<option value="TEMPORARY">임시 노선</option>
+					</select>
+				</div>
+				<button
+					type="button"
+					onclick={() => openRouteModal()}
+					class="inline-flex items-center gap-1.5 rounded-2xl bg-blue-600 px-5 py-2.5 text-xs font-black text-white shadow-sm hover:bg-blue-700"
+				>
+					<Icon icon="ph:plus-bold" />
+					<span>새 노선 정의</span>
+				</button>
+			</div>
+
+			<div class="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
+				{#each filteredRoutes as r (r.route_name)}
+					<div class="flex flex-col justify-between rounded-2xl border-2 border-slate-200 bg-white p-6 shadow-sm transition hover:border-blue-400">
+						<div>
+							<div class="mb-3 flex items-start justify-between">
+								<span class="rounded-lg border px-2.5 py-0.5 text-[10px] font-black {r.route_type === 'REGULAR'
+									? 'border-blue-200 bg-blue-50 text-blue-700'
+									: 'border-amber-200 bg-amber-50 text-amber-700'}">
+									{r.route_type === 'REGULAR' ? '정규노선' : '임시노선'}
+								</span>
+								<button
+									type="button"
+									onclick={() => openRouteModal(r)}
+									class="rounded-lg px-2.5 py-1 text-xs font-bold text-blue-600 hover:bg-blue-50"
+								>
+									수정
+								</button>
+							</div>
+							<h3 class="text-2xl font-black tracking-tight text-slate-900">{r.route_name}</h3>
+							<div class="mt-3 flex flex-wrap gap-2 text-xs font-bold text-slate-500">
+								<span class="rounded-lg bg-slate-100 px-2.5 py-1">현재 차량 {r.active_version?.vehicle_count || 0}대</span>
+								<span class="rounded-lg bg-emerald-50 px-2.5 py-1 text-emerald-700">로번 이력 {r.version_count}건</span>
+								<span class="rounded-lg bg-amber-50 px-2.5 py-1 text-amber-700">구간 {r.segment_count}개</span>
+							</div>
+						</div>
+						<div class="mt-5 flex items-center justify-between border-t border-slate-100 pt-4 text-xs font-black">
+							<button
+								type="button"
+								onclick={() => {
+									selectedRouteName = r.route_name;
+									activeTab = 'rosters';
+								}}
+								class="text-emerald-600 hover:underline"
+							>
+								로번 이력 관리 →
+							</button>
+							<button
+								type="button"
+								onclick={() => {
+									selectedRouteName = r.route_name;
+									activeTab = 'segments';
+								}}
+								class="text-amber-600 hover:underline"
+							>
+								구간 시간 입력 →
+							</button>
+						</div>
 					</div>
-				{:else if error}
-					<div class="rounded-3xl border-2 border-red-500 bg-red-50 p-6 text-center text-red-700">
-						<Icon icon="mdi:alert-octagon-outline" class="mx-auto h-12 w-12 text-red-500" />
-						<p class="mt-3 text-sm font-black">{error}</p>
-						<button onclick={loadRouteMasters} class="mt-4 rounded-xl bg-red-600 px-4 py-2 text-xs font-black text-white">재시도</button>
+				{/each}
+			</div>
+		</div>
+	{:else if activeTab === 'rosters'}
+		<!-- [탭 2] 로번 생성 (Append-Only 날짜별 과거·현재·미래 이력) -->
+		<div class="space-y-5">
+			<div class="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-4">
+				<div class="flex flex-wrap items-center gap-2.5">
+					<label for="roster-route-select" class="text-xs font-black text-slate-700">대상 노선:</label>
+					<select
+						id="roster-route-select"
+						bind:value={selectedRouteName}
+						class="rounded-xl border-2 border-slate-200 bg-white px-3.5 py-2 text-xs font-black text-slate-900"
+					>
+						{#each uniqueRoutes as r}
+							<option value={r.route_name}>{r.route_name} ({r.version_count}개 버전)</option>
+						{/each}
+					</select>
+
+					<div class="flex items-center gap-1 rounded-xl border border-slate-200 bg-slate-50 p-1">
+						{#each [['ALL', '전체'], ['PAST', '과거'], ['ACTIVE', '현재'], ['FUTURE', '미래']] as [val, label]}
+							<button
+								type="button"
+								onclick={() => (rosterScopeFilter = /** @type {any} */ (val))}
+								class="rounded-lg px-2.5 py-1 text-[11px] font-black transition {rosterScopeFilter === val
+									? 'bg-emerald-600 text-white'
+									: 'text-slate-600 hover:bg-white'}"
+							>
+								{label}
+							</button>
+						{/each}
 					</div>
-				{:else if filteredMasters.length === 0}
-					<div class="rounded-3xl border-2 border-dashed border-slate-300 bg-slate-50 py-16 text-center text-slate-400">
-						<Icon icon="mdi:bus-alert" class="mx-auto h-12 w-12 text-slate-300" />
-						<p class="mt-3 text-xs font-bold">조건에 부합하는 노선 정보가 없습니다.</p>
+
+					<input
+						type="date"
+						bind:value={rosterDateFilter}
+						title="특정 날짜 기준 적용 로번 필터"
+						class="rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-bold text-slate-700"
+					/>
+					{#if rosterDateFilter}
+						<button type="button" onclick={() => (rosterDateFilter = '')} class="text-xs font-bold text-rose-500 hover:underline">
+							날짜 초기화
+						</button>
+					{/if}
+				</div>
+
+				<button
+					type="button"
+					onclick={() => openAppendRoster()}
+					class="inline-flex items-center gap-1.5 rounded-2xl bg-emerald-600 px-5 py-2.5 text-xs font-black text-white shadow-sm hover:bg-emerald-700"
+				>
+					<Icon icon="ph:plus-bold" />
+					<span>새 로번 버전 추가 (Append-Only)</span>
+				</button>
+			</div>
+
+			{#if showAppendForm}
+				<div class="space-y-4 rounded-3xl border-2 border-emerald-300 bg-white p-6 shadow-md">
+					<div class="flex items-center justify-between border-b border-slate-100 pb-3">
+						<div>
+							<h3 class="text-base font-black text-slate-900">[{selectedRouteName}] 새 로번 버전 추가 (Append-Only)</h3>
+							<p class="text-[11px] text-slate-500">기존 과거·미래 버전은 삭제되지 않으며, 겹치는 직전 버전의 종료일이 시작일 전날로 자동 마감됩니다.</p>
+						</div>
+						<button type="button" onclick={() => (showAppendForm = false)} class="text-xs font-bold text-slate-400 hover:text-slate-700">
+							닫기
+						</button>
+					</div>
+
+					<div class="grid grid-cols-1 gap-4 sm:grid-cols-5">
+						<div>
+							<label for="app-start-date" class="mb-1 block text-[11px] font-black text-slate-700">적용 시작일 *</label>
+							<input id="app-start-date" type="date" bind:value={appendForm.start_date} class="w-full rounded-xl border-2 border-slate-200 px-3 py-2 text-xs font-bold" />
+						</div>
+						<div>
+							<label for="app-end-date" class="mb-1 block text-[11px] font-black text-slate-700">적용 종료일 (선택)</label>
+							<input id="app-end-date" type="date" bind:value={appendForm.end_date} class="w-full rounded-xl border-2 border-slate-200 px-3 py-2 text-xs font-bold" />
+						</div>
+						<div>
+							<label for="app-vehicle-count" class="mb-1 block text-[11px] font-black text-slate-700">배차 로번 수</label>
+							<input id="app-vehicle-count" type="number" min="1" max="50" bind:value={appendForm.vehicle_count} class="w-full rounded-xl border-2 border-slate-200 px-3 py-2 text-xs font-bold" />
+						</div>
+						<div>
+							<label for="app-version" class="mb-1 block text-[11px] font-black text-slate-700">버전명 (비우면 자동)</label>
+							<input id="app-version" type="text" bind:value={appendForm.version} placeholder="예: v2, 2026-하계" class="w-full rounded-xl border-2 border-slate-200 px-3 py-2 text-xs font-bold" />
+						</div>
+						<div class="flex items-end pb-2">
+							<label class="inline-flex cursor-pointer items-center gap-2 text-xs font-bold text-slate-700">
+								<input type="checkbox" bind:checked={appendForm.is_regular_duty} class="h-4 w-4 rounded border-slate-300 text-emerald-600" />
+								<span>당연 근무</span>
+							</label>
+						</div>
+					</div>
+
+					<div class="overflow-x-auto rounded-2xl border border-slate-200">
+						<table class="w-full text-left text-xs">
+							<thead class="border-b border-slate-200 bg-slate-50 text-[11px] font-black text-slate-500">
+								<tr>
+									<th class="px-3 py-2.5">로번</th>
+									<th class="px-3 py-2.5">시작(24H)</th>
+									<th class="px-3 py-2.5">종료(24H)</th>
+									<th class="px-3 py-2.5">기점</th>
+									<th class="px-3 py-2.5">종점</th>
+									<th class="px-3 py-2.5">출고/입고 차고지</th>
+									<th class="px-3 py-2.5 text-center">당연 근무</th>
+								</tr>
+							</thead>
+							<tbody class="divide-y divide-slate-100">
+								{#each appendTimetables as row, idx}
+									<tr>
+										<td class="px-3 py-2 font-black text-slate-800">{idx + 1}로번</td>
+										<td class="px-3 py-2">
+											<input
+												type="text"
+												value={row.start_time}
+												oninput={(e) => (row.start_time = format24hTime(e.currentTarget.value))}
+												class="w-20 rounded-lg border border-slate-200 px-2 py-1 font-mono text-xs font-bold"
+											/>
+										</td>
+										<td class="px-3 py-2">
+											<input
+												type="text"
+												value={row.end_time}
+												oninput={(e) => (row.end_time = format24hTime(e.currentTarget.value))}
+												class="w-20 rounded-lg border border-slate-200 px-2 py-1 font-mono text-xs font-bold"
+											/>
+										</td>
+										<td class="px-3 py-2">
+											<input type="text" bind:value={row.start_location} class="w-28 rounded-lg border border-slate-200 px-2 py-1 text-xs" />
+										</td>
+										<td class="px-3 py-2">
+											<input type="text" bind:value={row.end_location} class="w-28 rounded-lg border border-slate-200 px-2 py-1 text-xs" />
+										</td>
+										<td class="px-3 py-2 flex gap-1">
+											<input type="text" bind:value={row.start_garage} placeholder="출고" class="w-16 rounded-lg border border-slate-200 px-2 py-1 text-xs" />
+											<input type="text" bind:value={row.end_garage} placeholder="입고" class="w-16 rounded-lg border border-slate-200 px-2 py-1 text-xs" />
+										</td>
+										<td class="px-3 py-2 text-center">
+											<input
+												type="checkbox"
+												bind:checked={row.is_regular_duty}
+												class="h-4 w-4 rounded border-slate-300 text-emerald-600"
+												aria-label={`${idx + 1}로번 당연 근무`}
+											/>
+										</td>
+									</tr>
+								{/each}
+							</tbody>
+						</table>
+					</div>
+
+					<div class="flex justify-end gap-2">
+						<button type="button" onclick={() => (showAppendForm = false)} class="rounded-xl border border-slate-200 px-4 py-2 text-xs font-bold text-slate-600">
+							취소
+						</button>
+						<button
+							type="button"
+							disabled={appending}
+							onclick={handleAppendRoster}
+							class="rounded-xl bg-emerald-600 px-5 py-2 text-xs font-black text-white hover:bg-emerald-700 disabled:opacity-50"
+						>
+							{appending ? '저장 중...' : 'Append-Only 로번 등록'}
+						</button>
+					</div>
+				</div>
+			{/if}
+
+			<!-- 날짜별 이력 타임라인 -->
+			<div class="space-y-3">
+				{#if selectedRouteVersions.length === 0}
+					<div class="rounded-2xl border-2 border-dashed border-slate-200 bg-white py-12 text-center text-xs font-bold text-slate-400">
+						조건에 해당하는 로번 이력이 없습니다.
 					</div>
 				{:else}
-					{#each filteredMasters as master (master.id)}
-						<button 
-							onclick={() => {
-								if (pageMode === 'VIEW') {
-									selectedId = master.id;
-								} else {
-									if (confirm('⚠️ 다른 노선 선택 시 작성 중인 스케줄 폼의 내용이 유실됩니다. 계속하시겠습니까?')) {
-										selectedId = master.id;
-										pageMode = 'VIEW';
-									}
-								}
-							}}
-							class="w-full text-left transition-all duration-300 hover:-translate-y-0.5 active:scale-98"
-						>
-							<span class="block relative overflow-hidden rounded-3xl border-2 p-5 shadow-sm transition-all duration-300 {selectedId === master.id ? 'border-indigo-600 bg-indigo-50/55 shadow-md ring-2 ring-indigo-400/30' : 'border-slate-200 bg-white hover:border-slate-400'}">
-								<span class="flex items-center justify-between mb-3">
-									{#if master.route_type === 'REGULAR'}
-										<span class="inline-flex items-center gap-1.5 rounded-full bg-blue-100 px-3 py-1 text-[10px] font-black tracking-tight text-blue-800">
-											<span class="h-2 w-2 rounded-full bg-blue-500 animate-pulse"></span>
-											정규노선
-										</span>
-									{:else}
-										<span class="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-3 py-1 text-[10px] font-black tracking-tight text-amber-800">
-											<span class="h-2 w-2 rounded-full bg-amber-500"></span>
-											임시노선
-										</span>
-									{/if}
-									
-									<span class="inline-flex items-center gap-1 rounded-md bg-slate-900 px-2 py-0.5 text-[10px] font-bold text-white tracking-widest uppercase">
-										{master.version}
+					{#each selectedRouteVersions as v (v.id)}
+						{@const badge = getVersionBadge(v)}
+						<div class="rounded-2xl border-2 border-slate-200 bg-white p-5 shadow-xs">
+							<div class="flex flex-wrap items-center justify-between gap-3">
+								<div class="flex flex-wrap items-center gap-2.5">
+									<span class="rounded-lg border px-2.5 py-0.5 text-[11px] font-black {badge.cls}">{badge.label}</span>
+									<span class="font-mono text-sm font-black text-slate-900">{v.version}</span>
+									<span class="text-xs font-bold text-slate-600">
+										{v.start_date} ~ {v.end_date || '진행중 (종료일 없음)'}
 									</span>
-								</span>
+									<span class="rounded-lg bg-slate-100 px-2 py-0.5 text-[11px] font-bold text-slate-600">
+										로번 {v.vehicle_count}대 ({v.timetables?.length || 0}행)
+									</span>
+								</div>
+								<div class="flex items-center gap-2">
+									<button
+										type="button"
+										onclick={() => (inspectingVersionId = inspectingVersionId === v.id ? null : v.id)}
+										class="rounded-lg border border-slate-200 px-3 py-1 text-xs font-bold text-slate-700 hover:bg-slate-50"
+									>
+										{inspectingVersionId === v.id ? '시간표 접기' : '시간표 보기'}
+									</button>
+									<button
+										type="button"
+										onclick={() => openAppendRoster(v)}
+										class="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700 hover:bg-emerald-100"
+									>
+										이 버전 복사 → 새 버전
+									</button>
+									<button
+										type="button"
+										onclick={() => handleDeleteRosterVersion(v.id)}
+										class="rounded-lg px-2.5 py-1 text-xs font-bold text-rose-500 hover:bg-rose-50"
+									>
+										삭제
+									</button>
+								</div>
+							</div>
 
-								<span class="block text-xl font-black tracking-tight text-slate-900">
-									{master.route_name}
-								</span>
-
-								<span class="mt-4 flex items-center justify-between border-t border-slate-100 pt-3 text-xs">
-									<span class="flex items-center gap-1 text-slate-500 font-bold">
-										<Icon icon="mdi:calendar-range" class="h-4 w-4 text-slate-400" />
-										<span>{master.start_date.slice(5)}</span>
-										<span>~</span>
-										<span>{master.end_date ? master.end_date.slice(5) : '진행중'}</span>
-									</span>
-									
-									<span class="flex items-center gap-2">
-										<span class="font-extrabold text-indigo-600 bg-indigo-100/50 px-2 py-0.5 rounded-lg text-[11px]">
-											로번 {master.vehicle_count}개
-										</span>
-									</span>
-								</span>
-							</span>
-						</button>
+							{#if inspectingVersionId === v.id}
+								<div class="mt-4 overflow-x-auto rounded-xl border border-slate-200">
+									<table class="w-full text-left text-xs">
+										<thead class="border-b border-slate-200 bg-slate-50 text-[11px] font-black text-slate-500">
+											<tr>
+												<th class="px-3 py-2">순번</th>
+												<th class="px-3 py-2">운행 시간</th>
+												<th class="px-3 py-2">기점 → 종점</th>
+												<th class="px-3 py-2">차고지 (출고/입고)</th>
+												<th class="px-3 py-2 text-center">당연 근무</th>
+											</tr>
+										</thead>
+										<tbody class="divide-y divide-slate-100">
+											{#each v.timetables || [] as tt}
+												<tr>
+													<td class="px-3 py-2 font-black">{tt.seq}로번</td>
+													<td class="px-3 py-2 font-mono font-bold text-blue-700">{tt.start_time} ~ {tt.end_time}</td>
+													<td class="px-3 py-2">{tt.start_location} → {tt.end_location}</td>
+													<td class="px-3 py-2 text-slate-500">{tt.start_garage || '-'} / {tt.end_garage || '-'}</td>
+													<td class="px-3 py-2 text-center">
+														{#if tt.is_regular_duty}
+															<span class="rounded-md bg-emerald-50 border border-emerald-200 px-2 py-0.5 text-[10px] font-black text-emerald-700">당연 근무</span>
+														{:else}
+															<span class="text-[10px] font-bold text-slate-400">일반</span>
+														{/if}
+													</td>
+												</tr>
+											{/each}
+										</tbody>
+									</table>
+								</div>
+							{/if}
+						</div>
 					{/each}
 				{/if}
 			</div>
 		</div>
+	{:else}
+		<!-- [탭 3] 구간 시간 입력 -->
+		<div class="space-y-4">
+			<div class="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-4">
+				<div class="flex flex-wrap items-center gap-3">
+					<label for="seg-route-select" class="text-xs font-black text-slate-700">대상 노선:</label>
+					<select
+						id="seg-route-select"
+						bind:value={selectedRouteName}
+						class="rounded-xl border-2 border-slate-200 bg-white px-3.5 py-2 text-xs font-black text-slate-900"
+					>
+						{#each uniqueRoutes as r}
+							<option value={r.route_name}>{r.route_name}</option>
+						{/each}
+					</select>
+					<span class="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-black text-amber-800">
+						총 소요시간: {totalSegmentMinutes}분 ({Math.floor(totalSegmentMinutes / 60)}시간 {totalSegmentMinutes % 60}분)
+					</span>
+				</div>
+				<div class="flex items-center gap-2">
+					<button
+						type="button"
+						onclick={addSegmentRow}
+						class="inline-flex items-center gap-1.5 rounded-xl border-2 border-slate-300 bg-white px-4 py-2 text-xs font-black text-slate-700 hover:bg-slate-50"
+					>
+						<Icon icon="ph:plus-bold" />
+						<span>구간 추가</span>
+					</button>
+					<button
+						type="button"
+						disabled={savingSegments}
+						onclick={handleSaveSegments}
+						class="inline-flex items-center gap-1.5 rounded-xl bg-amber-600 px-5 py-2 text-xs font-black text-white shadow-sm hover:bg-amber-700 disabled:opacity-50"
+					>
+						<Icon icon="ph:floppy-disk-bold" />
+						<span>{savingSegments ? '저장 중...' : '구간 시간 저장'}</span>
+					</button>
+				</div>
+			</div>
 
-		<!-- ========================================== -->
-		<!-- 🖥️ RIGHT: 디테일뷰 및 동적 로번 스케줄 동기화 폼 (8 cols) -->
-		<!-- ========================================== -->
-		<div class="lg:col-span-8">
-			
-			<!-- ========================================== -->
-			<!-- [A] VIEW MODE: 노선 정보 및 로번별 근무시간 타임라인 -->
-			<!-- ========================================== -->
-			{#if pageMode === 'VIEW'}
-				{#if selectedRoute}
-					<div class="flex flex-col gap-6 rounded-3xl border-3 border-slate-900 bg-white p-6 shadow-[6px_6px_0px_0px_rgba(15,23,42,1)] md:p-8">
-						
-						<div class="flex flex-col justify-between gap-4 border-b border-slate-200 pb-5 md:flex-row md:items-center">
-							<div class="space-y-1">
-								<div class="flex items-center gap-3">
-									<span class="text-xs font-black tracking-wider text-slate-400 uppercase">Selected Master Route</span>
-									{#if selectedRoute.route_type === 'REGULAR'}
-										<span class="rounded bg-blue-100 px-2 py-0.5 text-[10px] font-black text-blue-800 uppercase">REGULAR</span>
-									{:else}
-										<span class="rounded bg-amber-100 px-2 py-0.5 text-[10px] font-black text-amber-800 uppercase">TEMPORARY</span>
-									{/if}
-								</div>
-								
-								<h2 class="text-3xl font-black tracking-tight text-slate-900">
-									{selectedRoute.route_name} <span class="text-indigo-600 font-extrabold text-2xl">{selectedRoute.version}</span>
-								</h2>
-							</div>
-
-							<div class="flex gap-2">
-								<button onclick={enterEditMode} class="btn rounded-xl border-none bg-indigo-50 px-4 font-black text-indigo-700 shadow-sm transition-all hover:bg-indigo-100 btn-md md:px-5">
-									<Icon icon="mdi:pencil-outline" class="h-4.5 w-4.5" />
-									로번 수/근무시간 수정
-								</button>
-								<button onclick={deleteRoute} class="btn rounded-xl border-none bg-red-50 px-4 font-black text-red-600 shadow-sm transition-all hover:bg-red-100 btn-md md:px-5">
-									<Icon icon="mdi:trash-can-outline" class="h-4.5 w-4.5" />
-									삭제
-								</button>
-							</div>
-						</div>
-
-						<div class="grid grid-cols-2 gap-4 rounded-2xl bg-slate-50 p-5 md:grid-cols-4 md:gap-6">
-							<div class="space-y-1">
-								<span class="text-[10px] font-black text-slate-400 uppercase">노선 형태</span>
-								<p class="text-base font-extrabold text-slate-800">
-									{selectedRoute.route_type === 'REGULAR' ? '정규 고정 배차' : '임시 특별 편성'}
-								</p>
-							</div>
-							<div class="space-y-1">
-								<span class="text-[10px] font-black text-slate-400 uppercase">버전 식별</span>
-								<p class="text-base font-extrabold text-indigo-600">{selectedRoute.version}</p>
-							</div>
-							<div class="space-y-1">
-								<span class="text-[10px] font-black text-slate-400 uppercase">배정 로번 수</span>
-								<p class="text-base font-extrabold text-indigo-600 font-black">{selectedRoute.vehicle_count} 개</p>
-							</div>
-							<div class="space-y-1">
-								<span class="text-[10px] font-black text-slate-400 uppercase">유효 가동구간</span>
-								<p class="text-xs font-black text-slate-700 leading-tight">
-									{selectedRoute.start_date}<br/>
-									<span class="text-slate-400">~ {selectedRoute.end_date || '종료기한 없음'}</span>
-								</p>
-							</div>
-						</div>
-
-						<!-- 로번별 일일 가동 시간표 목록 -->
-						<div class="space-y-5">
-							<div class="flex flex-col gap-1">
-								<h3 class="text-lg font-black tracking-tight text-slate-900">
-									📋 로번별 일일 운행 시간표 <span class="text-indigo-600 font-black">({selectedRoute.timetables.length}개 가동)</span>
-								</h3>
-								<p class="text-xs font-bold text-slate-400">배정된 로번 수({selectedRoute.vehicle_count}개)만큼 각 로번별 24H 기준 근무시간 및 요약 기종점 정보가 나타납니다.</p>
-							</div>
-
-							{#if selectedRoute.timetables.length === 0}
-								<div class="rounded-2xl border-2 border-dashed border-slate-200 py-12 text-center text-slate-400">
-									<Icon icon="mdi:clock-alert-outline" class="mx-auto h-10 w-12 text-slate-300" />
-									<p class="mt-2 text-xs font-bold">등록된 로번별 운행 일정 및 기종점이 비어있습니다.</p>
-								</div>
-							{:else}
-								<div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-									{#each selectedRoute.timetables as tt (tt.id)}
-										<div class="group relative overflow-hidden rounded-3xl border-2 border-slate-100 bg-white p-5 shadow-sm transition-all duration-300 hover:border-indigo-400 hover:shadow-md">
-											<div class="absolute right-0 top-0 h-16 w-16 bg-slate-50 text-slate-200 transition-all group-hover:bg-indigo-50/50 group-hover:text-indigo-200 flex items-center justify-center rounded-bl-3xl">
-												<Icon icon="mdi:bus" class="h-7 w-7" />
-											</div>
-
-											<div class="flex items-center gap-2">
-												<span class="text-[10px] font-black tracking-widest text-indigo-600 uppercase">VEHICLE SCHEDULE (24H)</span>
-											</div>
-											<h4 class="mt-1 text-lg font-black text-slate-900">
-												{tt.seq}로번
-											</h4>
-
-											<!-- 근무 시간 정보 (24시간제로 깔끔하게 렌더링) -->
-											<div class="mt-4 flex items-center gap-2">
-												<span class="rounded-md bg-indigo-600 px-2 py-0.5 text-[9px] font-bold text-white tracking-wider uppercase">24H 운행</span>
-												<p class="text-base font-black text-slate-800">
-													{tt.start_time} ~ {tt.end_time}
-												</p>
-											</div>
-
-											<!-- 기종점 및 요약 정보 + 당연 근무 스위치 통합 배치 (종점 바로 우측 밀착 배치) -->
-											<div class="mt-3 flex items-center justify-between gap-3">
-												<div class="flex flex-1 items-center justify-between rounded-xl bg-slate-50 px-3.5 py-2.5 text-xs font-bold text-slate-600">
-													<div class="flex items-center gap-1 font-black text-slate-800">
-														<Icon icon="mdi:map-marker-outline" class="h-4 w-4 text-indigo-500" />
-														<span>{tt.start_location}</span>
-													</div>
-													<Icon icon="mdi:arrow-right-thin" class="h-4 w-4 text-slate-400" />
-													<div class="flex items-center gap-1 font-black text-slate-800">
-														<Icon icon="mdi:map-marker-check" class="h-4 w-4 text-emerald-500" />
-														<span>{tt.end_location}</span>
-													</div>
-												</div>
-												
-												<!-- 당연 근무 스위치 (도착 종점 위치 바로 오른쪽에 밀착 배치) -->
-												<div class="flex flex-col items-center justify-center shrink-0">
-													<button 
-														type="button" 
-														onclick={() => toggleTimetableRegularDuty(tt, tt.is_regular_duty)}
-														class="relative inline-flex h-6.5 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none {tt.is_regular_duty ? 'bg-indigo-600' : 'bg-slate-300'}"
-														title="당연 근무 여부 토글"
-													>
-														<span 
-															class="pointer-events-none inline-block h-4.5 w-4.5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out {tt.is_regular_duty ? 'translate-x-4.5' : 'translate-x-0'}"
-														></span>
-													</button>
-													<span class="text-[8px] font-black mt-0.5 {tt.is_regular_duty ? 'text-indigo-600' : 'text-slate-400'}">당연근무</span>
-												</div>
-											</div>
-										</div>
-									{/each}
-								</div>
-							{/if}
-						</div>
+			<div class="overflow-x-auto rounded-2xl border-2 border-slate-200 bg-white">
+				{#if segmentRows.length === 0}
+					<div class="py-12 text-center text-xs font-bold text-slate-400">
+						등록된 구간이 없습니다. `구간 추가` 버튼을 눌러 노선의 구간별 소요시간을 입력하세요.
 					</div>
 				{:else}
-					<div class="flex flex-col items-center justify-center rounded-3xl border-3 border-slate-900 bg-white py-36 px-6 text-center shadow-[6px_6px_0px_0px_rgba(15,23,42,1)]">
-						<div class="relative mb-6">
-							<div class="absolute inset-0 rounded-full bg-indigo-100 animate-ping opacity-75"></div>
-							<div class="relative flex h-20 w-20 items-center justify-center rounded-full bg-indigo-50 text-indigo-600">
-								<Icon icon="mdi:bus-marker" class="h-10 w-10 animate-bounce" />
-							</div>
+					<table class="w-full text-left text-xs">
+						<thead class="border-b border-slate-200 bg-slate-50 text-[11px] font-black text-slate-500">
+							<tr>
+								<th class="px-4 py-3">순번</th>
+								<th class="px-4 py-3">구간명</th>
+								<th class="px-4 py-3">출발 정류장</th>
+								<th class="px-4 py-3">도착 정류장</th>
+								<th class="px-4 py-3">소요시간 (분)</th>
+								<th class="px-4 py-3">거리 (km)</th>
+								<th class="px-4 py-3">비고</th>
+								<th class="px-4 py-3 text-right">관리</th>
+							</tr>
+						</thead>
+						<tbody class="divide-y divide-slate-100">
+							{#each segmentRows as seg, idx}
+								<tr>
+									<td class="px-4 py-2.5 font-black text-slate-800">{idx + 1}</td>
+									<td class="px-4 py-2.5">
+										<input type="text" bind:value={seg.segment_name} placeholder="예: 터미널 → 연동" class="w-40 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-bold" />
+									</td>
+									<td class="px-4 py-2.5">
+										<input type="text" bind:value={seg.start_stop} placeholder="출발지" class="w-28 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs" />
+									</td>
+									<td class="px-4 py-2.5">
+										<input type="text" bind:value={seg.end_stop} placeholder="도착지" class="w-28 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs" />
+									</td>
+									<td class="px-4 py-2.5">
+										<input type="number" min="0" bind:value={seg.duration_min} class="w-20 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-black text-amber-700" />
+									</td>
+									<td class="px-4 py-2.5">
+										<input type="text" bind:value={seg.distance_km} placeholder="예: 4.5" class="w-20 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs" />
+									</td>
+									<td class="px-4 py-2.5">
+										<input type="text" bind:value={seg.memo} placeholder="메모" class="w-32 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs" />
+									</td>
+									<td class="px-4 py-2.5 text-right space-x-1">
+										<button type="button" disabled={idx === 0} onclick={() => moveSegmentRow(idx, -1)} class="rounded border border-slate-200 px-1.5 py-1 text-[10px] font-black disabled:opacity-30">▲</button>
+										<button type="button" disabled={idx === segmentRows.length - 1} onclick={() => moveSegmentRow(idx, 1)} class="rounded border border-slate-200 px-1.5 py-1 text-[10px] font-black disabled:opacity-30">▼</button>
+										<button type="button" onclick={() => removeSegmentRow(idx)} class="px-2 py-1 font-bold text-rose-500 hover:underline">삭제</button>
+									</td>
+								</tr>
+							{/each}
+						</tbody>
+					</table>
+				{/if}
+			</div>
+		</div>
+	{/if}
+</div>
+
+<!-- 1단계 노선 정의 생성/수정 모달 -->
+{#if showRouteModal}
+	<!-- svelte-ignore a11y_click_events_have_key_events -->
+	<!-- svelte-ignore a11y_no_static_element_interactions -->
+	<div onclick={() => (showRouteModal = false)} class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+		<div onclick={(e) => e.stopPropagation()} class="w-full max-w-md rounded-3xl border-2 border-slate-200 bg-white p-6 shadow-2xl space-y-4">
+			<h3 class="text-lg font-black text-slate-900">1단계 · 노선 정의 {editingRouteMasterId ? '수정' : '등록'}</h3>
+			<div class="space-y-3">
+				<div>
+					<label for="rm-name" class="mb-1 block text-xs font-black text-slate-700">노선명 *</label>
+					<input id="rm-name" type="text" bind:value={routeForm.route_name} placeholder="예: 121/122" class="w-full rounded-xl border-2 border-slate-200 px-3.5 py-2.5 text-xs font-bold" />
+				</div>
+				<div>
+					<label for="rm-type" class="mb-1 block text-xs font-black text-slate-700">노선 유형</label>
+					<select id="rm-type" bind:value={routeForm.route_type} class="w-full rounded-xl border-2 border-slate-200 px-3.5 py-2.5 text-xs font-bold">
+						<option value="REGULAR">정규 노선 (REGULAR)</option>
+						<option value="TEMPORARY">임시 노선 (TEMPORARY)</option>
+					</select>
+				</div>
+				{#if !editingRouteMasterId}
+					<div class="grid grid-cols-2 gap-3">
+						<div>
+							<label for="rm-start" class="mb-1 block text-xs font-black text-slate-700">초기 적용 시작일</label>
+							<input id="rm-start" type="date" bind:value={routeForm.start_date} class="w-full rounded-xl border-2 border-slate-200 px-3 py-2 text-xs font-bold" />
 						</div>
-						
-						<h3 class="text-2xl font-black tracking-tight text-slate-900">
-							선택된 노선이 존재하지 않습니다.
-						</h3>
-						<p class="mt-2.5 max-w-sm text-xs font-bold leading-relaxed text-slate-400">
-							왼쪽의 노선 목록에서 버전을 조회할 대상을 클릭해 주시거나, 상단의 '새 노선 등록' 단추를 활용해 시스템을 세팅해 주세요.
-						</p>
+						<div>
+							<label for="rm-veh" class="mb-1 block text-xs font-black text-slate-700">초기 로번 수</label>
+							<input id="rm-veh" type="number" min="1" bind:value={routeForm.vehicle_count} class="w-full rounded-xl border-2 border-slate-200 px-3 py-2 text-xs font-bold" />
+						</div>
 					</div>
 				{/if}
-			
-			<!-- ========================================== -->
-			<!-- [B] CREATE/EDIT MODE: 실시간 로번 수 연동 폼 빌더 -->
-			<!-- ========================================== -->
-			{:else}
-				<div class="flex flex-col gap-6 rounded-3xl border-3 border-slate-900 bg-white p-6 shadow-[6px_6px_0px_0px_rgba(15,23,42,1)] md:p-8">
-					
-					<div class="flex items-center justify-between border-b border-slate-200 pb-5">
-						<div>
-							<span class="text-xs font-black tracking-wider text-indigo-600 uppercase">
-								{pageMode === 'CREATE' ? 'New Fleet Scheduler' : 'Update Fleet Scheduler'}
-							</span>
-							<h2 class="text-2xl font-black tracking-tight text-slate-900">
-								{pageMode === 'CREATE' ? '새 노선 및 로번 스케줄 등록' : `[${formRouteName}] 로번 운행 관리`}
-							</h2>
-						</div>
-						
-						<div class="flex gap-1">
-							<button onclick={cancelForm} class="btn rounded-xl border-none bg-slate-100 px-4 font-black text-slate-500 transition-all hover:bg-slate-200 btn-sm md:btn-md">
-								취소
-							</button>
-							<button onclick={saveRoute} class="btn rounded-xl border-none bg-indigo-600 px-4 font-black text-white shadow-sm transition-all hover:bg-indigo-700 btn-sm md:btn-md md:px-6">
-								<Icon icon="mdi:content-save" class="h-4.5 w-4.5" />
-								{pageMode === 'CREATE' ? '신규 등록' : '저장'}
-							</button>
-						</div>
-					</div>
-
-					<!-- 섹션 1: 마스터 메타데이터 설정 (로번 수 제어 포함) -->
-					<div class="space-y-4">
-						<div class="flex items-center gap-1.5 text-base font-black text-slate-900">
-							<span class="flex h-5.5 w-5.5 items-center justify-center rounded-full bg-slate-900 text-xs text-white">1</span>
-							<span>노선 기준 메타데이터 설정</span>
-						</div>
-						
-						<div class="grid grid-cols-1 gap-4 md:grid-cols-2">
-							<div class="form-control w-full">
-								<label class="label py-1" for="routeNameInput">
-									<span class="label-text font-black text-slate-700 text-xs">노선명</span>
-								</label>
-								<input 
-									type="text" 
-									id="routeNameInput"
-									placeholder="예: 100번, 201번 등" 
-									bind:value={formRouteName}
-									class="input-bordered input w-full rounded-xl bg-slate-50 text-sm font-bold text-black border-2 border-slate-200 focus:border-indigo-500 focus:bg-white focus:outline-none"
-								/>
-							</div>
-
-							<div class="form-control w-full">
-								<label class="label py-1" for="routeVersionInput">
-									<span class="label-text font-black text-slate-700 text-xs">노선 버전식별값</span>
-								</label>
-								<input 
-									type="text" 
-									id="routeVersionInput"
-									placeholder="예: v1, v2" 
-									bind:value={formVersion}
-									class="input-bordered input w-full rounded-xl bg-slate-50 text-sm font-bold text-black border-2 border-slate-200 focus:border-indigo-500 focus:bg-white focus:outline-none"
-								/>
-							</div>
-
-							<!-- 중요: 로번 수가 변경되면 하단 2단계 로번 시간표 행이 실시간 자동 증감됩니다. -->
-							<div class="form-control w-full">
-								<label class="label py-1" for="vehicleCountInput">
-									<span class="label-text font-black text-indigo-600 text-xs">⚠️ 할당 배차 로번 수 (입력 시 스케줄 행 자동 연동)</span>
-								</label>
-								<input 
-									type="number" 
-									id="vehicleCountInput"
-									min="1"
-									bind:value={formVehicleCount}
-									class="input-bordered input w-full rounded-xl bg-slate-50 text-sm font-black text-indigo-600 border-2 border-indigo-500/40 focus:border-indigo-600 focus:bg-white focus:outline-none focus:ring-1 focus:ring-indigo-400"
-								/>
-							</div>
-
-							<div class="form-control w-full">
-								<label class="label py-1" for="routeTypeSelect">
-									<span class="label-text font-black text-slate-700 text-xs">노선 가동 종류</span>
-								</label>
-								<select 
-									id="routeTypeSelect"
-									bind:value={formRouteType}
-									class="select-bordered select w-full rounded-xl bg-slate-50 text-sm font-bold text-black border-2 border-slate-200 focus:border-indigo-500 focus:bg-white focus:outline-none"
-								>
-									<option value="REGULAR">REGULAR (정규노선)</option>
-									<option value="TEMPORARY">TEMPORARY (임시노선)</option>
-								</select>
-							</div>
-
-							<div class="form-control w-full">
-								<label class="label py-1" for="startDateInput">
-									<span class="label-text font-black text-slate-700 text-xs">시작 적용일자</span>
-								</label>
-								<input 
-									type="date" 
-									id="startDateInput"
-									bind:value={formStartDate}
-									class="input-bordered input w-full rounded-xl bg-slate-50 text-sm font-bold text-black border-2 border-slate-200 focus:border-indigo-500 focus:bg-white focus:outline-none"
-								/>
-							</div>
-
-							<div class="form-control w-full">
-								<label class="label py-1" for="endDateInput">
-									<span class="label-text font-black text-slate-700 text-xs">종료 예정일자 (선택)</span>
-								</label>
-								<input 
-									type="date" 
-									id="endDateInput"
-									bind:value={formEndDate}
-									class="input-bordered input w-full rounded-xl bg-slate-50 text-sm font-bold text-black border-2 border-slate-200 focus:border-indigo-500 focus:bg-white focus:outline-none"
-								/>
-							</div>
-						</div>
-					</div>
-
-					<!-- 섹션 2: 배정된 로번 수만큼 동적 동기화 출력되는 시간표 -->
-					<div class="mt-4 space-y-4">
-						<div class="flex items-center gap-1.5 border-t border-slate-100 pt-5 text-base font-black text-slate-900">
-							<span class="flex h-5.5 w-5.5 items-center justify-center rounded-full bg-slate-900 text-xs text-white">2</span>
-							<span>로번 수별 일일 근무 요약 시간표 설정 ({formVehicleCount}개 등록 중)</span>
-						</div>
-
-						<p class="text-xs font-bold text-slate-400">
-							* 위의 로번 수를 수정하면 아래의 시간표 줄 수가 동적으로 변경됩니다. 각 로번의 실질적인 하루 전체 가동 근무시간(시작/종료) 및 기종점 요약 정보를 입력해 주세요. (🕒 **시간은 24시간제(00:00~23:59)로 입력됩니다**)
-						</p>
-
-						<!-- 동기화 리스트 출력 영역 -->
-						<div class="space-y-3">
-							{#each formTimetables as timetable, index (index)}
-								<div class="flex flex-col gap-3 rounded-2xl border-2 border-slate-200 bg-slate-50/50 p-4 transition-all hover:border-slate-300 md:flex-row md:items-center">
-									
-									<div class="flex items-center gap-3 shrink-0 md:flex-col md:gap-1.5 md:w-24 text-center">
-										<div class="flex h-8 w-8 items-center justify-center rounded-full bg-slate-900 text-xs font-black text-white mx-auto">
-											{timetable.seq}
-										</div>
-										<span class="text-[11px] font-black text-slate-500 uppercase">로번</span>
-									</div>
-
-									<div class="grid grid-cols-2 gap-3.5 flex-1 md:grid-cols-5">
-										
-										<!-- 운행 시작 시간 (24H 한정 가이드) -->
-										<div class="form-control">
-											<label class="label py-0.5" for="startTimeInput-{index}">
-												<span class="label-text text-[10px] font-black text-indigo-600">출발 (24H 표기)</span>
-											</label>
-											<input 
-												type="text" 
-												id="startTimeInput-{index}"
-												value={timetable.start_time}
-												oninput={(e) => handleTimeInput(e, timetable, 'start_time')}
-												class="input-bordered input input-sm w-full rounded-lg bg-white text-xs font-bold text-black border-2 border-indigo-500/20 focus:outline-none focus:border-indigo-500"
-												placeholder="예: 08:30"
-												maxlength="5"
-											/>
-										</div>
-
-										<!-- 운행 종료 시간 (24H 한정 가이드) -->
-										<div class="form-control">
-											<label class="label py-0.5" for="endTimeInput-{index}">
-												<span class="label-text text-[10px] font-black text-indigo-600">종료 (24H 표기)</span>
-											</label>
-											<input 
-												type="text" 
-												id="endTimeInput-{index}"
-												value={timetable.end_time}
-												oninput={(e) => handleTimeInput(e, timetable, 'end_time')}
-												class="input-bordered input input-sm w-full rounded-lg bg-white text-xs font-bold text-black border-2 border-indigo-500/20 focus:outline-none focus:border-indigo-500"
-												placeholder="예: 20:00"
-												maxlength="5"
-											/>
-										</div>
-
-										<!-- 출발 기점 위치 -->
-										<div class="form-control">
-											<label class="label py-0.5" for="startLocInput-{index}">
-												<span class="label-text text-[10px] font-black text-slate-400">출발 기점 위치</span>
-											</label>
-											<input 
-												type="text" 
-												id="startLocInput-{index}"
-												placeholder="예: 제주공항"
-												bind:value={timetable.start_location}
-												class="input-bordered input input-sm w-full rounded-lg bg-white text-xs font-bold text-black border border-slate-200 focus:outline-none focus:border-indigo-500"
-											/>
-										</div>
-
-										<!-- 도착 종점 위치 -->
-										<div class="form-control">
-											<label class="label py-0.5" for="endLocInput-{index}">
-												<span class="label-text text-[10px] font-black text-slate-400">도착 종점 위치</span>
-											</label>
-											<input 
-												type="text" 
-												id="endLocInput-{index}"
-												placeholder="예: 성산포"
-												bind:value={timetable.end_location}
-												class="input-bordered input input-sm w-full rounded-lg bg-white text-xs font-bold text-black border border-slate-200 focus:outline-none focus:border-indigo-500"
-											/>
-										</div>
-
-										<!-- 당연 근무 토글 (도착 종점 위치 바로 오른쪽에 밀착 배치) -->
-										<div class="form-control flex flex-col items-center justify-center">
-											<label class="label py-0.5" for="isRegularDutyToggle-form-{index}">
-												<span class="label-text text-[10px] font-black text-indigo-600">당연 근무</span>
-											</label>
-											<button 
-												type="button" 
-												id="isRegularDutyToggle-form-{index}"
-												onclick={() => timetable.is_regular_duty = !timetable.is_regular_duty}
-												class="relative inline-flex h-7.5 w-13 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none {timetable.is_regular_duty ? 'bg-indigo-600' : 'bg-slate-300'}"
-											>
-												<span 
-													class="pointer-events-none inline-block h-5.5 w-5.5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out {timetable.is_regular_duty ? 'translate-x-5.5' : 'translate-x-0'}"
-												></span>
-											</button>
-										</div>
-
-									</div>
-								</div>
-							{/each}
-						</div>
-					</div>
-
-					<!-- 최종 하단 제어부 -->
-					<div class="flex items-center justify-end gap-2 border-t border-slate-100 pt-5">
-						<button onclick={cancelForm} type="button" class="btn rounded-xl border-none bg-slate-100 px-6 font-black text-slate-600 transition-all hover:bg-slate-200">
-							수정 취소
-						</button>
-						<button onclick={saveRoute} type="button" class="btn rounded-xl border-none bg-indigo-600 px-8 font-black text-white shadow-md transition-all hover:bg-indigo-700">
-							<Icon icon="mdi:check-circle" class="h-5 w-5" />
-							스케줄 최종 저장
-						</button>
-					</div>
-
-				</div>
-			{/if}
-
+				<label class="inline-flex cursor-pointer items-center gap-2 text-xs font-bold text-slate-700">
+					<input type="checkbox" bind:checked={routeForm.is_regular_duty} class="h-4 w-4 rounded border-slate-300 text-blue-600" />
+					<span>당연 근무 노선</span>
+				</label>
+			</div>
+			<div class="flex justify-end gap-2 pt-2">
+				<button type="button" onclick={() => (showRouteModal = false)} class="rounded-xl border border-slate-200 px-4 py-2 text-xs font-bold text-slate-600">취소</button>
+				<button type="button" onclick={saveRouteDefinition} class="rounded-xl bg-blue-600 px-5 py-2 text-xs font-black text-white hover:bg-blue-700">저장</button>
+			</div>
 		</div>
-
 	</div>
-
-</div>
+{/if}

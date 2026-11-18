@@ -190,6 +190,16 @@ export const adminUpdateRouteMaster = <T = any>(
 ) => request<T>(BASE_URL + '/route-masters/' + id, 'PUT', data);
 export const adminDeleteRouteMaster = <T = any>(id: number | string) =>
 	request<T>(BASE_URL + '/route-masters/' + id, 'DELETE');
+export const adminAppendRouteRoster = <T = any>(data: Record<string, any>) =>
+	request<T>(BASE_URL + '/route-masters/append-roster', 'POST', data);
+export const adminGetRouteSegments = <T = any>(routeName?: string) =>
+	request<T>(
+		routeName
+			? `${BASE_URL}/route-segments?route_name=${encodeURIComponent(routeName)}`
+			: `${BASE_URL}/route-segments`
+	);
+export const adminSaveRouteSegments = <T = any>(data: Record<string, any>) =>
+	request<T>(BASE_URL + '/route-segments', 'PUT', data);
 
 // 🚐 일일 배차 관리 API (Dispatch Management)
 export const adminGetActiveRouteMasters = <T = any>(date: string) =>
