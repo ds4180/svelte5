@@ -5,6 +5,7 @@
  */
 
 import { fastApi } from '$lib/api';
+import { getSecureMediaUrl, type MediaAssetLike } from '$lib/config/media';
 
 export interface UploadFilesOptions {
 	app_id?: string;
@@ -90,9 +91,116 @@ export async function createUserFolder<T = any>(folderName: string, subPath = ''
 	});
 }
 
+export interface PublishAssetsPayload {
+	asset_ids: number[];
+	app_id?: string;
+	target_id?: string | null;
+	access_level?: 'PUBLIC' | 'PROTECTED' | string;
+	sub_path?: string;
+}
+
+const pendingPrivateAssetIds = new Set<number>();
+
 /**
- * 7. 선택 자산 공식 배포 (Publish Copy to PUBLIC/POSTS)
+ * 에디터 세션에서 개인 보관함(PRIVATE)에 임시 업로드된 자산 ID 등록
  */
-export async function publishAssets<T = any>(assetIds: Array<number | string>): Promise<T> {
-	return await fastApi<T>('POST', '/api/media/publish', { asset_ids: assetIds });
+export function registerPendingPrivateAsset(assetId: number | string) {
+	const id = Number(assetId);
+	if (Number.isFinite(id) && id > 0) {
+		pendingPrivateAssetIds.add(id);
+	}
+}
+
+/**
+ * 7. 개인 보관함(PRIVATE) 자산을 서비스 영역(PUBLIC/PROTECTED)으로 물리 복사 배포
+ */
+export async function publishAssets<T = any>(
+	payloadOrIds: PublishAssetsPayload | Array<number | string>
+): Promise<T> {
+	const payload = Array.isArray(payloadOrIds) ? { asset_ids: payloadOrIds } : payloadOrIds;
+	return await fastApi<T>('POST', '/api/media/publish', payload);
+}
+
+/**
+ * 8. 글 저장 시 본문(HTML/JSON) 내 임시 개인 자산(/media/serve/{id})을 서비스 영역으로 물리 복사하고 URL을 치환
+ */
+export async function publishEditorContentAssets(params: {
+	content: string;
+	content_json?: any;
+	app_id: string;
+	target_id?: string | null;
+	access_level: 'PUBLIC' | 'PROTECTED' | string;
+	sub_path?: string;
+	serverUrl?: string;
+}): Promise<{ content: string; content_json: any }> {
+	const {
+		content,
+		content_json = null,
+		app_id,
+		target_id = null,
+		access_level,
+		sub_path = '',
+		serverUrl = ''
+	} = params;
+
+	if (!content || pendingPrivateAssetIds.size === 0) {
+		return { content, content_json };
+	}
+
+	const serveRegex = /\/media\/serve\/(\d+)/g;
+	const foundIds = new Set<number>();
+	let match: RegExpExecArray | null;
+	while ((match = serveRegex.exec(content)) !== null) {
+		const id = Number(match[1]);
+		if (pendingPrivateAssetIds.has(id)) {
+			foundIds.add(id);
+		}
+	}
+
+	if (foundIds.size === 0) {
+		return { content, content_json };
+	}
+
+	const assetIds = Array.from(foundIds);
+	const publishedList = await publishAssets<MediaAssetLike[]>({
+		asset_ids: assetIds,
+		app_id,
+		target_id: target_id ? String(target_id) : null,
+		access_level,
+		sub_path
+	});
+
+	if (!Array.isArray(publishedList) || publishedList.length === 0) {
+		return { content, content_json };
+	}
+
+	const urlMap = new Map<number, string>();
+	publishedList.forEach((newAsset, idx) => {
+		const srcId = Number(newAsset?.meta_info?.published_from ?? assetIds[idx]);
+		const newUrl = getSecureMediaUrl(serverUrl, newAsset);
+		if (srcId && newUrl) {
+			urlMap.set(srcId, newUrl);
+			pendingPrivateAssetIds.delete(srcId);
+		}
+	});
+
+	if (urlMap.size === 0) {
+		return { content, content_json };
+	}
+
+	let nextContent = content;
+	let nextJsonStr = content_json ? JSON.stringify(content_json) : null;
+
+	for (const [oldId, newUrl] of urlMap.entries()) {
+		const oldPattern = new RegExp(`(?:https?:\\/\\/[^"'\\s)]*)?(?:\\/api)?\\/media\\/serve\\/${oldId}(?:\\?[^"'\\s)]*)?`, 'g');
+		nextContent = nextContent.replace(oldPattern, newUrl);
+		if (nextJsonStr) {
+			nextJsonStr = nextJsonStr.replace(oldPattern, newUrl);
+		}
+	}
+
+	return {
+		content: nextContent,
+		content_json: nextJsonStr ? JSON.parse(nextJsonStr) : content_json
+	};
 }

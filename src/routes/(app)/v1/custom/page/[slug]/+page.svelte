@@ -39,6 +39,10 @@
 									게시일: {formatDate(pageData.published_at)}
 								</span>
 							{/if}
+							<span class="inline-flex items-center gap-1 text-xs font-bold text-slate-400">
+								<Icon icon="ph:eye-bold" class="text-sm" />
+								<span>조회 {pageData.view_count ?? 0}</span>
+							</span>
 						</div>
 						{#if isAdmin}
 							<a

@@ -10,11 +10,14 @@
 	import { toast } from '$lib/runes/toast.svelte';
 	import { formatDate, toLocalISOString } from '$lib/utils';
 	import { formatApiError } from '$lib/utils/error';
+	import { env } from '$env/dynamic/public';
+	import { publishEditorContentAssets } from '$lib/services/mediaService';
 	import * as api from '$lib/api/page';
 	import TiptapEditor from '$lib/components/TiptapEditor.svelte';
 	import SafeHtml from '$lib/components/SafeHtml.svelte';
 	import Icon from '@iconify/svelte';
 
+	const PUBLIC_SERVER_URL = env.PUBLIC_SERVER_URL || '';
 	const auth = getAuthContext();
 
 	let { data = {} } = $props();
@@ -81,6 +84,18 @@
 
 		isLoading = true;
 		try {
+			const publishedMedia = await publishEditorContentAssets({
+				content: editForm.content,
+				content_json: editForm.content_json,
+				app_id: 'page',
+				target_id: editForm.id ? String(editForm.id) : null,
+				access_level: Number(editForm.min_rank ?? 0) === 0 ? 'PUBLIC' : 'PROTECTED',
+				sub_path: editForm.slug ? `PAGES/${editForm.slug}` : 'PAGES',
+				serverUrl: PUBLIC_SERVER_URL
+			});
+			editForm.content = publishedMedia.content;
+			editForm.content_json = publishedMedia.content_json;
+
 			if (editForm.id) {
 				page = await api.adminUpdatePage(editForm);
 				toast.success('페이지가 성공적으로 수정되었습니다.');
@@ -320,7 +335,7 @@
 					<!-- Content Editor -->
 					<div>
 						<span class="block text-xs font-bold text-slate-700 mb-2">본문 콘텐츠 (Tiptap 에디터)</span>
-						<TiptapEditor bind:content={editForm.content} bind:content_json={editForm.content_json} />
+						<TiptapEditor bind:content={editForm.content} bind:content_json={editForm.content_json} slug={editForm.slug} />
 					</div>
 				</div>
 

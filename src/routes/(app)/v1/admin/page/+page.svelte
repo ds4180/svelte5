@@ -11,8 +11,12 @@
 	import { toast } from '$lib/runes/toast.svelte';
 	import { getSiteTitle } from '$lib/config/site';
 	import { toLocalISOString } from '$lib/utils';
+	import { env } from '$env/dynamic/public';
+	import { publishEditorContentAssets } from '$lib/services/mediaService';
 	import TiptapEditor from '$lib/components/TiptapEditor.svelte';
 	import Icon from '@iconify/svelte';
+
+	const PUBLIC_SERVER_URL = env.PUBLIC_SERVER_URL || '';
 
 	let { data } = $props();
 
@@ -62,15 +66,25 @@
 
 		isCreating = true;
 		try {
+			const normalizedSlug = createForm.slug.trim().toLowerCase().replace(/[^a-z0-9-_]/g, '-');
+			const publishedMedia = await publishEditorContentAssets({
+				content: createForm.content,
+				content_json: createForm.content_json,
+				app_id: 'page',
+				access_level: Number(createForm.min_rank ?? 0) === 0 ? 'PUBLIC' : 'PROTECTED',
+				sub_path: normalizedSlug ? `PAGES/${normalizedSlug}` : 'PAGES',
+				serverUrl: PUBLIC_SERVER_URL
+			});
+
 			await api.adminCreatePage({
 				title: createForm.title.trim(),
-				slug: createForm.slug.trim().toLowerCase().replace(/[^a-z0-9-_]/g, '-'),
+				slug: normalizedSlug,
 				status: createForm.status,
 				min_rank: Number(createForm.min_rank) || 0,
 				is_active: createForm.is_active,
 				redirect_url: createForm.redirect_url ? createForm.redirect_url.trim() : null,
-				content: createForm.content,
-				content_json: createForm.content_json || {}
+				content: publishedMedia.content,
+				content_json: publishedMedia.content_json || {}
 			});
 			toast.success(`'${createForm.title}' 페이지가 성공적으로 생성되었습니다.`);
 			activeTab = 'list';
@@ -444,7 +458,7 @@
 					<span class="block text-xs font-bold text-slate-700 mb-2">
 						본문 콘텐츠 (Tiptap 에디터)
 					</span>
-					<TiptapEditor bind:content={createForm.content} bind:content_json={createForm.content_json} />
+					<TiptapEditor bind:content={createForm.content} bind:content_json={createForm.content_json} slug={createForm.slug} />
 				</div>
 
 				<div class="flex items-center justify-between border-t border-slate-100 pt-6">

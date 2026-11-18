@@ -21,7 +21,10 @@ export const load: PageServerLoad = async ({ fetch, params, locals, url }) => {
 	}
 
 	try {
-		const res = await fetch(`/api/v1/page/detail/${slug}`);
+		const detailUrl = isEditRequest
+			? `/api/v1/page/detail/${slug}?count_view=false`
+			: `/api/v1/page/detail/${slug}`;
+		const res = await fetch(detailUrl);
 		if (!res.ok) {
 			const err = await res.json().catch(() => ({}));
 			throw error(res.status, formatApiError(err, '페이지를 불러오지 못했습니다.'));

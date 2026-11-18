@@ -1,0 +1,180 @@
+/* 📊 차트 노드 */
+.tiptap-chart-node,
+[data-tiptap-chart] {
+	margin: 1.25rem 0;
+	border-radius: 1rem;
+	border: 1px solid #e2e8f0;
+	background-color: #ffffff;
+	padding: 1rem;
+	box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05);
+}
+
+.tiptap-chart-canvas,
+[data-tiptap-chart] > .tiptap-chart-canvas {
+	height: 280px;
+	width: 100%;
+	position: relative;
+}
+
+/* 📢 콜아웃 박스 */
+.tiptap-callout {
+	margin: 1rem 0;
+	border-radius: 0.75rem;
+	border-left: 4px solid #2563eb;
+	background-color: #eff6ff;
+	padding: 0.875rem 1.125rem;
+	color: #1e3a8a;
+}
+.tiptap-callout p {
+	margin: 0.25rem 0;
+	color: inherit;
+}
+.tiptap-callout-warning {
+	border-left-color: #d97706;
+	background-color: #fffbeb;
+	color: #78350f;
+}
+.tiptap-callout-danger {
+	border-left-color: #dc2626;
+	background-color: #fef2f2;
+	color: #7f1d1d;
+}
+.tiptap-callout-success {
+	border-left-color: #16a34a;
+	background-color: #f0fdf4;
+	color: #14532d;
+}
+
+/* 📂 접기/펼치기 아코디언 */
+.tiptap-details {
+	margin: 1rem 0;
+	border-radius: 0.75rem;
+	border: 1px solid #e2e8f0;
+	background-color: #f8fafc;
+	overflow: hidden;
+}
+.tiptap-details-summary {
+	cursor: pointer;
+	padding: 0.75rem 1rem;
+	font-weight: 700;
+	font-size: 0.95rem;
+	color: #0f172a;
+	background-color: #f1f5f9;
+	user-select: none;
+}
+.tiptap-details > .details-content {
+	padding: 0.75rem 1rem;
+	background-color: #ffffff;
+}
+
+/* 🔗 바로가기 버튼 카드 */
+.tiptap-action-card {
+	margin: 1rem 0;
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: 0.75rem;
+	border-radius: 1rem;
+	border: 1px solid #e2e8f0;
+	background-color: #f8fafc;
+	padding: 0.875rem 1.125rem;
+}
+.tiptap-action-desc {
+	font-size: 0.875rem;
+	font-weight: 600;
+	color: #475569;
+}
+.tiptap-action-btn {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.375rem;
+	border-radius: 0.75rem;
+	padding: 0.55rem 1.1rem;
+	font-size: 0.875rem;
+	font-weight: 700;
+	text-decoration: none !important;
+	transition: opacity 0.15s ease, transform 0.15s ease;
+}
+.tiptap-action-btn:hover {
+	opacity: 0.92;
+}
+.tiptap-action-primary {
+	background-color: #2563eb;
+	color: #ffffff !important;
+}
+.tiptap-action-dark {
+	background-color: #0f172a;
+	color: #ffffff !important;
+}
+.tiptap-action-outline {
+	background-color: #ffffff;
+	color: #0f172a !important;
+	border: 1.5px solid #cbd5e1;
+}
+
+/* ☑️ 체크리스트 (TaskList) */
+ul[data-type='taskList'] {
+	list-style: none !important;
+	padding-left: 0.25rem !important;
+	margin: 0.75rem 0;
+}
+ul[data-type='taskList'] li {
+	display: flex;
+	align-items: flex-start;
+	gap: 0.5rem;
+	margin: 0.375rem 0;
+}
+ul[data-type='taskList'] li > label {
+	flex: 0 0 auto;
+	margin-top: 0.25rem;
+	user-select: none;
+}
+ul[data-type='taskList'] li > label input[type='checkbox'] {
+	width: 1rem;
+	height: 1rem;
+	accent-color: #2563eb;
+	cursor: pointer;
+}
+ul[data-type='taskList'] li > div {
+	flex: 1 1 auto;
+}
+ul[data-type='taskList'] li[data-checked='true'] > div {
+	text-decoration: line-through;
+	color: #94a3b8;
+}
+
+/* 🎬 영상 / 지도 임베드 */
+.tiptap-embed-wrap {
+	margin: 1.25rem 0;
+	position: relative;
+	width: 100%;
+	padding-top: 56.25%;
+	border-radius: 1rem;
+	overflow: hidden;
+	border: 1px solid #e2e8f0;
+	background-color: #0f172a;
+}
+.tiptap-embed-iframe {
+	position: absolute;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+	border: 0;
+}
+
+/* 📋 표 (뷰어 공용) */
+.prose table {
+	border-collapse: collapse;
+	width: 100%;
+	margin: 1rem 0;
+}
+.prose th,
+.prose td {
+	border: 1px solid #cbd5e1;
+	padding: 0.5rem 0.75rem;
+}
+.prose th {
+	background-color: #f8fafc;
+	font-weight: 700;
+}
