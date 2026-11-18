@@ -106,8 +106,10 @@
 
 		if (parts.length <= 1) {
 			mode = 'list';
+			postId = null;
 		} else if (parts[1] === 'write') {
 			mode = 'write';
+			postId = null;
 			resetEditForm();
 		} else if (parts.length >= 2) {
 			postId = parts[1];
