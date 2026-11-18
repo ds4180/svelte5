@@ -176,165 +176,225 @@
 </script>
 
 <div
-	class="tiptap-editor relative min-h-[600px] border-4 border-black bg-white font-['Outfit'] shadow-[12px_12px_0_rgba(0,0,0,1)] selection:bg-yellow-200"
+	class="tiptap-editor relative flex min-h-[520px] flex-col overflow-hidden rounded-2xl border-2 border-slate-200 bg-white shadow-sm transition focus-within:border-blue-600 selection:bg-blue-100"
 >
 	{#if editor}
 		<div
-			class="toolbar sticky top-0 z-20 flex flex-wrap items-center gap-1 border-b-4 border-black bg-[#fafafa] p-2"
+			class="toolbar sticky top-0 z-20 flex flex-wrap items-center gap-1 border-b border-slate-200 bg-slate-50/95 px-3 py-2 backdrop-blur-sm"
 		>
 			<!-- 1. Typography -->
-			<div class="flex items-center border-r-2 border-black/10 pr-2 mr-1 gap-1">
-				<select 
+			<div class="flex items-center gap-1">
+				<select
+					aria-label="글자 크기"
 					onchange={(e) => setFontSize(e.target.value)}
-					class="h-9 border-2 border-black bg-white px-1 text-[10px] font-black uppercase outline-none focus:bg-yellow-400"
+					class="h-8 rounded-lg border border-slate-200 bg-white px-2 text-xs font-medium text-slate-700 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
 				>
-					<option value="">Size</option>
+					<option value="">크기</option>
 					{#each ['12px', '14px', '16px', '18px', '20px', '24px', '32px', '48px'] as size}
-						<option value={size}>{size.replace('px','')}</option>
+						<option value={size}>{size.replace('px', '')}px</option>
 					{/each}
 				</select>
-				<button type="button" onclick={() => toggleHeading(1)} class="tool-btn {editor.isActive('heading', { level: 1 }) ? 'active' : ''}">H1</button>
-				<button type="button" onclick={() => toggleHeading(2)} class="tool-btn {editor.isActive('heading', { level: 2 }) ? 'active' : ''}">H2</button>
-				<button type="button" onclick={() => toggleHeading(3)} class="tool-btn {editor.isActive('heading', { level: 3 }) ? 'active' : ''}">H3</button>
+				<button type="button" title="제목 1" onclick={() => toggleHeading(1)} class="tool-btn text-xs {editor.isActive('heading', { level: 1 }) ? 'active' : ''}">H1</button>
+				<button type="button" title="제목 2" onclick={() => toggleHeading(2)} class="tool-btn text-xs {editor.isActive('heading', { level: 2 }) ? 'active' : ''}">H2</button>
+				<button type="button" title="제목 3" onclick={() => toggleHeading(3)} class="tool-btn text-xs {editor.isActive('heading', { level: 3 }) ? 'active' : ''}">H3</button>
 			</div>
+
+			<div class="mx-1 h-5 w-px bg-slate-200"></div>
 
 			<!-- 2. Core Formatting -->
-			<div class="flex border-r-2 border-black/10 pr-1 mr-1">
-				<button type="button" onclick={toggleBold} class="tool-btn {editor.isActive('bold') ? 'active' : ''}"><Icon icon="ph:text-b-bold" /></button>
-				<button type="button" onclick={toggleItalic} class="tool-btn {editor.isActive('italic') ? 'active' : ''}"><Icon icon="ph:text-italic-bold" /></button>
-				<button type="button" onclick={toggleUnderline} class="tool-btn {editor.isActive('underline') ? 'active' : ''}"><Icon icon="ph:text-underline-bold" /></button>
-				<button type="button" onclick={toggleStrike} class="tool-btn {editor.isActive('strike') ? 'active' : ''}"><Icon icon="ph:text-strikethrough-bold" /></button>
+			<div class="flex items-center gap-0.5">
+				<button type="button" title="굵게" onclick={toggleBold} class="tool-btn {editor.isActive('bold') ? 'active' : ''}"><Icon icon="ph:text-b-bold" /></button>
+				<button type="button" title="기울임" onclick={toggleItalic} class="tool-btn {editor.isActive('italic') ? 'active' : ''}"><Icon icon="ph:text-italic-bold" /></button>
+				<button type="button" title="밑줄" onclick={toggleUnderline} class="tool-btn {editor.isActive('underline') ? 'active' : ''}"><Icon icon="ph:text-underline-bold" /></button>
+				<button type="button" title="취소선" onclick={toggleStrike} class="tool-btn {editor.isActive('strike') ? 'active' : ''}"><Icon icon="ph:text-strikethrough-bold" /></button>
 			</div>
+
+			<div class="mx-1 h-5 w-px bg-slate-200"></div>
 
 			<!-- 3. Colors -->
-			<div class="flex border-r-2 border-black/10 pr-1 mr-1 gap-1 items-center px-1">
-				{#each ['#000000', '#ff0000', '#0000ff', '#008000', '#ffa500', '#800080'] as c}
-					<button type="button" onclick={() => setColor(c)} class="h-5 w-5 rounded-full border border-black/20 hover:scale-125 transition-transform" style="background-color: {c}"></button>
+			<div class="flex items-center gap-1.5 px-1">
+				{#each [
+					{ color: '#0f172a', label: '검정' },
+					{ color: '#dc2626', label: '빨강' },
+					{ color: '#2563eb', label: '파랑' },
+					{ color: '#16a34a', label: '초록' },
+					{ color: '#d97706', label: '주황' },
+					{ color: '#9333ea', label: '보라' }
+				] as item}
+					<button
+						type="button"
+						title="글자색: {item.label}"
+						onclick={() => setColor(item.color)}
+						class="h-4.5 w-4.5 rounded-full ring-1 ring-slate-300 transition-transform hover:scale-115"
+						style="background-color: {item.color}"
+					></button>
 				{/each}
 			</div>
+
+			<div class="mx-1 h-5 w-px bg-slate-200"></div>
 
 			<!-- 4. Highlights -->
-			<div class="flex border-r-2 border-black/10 pr-1 mr-1 gap-0.5">
-				{#each ['#ffec99', '#b2f2bb', '#a5d8ff', '#ffc9c9'] as h}
-					<button type="button" onclick={() => toggleHighlight(h)} class="h-8 w-4 border border-black/10 hover:brightness-90" style="background-color: {h}"></button>
+			<div class="flex items-center gap-1 px-0.5">
+				{#each [
+					{ color: '#fef08a', label: '노랑 형광펜' },
+					{ color: '#bbf7d0', label: '초록 형광펜' },
+					{ color: '#bfdbfe', label: '파랑 형광펜' },
+					{ color: '#fecaca', label: '분홍 형광펜' }
+				] as item}
+					<button
+						type="button"
+						title={item.label}
+						onclick={() => toggleHighlight(item.color)}
+						class="h-5 w-5 rounded-md ring-1 ring-slate-200 transition-transform hover:scale-105"
+						style="background-color: {item.color}"
+					></button>
 				{/each}
-				<button type="button" onclick={clearFormat} class="tool-btn !w-auto px-2 text-[10px] font-black underline" title="Clear All Formatting">CLEAR</button>
+				<button type="button" onclick={clearFormat} class="tool-btn ml-0.5 text-slate-500" title="서식 지우기">
+					<Icon icon="ph:eraser-bold" />
+				</button>
 			</div>
+
+			<div class="mx-1 h-5 w-px bg-slate-200"></div>
 
 			<!-- 5. Alignment -->
-			<div class="flex border-r-2 border-black/10 pr-1 mr-1">
-				<button type="button" onclick={() => setTextAlign('left')} class="tool-btn {editor.isActive({ textAlign: 'left' }) ? 'active' : ''}"><Icon icon="ph:text-align-left-bold" /></button>
-				<button type="button" onclick={() => setTextAlign('center')} class="tool-btn {editor.isActive({ textAlign: 'center' }) ? 'active' : ''}"><Icon icon="ph:text-align-center-bold" /></button>
-				<button type="button" onclick={() => setTextAlign('right')} class="tool-btn {editor.isActive({ textAlign: 'right' }) ? 'active' : ''}"><Icon icon="ph:text-align-right-bold" /></button>
-				<button type="button" onclick={() => setTextAlign('justify')} class="tool-btn {editor.isActive({ textAlign: 'justify' }) ? 'active' : ''}"><Icon icon="ph:text-align-justify-bold" /></button>
+			<div class="flex items-center gap-0.5">
+				<button type="button" title="왼쪽 정렬" onclick={() => setTextAlign('left')} class="tool-btn {editor.isActive({ textAlign: 'left' }) ? 'active' : ''}"><Icon icon="ph:text-align-left-bold" /></button>
+				<button type="button" title="가운데 정렬" onclick={() => setTextAlign('center')} class="tool-btn {editor.isActive({ textAlign: 'center' }) ? 'active' : ''}"><Icon icon="ph:text-align-center-bold" /></button>
+				<button type="button" title="오른쪽 정렬" onclick={() => setTextAlign('right')} class="tool-btn {editor.isActive({ textAlign: 'right' }) ? 'active' : ''}"><Icon icon="ph:text-align-right-bold" /></button>
+				<button type="button" title="양쪽 정렬" onclick={() => setTextAlign('justify')} class="tool-btn {editor.isActive({ textAlign: 'justify' }) ? 'active' : ''}"><Icon icon="ph:text-align-justify-bold" /></button>
 			</div>
+
+			<div class="mx-1 h-5 w-px bg-slate-200"></div>
 
 			<!-- 6. Lists & Blocks -->
-			<div class="flex border-r-2 border-black/10 pr-1 mr-1">
-				<button type="button" onclick={toggleBulletList} class="tool-btn {editor.isActive('bulletList') ? 'active' : ''}"><Icon icon="ph:list-bullets-bold" /></button>
-				<button type="button" onclick={toggleOrderedList} class="tool-btn {editor.isActive('orderedList') ? 'active' : ''}"><Icon icon="ph:list-numbers-bold" /></button>
-				<button type="button" onclick={toggleBlockquote} class="tool-btn {editor.isActive('blockquote') ? 'active' : ''}"><Icon icon="ph:quotes-bold" /></button>
-				<button type="button" onclick={toggleCodeBlock} class="tool-btn {editor.isActive('codeBlock') ? 'active' : ''}"><Icon icon="ph:terminal-window-bold" /></button>
+			<div class="flex items-center gap-0.5">
+				<button type="button" title="글머리 기호 목록" onclick={toggleBulletList} class="tool-btn {editor.isActive('bulletList') ? 'active' : ''}"><Icon icon="ph:list-bullets-bold" /></button>
+				<button type="button" title="번호 매기기 목록" onclick={toggleOrderedList} class="tool-btn {editor.isActive('orderedList') ? 'active' : ''}"><Icon icon="ph:list-numbers-bold" /></button>
+				<button type="button" title="인용구" onclick={toggleBlockquote} class="tool-btn {editor.isActive('blockquote') ? 'active' : ''}"><Icon icon="ph:quotes-bold" /></button>
+				<button type="button" title="코드 블록" onclick={toggleCodeBlock} class="tool-btn {editor.isActive('codeBlock') ? 'active' : ''}"><Icon icon="ph:terminal-window-bold" /></button>
 			</div>
 
+			<div class="mx-1 h-5 w-px bg-slate-200"></div>
+
 			<!-- 7. Media -->
-			<div class="flex border-r-2 border-black/10 pr-1 mr-1">
-				<button type="button" onclick={addLink} class="tool-btn {editor.isActive('link') ? 'active' : ''}"><Icon icon="ph:link-bold" /></button>
-				<button type="button" onclick={addImage} class="tool-btn"><Icon icon="ph:image-square-bold" /></button>
-				<button type="button" onclick={() => editor.chain().focus().setHorizontalRule().run()} class="tool-btn" title="Divider"><Icon icon="ph:minus-bold" /></button>
+			<div class="flex items-center gap-0.5">
+				<button type="button" title="링크 삽입" onclick={addLink} class="tool-btn {editor.isActive('link') ? 'active' : ''}"><Icon icon="ph:link-bold" /></button>
+				<button type="button" title="이미지 URL 삽입" onclick={addImage} class="tool-btn"><Icon icon="ph:image-square-bold" /></button>
+				<button type="button" title="구분선" onclick={() => editor.chain().focus().setHorizontalRule().run()} class="tool-btn"><Icon icon="ph:minus-bold" /></button>
 			</div>
 
 			<!-- 8. History -->
-			<div class="flex ml-auto">
-				<button type="button" onclick={undo} class="tool-btn opacity-50 hover:opacity-100"><Icon icon="ph:arrow-counter-clockwise-bold" /></button>
-				<button type="button" onclick={redo} class="tool-btn opacity-50 hover:opacity-100"><Icon icon="ph:arrow-clockwise-bold" /></button>
+			<div class="ml-auto flex items-center gap-0.5">
+				<button type="button" title="실행 취소" onclick={undo} class="tool-btn text-slate-400 hover:text-slate-700"><Icon icon="ph:arrow-counter-clockwise-bold" /></button>
+				<button type="button" title="다시 실행" onclick={redo} class="tool-btn text-slate-400 hover:text-slate-700"><Icon icon="ph:arrow-clockwise-bold" /></button>
 			</div>
 		</div>
 	{/if}
 
 	<!-- 🖋️ Editor Body -->
-	<div 
-		class="editor-body prose max-w-none min-h-[500px] p-8 outline-none transition-all focus:bg-slate-50/30 {isMounted ? '' : 'invisible'}" 
+	<div
+		class="editor-body prose prose-slate max-w-none flex-1 min-h-[420px] px-6 py-5 outline-none transition-colors {isMounted ? '' : 'invisible'}"
 		bind:this={element}>
 	</div>
 
 	{#if !isMounted}
-		<div class="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-white z-30">
-			<span class="loading loading-lg loading-spinner text-black"></span>
-			<p class="text-[10px] font-black tracking-[0.4em] uppercase italic opacity-30">Cortex Editor Booting...</p>
+		<div class="absolute inset-0 z-30 flex flex-col items-center justify-center gap-3 bg-white/95">
+			<span class="loading loading-md loading-spinner text-blue-600"></span>
+			<p class="text-xs font-medium text-slate-400">에디터를 불러오는 중...</p>
 		</div>
 	{/if}
 </div>
 
 <style>
 	.tool-btn {
-		height: 2.25rem;
-		width: 2.25rem;
-		display: flex;
+		height: 2rem;
+		min-width: 2rem;
+		padding: 0 0.375rem;
+		border-radius: 0.5rem;
+		display: inline-flex;
 		align-items: center;
 		justify-content: center;
-		font-size: 1rem;
-		font-weight: 900;
-		transition: all 0.1s;
+		font-size: 0.95rem;
+		font-weight: 600;
+		transition: background-color 0.15s ease, color 0.15s ease;
 		cursor: pointer;
 		background: transparent;
 		border: none;
-		color: #000;
+		color: #475569;
 	}
 	.tool-btn:hover {
-		background-color: #000;
-		color: #fff;
+		background-color: #e2e8f0;
+		color: #0f172a;
 	}
 	.tool-btn.active {
-		background-color: #000;
-		color: #fff;
+		background-color: #eff6ff;
+		color: #2563eb;
+		box-shadow: inset 0 0 0 1px #bfdbfe;
 	}
 
 	:global(.ProseMirror) {
-		min-height: 400px;
+		min-height: 380px;
 		outline: none;
-		color: #000;
-		line-height: 1.5; /* 줄 간격 최적화 */
-		letter-spacing: -0.01em; /* 글자 간격 최적화 */
+		color: #1e293b;
+		line-height: 1.7;
+		letter-spacing: -0.01em;
 	}
-	/* 🛡️ [색상 고정] Tailwind prose가 헤더 색상을 흰색이나 다른 색으로 바꾸는 것을 방지 */
 	:global(.ProseMirror h1, .ProseMirror h2, .ProseMirror h3, .ProseMirror h4) {
-		color: #000 !important;
-		margin-top: 1.2em;
-		margin-bottom: 0.6em;
+		color: #0f172a !important;
+		font-weight: 700;
+		margin-top: 1.25em;
+		margin-bottom: 0.5em;
 	}
 	:global(.ProseMirror p) {
 		margin-top: 0.5em;
 		margin-bottom: 0.5em;
-		color: #000;
+		color: #1e293b;
 	}
 	:global(.ProseMirror span[style*='color']) {
 		color: inherit;
 	}
 	:global(.ProseMirror p.is-editor-empty:first-child::before) {
-		color: #adb5bd;
+		color: #94a3b8;
 		content: attr(data-placeholder);
 		float: left;
 		height: 0;
 		pointer-events: none;
 	}
+	:global(.ProseMirror blockquote) {
+		border-left: 3px solid #3b82f6;
+		background-color: #f8fafc;
+		padding: 0.75rem 1rem;
+		border-radius: 0 0.5rem 0.5rem 0;
+		color: #475569;
+	}
+	:global(.ProseMirror pre) {
+		background-color: #0f172a;
+		color: #f8fafc;
+		border-radius: 0.75rem;
+		padding: 1rem 1.25rem;
+	}
 	:global(.ProseMirror img) {
-		border: 4px solid black;
-		transition: all 0.3s;
+		border-radius: 0.75rem;
+		border: 1px solid #e2e8f0;
+		box-shadow: 0 4px 12px rgba(15, 23, 42, 0.06);
+		transition: box-shadow 0.2s ease, transform 0.2s ease;
 	}
 	:global(.ProseMirror img:hover) {
-		box-shadow: 10px 10px 0 #3b82f6;
-		transform: translate(-4px, -4px);
+		box-shadow: 0 8px 20px rgba(15, 23, 42, 0.1);
 	}
 
 	/* 📱 커스텀 스크롤바 */
 	.tiptap-editor ::-webkit-scrollbar {
-		width: 4px;
+		width: 6px;
 	}
 	.tiptap-editor ::-webkit-scrollbar-track {
-		background: #f1f1f1;
+		background: transparent;
 	}
 	.tiptap-editor ::-webkit-scrollbar-thumb {
-		background: #000;
+		background: #cbd5e1;
+		border-radius: 9999px;
+	}
+	.tiptap-editor ::-webkit-scrollbar-thumb:hover {
+		background: #94a3b8;
 	}
 </style>

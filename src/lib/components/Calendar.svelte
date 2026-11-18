@@ -742,14 +742,14 @@
 <div
 	class="calendar-root bg-white border-slate-900 transition-all
 	       {fullBleedMobile
-		? '-mx-4 sm:mx-0 rounded-none sm:rounded-3xl border-y-2 border-x-0 sm:border-2 px-0 py-3 sm:p-6 md:p-8 shadow-none sm:shadow-xl'
+		? 'full-bleed-mobile -mx-4 sm:mx-0 rounded-none sm:rounded-3xl border-y-2 border-x-0 sm:border-2 px-0 py-3 sm:p-6 md:p-8 shadow-none sm:shadow-xl'
 		: 'rounded-2xl sm:rounded-3xl border-2 p-3 sm:p-6 md:p-8 shadow-xl'}"
 >
 	<!-- ===================================================================== -->
 	<!-- 1. 상단 컨트롤 헤더 -->
 	<!-- ===================================================================== -->
 	<div
-		class="mb-3 sm:mb-5 flex flex-wrap items-center justify-between gap-2 border-b-2 border-slate-900 pb-3 sm:pb-5
+		class="calendar-header mb-3 sm:mb-5 flex flex-wrap items-center justify-between gap-2 border-b-2 border-slate-900 pb-3 sm:pb-5
 		       {fullBleedMobile ? 'px-3 sm:px-0' : ''}"
 	>
 		<div class="flex flex-col">
@@ -807,7 +807,7 @@
 	<!-- 2. 요일 헤더 (일 ~ 토 7열) -->
 	<!-- ===================================================================== -->
 	<div
-		class="grid grid-cols-7 border-t-2 border-b-2 border-slate-900 bg-slate-100
+		class="calendar-weekdays grid grid-cols-7 border-t-2 border-b-2 border-slate-900 bg-slate-100
 		       {fullBleedMobile ? 'sm:border-x-2' : 'border-x-2'}"
 	>
 		{#each DAYS_OF_WEEK as dayLabel, idx}
@@ -824,7 +824,7 @@
 	<!-- 3. 7열 날짜 그리드 (단차 0px 고정 높이 & 3개 이상 시 ... 플로팅 툴팁) -->
 	<!-- ===================================================================== -->
 	<div
-		class="grid grid-cols-7 gap-px bg-slate-300 border-b-2 border-slate-900
+		class="calendar-grid grid grid-cols-7 gap-px bg-slate-300 border-b-2 border-slate-900
 		       {fullBleedMobile ? 'sm:border-x-2 sm:bg-slate-900' : 'border-x-2 bg-slate-900'}"
 	>
 		{#each calendarCells as cell (cell.dateStr)}
@@ -1200,3 +1200,30 @@
 		</div>
 	{/if}
 </div>
+
+<style>
+	/* 📱 모바일 세로 모드 + 하단 퀵 내비게이션 바 활성화(< 768px) 구간: 캘린더 좌우 여백 0 */
+	@media (max-width: 767px) and (orientation: portrait) {
+		.calendar-root.full-bleed-mobile {
+			width: 100vw;
+			max-width: 100vw;
+			margin-left: calc(50% - 50vw);
+			margin-right: calc(50% - 50vw);
+			padding-left: 0;
+			padding-right: 0;
+			border-left-width: 0;
+			border-right-width: 0;
+			border-radius: 0;
+			box-shadow: none;
+		}
+		.calendar-root.full-bleed-mobile .calendar-header {
+			padding-left: 0.75rem;
+			padding-right: 0.75rem;
+		}
+		.calendar-root.full-bleed-mobile .calendar-weekdays,
+		.calendar-root.full-bleed-mobile .calendar-grid {
+			border-left-width: 0;
+			border-right-width: 0;
+		}
+	}
+</style>

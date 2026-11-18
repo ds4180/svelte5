@@ -11,6 +11,7 @@
 	import { toast } from '$lib/runes/toast.svelte';
 	import { getSiteTitle } from '$lib/config/site';
 	import { toLocalISOString } from '$lib/utils';
+	import TiptapEditor from '$lib/components/TiptapEditor.svelte';
 	import Icon from '@iconify/svelte';
 
 	let { data } = $props();
@@ -31,7 +32,8 @@
 		min_rank: 0,
 		is_active: true,
 		redirect_url: '',
-		content: ''
+		content: '',
+		content_json: /** @type {any} */ (null)
 	});
 
 	function startCreate() {
@@ -42,7 +44,8 @@
 			min_rank: 0,
 			is_active: true,
 			redirect_url: '',
-			content: ''
+			content: '',
+			content_json: null
 		};
 		activeTab = 'create';
 	}
@@ -66,7 +69,8 @@
 				min_rank: Number(createForm.min_rank) || 0,
 				is_active: createForm.is_active,
 				redirect_url: createForm.redirect_url ? createForm.redirect_url.trim() : null,
-				content: createForm.content
+				content: createForm.content,
+				content_json: createForm.content_json || {}
 			});
 			toast.success(`'${createForm.title}' 페이지가 성공적으로 생성되었습니다.`);
 			activeTab = 'list';
@@ -437,16 +441,10 @@
 				</div>
 
 				<div>
-					<label for="create-content-input" class="block text-xs font-bold text-slate-700 mb-2">
-						본문 콘텐츠 (HTML / Markdown)
-					</label>
-					<textarea
-						id="create-content-input"
-						bind:value={createForm.content}
-						rows="12"
-						placeholder="페이지 본문 내용을 입력하세요. (HTML 또는 일반 텍스트)"
-						class="w-full px-4 py-3 rounded-2xl border-2 border-slate-200 text-xs font-mono font-medium focus:border-blue-600 focus:outline-none transition"
-					></textarea>
+					<span class="block text-xs font-bold text-slate-700 mb-2">
+						본문 콘텐츠 (Tiptap 에디터)
+					</span>
+					<TiptapEditor bind:content={createForm.content} bind:content_json={createForm.content_json} />
 				</div>
 
 				<div class="flex items-center justify-between border-t border-slate-100 pt-6">

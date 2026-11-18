@@ -1,4 +1,4 @@
-import { error, isHttpError } from '@sveltejs/kit';
+import { error, isHttpError, redirect } from '@sveltejs/kit';
 import { formatApiError } from '$lib/utils/error';
 import type { PageServerLoad } from './$types';
 
@@ -6,8 +6,20 @@ import type { PageServerLoad } from './$types';
  * @file (app)/v1/custom/page/[slug]/+page.server.ts
  * @description [CUSTOM 앱] DB CMS 페이지 개별 본문 SSR 로더
  */
-export const load: PageServerLoad = async ({ fetch, params }) => {
+export const load: PageServerLoad = async ({ fetch, params, locals, url }) => {
 	const { slug } = params;
+	const isEditRequest = url.searchParams.get('edit') === 'true';
+
+	// 🛡️ 편집 모드(?edit=true)는 로그인 + 관리자(rank_level >= 4)만 진입 허용
+	if (isEditRequest) {
+		if (!locals.user) {
+			throw redirect(302, `/login?redirect=${encodeURIComponent(url.pathname + url.search)}`);
+		}
+		if (Number(locals.user.rank_level ?? 0) < 4) {
+			throw error(403, '페이지 편집 권한이 없습니다. (관리자 전용)');
+		}
+	}
+
 	try {
 		const res = await fetch(`/api/v1/page/detail/${slug}`);
 		if (!res.ok) {
