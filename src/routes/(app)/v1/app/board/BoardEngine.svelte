@@ -11,13 +11,19 @@
 	import * as api from '$lib/api/board';
 	import { adminGetAppData } from '$lib/api/admin';
 	import * as engines from '$lib/index';
-	import { goto } from '$app/navigation';
+	import { goto, invalidateAll } from '$app/navigation';
 	import TiptapEditor from '$lib/components/TiptapEditor.svelte';
 	import SafeHtml from '$lib/components/SafeHtml.svelte';
+	import SearchFilterBar from '$lib/components/SearchFilterBar.svelte';
+	import Pagination from '$lib/components/Pagination.svelte';
 	import { getAuthContext } from '$lib/runes/auth.svelte';
 	import { toast } from '$lib/runes/toast.svelte';
 	import { formatDate } from '$lib/utils';
 	import { formatApiError } from '$lib/utils/error';
+	import { env } from '$env/dynamic/public';
+	import { publishEditorContentAssets } from '$lib/services/mediaService';
+
+	const PUBLIC_SERVER_URL = env.PUBLIC_SERVER_URL || '';
 
 	/** @type {{ slug: string, appId?: string, initialData?: any }} */
 	let { slug, appId = 'board', initialData = null } = $props();
@@ -31,6 +37,7 @@
 	let currentPage = $state(1);
 	let pageSize = $state(10);
 	let keyword = $state('');
+	let sort = $state('latest');
 
 	// --- [데이터 상태] ---
 	let posts = $state(initialData?.posts || []);
@@ -52,6 +59,14 @@
 		})
 	);
 
+	let canModifyPost = $derived(
+		Boolean(post) &&
+			((auth.user?.rank_level ?? 0) >= 4 ||
+				(canWrite &&
+					((post.user_id && post.user_id === auth.user?.id) ||
+						(post.author_id && post.author_id === auth.user?.id))))
+	);
+
 	// --- [폼 상태] ---
 	let editForm = $state({
 		title: '',
@@ -60,6 +75,16 @@
 		extra_data: {},
 		status: 'published'
 	});
+
+	function resetEditForm() {
+		editForm = {
+			title: '',
+			content: '',
+			content_json: null,
+			extra_data: {},
+			status: 'published'
+		};
+	}
 
 	/** 경로 파싱 함수 */
 	function parsePath() {
@@ -70,6 +95,7 @@
 			mode = 'list';
 		} else if (parts[1] === 'write') {
 			mode = 'write';
+			resetEditForm();
 		} else if (parts.length >= 2) {
 			postId = parts[1];
 			if (parts[2] === 'edit') {
@@ -82,6 +108,17 @@
 
 	// 초기 파싱
 	parsePath();
+
+	// 🔄 initialData 변경(invalidateAll 등) 시 목록/상세 상태 즉시 동기화
+	$effect(() => {
+		if (initialData) {
+			posts = initialData.posts || [];
+			post = initialData.post || null;
+			board = initialData.board || null;
+			bindings = initialData.bindings || [];
+			total = initialData.total || 0;
+		}
+	});
 
 	// 🔄 슬러그 변경 감지 (Svelte 5 클라이언트 라우팅 대응)
 	let currentSlug = $state(slug);
@@ -142,7 +179,8 @@
 			const data = await adminGetAppData('boards', slug, { 
 				page: currentPage - 1, 
 				size: pageSize, 
-				keyword: keyword 
+				keyword: keyword,
+				sort: sort
 			});
 
 			if (mode === 'list') {
@@ -176,6 +214,8 @@
 
 	// --- [액션 핸들러] ---
 	async function handleSave() {
+		if (isLoading) return;
+
 		if (!editForm.title || !editForm.title.trim()) {
 			toast.warning('제목을 입력해주세요.');
 			return;
@@ -185,19 +225,46 @@
 		tempDiv.innerHTML = editForm.content;
 		const textContent = tempDiv.textContent || tempDiv.innerText || '';
 		
-		if (!textContent.trim() && !editForm.content.includes('<img')) {
+		const hasRichBlock =
+			editForm.content.includes('<img') ||
+			editForm.content.includes('data-tiptap-') ||
+			editForm.content.includes('<table') ||
+			editForm.content.includes('<iframe');
+
+		if (!textContent.trim() && !hasRichBlock) {
 			toast.warning('내용을 입력해주세요.');
 			return;
 		}
 
 		try {
 			isLoading = true;
+			const publishedMedia = await publishEditorContentAssets({
+				content: editForm.content,
+				content_json: editForm.content_json,
+				app_id: 'board',
+				target_id: postId ? String(postId) : null,
+				access_level: Number(board?.min_read_rank ?? 0) === 0 ? 'PUBLIC' : 'PROTECTED',
+				sub_path: boardSlug ? `BOARDS/${boardSlug}` : 'BOARDS',
+				serverUrl: PUBLIC_SERVER_URL
+			});
+			editForm.content = publishedMedia.content;
+			editForm.content_json = publishedMedia.content_json;
+
+			const payload = {
+				...editForm,
+				media_ids: publishedMedia.publishedAssetIds || []
+			};
+
 			if (mode === 'write') {
-				await api.createPost(boardSlug, editForm);
+				await api.createPost(boardSlug, payload);
+				toast.success('게시글이 등록되었습니다.');
 			} else if (mode === 'edit') {
-				await api.updatePost(postId, editForm);
+				await api.updatePost(postId, payload);
+				toast.success('게시글이 수정되었습니다.');
 			}
-			goto(`/v1/app/board/${boardSlug}`, { invalidateAll: true });
+			resetEditForm();
+			await goto(`/v1/app/board/${boardSlug}`, { invalidateAll: true });
+			await invalidateAll();
 		} catch (e) {
 			toast.error('저장 실패: ' + formatApiError(e));
 		} finally {
@@ -211,7 +278,8 @@
 			isLoading = true;
 			await api.deletePost(postId);
 			toast.success('게시물이 삭제되었습니다.');
-			goto(`/v1/app/board/${boardSlug}`, { invalidateAll: true });
+			await goto(`/v1/app/board/${boardSlug}`, { invalidateAll: true });
+			await invalidateAll();
 		} catch (e) {
 			toast.error('삭제 실패: ' + formatApiError(e));
 		} finally {
@@ -235,52 +303,49 @@
 </script>
 
 <!-- 🎨 메인 디자인 컨테이너 -->
-<div
-	class="board-engine-container min-h-screen w-full bg-[#fafafa] p-4 font-['Outfit'] text-black md:p-8"
->
+<div class="board-engine-container w-full text-slate-900">
 	{#if isLoading}
 		<div
-			class="fixed inset-0 z-50 flex flex-col items-center justify-center gap-6 bg-white/80 backdrop-blur-sm"
+			class="fixed inset-0 z-50 flex flex-col items-center justify-center gap-3 bg-white/75 backdrop-blur-xs"
 		>
 			<div
-				class="h-16 w-16 animate-spin rounded-full border-8 border-black border-t-blue-600"
+				class="h-10 w-10 animate-spin rounded-full border-4 border-slate-200 border-t-blue-600"
 			></div>
-			<p class="text-sm font-black tracking-widest uppercase italic opacity-40">
-				Synchronizing Data...
+			<p class="text-xs font-bold text-slate-500">
+				데이터 불러오는 중...
 			</p>
 		</div>
 	{/if}
 
 	{#if errorMessage}
 		<div
-			class="animate-shake mx-auto mb-10 flex max-w-4xl items-center gap-6 border-4 border-black bg-red-50 p-10"
+			class="mx-auto mb-6 flex max-w-4xl items-center gap-4 rounded-2xl border-2 border-rose-200 bg-rose-50 p-5 text-rose-800"
 		>
-			<Icon icon="ph:warning-circle-bold" class="h-14 w-14 flex-shrink-0 text-red-600" />
+			<Icon icon="ph:warning-circle-bold" class="h-8 w-8 flex-shrink-0 text-rose-600" />
 			<div>
-				<h3 class="text-2xl font-black uppercase italic">System Fault</h3>
-				<p class="font-bold opacity-60">{errorMessage}</p>
+				<h3 class="text-sm font-black">오류 안내</h3>
+				<p class="text-xs font-bold opacity-80">{errorMessage}</p>
 			</div>
 		</div>
 	{/if}
 
-	<div class="mx-auto max-w-6xl space-y-12">
+	<div class="mx-auto max-w-5xl space-y-8 pb-20">
 		{#if !boardSlug}
 			<div
-				class="flex h-[60vh] flex-col items-center justify-center gap-8 border-8 border-black bg-white p-20 text-center shadow-[30px_30px_0_rgba(239,68,68,0.1)]"
+				class="flex h-[50vh] flex-col items-center justify-center gap-6 rounded-3xl border-2 border-slate-200 bg-white p-10 text-center shadow-sm"
 			>
-				<Icon icon="ph:map-pin-line-bold" class="h-24 w-24 animate-bounce text-red-600" />
-				<div class="space-y-4">
-					<h2 class="text-6xl font-black tracking-tighter uppercase italic">
-						Address <span class="NOT-ITALIC text-red-600">Fault</span>
+				<Icon icon="ph:map-pin-line-bold" class="h-16 w-16 text-rose-500" />
+				<div class="space-y-2">
+					<h2 class="text-2xl font-black tracking-tight text-slate-900">
+						잘못된 게시판 경로
 					</h2>
-					<p class="max-w-md text-lg leading-relaxed font-bold italic opacity-40">
-						요청하신 경로가 불완전합니다. <br />서비스를 이용하려면 유효한 게시판 주소로 접속해
-						주십시오.
+					<p class="max-w-md text-sm font-medium text-slate-500">
+						요청하신 경로가 불완전합니다. 전체 게시판 목록에서 게시판을 선택해 주세요.
 					</p>
 				</div>
 				<a
 					href="/v1/app/boards"
-					class="flex h-16 items-center justify-center bg-black px-10 font-black text-white uppercase italic transition-all hover:bg-blue-600"
+					class="inline-flex items-center justify-center rounded-2xl bg-slate-900 px-6 py-3 text-xs font-black text-white transition hover:bg-blue-600"
 				>
 					전체 게시판 목록 보기
 				</a>
@@ -288,70 +353,53 @@
 		{:else}
 			<!-- 📑 HEADER AREA -->
 			<header
-				class="flex flex-col items-start justify-between gap-8 border-b-8 border-black pb-10 md:flex-row md:items-end"
+				class="flex flex-col items-start justify-between gap-5 border-b border-slate-200 pb-6 md:flex-row md:items-end"
 			>
-				<div class="space-y-4">
-					<div class="flex items-center gap-4">
+				<div class="space-y-2">
+					<div class="flex items-center gap-2">
 						<span
-							class="bg-black px-4 py-1 text-[10px] font-black tracking-widest text-white uppercase italic"
-							>{mode} MODE</span
+							class="rounded-lg bg-blue-50 px-2.5 py-1 text-[11px] font-black text-blue-700"
 						>
-						<span class="text-[10px] font-bold tracking-[0.3em] uppercase opacity-30"
-							>Board Engine / {boardSlug}</span
-						>
+							{boardSlug}
+						</span>
+						<span class="text-xs font-bold text-slate-400">
+							{mode === 'list' ? '목록' : mode === 'view' ? '상세' : mode === 'write' ? '글쓰기' : '수정'}
+						</span>
 					</div>
-					<h1 class="mb-2 text-6xl leading-[0.8] font-black tracking-tighter uppercase italic">
-						{board?.name || boardSlug || 'Loading...'}
+					<h1 class="text-2xl font-black tracking-tight text-slate-900 sm:text-3xl">
+						{board?.name || boardSlug || '불러오는 중...'}
 					</h1>
-					<p class="max-w-lg text-xs leading-relaxed font-bold italic opacity-40">
-						{board?.description || '게시판 데이터를 동기화하는 중입니다.'}
-					</p>
+					{#if board?.description}
+						<p class="max-w-xl text-xs font-medium text-slate-500 sm:text-sm">
+							{board.description}
+						</p>
+					{/if}
 				</div>
 
-				<div class="flex items-center gap-4">
-					{#if mode === 'list'}
-						<div
-							class="group flex h-16 border-4 border-black transition-all focus-within:ring-4 focus-within:ring-blue-100"
-						>
-							<input
-								type="text"
-								bind:value={keyword}
-								placeholder="SEARCH POSTS..."
-								class="w-48 border-none bg-white px-6 text-sm font-black uppercase focus:outline-none md:w-64"
-								onkeydown={(e) => e.key === 'Enter' && handleSearch()}
-							/>
-							<button
-								class="flex items-center justify-center bg-black px-6 text-white transition-all hover:bg-blue-600"
-								onclick={handleSearch}
-								aria-label="검색"
-							>
-								<Icon icon="ph:magnifying-glass-bold" class="h-6 w-6" />
-							</button>
-						</div>
-					{/if}
-
-					<div class="flex gap-4">
+				<div class="flex flex-wrap items-center gap-2.5">
+					<div class="flex items-center gap-2">
 						{#if mode === 'list' && canWrite}
 							<a
 								href="/v1/app/board/{boardSlug}/write"
-								class="flex h-16 items-center justify-center border-4 border-black bg-blue-600 px-10 text-lg font-black text-white uppercase italic shadow-[8px_8px_0_rgba(0,0,0,1)] transition-all hover:translate-x-1 hover:translate-y-1 hover:bg-black hover:shadow-none"
+								class="inline-flex h-10 items-center justify-center gap-1.5 rounded-xl bg-blue-600 px-4 text-xs font-black text-white shadow-sm transition hover:bg-blue-700"
 							>
-								New Post
+								<Icon icon="ph:pencil-line-bold" class="h-4 w-4" />
+								<span>글쓰기</span>
 							</a>
 						{:else if mode !== 'list'}
 							<a
 								href="/v1/app/board/{boardSlug}"
-								class="flex h-16 items-center justify-center border-4 border-black bg-white px-10 text-lg font-black text-black uppercase italic transition-all hover:bg-slate-100"
+								class="inline-flex h-10 items-center justify-center rounded-xl border-2 border-slate-200 bg-white px-4 text-xs font-bold text-slate-700 transition hover:bg-slate-50"
 							>
-								← List
+								← 목록으로
 							</a>
 						{/if}
 						<a
 							href="/v1/app/boards"
-							class="flex h-16 items-center justify-center border-4 border-black bg-slate-100 px-6 text-xs font-black uppercase transition-all hover:bg-black hover:text-white"
-							title="전체 게시판 목록 허브"
+							class="inline-flex h-10 items-center justify-center rounded-xl border-2 border-slate-200 bg-white px-4 text-xs font-bold text-slate-600 transition hover:bg-slate-50"
+							title="전체 게시판 목록"
 						>
-							전체 목록
+							전체 게시판
 						</a>
 					</div>
 				</div>
@@ -360,44 +408,60 @@
 			<!-- 📄 MAIN CONTENT AREA -->
 			<main class="animate-fade-in">
 				{#if mode === 'list'}
-					<div class="flex flex-col gap-6">
+					<div class="flex flex-col gap-4">
+						<SearchFilterBar
+							bind:keyword
+							bind:sort
+							bind:pageSize
+							{total}
+							onSearch={handleSearch}
+						/>
+
 						{#if posts.length === 0 && !isLoading}
 							<div
-								class="flex h-80 flex-col items-center justify-center gap-4 border-4 border-dashed border-black opacity-20 grayscale"
+								class="flex h-60 flex-col items-center justify-center gap-3 rounded-3xl border-2 border-dashed border-slate-200 bg-white text-slate-400"
 							>
-								<Icon icon="ph:article-bold" class="h-20 w-20" />
-								<p class="font-black tracking-widest uppercase italic">No Posts Found in Cluster</p>
+								<Icon icon="ph:article-bold" class="h-14 w-14 opacity-40" />
+								<p class="text-sm font-bold">등록된 게시글이 없습니다.</p>
 							</div>
 						{:else}
-							<div class="grid grid-cols-1 gap-6">
+							<div class="grid grid-cols-1 gap-4">
 								{#each posts as p}
 									<a
 										href="/v1/app/board/{boardSlug}/{p.id}"
-										class="group relative block overflow-hidden border-4 border-black bg-white p-8 transition-all hover:-translate-x-1 hover:-translate-y-1 hover:bg-slate-50 hover:shadow-[12px_12px_0_rgba(37,99,235,1)]"
+										class="board-fullbleed-card group block rounded-2xl border-2 border-slate-200 bg-white p-5 shadow-2xs transition hover:border-blue-400 hover:shadow-sm sm:p-6"
 									>
-										<div class="mb-6 flex items-start justify-between">
-											<div class="flex items-center gap-3">
+										<div class="mb-2 flex items-start justify-between gap-3">
+											<div class="flex flex-wrap items-center gap-2">
 												<span
-													class="rounded bg-slate-100 px-2 py-1 font-mono text-[10px] font-black"
-													>NO.{p.id}</span
+													class="rounded-lg bg-slate-100 px-2 py-0.5 font-mono text-[11px] font-bold text-slate-600"
 												>
-												<span class="text-[10px] font-black tracking-widest uppercase opacity-30"
-													>{formatDate(p.created_at)}</span
-												>
+													NO.{p.id}
+												</span>
+												{#if p.user_name || p.author_name}
+													<span class="inline-flex items-center gap-1 rounded-lg bg-slate-50 px-2 py-0.5 text-[11px] font-bold text-slate-600">
+														<Icon icon="ph:user-bold" class="h-3 w-3 text-slate-400" />
+														<span>{p.user_name || p.author_name}</span>
+													</span>
+												{/if}
 											</div>
-											<span
-												class="flex items-center gap-2 text-[10px] font-black text-blue-600 uppercase opacity-0 transition-opacity group-hover:opacity-100"
-											>
-												Read Article <Icon icon="ph:arrow-right-bold" />
-											</span>
+											<div class="flex shrink-0 flex-col items-end gap-0.5 text-right">
+												<span class="inline-flex items-center gap-1 text-xs font-bold text-slate-500">
+													<Icon icon="ph:eye-bold" class="h-3.5 w-3.5 text-slate-400" />
+													<span>{p.view_count || 0}</span>
+												</span>
+												<span class="text-[11px] font-medium text-slate-400">
+													{formatDate(p.create_date || p.created_at)}
+												</span>
+											</div>
 										</div>
 										<h3
-											class="mb-3 line-clamp-1 text-3xl font-black tracking-tight uppercase transition-colors group-hover:text-blue-600"
+											class="mb-1.5 line-clamp-1 text-lg font-black tracking-tight text-slate-900 transition-colors group-hover:text-blue-600 sm:text-xl"
 										>
 											{p.title}
 										</h3>
 										<p
-											class="line-clamp-2 max-w-3xl text-xs leading-relaxed font-bold italic opacity-40"
+											class="line-clamp-2 max-w-3xl text-xs leading-relaxed font-medium text-slate-500 sm:text-sm"
 										>
 											{p.content.replace(/<[^>]*>/g, '') || '본문 내용이 없습니다.'}
 										</p>
@@ -405,166 +469,135 @@
 								{/each}
 							</div>
 
-							<!-- 🔢 PAGINATION -->
-							{#if total > pageSize}
-								<div class="flex items-center justify-center gap-2 pt-12">
-									{#each Array(Math.ceil(total / pageSize)) as _, i}
-										<button
-											class="h-14 w-14 border-4 border-black text-lg font-black transition-all {currentPage ===
-											i + 1
-												? 'bg-black text-white'
-												: 'bg-white hover:bg-slate-100'}"
-											onclick={() => handlePageChange(i + 1)}
-										>
-											{i + 1}
-										</button>
-									{/each}
-								</div>
-							{/if}
+							<!-- 🔢 PAGINATION (공용 Pagination 컴포넌트) -->
+							<Pagination
+								{total}
+								currentPage={currentPage - 1}
+								size={pageSize}
+								onPageChange={(pageZero) => handlePageChange(pageZero + 1)}
+							/>
 						{/if}
 					</div>
 				{:else if mode === 'view'}
 					{#if !post && !isLoading}
 						<div
-							class="flex h-80 flex-col items-center justify-center gap-6 border-4 border-dashed border-black opacity-30"
+							class="flex h-64 flex-col items-center justify-center gap-4 rounded-3xl border-2 border-dashed border-slate-200 bg-white text-slate-400"
 						>
-							<Icon icon="ph:file-dashed-bold" class="h-20 w-20" />
-							<p class="font-black tracking-widest uppercase italic">Post Not Found</p>
+							<Icon icon="ph:file-dashed-bold" class="h-14 w-14 opacity-40" />
+							<p class="text-sm font-bold">게시물을 찾을 수 없습니다.</p>
 							<a
 								href="/v1/app/board/{boardSlug}"
-								class="border-2 border-black px-6 py-2 text-xs font-black uppercase hover:bg-black hover:text-white"
+								class="rounded-xl border-2 border-slate-200 bg-white px-5 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50"
 							>
-								← Back to List
+								← 목록으로
 							</a>
 						</div>
 					{:else if post}
-						<article class="mx-auto max-w-4xl" in:fade={{ duration: 300 }}>
-							<!-- 🔙 상단 브레드크럼 네비게이션 -->
-							<nav class="mb-10 flex items-center gap-3 text-[10px] font-black tracking-widest uppercase">
-								<a
-									href="/v1/app/board/{boardSlug}"
-									class="flex items-center gap-1 text-blue-600 opacity-70 transition-opacity hover:opacity-100"
-								>
-									<Icon icon="ph:caret-left-bold" class="h-3 w-3" />
-									{board?.name || boardSlug}
-								</a>
-								<span class="opacity-20">/</span>
-								<span class="opacity-40">NO.{post.id}</span>
-							</nav>
-
-							<!-- 📋 게시물 헤더 블록 -->
-							<header class="mb-10 space-y-6 border-b-4 border-black pb-10">
-								{#if post.status && post.status !== 'published'}
-									<span
-										class="inline-block bg-yellow-400 px-3 py-1 text-[9px] font-black tracking-widest uppercase"
-									>
-										{post.status}
-									</span>
-								{/if}
-
-								<h1
-									class="border-l-8 border-black pl-8 text-5xl leading-tight font-black tracking-tighter md:text-6xl"
-								>
-									{post.title}
-								</h1>
-
-								<div class="flex flex-wrap items-center gap-x-8 gap-y-3 text-xs font-bold">
-									<div class="flex items-center gap-2 opacity-50">
-										<Icon icon="ph:user-circle-bold" class="h-4 w-4" />
-										<span class="bg-black px-2 py-0.5 text-[9px] text-white uppercase">AUTHOR</span>
-										<span>{post.author_name || 'ANONYMOUS'}</span>
+						<article class="mx-auto max-w-4xl" in:fade={{ duration: 250 }}>
+							<div class="board-fullbleed-card rounded-3xl border-2 border-slate-200 bg-white p-6 shadow-sm sm:p-10">
+								<!-- 📋 게시물 헤더 블록 -->
+								<header class="border-b border-slate-200 pb-6">
+									<div class="flex flex-wrap items-center gap-2">
+										<a
+											href="/v1/app/board/{boardSlug}"
+											class="rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-600 hover:bg-slate-200 transition"
+										>
+											{board?.name || boardSlug} · NO.{post.id}
+										</a>
+										{#if post.status && post.status !== 'published'}
+											<span class="rounded-lg bg-amber-100 px-2.5 py-1 text-xs font-bold text-amber-800">
+												{post.status}
+											</span>
+										{/if}
 									</div>
-									<div class="flex items-center gap-2 opacity-40">
-										<Icon icon="ph:calendar-blank-bold" class="h-4 w-4" />
-										<span>{formatDate(post.created_at)}</span>
-									</div>
-									{#if post.updated_at && post.updated_at !== post.created_at}
-										<div class="flex items-center gap-2 opacity-30">
-											<Icon icon="ph:pencil-line-bold" class="h-4 w-4" />
-											<span>수정됨 {formatDate(post.updated_at)}</span>
-										</div>
-									{/if}
-									<div class="ml-auto flex items-center gap-2 opacity-40">
-										<Icon icon="ph:eye-bold" class="h-4 w-4" />
-										<span>{post.view_count || 0} VIEWS</span>
-									</div>
-								</div>
-							</header>
 
-							<!-- 📄 본문 콘텐츠 -->
-							<section
-								class="mb-12 border-4 border-black bg-white p-8 shadow-[16px_16px_0_rgba(0,0,0,0.04)] md:p-14"
-							>
+									<h1 class="mt-3 text-2xl font-black tracking-tight text-slate-900 sm:text-3xl">
+										{post.title}
+									</h1>
+
+									<div class="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs font-bold text-slate-500">
+										<span class="inline-flex items-center gap-1.5 text-slate-700">
+											<Icon icon="ph:user-bold" class="h-3.5 w-3.5 text-slate-400" />
+											<span>{post.user_name || post.author_name || post.user?.real_name || post.user?.username || '작성자'}</span>
+										</span>
+										<span class="inline-flex items-center gap-1.5 text-slate-400">
+											<Icon icon="ph:calendar-blank-bold" class="h-3.5 w-3.5" />
+											<span>작성 {formatDate(post.create_date || post.created_at)}</span>
+										</span>
+										{#if post.modify_date || post.updated_at}
+											<span class="inline-flex items-center gap-1.5 text-slate-400">
+												<Icon icon="ph:pencil-line-bold" class="h-3.5 w-3.5" />
+												<span>수정 {formatDate(post.modify_date || post.updated_at)}</span>
+											</span>
+										{/if}
+										<span class="inline-flex items-center gap-1.5 text-slate-500 sm:ml-auto">
+											<Icon icon="ph:eye-bold" class="h-3.5 w-3.5 text-slate-400" />
+											<span>조회 {post.view_count || 0}</span>
+										</span>
+									</div>
+								</header>
+
+								<!-- 📄 본문 콘텐츠 -->
 								<SafeHtml
 									html={post.content}
-									class="prose prose-lg max-w-none font-['Noto_Sans_KR'] leading-relaxed"
+									class="prose prose-slate max-w-none pt-8 text-base leading-relaxed text-slate-800"
 								/>
-							</section>
 
-							<!-- 🗂 extra_data 필드 표시 -->
-							{#if post.extra_data && Object.keys(post.extra_data).length > 0}
-								<section class="mb-10 border-4 border-black bg-slate-50 p-8">
-									<h3
-										class="mb-6 border-b-2 border-black pb-3 text-xs font-black tracking-[0.3em] uppercase"
-									>
-										<Icon icon="ph:list-dashes-bold" class="inline h-4 w-4" /> Additional Fields
-									</h3>
-									<dl class="grid grid-cols-1 gap-4 md:grid-cols-2">
-										{#each Object.entries(post.extra_data) as [key, val]}
-											<div class="border-2 border-black bg-white p-4">
-												<dt
-													class="mb-1 text-[9px] font-black tracking-widest uppercase opacity-40"
-												>
-													{key}
-												</dt>
-												<dd class="text-sm font-bold">{val}</dd>
-											</div>
-										{/each}
-									</dl>
-								</section>
-							{/if}
+								<!-- 🗂 extra_data 필드 표시 -->
+								{#if post.extra_data && Object.keys(post.extra_data).length > 0}
+									<section class="mt-8 rounded-2xl border border-slate-200 bg-slate-50 p-5">
+										<h3 class="mb-3 flex items-center gap-1.5 text-xs font-black text-slate-700">
+											<Icon icon="ph:list-dashes-bold" class="h-4 w-4 text-blue-600" />
+											<span>추가 정보</span>
+										</h3>
+										<dl class="grid grid-cols-1 gap-3 md:grid-cols-2">
+											{#each Object.entries(post.extra_data) as [key, val]}
+												<div class="rounded-xl border border-slate-200 bg-white p-3.5">
+													<dt class="mb-0.5 text-[11px] font-bold text-slate-400">{key}</dt>
+													<dd class="text-sm font-bold text-slate-800">{val}</dd>
+												</div>
+											{/each}
+										</dl>
+									</section>
+								{/if}
 
-							<!-- 🔧 액션 푸터 -->
-							<footer
-								class="flex flex-wrap items-center justify-between gap-4 border-4 border-black bg-slate-100 p-6 md:p-8"
-							>
-								<div class="flex flex-wrap gap-3">
-									<button
-										class="flex h-12 items-center gap-2 border-2 border-black bg-white px-6 text-xs font-black uppercase transition-all hover:bg-black hover:text-white"
-										onclick={goToEdit}
+								<!-- 🔧 액션 푸터 -->
+								<footer class="mt-10 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-6">
+									<div class="flex flex-wrap gap-2">
+										{#if canModifyPost}
+											<button
+												class="inline-flex items-center gap-1.5 rounded-xl border-2 border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+												onclick={goToEdit}
+											>
+												<Icon icon="ph:pencil-simple-bold" class="h-4 w-4" /> 수정
+											</button>
+											<button
+												class="inline-flex items-center gap-1.5 rounded-xl border-2 border-rose-200 bg-white px-4 py-2 text-xs font-bold text-rose-600 transition hover:bg-rose-50"
+												onclick={handleDelete}
+											>
+												<Icon icon="ph:trash-bold" class="h-4 w-4" /> 삭제
+											</button>
+										{/if}
+									</div>
+									<a
+										href="/v1/app/board/{boardSlug}"
+										class="inline-flex items-center gap-1.5 rounded-xl bg-slate-900 px-5 py-2 text-xs font-bold text-white transition hover:bg-blue-600"
 									>
-										<Icon icon="ph:pencil-simple-bold" class="h-4 w-4" /> Modify
-									</button>
-									<button
-										class="flex h-12 items-center gap-2 border-2 border-red-500 bg-white px-6 text-xs font-black text-red-600 uppercase transition-all hover:bg-red-600 hover:text-white"
-										onclick={handleDelete}
-									>
-										<Icon icon="ph:trash-bold" class="h-4 w-4" /> Delete
-									</button>
-								</div>
-								<a
-									href="/v1/app/board/{boardSlug}"
-									class="flex h-12 items-center gap-2 bg-black px-8 text-xs font-black text-white uppercase transition-all hover:bg-slate-800"
-								>
-									<Icon icon="ph:list-bold" class="h-4 w-4" /> Return to List
-								</a>
-							</footer>
+										<Icon icon="ph:list-bold" class="h-4 w-4" /> 목록으로
+									</a>
+								</footer>
+							</div>
 
 							<!-- 💬 Dynamic Service Bindings (댓글 등) -->
 							{#if bindings && bindings.length > 0}
-								<div class="mt-16 space-y-10 pb-24">
+								<div class="mt-8 space-y-6 pb-16">
 									{#each bindings as binding (binding.service_component)}
 										{#if engines[binding.service_component]}
 											{@const DynComp = engines[binding.service_component]}
 											<div
-												class="border-t-4 border-black pt-10"
-												in:fly={{ y: 20, duration: 400 }}
+												class="board-fullbleed-card rounded-3xl border-2 border-slate-200 bg-white p-6 shadow-sm"
+												in:fly={{ y: 16, duration: 300 }}
 											>
-												<p
-													class="mb-6 text-[9px] font-black tracking-[0.4em] uppercase opacity-30"
-												>
-													{binding.service_component}
-												</p>
 												<DynComp
 													{post}
 													{appId}
@@ -580,45 +613,57 @@
 					{/if}
 				{:else if mode === 'write' || mode === 'edit'}
 					<div class="mx-auto max-w-5xl">
-						<div class="border-8 border-black bg-white p-10 md:p-16">
-							<div class="mb-12 flex items-baseline justify-between border-b-4 border-black pb-6">
-								<h2 class="text-4xl font-black tracking-tighter uppercase italic">
-									Cluster Entry / <span class="text-blue-600">{mode}</span>
-								</h2>
-								<span class="text-[10px] font-black tracking-[0.3em] uppercase opacity-30"
-									>Protocol_v2.0</span
+						<div class="board-fullbleed-card rounded-3xl border-2 border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+							<div class="mb-6 flex items-center justify-between border-b border-slate-100 pb-4">
+								<div class="flex items-center gap-3">
+									<div class="flex h-10 w-10 items-center justify-center rounded-2xl bg-blue-50 text-blue-600">
+										<Icon icon="ph:pencil-simple-line-bold" class="text-xl" />
+									</div>
+									<div>
+										<h2 class="text-lg font-black text-slate-900">
+											{mode === 'write' ? '새 게시글 작성' : '게시글 수정'}
+										</h2>
+										<p class="text-xs font-bold text-slate-500">
+											{board?.name || boardSlug}
+										</p>
+									</div>
+								</div>
+								<a
+									href="/v1/app/board/{boardSlug}"
+									class="rounded-xl px-3.5 py-2 text-xs font-bold text-slate-500 hover:bg-slate-100 hover:text-slate-800 transition"
 								>
+									취소
+								</a>
 							</div>
 
-							<div class="space-y-10">
-								<div class="space-y-3">
-									<label
-										class="flex items-center gap-2 text-[10px] font-black tracking-[0.2em] uppercase opacity-30"
-									>
-										<Icon icon="ph:text-t-bold" class="h-4 w-4" /> Entry Title
+							<div class="space-y-6">
+								<div>
+									<label for="board-title-input" class="mb-2 block text-xs font-bold text-slate-700">
+										제목 <span class="text-rose-500">*</span>
 									</label>
 									<input
+										id="board-title-input"
 										type="text"
 										bind:value={editForm.title}
-										class="h-20 w-full border-4 border-black bg-[#fafafa] px-8 text-3xl font-black uppercase transition-all placeholder:opacity-20 focus:bg-white focus:ring-8 focus:ring-blue-100 focus:outline-none"
-										placeholder="TYPE YOUR TITLE..."
+										class="w-full rounded-2xl border-2 border-slate-200 bg-white px-4 py-3 text-sm font-bold focus:border-blue-600 focus:outline-none transition"
+										placeholder="게시글 제목을 입력하세요"
 									/>
 								</div>
 
 								<!-- 동적 커스텀 필드 -->
 								{#if board?.fields_def && board.fields_def.length > 0}
-									<div class="grid grid-cols-1 gap-8 border-y-2 border-black/5 py-10 md:grid-cols-2">
+									<div class="grid grid-cols-1 gap-5 rounded-2xl border border-slate-200 bg-slate-50/60 p-4 md:grid-cols-2">
 										{#each board.fields_def as field}
-											<div class="space-y-3">
-												<label class="flex items-center gap-2 text-[10px] font-black tracking-[0.2em] uppercase opacity-30">
-													<Icon icon="ph:tag-bold" class="h-4 w-4" /> {field.label}
+											<div>
+												<label class="mb-1.5 block text-xs font-bold text-slate-700">
+													{field.label}
 												</label>
 												{#if field.type === 'number'}
-													<input type="number" bind:value={editForm.extra_data[field.key]} class="h-14 w-full border-2 border-black bg-white px-5 font-bold focus:outline-none focus:ring-4 focus:ring-blue-50" />
+													<input type="number" bind:value={editForm.extra_data[field.key]} class="w-full rounded-2xl border-2 border-slate-200 bg-white px-4 py-2.5 text-sm font-bold focus:border-blue-600 focus:outline-none transition" />
 												{:else if field.type === 'date'}
-													<input type="date" bind:value={editForm.extra_data[field.key]} class="h-14 w-full border-2 border-black bg-white px-5 font-bold focus:outline-none focus:ring-4 focus:ring-blue-50" />
+													<input type="date" bind:value={editForm.extra_data[field.key]} class="w-full rounded-2xl border-2 border-slate-200 bg-white px-4 py-2.5 text-sm font-bold focus:border-blue-600 focus:outline-none transition" />
 												{:else if field.type === 'select'}
-													<select bind:value={editForm.extra_data[field.key]} class="h-14 w-full border-2 border-black bg-white px-5 font-black focus:outline-none focus:ring-4 focus:ring-blue-50">
+													<select bind:value={editForm.extra_data[field.key]} class="w-full rounded-2xl border-2 border-slate-200 bg-white px-4 py-2.5 text-sm font-bold focus:border-blue-600 focus:outline-none transition">
 														<option value="">-- 선택하세요 --</option>
 														{#each (field.options_text || '').split(',').map(s => s.trim()) as opt}
 															{#if opt}
@@ -627,46 +672,41 @@
 														{/each}
 													</select>
 												{:else}
-													<input type="text" bind:value={editForm.extra_data[field.key]} placeholder={field.placeholder || ''} class="h-14 w-full border-2 border-black bg-white px-5 font-bold focus:outline-none focus:ring-4 focus:ring-blue-50" />
+													<input type="text" bind:value={editForm.extra_data[field.key]} placeholder={field.placeholder || ''} class="w-full rounded-2xl border-2 border-slate-200 bg-white px-4 py-2.5 text-sm font-bold focus:border-blue-600 focus:outline-none transition" />
 												{/if}
 											</div>
 										{/each}
 									</div>
 								{/if}
 
-								<div class="space-y-3">
-									<label
-										class="flex items-center gap-2 text-[10px] font-black tracking-[0.2em] uppercase opacity-30"
-									>
-										<Icon icon="ph:article-bold" class="h-4 w-4" /> Entry Content
-									</label>
-									<div class="min-h-[500px] border-4 border-black">
-										<TiptapEditor bind:content={editForm.content} bind:content_json={editForm.content_json} />
-									</div>
+								<div>
+									<span class="mb-2 block text-xs font-bold text-slate-700">
+										본문 콘텐츠 (표준 에디터)
+									</span>
+									<TiptapEditor bind:content={editForm.content} bind:content_json={editForm.content_json} slug={boardSlug} />
 								</div>
 
-								<div class="flex flex-col gap-6 pt-10 md:flex-row">
+								<div class="flex items-center justify-end gap-3 border-t border-slate-100 pt-6">
+									<a
+										href="/v1/app/board/{boardSlug}"
+										class="rounded-2xl border-2 border-slate-200 bg-white px-6 py-3 text-xs font-bold text-slate-600 transition hover:bg-slate-50"
+									>
+										취소
+									</a>
 									<button
-										class="group flex h-24 flex-1 items-center justify-center gap-4 border-4 border-black bg-blue-600 text-2xl font-black tracking-[0.2em] text-white uppercase transition-all hover:bg-black disabled:opacity-50"
+										type="button"
+										class="inline-flex items-center gap-2 rounded-2xl bg-blue-600 px-8 py-3 text-sm font-black text-white shadow-sm transition hover:bg-blue-700 disabled:opacity-50"
 										onclick={handleSave}
 										disabled={isLoading}
 									>
 										{#if isLoading}
-											<span class="loading loading-spinner"></span> SYNCING...
+											<span class="loading loading-spinner loading-xs"></span>
+											<span>저장 중...</span>
 										{:else}
-											<Icon
-												icon="ph:paper-plane-tilt-bold"
-												class="h-8 w-8 transition-transform group-hover:rotate-12"
-											/>
-											{mode === 'write' ? 'Authorize Entry' : 'Update Record'}
+											<Icon icon="ph:floppy-disk-back-bold" class="h-4 w-4" />
+											<span>{mode === 'write' ? '게시글 등록' : '수정사항 저장'}</span>
 										{/if}
 									</button>
-									<a
-										href="/v1/app/board/{boardSlug}"
-										class="flex h-24 items-center justify-center border-4 border-black px-10 text-xs font-black tracking-[0.3em] uppercase transition-all hover:bg-slate-100"
-									>
-										Abort Process
-									</a>
 								</div>
 							</div>
 						</div>
@@ -678,11 +718,19 @@
 </div>
 
 <style>
-	:global(.prose) {
-		max-width: none;
-	}
-	:global(.prose img) {
-		border: 4px solid black;
-		box-shadow: 15px 15px 0 rgba(0, 0, 0, 0.05);
+	/* 📱 모바일 세로 모드 + 하단 퀵 내비게이션 바 활성화(< 768px) 구간: 게시판 카드 좌우 여백 0 */
+	@media (max-width: 767px) and (orientation: portrait) {
+		.board-fullbleed-card {
+			width: 100vw;
+			max-width: 100vw;
+			margin-left: calc(50% - 50vw);
+			margin-right: calc(50% - 50vw);
+			border-left-width: 0;
+			border-right-width: 0;
+			border-radius: 0;
+			box-shadow: none;
+			padding-left: 1rem;
+			padding-right: 1rem;
+		}
 	}
 </style>

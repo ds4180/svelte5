@@ -132,7 +132,7 @@ export async function publishEditorContentAssets(params: {
 	access_level: 'PUBLIC' | 'PROTECTED' | string;
 	sub_path?: string;
 	serverUrl?: string;
-}): Promise<{ content: string; content_json: any }> {
+}): Promise<{ content: string; content_json: any; publishedAssetIds: number[] }> {
 	const {
 		content,
 		content_json = null,
@@ -144,7 +144,7 @@ export async function publishEditorContentAssets(params: {
 	} = params;
 
 	if (!content || pendingPrivateAssetIds.size === 0) {
-		return { content, content_json };
+		return { content, content_json, publishedAssetIds: [] };
 	}
 
 	const serveRegex = /\/media\/serve\/(\d+)/g;
@@ -158,7 +158,7 @@ export async function publishEditorContentAssets(params: {
 	}
 
 	if (foundIds.size === 0) {
-		return { content, content_json };
+		return { content, content_json, publishedAssetIds: [] };
 	}
 
 	const assetIds = Array.from(foundIds);
@@ -171,13 +171,17 @@ export async function publishEditorContentAssets(params: {
 	});
 
 	if (!Array.isArray(publishedList) || publishedList.length === 0) {
-		return { content, content_json };
+		return { content, content_json, publishedAssetIds: [] };
 	}
 
 	const urlMap = new Map<number, string>();
+	const publishedAssetIds: number[] = [];
 	publishedList.forEach((newAsset, idx) => {
 		const srcId = Number(newAsset?.meta_info?.published_from ?? assetIds[idx]);
 		const newUrl = getSecureMediaUrl(serverUrl, newAsset);
+		if (newAsset?.id) {
+			publishedAssetIds.push(Number(newAsset.id));
+		}
 		if (srcId && newUrl) {
 			urlMap.set(srcId, newUrl);
 			pendingPrivateAssetIds.delete(srcId);
@@ -185,7 +189,7 @@ export async function publishEditorContentAssets(params: {
 	});
 
 	if (urlMap.size === 0) {
-		return { content, content_json };
+		return { content, content_json, publishedAssetIds };
 	}
 
 	let nextContent = content;
@@ -201,6 +205,7 @@ export async function publishEditorContentAssets(params: {
 
 	return {
 		content: nextContent,
-		content_json: nextJsonStr ? JSON.parse(nextJsonStr) : content_json
+		content_json: nextJsonStr ? JSON.parse(nextJsonStr) : content_json,
+		publishedAssetIds
 	};
 }

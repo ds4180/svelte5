@@ -1,66 +1,102 @@
 <script>
 	/**
 	 * Pagination.svelte
-	 * @description 페이지네이션 컴포넌트 (DaisyUI 스타일 적용)
-	 * @prop {number} total       - 전체 데이터 수
+	 * @description 공용 페이지네이션 컴포넌트 (SPA 콜백 모드 + URL 링크 모드 겸용)
+	 * @prop {number} total - 전체 데이터 수
 	 * @prop {number} currentPage - 현재 페이지 번호 (0-indexed)
-	 * @prop {number} [size=10]   - 페이지당 항목 수
-	 * @prop {string} [keyword]   - 검색어 (URL 파라미터에 유지)
+	 * @prop {number} [size=10] - 페이지당 항목 수
+	 * @prop {string} [keyword=''] - URL 링크 모드용 검색어
+	 * @prop {(page: number) => void} [onPageChange] - SPA 콜백 (지정 시 <button>으로 동작)
 	 */
+	import Icon from '@iconify/svelte';
 
-	// --- [Svelte 5 Props] ---
-	let { total = 0, currentPage = 0, size = 10, keyword = '' } = $props();
+	let {
+		total = 0,
+		currentPage = 0,
+		size = 10,
+		keyword = '',
+		onPageChange = undefined
+	} = $props();
 
-	// 전체 페이지 수 자동 계산 ($derived 룬)
-	const totalPages = $derived(Math.ceil(total / size));
+	const totalPages = $derived(Math.max(1, Math.ceil(total / Math.max(1, size))));
 
-	/**
-	 * 검색어를 포함한 페이지 URL 생성
-	 * @param {number} page
-	 * @returns {string}
-	 */
 	const getUrl = (page) => {
-		const params = new URLSearchParams({ page: page.toString() });
+		const params = new URLSearchParams({ page: String(page) });
 		if (keyword) params.set('keyword', keyword);
 		return `?${params.toString()}`;
 	};
+
+	function handleSelect(page) {
+		if (page < 0 || page >= totalPages || page === currentPage) return;
+		onPageChange?.(page);
+	}
 </script>
 
-<!-- ================================================================== -->
-<!-- 페이지네이션 (DaisyUI join + btn 스타일) -->
-<!-- ================================================================== -->
 {#if totalPages > 1}
-	<div class="mt-4 flex justify-center">
-		<div class="join">
-			<!-- 이전 버튼 -->
-			<a
-				href={getUrl(currentPage - 1)}
-				class="btn join-item btn-sm {currentPage <= 0 ? 'btn-disabled' : ''}"
+	<nav class="mt-6 flex items-center justify-center gap-1.5" aria-label="페이지 이동">
+		{#if onPageChange}
+			<button
+				type="button"
+				onclick={() => handleSelect(currentPage - 1)}
+				disabled={currentPage <= 0}
 				aria-label="이전 페이지"
+				class="inline-flex h-10 w-10 items-center justify-center rounded-xl border-2 border-slate-200 bg-white text-slate-600 transition hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
 			>
-				«
+				<Icon icon="ph:caret-left-bold" class="h-4 w-4" />
+			</button>
+
+			{#each Array(totalPages) as _, i}
+				{#if i >= currentPage - 3 && i <= currentPage + 3}
+					<button
+						type="button"
+						onclick={() => handleSelect(i)}
+						class="inline-flex h-10 min-w-[2.5rem] items-center justify-center rounded-xl border-2 px-3 text-xs font-black transition {i === currentPage
+							? 'border-blue-600 bg-blue-600 text-white shadow-xs'
+							: 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50'}"
+					>
+						{i + 1}
+					</button>
+				{/if}
+			{/each}
+
+			<button
+				type="button"
+				onclick={() => handleSelect(currentPage + 1)}
+				disabled={currentPage + 1 >= totalPages}
+				aria-label="다음 페이지"
+				class="inline-flex h-10 w-10 items-center justify-center rounded-xl border-2 border-slate-200 bg-white text-slate-600 transition hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+			>
+				<Icon icon="ph:caret-right-bold" class="h-4 w-4" />
+			</button>
+		{:else}
+			<a
+				href={getUrl(Math.max(0, currentPage - 1))}
+				aria-label="이전 페이지"
+				class="inline-flex h-10 w-10 items-center justify-center rounded-xl border-2 border-slate-200 bg-white text-slate-600 transition hover:border-slate-300 hover:bg-slate-50 {currentPage <= 0 ? 'pointer-events-none opacity-40' : ''}"
+			>
+				<Icon icon="ph:caret-left-bold" class="h-4 w-4" />
 			</a>
 
-			<!-- 페이지 번호 (현재 페이지 ±5 범위만 표시) -->
 			{#each Array(totalPages) as _, i}
-				{#if i >= currentPage - 5 && i <= currentPage + 5}
+				{#if i >= currentPage - 3 && i <= currentPage + 3}
 					<a
 						href={getUrl(i)}
-						class="btn join-item btn-sm {i === currentPage ? 'btn-active btn-primary' : ''}"
+						class="inline-flex h-10 min-w-[2.5rem] items-center justify-center rounded-xl border-2 px-3 text-xs font-black transition {i === currentPage
+							? 'border-blue-600 bg-blue-600 text-white shadow-xs'
+							: 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50'}"
 					>
 						{i + 1}
 					</a>
 				{/if}
 			{/each}
 
-			<!-- 다음 버튼 -->
 			<a
-				href={getUrl(currentPage + 1)}
-				class="btn join-item btn-sm {currentPage + 1 >= totalPages ? 'btn-disabled' : ''}"
+				href={getUrl(Math.min(totalPages - 1, currentPage + 1))}
 				aria-label="다음 페이지"
+				class="inline-flex h-10 w-10 items-center justify-center rounded-xl border-2 border-slate-200 bg-white text-slate-600 transition hover:border-slate-300 hover:bg-slate-50 {currentPage + 1 >= totalPages ? 'pointer-events-none opacity-40' : ''}"
 			>
-				»
+				<Icon icon="ph:caret-right-bold" class="h-4 w-4" />
 			</a>
-		</div>
-	</div>
+		{/if}
+	</nav>
 {/if}

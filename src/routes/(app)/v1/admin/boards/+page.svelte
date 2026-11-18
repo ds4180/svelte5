@@ -24,7 +24,10 @@
 		name: '',
 		description: '',
 		layout_type: 'list',
-		items_per_page: 10
+		items_per_page: 10,
+		min_read_rank: 0,
+		min_write_rank: 2,
+		is_active: true
 	});
 
 	// 📊 4대 관제 지표 요약 (반응형 파생 상태)
@@ -60,7 +63,10 @@
 			name: '',
 			description: '',
 			layout_type: 'list',
-			items_per_page: 10
+			items_per_page: 10,
+			min_read_rank: 0,
+			min_write_rank: 2,
+			is_active: true
 		};
 	}
 
@@ -73,7 +79,13 @@
 	 * @param {any} b
 	 */
 	function startEdit(b) {
-		editingBoard = { ...b, layout_type: b.layout_type || 'list' };
+		editingBoard = {
+			...b,
+			layout_type: b.layout_type || 'list',
+			min_read_rank: Number(b.min_read_rank ?? 0),
+			min_write_rank: Number(b.min_write_rank ?? 2),
+			is_active: b.is_active ?? true
+		};
 		activeTab = 'create';
 	}
 
@@ -321,10 +333,13 @@
 								</p>
 							</div>
 
-							<div class="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between">
-								<span class="text-xs font-bold text-slate-400 font-mono">
-									페이지당 {b.items_per_page || 10}건
-								</span>
+							<div class="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between gap-2">
+								<div class="flex items-center gap-2 text-xs font-bold text-slate-400 font-mono">
+									<span>{b.items_per_page || 10}건</span>
+									<span class="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-black text-slate-600">
+										R{b.min_read_rank ?? 0} / W{b.min_write_rank ?? 2}
+									</span>
+								</div>
 								<div class="flex items-center gap-2">
 									<button
 										type="button"
@@ -436,6 +451,52 @@
 							class="w-full px-4 py-3 rounded-2xl border-2 border-slate-200 text-xs font-bold text-slate-800 bg-white focus:border-blue-600 focus:outline-none transition"
 						/>
 					</div>
+				</div>
+
+				<div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+					<div class="space-y-1.5">
+						<label for="board-read-rank-select" class="block text-xs font-black text-slate-700 tracking-wide">읽기 최소 권한 (min_read_rank)</label>
+						<select
+							id="board-read-rank-select"
+							bind:value={editingBoard.min_read_rank}
+							class="w-full px-4 py-3 rounded-2xl border-2 border-slate-200 text-xs font-bold text-slate-800 bg-white focus:border-blue-600 focus:outline-none transition"
+						>
+							<option value={0}>전체 공개 (R0)</option>
+							<option value={1}>로그인 · 직원 전용 (R1)</option>
+							<option value={2}>중간 관리자 이상 (R2)</option>
+							<option value={4}>시스템 마스터 이상 (R4)</option>
+							<option value={9}>최고 관리자(root) 전용 (R9)</option>
+						</select>
+					</div>
+
+					<div class="space-y-1.5">
+						<label for="board-write-rank-select" class="block text-xs font-black text-slate-700 tracking-wide">쓰기/수정 최소 권한 (min_write_rank)</label>
+						<select
+							id="board-write-rank-select"
+							bind:value={editingBoard.min_write_rank}
+							class="w-full px-4 py-3 rounded-2xl border-2 border-slate-200 text-xs font-bold text-slate-800 bg-white focus:border-blue-600 focus:outline-none transition"
+						>
+							<option value={0}>전체 허용 (R0)</option>
+							<option value={1}>로그인 · 직원 이상 (R1)</option>
+							<option value={2}>중간 관리자 이상 (R2)</option>
+							<option value={4}>시스템 마스터 이상 (R4)</option>
+							<option value={9}>최고 관리자(root) 전용 (R9)</option>
+						</select>
+					</div>
+				</div>
+
+				<div class="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+					<label class="flex items-center gap-2 cursor-pointer">
+						<input type="checkbox" bind:checked={editingBoard.is_active} class="checkbox checkbox-sm checkbox-primary" />
+						<span class="text-xs font-bold text-slate-700">게시판 활성화 (is_active)</span>
+					</label>
+					<a
+						href="/v1/admin/group-manage"
+						class="inline-flex items-center gap-1 text-xs font-black text-blue-600 hover:underline"
+					>
+						<Icon icon="ph:shield-check-bold" class="text-sm" />
+						<span>그룹별 허용/차단(allow/deny) 세부 관리 →</span>
+					</a>
 				</div>
 
 				<div class="pt-6 border-t border-slate-100 flex flex-wrap items-center gap-3">

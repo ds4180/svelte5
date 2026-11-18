@@ -16,22 +16,22 @@ export interface BoardPostQueryParams {
 }
 
 export const getBoardPosts = <T = any>(slug: string, params: BoardPostQueryParams = {}) =>
-	fastApi<T>('GET', `/api/v1/boards/${slug}/posts`, params);
+	fastApi<T>('GET', `/api/v1/board/list/${slug}`, params);
 
 export const getBoardConfig = <T = any>(slug: string) =>
-	fastApi<T>('GET', `/api/v1/boards/${slug}/config`);
+	fastApi<T>('GET', `/api/v1/board/list/${slug}`, { page: 0, size: 1 });
 
 export const getPostDetail = <T = any>(postId: number | string) =>
-	fastApi<T>('GET', `/api/v1/posts/${postId}`);
+	fastApi<T>('GET', `/api/v1/board/post/${postId}`);
 
 export const createPost = <T = any>(slug: string, data: Record<string, any>) =>
-	fastApi<T>('POST', `/api/v1/boards/${slug}/posts`, data);
+	fastApi<T>('POST', `/api/v1/board/create/${slug}`, data);
 
 export const updatePost = <T = any>(postId: number | string, data: Record<string, any>) =>
-	fastApi<T>('PUT', `/api/v1/posts/${postId}`, data);
+	fastApi<T>('PUT', `/api/v1/board/update/${postId}`, data);
 
 export const deletePost = <T = any>(postId: number | string) =>
-	fastApi<T>('DELETE', `/api/v1/posts/${postId}`);
+	fastApi<T>('DELETE', `/api/v1/board/delete/${postId}`);
 
 // 댓글 API 통합 re-export
 export { getComments, createComment, updateComment, deleteComment } from './comment';
