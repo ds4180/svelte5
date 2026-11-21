@@ -45,11 +45,29 @@ export interface MiniappQueryParams {
 	[key: string]: any;
 }
 
+export interface MiniappSummary {
+	counts: MiniappCounts;
+	items: MiniappItem[];
+}
+
 /**
- * 상단 헤더 뱃지 및 슬라이더 뱃지용 실시간 미결 건수 조회
+ * 상단 헤더 뱃지 및 슬라이더 뱃지용 미결 건수 조회
  */
 export const getMiniappCounts = () =>
 	fastApi<MiniappCounts>('GET', '/api/v1/miniapps/counts');
+
+/**
+ * 카운트 + 피드 목록 단일 통합 조회 (1회 요청으로 부하 절감)
+ */
+export const getMiniappSummary = (params: MiniappQueryParams = {}) => {
+	const cleanParams: Record<string, any> = {};
+	Object.entries(params).forEach(([key, val]) => {
+		if (val !== undefined && val !== null && val !== '') {
+			cleanParams[key] = val;
+		}
+	});
+	return fastApi<MiniappSummary>('GET', '/api/v1/miniapps/summary', cleanParams);
+};
 
 /**
  * 사용자의 미니앱 액션 피드 목록 조회

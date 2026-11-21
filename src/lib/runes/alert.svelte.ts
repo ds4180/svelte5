@@ -15,6 +15,7 @@
  */
 
 import { browser } from '$app/environment';
+import { fastApi } from '$lib/api';
 import { isExpired } from '$lib/utils';
 import { notifyAlert } from '$lib/utils/sound';
 
@@ -62,21 +63,141 @@ export class AlertState {
 	// 📌 L4/L5 전용 카운트다운 타이머 상태 { [alertId]: 남은초 }
 	countdowns = $state<Record<string | number, number>>({});
 
+	private _initialized = false;
+	private _initializedFirstLoad = false;
+	private _inFlightSync: Promise<void> | null = null;
+	private _lastSyncedAt = 0;
+	private _isDirty = false;
+	private _syncTimer: ReturnType<typeof setTimeout> | null = null;
+	private readonly SYNC_TTL_MS = 120_000;
+
 	constructor() {}
 
 	/**
-	 * 브라우저 런타임 초기화 (LocalStorage 복구)
+	 * 브라우저 런타임 초기화 (LocalStorage 복구, 1회 보장)
 	 */
 	init() {
-		if (browser) {
+		if (!browser || this._initialized) return;
+		this._initialized = true;
+		try {
+			const stored = localStorage.getItem('dismissed_alerts');
+			this.dismissedIds = stored ? JSON.parse(stored) : {};
+			this.isQuietMode = localStorage.getItem('is_quiet_mode') === 'true';
+			console.log('🔔 [AlertState] 사내 알림 엔진 초기화 완료');
+		} catch (e) {
+			this.dismissedIds = {};
+		}
+	}
+
+	/**
+	 * 로그아웃/세션 종료 시 활성 알림 메모리 상태 초기화
+	 */
+	reset() {
+		if (this._syncTimer) {
+			clearTimeout(this._syncTimer);
+			this._syncTimer = null;
+		}
+		this.all = [];
+		this.sessionHiddenIds = new Set();
+		this.countdowns = {};
+		this._initializedFirstLoad = false;
+		this._lastSyncedAt = 0;
+		this._isDirty = false;
+	}
+
+	/**
+	 * 서버 활성 알림 동기화 (in-flight 병합 및 TTL 가드 적용)
+	 */
+	async sync(force = false): Promise<void> {
+		if (!browser) return;
+		this.init();
+
+		if (this._inFlightSync) {
+			return this._inFlightSync;
+		}
+
+		if (
+			!force &&
+			!this._isDirty &&
+			this._lastSyncedAt > 0 &&
+			Date.now() - this._lastSyncedAt < this.SYNC_TTL_MS
+		) {
+			return;
+		}
+
+		this._inFlightSync = (async () => {
 			try {
-				const stored = localStorage.getItem('dismissed_alerts');
-				this.dismissedIds = stored ? JSON.parse(stored) : {};
-				this.isQuietMode = localStorage.getItem('is_quiet_mode') === 'true';
-				console.log('🔔 [AlertState] 사내 알림 엔진 초기화 완료');
+				const serverAlerts = await fastApi('GET', '/api/alert/active', {}, { offline: false });
+				if (Array.isArray(serverAlerts)) {
+					const existingIds = new Set(this.all.map((oldA) => oldA.id));
+
+					const mergedAlerts = serverAlerts.map((newA) => {
+						const existing = this.all.find((oldA) => oldA.id === newA.id);
+						if (existing) {
+							return { ...newA, timerStarted: existing.timerStarted };
+						}
+						return newA;
+					});
+
+					// 최초 로드 이후 새로 도착한 L1/L2 알림에만 사운드/진동 트리거
+					if (this._initializedFirstLoad) {
+						for (const newA of serverAlerts) {
+							if (!existingIds.has(newA.id) && (newA.level === 1 || newA.level === 2)) {
+								notifyAlert(newA.level);
+								break;
+							}
+						}
+					}
+					this._initializedFirstLoad = true;
+					this._lastSyncedAt = Date.now();
+					this._isDirty = false;
+
+					if (JSON.stringify(this.all) !== JSON.stringify(mergedAlerts)) {
+						this.all = mergedAlerts;
+					}
+				}
 			} catch (e) {
-				this.dismissedIds = {};
+				console.warn('⚠️ [AlertState] 실시간 갱신 실패', e);
+			} finally {
+				this._inFlightSync = null;
 			}
+		})();
+
+		return this._inFlightSync;
+	}
+
+	/**
+	 * WebSocket 'new_alert' 신호 수신 시 지터 기반 분산 동기화
+	 */
+	handleRealtimeSignal() {
+		if (!browser) return;
+		this._isDirty = true;
+
+		if (typeof document !== 'undefined' && document.visibilityState !== 'visible') {
+			return;
+		}
+
+		if (this._syncTimer) {
+			clearTimeout(this._syncTimer);
+		}
+		const jitterMs = 200 + Math.floor(Math.random() * 1000);
+		this._syncTimer = setTimeout(() => {
+			this._syncTimer = null;
+			this.sync(true);
+		}, jitterMs);
+	}
+
+	/**
+	 * 탭 복귀 또는 백업 주기 시 stale/dirty 상태면 재조회
+	 */
+	syncIfStale() {
+		if (!browser) return;
+		if (
+			this._isDirty ||
+			this._lastSyncedAt === 0 ||
+			Date.now() - this._lastSyncedAt >= this.SYNC_TTL_MS
+		) {
+			this.sync(true);
 		}
 	}
 

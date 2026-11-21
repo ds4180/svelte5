@@ -51,7 +51,7 @@
 
 	$effect(() => {
 		if (auth.isAuthenticated) {
-			miniappStore.loadCounts();
+			miniappStore.ensureCountsLoaded(true);
 		} else {
 			miniappStore.reset();
 		}
@@ -185,6 +185,9 @@
 	}
 	function toggleRight() {
 		isRightOpen = !isRightOpen;
+		if (isRightOpen && auth.isAuthenticated) {
+			miniappStore.syncIfStale(true);
+		}
 	}
 	/** @param {any} menuId */
 	function toggleMenu(menuId) {

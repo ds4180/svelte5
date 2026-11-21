@@ -14,8 +14,9 @@
 		SurveyResponseItem,
 		SurveyVehicleContext
 	} from '$lib/api/survey';
-	import { uploadFiles } from '$lib/services/mediaService';
+	import { publishAssets, uploadFiles } from '$lib/services/mediaService';
 	import { getSecureMediaUrl } from '$lib/config/media';
+	import PersonalMediaPickerModal from '$lib/components/PersonalMediaPickerModal.svelte';
 	import SafeHtml from '$lib/components/SafeHtml.svelte';
 	import { toast } from '$lib/runes/toast.svelte';
 	import { formatApiError } from '$lib/utils/error';
@@ -45,6 +46,8 @@
 	let answers = $state<Record<string, any>>({});
 	let saving = $state(false);
 	let uploadingKey = $state<string | null>(null);
+	let pickerField = $state<SurveyFieldSchema | null>(null);
+	let showPersonalPicker = $state(false);
 	let lastSubmitted = $state<SurveyResponseItem | null>(null);
 
 	const myResponses = $derived(campaign.my_responses || (campaign.my_response ? [campaign.my_response] : []));
@@ -147,6 +150,37 @@
 	function removePhoto(key: string, idx: number) {
 		const curr = Array.isArray(answers[key]) ? answers[key] : [];
 		answers[key] = curr.filter((_: any, i: number) => i !== idx);
+	}
+
+	async function handlePersonalPhotosPicked(pickedAssets: any[]) {
+		if (!pickerField || !Array.isArray(pickedAssets) || pickedAssets.length === 0) return;
+		const field = pickerField;
+		const maxFiles = field.max_files || 5;
+		const currentList = Array.isArray(answers[field.key]) ? answers[field.key] : [];
+		if (currentList.length + pickedAssets.length > maxFiles) {
+			toast.warning(`최대 ${maxFiles}장까지 첨부할 수 있습니다.`);
+			return;
+		}
+		uploadingKey = field.key;
+		try {
+			const assetIds = pickedAssets.map((a) => Number(a.id)).filter((id) => Number.isFinite(id) && id > 0);
+			const published = await publishAssets<any[]>({
+				asset_ids: assetIds,
+				app_id: 'survey',
+				access_level: 'PROTECTED',
+				sub_path: `campaign_${campaign.id}`
+			});
+			const urls = (Array.isArray(published) ? published : [published])
+				.map((a: any) => a?.url || (a?.id ? `/api/media/serve/${a.id}` : ''))
+				.filter(Boolean);
+			answers[field.key] = [...currentList, ...urls];
+			toast.success(`${urls.length}장의 사진이 내 파일함에서 첨부되었습니다.`);
+		} catch (err) {
+			toast.error('개인 파일함 첨부 실패: ' + formatApiError(err, '오류'));
+		} finally {
+			uploadingKey = null;
+			pickerField = null;
+		}
 	}
 
 	async function handleSubmit() {
@@ -404,18 +438,32 @@
 				{:else if field.type === 'photo'}
 					<div class="space-y-3">
 						{#if isEditable}
-							<label class="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-dashed border-indigo-300 bg-indigo-50/60 px-4 py-2.5 text-xs font-black text-indigo-700 transition hover:bg-indigo-100">
-								<Icon icon="solar:camera-add-bold-duotone" class="text-base" />
-								<span>{uploadingKey === field.key ? '업로드 중...' : '사진 선택 / 촬영 첨부'}</span>
-								<input
-									type="file"
-									accept="image/*"
-									multiple
-									class="hidden"
+							<div class="flex flex-wrap items-center gap-2">
+								<label class="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-dashed border-indigo-300 bg-indigo-50/60 px-4 py-2.5 text-xs font-black text-indigo-700 transition hover:bg-indigo-100">
+									<Icon icon="solar:camera-add-bold-duotone" class="text-base" />
+									<span>{uploadingKey === field.key ? '업로드 중...' : '사진 선택 / 촬영 첨부'}</span>
+									<input
+										type="file"
+										accept="image/*"
+										multiple
+										class="hidden"
+										disabled={uploadingKey === field.key}
+										onchange={(e) => handlePhotoUpload(field, e)}
+									/>
+								</label>
+								<button
+									type="button"
 									disabled={uploadingKey === field.key}
-									onchange={(e) => handlePhotoUpload(field, e)}
-								/>
-							</label>
+									onclick={() => {
+										pickerField = field;
+										showPersonalPicker = true;
+									}}
+									class="inline-flex items-center gap-1.5 rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-xs font-black text-slate-700 transition hover:border-indigo-300 hover:bg-indigo-50 hover:text-indigo-700"
+								>
+									<Icon icon="solar:folder-open-bold-duotone" class="text-base text-indigo-600" />
+									<span>내 파일함(/USERS)</span>
+								</button>
+							</div>
 						{/if}
 						{#if Array.isArray(answers[field.key]) && answers[field.key].length > 0}
 							<div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -468,3 +516,11 @@
 		{/if}
 	</div>
 </div>
+
+<PersonalMediaPickerModal
+	bind:open={showPersonalPicker}
+	multiple={true}
+	onlyImages={true}
+	title="내 파일함 (/USERS) 사진 선택"
+	onSelect={handlePersonalPhotosPicked}
+/>

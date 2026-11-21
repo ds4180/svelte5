@@ -62,8 +62,11 @@
 				console.log('🌐 [Root Layout] 유저 세션 확인 -> 실시간 웹소켓 채널 연결 (/ws) 및 푸시 구독 1회 동기화');
 				websocket.init();
 				syncPushSubscription({ userId: auth.user?.id });
+				alertState.init();
+				alertState.sync();
 			} else {
 				websocket.disconnect();
+				alertState.reset();
 				// 수동/세션종료 전환 시에만 DB 푸시 구독을 해제 (단순 /login 진입으로 기존 기기 구독을 삭제하지 않음)
 				if (wasAuthenticated) {
 					wasAuthenticated = false;
@@ -107,8 +110,12 @@
 		alertState.init();
 		offlineSync.init();
 
-		// [2-2] 🌐 실시간 WebSocket 시스템 토스트 리스너 장착 (작업 실패 등 시스템 경보 수신)
+		// [2-2] 🌐 실시간 WebSocket 시스템 토스트 및 사내 알림 리스너 장착
 		const unsubscribeWs = websocket.addMessageListener((msg) => {
+			if (msg && msg.type === 'new_alert' && auth.isAuthenticated) {
+				alertState.handleRealtimeSignal();
+			}
+
 			if (msg && msg.type === 'TOAST') {
 				const toastType = msg.toast_type || 'info';
 				const text = msg.message || '';
@@ -136,11 +143,31 @@
 			}
 		});
 
-		// [2-3] PWA 서비스 워커 등록 (운영: /service-worker.js 등록, dev: 기존 SW 정리)
+		// [2-3] 탭 복귀 시 stale 알림 재동기화 + WS 단절 시에만 저빈도 백업 폴링
+		const handleVisibilityChange = () => {
+			if (document.visibilityState === 'visible' && auth.isAuthenticated) {
+				alertState.syncIfStale();
+			}
+		};
+		document.addEventListener('visibilitychange', handleVisibilityChange);
+
+		const alertBackupInterval = setInterval(() => {
+			if (
+				auth.isAuthenticated &&
+				document.visibilityState === 'visible' &&
+				websocket.status !== 'connected'
+			) {
+				alertState.syncIfStale();
+			}
+		}, 120_000);
+
+		// [2-4] PWA 서비스 워커 등록 (운영: /service-worker.js 등록, dev: 기존 SW 정리)
 		registerServiceWorker();
 
 		return () => {
 			unsubscribeWs();
+			document.removeEventListener('visibilitychange', handleVisibilityChange);
+			clearInterval(alertBackupInterval);
 		};
 	});
 </script>

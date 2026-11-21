@@ -4,13 +4,16 @@
 	 * - 새로운 MediaAsset 엔진(/api/media/upload)과 100% 호환됩니다.
 	 */
 	import { onDestroy, tick } from 'svelte';
-	import { uploadFiles } from '$lib/services/mediaService';
+	import { publishAssets, uploadFiles } from '$lib/services/mediaService';
 	import { env } from '$env/dynamic/public';
 	import { getSecureMediaUrl } from '$lib/config/media';
+	import { getAuthContext } from '$lib/runes/auth.svelte';
+	import PersonalMediaPickerModal from '$lib/components/PersonalMediaPickerModal.svelte';
 	import { slide } from 'svelte/transition';
 	import { formatApiError } from '$lib/utils/error';
 
 	const PUBLIC_SERVER_URL = env.PUBLIC_SERVER_URL || '';
+	const auth = getAuthContext();
 
 	// --- [Props 정의] ---
 	let {
@@ -19,10 +22,14 @@
 		target_id = null,         
 		access_level = 'PUBLIC',  
 		sub_path = '',
+		allowPersonalPicker = true,
+		onlyImages = false,
 		onUpload = undefined,     
 		uploadedAssets = $bindable([]),
 		uploadedFiles = $bindable([])
 	} = $props();
+
+	let showPersonalPicker = $state(false);
 
 	// --- [내부 상태 관리] ---
 	let files = $state([]);           
@@ -91,10 +98,58 @@
 		}
 	}
 
+	/**
+	 * [개인 보관함(/USERS) 선택 파일 반영]
+	 * - 호스트가 PRIVATE이면 원본 자산 그대로 연결하고,
+	 *   PUBLIC/PROTECTED 등 공용 대상이면 서비스 영역으로 안전 복사(Publish)합니다.
+	 * @param {any[]} pickedAssets
+	 */
+	async function handlePersonalPicked(pickedAssets) {
+		if (!Array.isArray(pickedAssets) || pickedAssets.length === 0) return;
+		isLoading = true;
+		errorMessage = '';
+		try {
+			const tierUpper = String(access_level || 'PUBLIC').toUpperCase();
+			let resolvedAssets = pickedAssets;
+			if (tierUpper !== 'PRIVATE') {
+				const publishTier = tierUpper === 'SYSTEM' ? 'PROTECTED' : tierUpper;
+				const assetIds = pickedAssets.map((a) => Number(a.id)).filter((id) => Number.isFinite(id) && id > 0);
+				if (assetIds.length > 0) {
+					resolvedAssets = await publishAssets({
+						asset_ids: assetIds,
+						app_id: app_id || 'general',
+						target_id: target_id ? String(target_id) : null,
+						access_level: publishTier,
+						sub_path: sub_path || undefined
+					});
+				}
+			}
+
+			const assetsToAdd = Array.isArray(resolvedAssets) ? resolvedAssets : [resolvedAssets];
+			uploadedAssets = multiple ? [...uploadedAssets, ...assetsToAdd] : assetsToAdd;
+			uploadedFiles = multiple ? [...uploadedFiles, ...assetsToAdd] : assetsToAdd;
+			if (onUpload) {
+				await onUpload(assetsToAdd);
+			}
+		} catch (err) {
+			console.error('Personal media pick failed:', err);
+			errorMessage = formatApiError(err, '개인 파일함 선택 중 오류가 발생했습니다.');
+		} finally {
+			isLoading = false;
+		}
+	}
+
 	onDestroy(() => {
 		previewUrls.forEach((url) => URL.revokeObjectURL(url));
 	});
 </script>
+
+<PersonalMediaPickerModal
+	bind:open={showPersonalPicker}
+	{multiple}
+	{onlyImages}
+	onSelect={handlePersonalPicked}
+/>
 
 <div class="space-y-4">
 	{#if uploadedAssets.length > 0}
@@ -116,11 +171,23 @@
 		</div>
 	{/if}
 
-	<div class="flex flex-wrap items-center gap-3">
+	<div class="flex flex-wrap items-center gap-2">
 		<label class="btn btn-outline btn-sm gap-2">
 			<span class="text-lg">📁</span> 파일 선택
 			<input type="file" class="hidden" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt" {multiple} onchange={handleFileChange} />
 		</label>
+
+		{#if allowPersonalPicker && auth.user?.id}
+			<button
+				type="button"
+				class="btn btn-outline btn-sm gap-1.5 border-indigo-300 text-indigo-700 hover:bg-indigo-50"
+				onclick={() => (showPersonalPicker = true)}
+				disabled={isLoading}
+			>
+				<span>🗂️</span>
+				<span>내 파일함(/USERS)</span>
+			</button>
+		{/if}
 
 		{#if files.length > 0}
 			<div class="flex items-center gap-2" transition:slide>

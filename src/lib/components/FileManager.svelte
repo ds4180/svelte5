@@ -383,6 +383,7 @@
 					{app_id}
 					access_level={tier}
 					sub_path={currentSubPath}
+					allowPersonalPicker={false}
 					bind:uploadedAssets={uploadedInSession}
 					onUpload={handleUploadSuccess}
 				/>

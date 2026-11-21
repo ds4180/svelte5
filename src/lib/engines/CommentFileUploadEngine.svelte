@@ -12,6 +12,7 @@
 	import { toast } from '$lib/runes/toast.svelte';
 	import { formatDateTime } from '$lib/utils';
 	import { formatApiError } from '$lib/utils/error';
+	import PersonalMediaPickerModal from '$lib/components/PersonalMediaPickerModal.svelte';
 	import Icon from '@iconify/svelte';
 
 	const PUBLIC_SERVER_URL = env.PUBLIC_SERVER_URL || '';
@@ -41,6 +42,8 @@
 	let savingEdit = $state(false);
 	let uploadingEdit = $state(false);
 	let editFileInputEl = $state(/** @type {HTMLInputElement | null} */ (null));
+	let showPersonalPicker = $state(false);
+	let pickerMode = $state(/** @type {'create' | 'edit'} */ ('create'));
 
 	// --- [이미지 미리보기 모달 상태 (PWA 친화적)] ---
 	let previewImages = $state(/** @type {any[]} */ ([]));
@@ -134,12 +137,30 @@
 
 	/** @param {number} assetId */
 	async function removePendingAsset(assetId) {
+		const target = pendingAssets.find((a) => a.id === assetId);
 		pendingAssets = pendingAssets.filter((a) => a.id !== assetId);
+		if (target?._fromPersonalVault) return;
 		try {
 			await deleteAsset(assetId);
 		} catch (e) {
 			console.error('[CommentFileUploadEngine] 임시 파일 삭제 실패:', e);
 		}
+	}
+
+	/** @param {any[]} pickedAssets */
+	function handlePersonalPicked(pickedAssets) {
+		if (!Array.isArray(pickedAssets) || pickedAssets.length === 0) return;
+		const tagged = pickedAssets.map((a) => ({ ...a, _fromPersonalVault: true }));
+		if (pickerMode === 'edit') {
+			const existingIds = new Set(editPendingAssets.map((a) => a.id));
+			const uniqueNew = tagged.filter((a) => !existingIds.has(a.id));
+			editPendingAssets = [...editPendingAssets, ...uniqueNew];
+		} else {
+			const existingIds = new Set(pendingAssets.map((a) => a.id));
+			const uniqueNew = tagged.filter((a) => !existingIds.has(a.id));
+			pendingAssets = [...pendingAssets, ...uniqueNew];
+		}
+		toast.success(`내 파일함에서 ${tagged.length}개 파일을 선택했습니다.`);
 	}
 
 	// --- [댓글 등록 핸들러: 2단계 물리 복사 배포 및 댓글 연결] ---
@@ -203,7 +224,10 @@
 		editPendingAssets = [];
 		removeMediaIds = [];
 		if (assetsToClean.length > 0) {
-			await Promise.allSettled(assetsToClean.map((a) => deleteAsset(a.id)));
+			const tempOnly = assetsToClean.filter((a) => !a._fromPersonalVault);
+			if (tempOnly.length > 0) {
+				await Promise.allSettled(tempOnly.map((a) => deleteAsset(a.id)));
+			}
 		}
 	}
 
@@ -217,7 +241,9 @@
 
 	/** @param {number} assetId */
 	async function removeEditPendingAsset(assetId) {
+		const target = editPendingAssets.find((a) => a.id === assetId);
 		editPendingAssets = editPendingAssets.filter((a) => a.id !== assetId);
+		if (target?._fromPersonalVault) return;
 		try {
 			await deleteAsset(assetId);
 		} catch (e) {
@@ -363,7 +389,7 @@
 
 				<div class="mt-2.5 flex items-center justify-between gap-2">
 					{#if config?.allow_upload !== false}
-						<div>
+						<div class="flex flex-wrap items-center gap-1.5">
 							<input
 								bind:this={fileInputEl}
 								type="file"
@@ -380,6 +406,20 @@
 								<Icon icon={uploading ? 'ph:spinner-gap-bold' : 'ph:paperclip-bold'} class="mr-1 {uploading ? 'animate-spin' : ''}" />
 								{uploading ? '업로드 중...' : '파일 첨부'}
 							</button>
+							{#if auth.user?.id}
+								<button
+									type="button"
+									disabled={uploading}
+									onclick={() => {
+										pickerMode = 'create';
+										showPersonalPicker = true;
+									}}
+									class="btn btn-sm btn-ghost border border-indigo-200 bg-indigo-50/70 text-xs font-bold text-indigo-700 hover:bg-indigo-100"
+								>
+									<Icon icon="ph:folder-user-bold" class="mr-1" />
+									내 파일함(/USERS)
+								</button>
+							{/if}
 						</div>
 					{:else}
 						<div></div>
@@ -508,7 +548,7 @@
 
 								<div class="flex items-center justify-between gap-2">
 									{#if config?.allow_upload !== false}
-										<div>
+										<div class="flex flex-wrap items-center gap-1.5">
 											<input
 												bind:this={editFileInputEl}
 												type="file"
@@ -525,6 +565,20 @@
 												<Icon icon={uploadingEdit ? 'ph:spinner-gap-bold' : 'ph:paperclip-bold'} class="mr-1 {uploadingEdit ? 'animate-spin' : ''}" />
 												{uploadingEdit ? '업로드 중...' : '파일 추가'}
 											</button>
+											{#if auth.user?.id}
+												<button
+													type="button"
+													disabled={uploadingEdit}
+													onclick={() => {
+														pickerMode = 'edit';
+														showPersonalPicker = true;
+													}}
+													class="btn btn-xs btn-ghost border border-indigo-200 bg-indigo-50/70 font-bold text-indigo-700 hover:bg-indigo-100"
+												>
+													<Icon icon="ph:folder-user-bold" class="mr-1" />
+													내 파일함
+												</button>
+											{/if}
 										</div>
 									{:else}
 										<div></div>
@@ -586,6 +640,13 @@
 </div>
 
 <svelte:window onkeydown={handlePreviewKeydown} />
+
+<PersonalMediaPickerModal
+	bind:open={showPersonalPicker}
+	multiple={true}
+	title="댓글 첨부용 내 파일함 (/USERS) 선택"
+	onSelect={handlePersonalPicked}
+/>
 
 {#if activePreview}
 	<!-- svelte-ignore a11y_click_events_have_key_events -->

@@ -6,11 +6,7 @@
 	 * - 레벨별 전용 컴포넌트(Toast, Banner, Modal) 호출
 	 */
 	import { alertState } from '$lib/runes/alert.svelte';
-	import { websocket } from '$lib/runes/websocket.svelte';
-	import { fastApi } from '$lib/api';
-	import { notifyAlert } from '$lib/utils/sound';
 	import { page } from '$app/state';
-	import { onMount } from 'svelte';
 	
 	// 분리된 서브 컴포넌트들 임포트
 	import AlertToast from './Alert/AlertToast.svelte';
@@ -19,69 +15,6 @@
 
 	/** @type {{ positionFilter: 'top' | 'bottom' | 'modal' }} */
 	let { positionFilter } = $props();
-	let initializedFirstLoad = false;
-
-	// 실시간 데이터 동기화 (Polling)
-	async function fetchActiveAlerts() {
-		try {
-			const serverAlerts = await fastApi('GET', '/api/alert/active', {}, { offline: false });
-			if (Array.isArray(serverAlerts)) {
-				const existingIds = new Set(alertState.all.map(oldA => oldA.id));
-				
-				// 🛡️ [데이터 병합] 서버 데이터를 돌면서 기존 로컬 상태 보존
-				const mergedAlerts = serverAlerts.map(newA => {
-					const existing = alertState.all.find(oldA => oldA.id === newA.id);
-					if (existing) {
-						// 기존 객체와 서버 데이터를 합치되, timerStarted 같은 로컬 플래그 유지
-						return { ...newA, timerStarted: existing.timerStarted };
-					}
-					return newA;
-				});
-
-				// 🔊 최초 페이지 로드 이후 웹소켓/폴링으로 새로 도착한 L1, L2 알림에 대해 사운드/진동 트리거
-				// (L3~L5는 AlertModal.svelte 마운트 시 자동 트리거됨)
-				if (initializedFirstLoad) {
-					for (const newA of serverAlerts) {
-						if (!existingIds.has(newA.id) && (newA.level === 1 || newA.level === 2)) {
-							notifyAlert(newA.level);
-							break;
-						}
-					}
-				}
-				initializedFirstLoad = true;
-
-				// 최종적으로 데이터가 변경되었을 때만 업데이트
-				if (JSON.stringify(alertState.all) !== JSON.stringify(mergedAlerts)) {
-					alertState.all = mergedAlerts;
-				}
-			}
-		} catch (e) {
-			console.warn('⚠️ [Alert] 실시간 갱신 실패', e);
-		}
-	}
-
-	onMount(() => {
-		// modal 컨테이너에서만 대표로 실시간 리스너 및 백업 폴링 수행
-		if (positionFilter === 'modal') {
-			fetchActiveAlerts();
-
-			// 🌐 [실시간 웹소켓 연동] 관리자의 새 알림 등록 및 상태 변경 시 0초 즉각 반영
-			const unsubscribeWs = websocket.addMessageListener((msg) => {
-				if (msg && msg.type === 'new_alert') {
-					console.log('🔔 [Alert] 새 알림 웹소켓 신호 감지 -> 즉시 갱신 시작');
-					fetchActiveAlerts();
-				}
-			});
-
-			// 혹시 모를 웹소켓 일시 단절에 대비한 백업 폴링 (60초 주기)
-			const interval = setInterval(fetchActiveAlerts, 60000);
-
-			return () => {
-				unsubscribeWs();
-				clearInterval(interval);
-			};
-		}
-	});
 
 	// 현재 경로와 필터에 맞는 알림들만 계산 ($derived)
 	const visibleAlerts = $derived(alertState.getVisibleAlerts(positionFilter, page.url.pathname));

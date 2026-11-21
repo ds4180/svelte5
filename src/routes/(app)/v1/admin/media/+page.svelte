@@ -691,6 +691,7 @@
 					app_id="admin" 
 					access_level={currentTab?.tier} 
 					sub_path={currentSubPath} 
+					allowPersonalPicker={false}
 					bind:uploadedAssets={uploadedInSession} 
 					onUpload={handleUploadSuccess} 
 				/>

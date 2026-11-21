@@ -34,6 +34,7 @@
 	import { registerPendingPrivateAsset, uploadFiles } from '$lib/services/mediaService';
 	import { formatApiError } from '$lib/utils/error';
 	import ImageUploader from '$lib/components/ImageUploader.svelte';
+	import PersonalMediaPickerModal from '$lib/components/PersonalMediaPickerModal.svelte';
 	import Icon from '@iconify/svelte';
 
 	const PUBLIC_SERVER_URL = env.PUBLIC_SERVER_URL || '';
@@ -104,6 +105,7 @@
 	let isTableActive = $state(false);
 	let isCalloutActive = $state(false);
 	let showUploadModal = $state(false);
+	let showPersonalPicker = $state(false);
 	let activeBlockModal = $state(/** @type {'chart' | 'action' | 'embed' | null} */ (null));
 	let editingChartPos = $state(/** @type {number | null} */ (null));
 	let isDirectUploading = $state(false);
@@ -434,6 +436,7 @@
 			if (!inserted) {
 				editor.commands.insertContent(html);
 			}
+			showUploadModal = false;
 			toast.success(`${htmlParts.length}개 파일이 본문에 삽입되었습니다. (저장 시 공용 영역으로 배포됩니다)`);
 		} catch (err) {
 			console.error('[Tiptap] 업로드 파일 본문 삽입 실패:', err);
@@ -602,6 +605,16 @@
 					>
 						<Icon icon="ph:upload-simple-bold" />
 					</button>
+					{#if auth.user?.id}
+						<button
+							type="button"
+							title="내 파일함(/USERS)에서 선택"
+							onclick={() => (showPersonalPicker = true)}
+							class="tool-btn {showPersonalPicker ? 'active' : ''}"
+						>
+							<Icon icon="ph:folder-user-bold" />
+						</button>
+					{/if}
 					<input
 						type="file"
 						accept="image/*"
@@ -695,6 +708,12 @@
 	{/if}
 </div>
 
+<PersonalMediaPickerModal
+	bind:open={showPersonalPicker}
+	multiple={true}
+	onSelect={handleEditorUpload}
+/>
+
 {#if showUploadModal}
 	<div
 		use:portal
@@ -708,7 +727,7 @@
 				<div>
 					<h3 class="text-base font-black text-slate-900">파일 · 이미지 업로드</h3>
 					<p class="text-xs text-slate-500">
-						개인 보관함(PRIVATE)에 먼저 저장되며, 글 저장 시 {slug ? `PAGES/${slug}` : '공용 영역'}으로 자동 배포됩니다.
+						PC 업로드 또는 내 파일함(/USERS)에서 선택할 수 있으며, 글 저장 시 {slug ? `PAGES/${slug}` : '공용 영역'}으로 자동 배포됩니다.
 					</p>
 				</div>
 				<button

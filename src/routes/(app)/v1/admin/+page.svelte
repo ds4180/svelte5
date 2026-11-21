@@ -24,9 +24,12 @@
 		admin_name: '관리자'
 	});
 	let loading = $state(true);
+	let statsLoaded = $state(false);
+	let statsError = $state(/** @type {string | null} */ (null));
 
-	// 🌐 실시간 AppRegistry 거버넌스 맵 (app_id -> { min_read_rank, min_write_rank, allow_groups, deny_groups })
-	let liveAppMap = $state({});
+	// 🌐 실시간 AppRegistry DB 원장 및 거버넌스 맵 (app_id -> AppMeta)
+	let liveApps = $state(/** @type {any[]} */ ([]));
+	let liveAppMap = $state(/** @type {Record<string, any>} */ ({}));
 
 	// 🔍 모듈 검색어 및 카테고리 필터
 	let moduleSearch = $state('');
@@ -34,23 +37,40 @@
 
 	async function loadStats() {
 		loading = true;
-		try {
-			stats = await api.adminGetDashboard();
-			if (stats?.system_apps && Array.isArray(stats.system_apps)) {
-				const map = {};
-				for (const a of stats.system_apps) {
-					map[a.app_id] = a;
-					if (a.app_id === 'boards' && !map['board']) {
-						map['board'] = a;
+		statsError = null;
+		let lastErr = null;
+		for (let attempt = 0; attempt < 2; attempt++) {
+			try {
+				const res = await api.adminGetDashboard();
+				stats = res;
+				if (res?.system_apps && Array.isArray(res.system_apps)) {
+					liveApps = res.system_apps;
+					/** @type {Record<string, any>} */
+					const map = {};
+					for (const a of res.system_apps) {
+						map[a.app_id] = a;
+						if (a.app_id === 'boards' && !map['board']) {
+							map['board'] = a;
+						}
 					}
+					liveAppMap = map;
 				}
-				liveAppMap = map;
+				statsLoaded = true;
+				statsError = null;
+				lastErr = null;
+				break;
+			} catch (e) {
+				lastErr = e;
+				if (attempt === 0) {
+					await new Promise((r) => setTimeout(r, 1200));
+				}
 			}
-		} catch (e) {
-			toast.error(e.message);
-		} finally {
-			loading = false;
 		}
+		if (lastErr) {
+			statsError = lastErr?.message || '대시보드 데이터를 불러오지 못했습니다.';
+			toast.error(statsError);
+		}
+		loading = false;
 	}
 
 	onMount(loadStats);
@@ -195,74 +215,67 @@
 	];
 
 	// ----------------------------------------------------------------------------
-	// 🧩 2. 비즈니스 & 콘텐츠 앱 관리 모듈 (INSTANCE / CUSTOM / SERVICE / PAGES)
-	//       - 사용자 화면과 연동되거나 호스트 앱에 애드온(Add-on)되는 앱들의 관리 화면
+	// 🧩 2. 설치 앱 모듈 (CUSTOM / INSTANCE / SERVICE — AppRegistry DB 기반 자동 생성)
+	//       - /v1/admin/apps에 등록된 앱을 DB에서 읽어 자동 카드 생성 (하드코딩 제거)
+	//       - 아래 프리셋은 기존 앱의 브랜드 색상·정렬 순서·아이콘 폴백만 제공합니다.
 	// ----------------------------------------------------------------------------
-	const appModules = [
-		{
-			type: 'CUSTOM',
-			appId: 'dispatch',
-			title: '차량 배차 관리',
-			desc: '실시간 노선별 차량 투입, 기사 배정 및 일일 운행 시간표 조율 (사용자: /v1/custom/dispatch)',
-			link: '/v1/admin/dispatch',
-			icon: 'mdi:bus-multiple',
-			color: 'bg-blue-700'
-		},
-		{
-			type: 'CUSTOM',
-			appId: 'route_master',
-			title: '노선 마스터 관리',
-			desc: '정규 및 임시 노선의 기준 버전 도면 및 회차 시간표 통합 관리 (배차 앱 연동)',
-			link: '/v1/admin/route_master',
-			icon: 'mdi:bus-clock',
-			color: 'bg-indigo-700'
-		},
-		{
-			type: 'CUSTOM',
-			appId: 'dayoff',
-			title: '휴무(결근계) 관리',
-			desc: '직원 및 승무원의 연차/휴무 신청 내역 승인·반려 관제 (사용자: /v1/custom/dayoff)',
-			link: '/v1/admin/dayoff',
-			icon: 'mdi:calendar-check-outline',
-			color: 'bg-amber-600'
-		},
-		{
-			type: 'CUSTOM',
-			appId: 'blackbox',
-			title: '블랙박스 비디오 관리',
-			desc: '비디오 장부(고유·육안번호), 현재 위치 추적, 본체 스펙(LED), 교체 요청 및 사용이력 역조회 (사용자: /v1/custom/blackbox)',
-			link: '/v1/admin/blackbox',
-			icon: 'mdi:video-box',
-			color: 'bg-slate-800'
-		},
-		{
-			type: 'INSTANCE',
-			appId: 'board',
-			title: '게시판 인스턴스 관리',
-			desc: '추상화 다중 게시판(공지, 자유 등) 슬러그 생성 및 레이아웃 정책 설정 (사용자: /v1/app/board/[slug])',
-			link: '/v1/admin/board',
-			icon: 'mdi:clipboard-text-outline',
-			color: 'bg-orange-600'
-		},
-		{
-			type: 'CUSTOM',
-			appId: 'page',
-			title: '페이지 엔진 관리',
-			desc: 'DB 기반 고정 콘텐츠 페이지 작성 및 게시 기간·권한 제어 (사용자: /v1/custom/page)',
-			link: '/v1/admin/page',
-			icon: 'mdi:file-document-edit-outline',
-			color: 'bg-sky-600'
-		},
-		{
-			type: 'SERVICE',
-			appId: 'services',
-			title: '서비스 마스터 (Add-on)',
-			desc: 'INSTANCE 및 CUSTOM 앱에 애드온(Add-on) 결합하는 레고형 서비스(댓글, 업로드 등) 번들 관리',
-			link: '/v1/admin/services',
-			icon: 'mdi:toy-brick-outline',
-			color: 'bg-rose-600'
+	/** @type {Record<string, any>} */
+	const INSTALL_APP_PRESETS = {
+		dispatch: { order: 10, color: 'bg-blue-700', icon: 'mdi:bus-multiple' },
+		route_master: { order: 20, color: 'bg-indigo-700', icon: 'mdi:bus-clock' },
+		dayoff: { order: 30, color: 'bg-amber-600', icon: 'mdi:calendar-check-outline' },
+		blackbox: { order: 40, color: 'bg-slate-800', icon: 'mdi:video-box' },
+		survey: { order: 45, color: 'bg-violet-600', icon: 'mdi:clipboard-list-outline' },
+		board: { order: 50, color: 'bg-orange-600', icon: 'mdi:clipboard-text-outline' },
+		page: { order: 60, color: 'bg-sky-600', icon: 'mdi:file-document-edit-outline' },
+		services: { order: 70, color: 'bg-rose-600', icon: 'mdi:toy-brick-outline', displayType: 'SERVICE' }
+	};
+
+	/** @type {Record<string, { color: string, icon: string }>} */
+	const DEFAULT_TYPE_STYLE = {
+		CUSTOM: { color: 'bg-indigo-600', icon: 'mdi:application-cog-outline' },
+		INSTANCE: { color: 'bg-orange-600', icon: 'mdi:view-grid-plus-outline' },
+		SERVICE: { color: 'bg-rose-600', icon: 'mdi:toy-brick-outline' }
+	};
+
+	const dynamicAppModules = $derived.by(() => {
+		const seen = new Set();
+		/** @type {any[]} */
+		const list = [];
+
+		for (const app of liveApps) {
+			const normalizedId = app.app_id === 'boards' ? 'board' : app.app_id;
+			const rawType = String(app.app_type || 'CUSTOM').toUpperCase();
+			const isInstallTarget =
+				rawType === 'CUSTOM' ||
+				rawType === 'INSTANCE' ||
+				rawType === 'SERVICE' ||
+				normalizedId === 'services';
+			if (!isInstallTarget || seen.has(normalizedId)) continue;
+			seen.add(normalizedId);
+
+			const preset = INSTALL_APP_PRESETS[normalizedId] || {};
+			const displayType = preset.displayType || rawType;
+			const typeStyle = DEFAULT_TYPE_STYLE[displayType] || DEFAULT_TYPE_STYLE.CUSTOM;
+			const normalizedRoute =
+				app.frontend_route === '/v1/admin/boards'
+					? '/v1/admin/board'
+					: app.frontend_route || `/v1/admin/${normalizedId}`;
+
+			list.push({
+				type: displayType,
+				appId: normalizedId,
+				order: preset.order ?? 999,
+				title: app.title || app.name || normalizedId,
+				desc: app.description || 'DB AppRegistry에 등록된 사용자·업무 앱 관리 화면',
+				link: normalizedRoute,
+				icon: app.icon_default || preset.icon || typeStyle.icon,
+				color: preset.color || typeStyle.color
+			});
 		}
-	];
+
+		return list.sort((a, b) => a.order - b.order || a.appId.localeCompare(b.appId));
+	});
 
 	// 앱 분류별 배지 스타일 헬퍼
 	function getTypeBadgeClass(type) {
@@ -291,7 +304,7 @@
 	);
 
 	const filteredAppModules = $derived(
-		appModules.filter(m => {
+		dynamicAppModules.filter(m => {
 			const matchesCategory = moduleCategory === 'ALL' || moduleCategory === 'BUSINESS';
 			const q = moduleSearch.trim().toLowerCase();
 			const matchesSearch = !q || m.title.toLowerCase().includes(q) || m.desc.toLowerCase().includes(q) || m.link.toLowerCase().includes(q);
@@ -394,6 +407,21 @@
 	</div>
 
 	<!-- 📊 4대 코어 관제탑 라이브 위젯 -->
+	{#if statsError && !statsLoaded}
+		<div class="flex flex-wrap items-center justify-between gap-3 rounded-2xl border-2 border-rose-200 bg-rose-50 px-5 py-4">
+			<div class="text-xs font-black text-rose-700">
+				⚠️ 대시보드 실시간 데이터를 불러오지 못했습니다: {statsError}
+			</div>
+			<button
+				type="button"
+				onclick={loadStats}
+				disabled={loading}
+				class="rounded-xl bg-rose-600 px-4 py-2 text-xs font-black text-white hover:bg-rose-700 disabled:opacity-50"
+			>
+				{loading ? '재조회 중...' : '다시 불러오기'}
+			</button>
+		</div>
+	{/if}
 	<div class="grid grid-cols-1 gap-4 md:grid-cols-2 md:gap-6 lg:grid-cols-4">
 		<!-- 위젯 1: 자율신경계 태스크 워커 -->
 		<a
@@ -409,19 +437,19 @@
 						⚡ Watchdog
 					</span>
 					<span
-						class="badge badge-xs font-bold {stats.task_engine?.is_healthy ? 'badge-success text-white' : 'badge-error text-white'}"
+						class="badge badge-xs font-bold {!statsLoaded ? 'badge-ghost' : stats.task_engine?.is_healthy ? 'badge-success text-white' : 'badge-error text-white'}"
 					>
-						{stats.task_engine?.is_healthy ? '정상 가동' : '경보 발생'}
+						{!statsLoaded ? '확인 중' : stats.task_engine?.is_healthy ? '정상 가동' : '경보 발생'}
 					</span>
 				</div>
 			</div>
 			<div class="flex items-baseline justify-between mt-2">
 				<div class="text-3xl font-black text-slate-800">
-					{stats.task_engine?.running_count || 0}<span class="text-xs text-slate-400 font-normal ml-1">실행중</span>
+					{statsLoaded ? (stats.task_engine?.running_count || 0) : '--'}<span class="text-xs text-slate-400 font-normal ml-1">실행중</span>
 				</div>
 				<div class="text-right text-xs text-slate-500 font-medium space-y-0.5">
-					<div>대기: <strong class="text-amber-600">{stats.task_engine?.pending_count || 0}</strong>건</div>
-					<div>실패: <strong class={stats.task_engine?.failed_count > 0 ? 'text-rose-600 font-black' : 'text-slate-400'}>{stats.task_engine?.failed_count || 0}</strong>건</div>
+					<div>대기: <strong class="text-amber-600">{statsLoaded ? (stats.task_engine?.pending_count || 0) : '--'}</strong>건</div>
+					<div>실패: <strong class={statsLoaded && stats.task_engine?.failed_count > 0 ? 'text-rose-600 font-black' : 'text-slate-400'}>{statsLoaded ? (stats.task_engine?.failed_count || 0) : '--'}</strong>건</div>
 				</div>
 			</div>
 			{#if stats.task_engine?.next_scheduled_task}
@@ -447,18 +475,18 @@
 					<Icon icon="mdi:shield-check-outline" class="text-blue-600 text-base" /> 보안 & 시스템
 				</div>
 				<span
-					class="badge badge-xs font-bold {stats.observability?.security_breach_24h > 0 ? 'badge-error text-white' : 'badge-info text-white'}"
+					class="badge badge-xs font-bold {!statsLoaded ? 'badge-ghost' : stats.observability?.security_breach_24h > 0 ? 'badge-error text-white' : 'badge-info text-white'}"
 				>
-					{stats.observability?.security_breach_24h > 0 ? '침해 감지' : '안전 보호'}
+					{!statsLoaded ? '확인 중' : stats.observability?.security_breach_24h > 0 ? '침해 감지' : '안전 보호'}
 				</span>
 			</div>
 			<div class="flex items-baseline justify-between mt-2">
-				<div class="text-3xl font-black {stats.observability?.security_breach_24h > 0 ? 'text-rose-600' : 'text-slate-800'}">
-					{stats.observability?.security_breach_24h || 0}<span class="text-xs text-slate-400 font-normal ml-1">보안침해 24h</span>
+				<div class="text-3xl font-black {statsLoaded && stats.observability?.security_breach_24h > 0 ? 'text-rose-600' : 'text-slate-800'}">
+					{statsLoaded ? (stats.observability?.security_breach_24h || 0) : '--'}<span class="text-xs text-slate-400 font-normal ml-1">보안침해 24h</span>
 				</div>
 				<div class="text-right text-xs text-slate-500 font-medium space-y-0.5">
-					<div>장애 에러: <strong class={stats.observability?.error_log_24h > 0 ? 'text-rose-500' : 'text-slate-400'}>{stats.observability?.error_log_24h || 0}</strong>건</div>
-					<div>시스템 상태: <strong class="text-emerald-600">안정</strong></div>
+					<div>장애 에러: <strong class={statsLoaded && stats.observability?.error_log_24h > 0 ? 'text-rose-500' : 'text-slate-400'}>{statsLoaded ? (stats.observability?.error_log_24h || 0) : '--'}</strong>건</div>
+					<div>시스템 상태: <strong class="text-emerald-600">{statsLoaded ? '안정' : '확인 중'}</strong></div>
 				</div>
 			</div>
 			<div class="mt-3 text-[10px] text-slate-400 border-t pt-2">
@@ -475,17 +503,17 @@
 				<div class="flex items-center gap-1.5 text-[11px] font-black tracking-wider text-slate-500 uppercase">
 					<Icon icon="mdi:account-clock-outline" class="text-emerald-600 text-base" /> 세션 & 근무
 				</div>
-				<span class="badge badge-xs badge-success text-white font-bold animate-pulse">
-					LIVE
+				<span class="badge badge-xs {statsLoaded ? 'badge-success text-white animate-pulse' : 'badge-ghost'} font-bold">
+					{statsLoaded ? 'LIVE' : '확인 중'}
 				</span>
 			</div>
 			<div class="flex items-baseline justify-between mt-2">
 				<div class="text-3xl font-black text-emerald-600">
-					{stats.observability?.active_sessions || 0}<span class="text-xs text-slate-500 font-normal ml-1">온라인</span>
+					{statsLoaded ? (stats.observability?.active_sessions || 0) : '--'}<span class="text-xs text-slate-500 font-normal ml-1">온라인</span>
 				</div>
 				<div class="text-right text-xs text-slate-500 font-medium space-y-0.5">
-					<div>오늘 근무: <strong class="text-slate-800">{stats.duty_status?.working_count || 0}</strong>명</div>
-					<div>오늘 휴무: <strong class="text-amber-600">{stats.duty_status?.dayoff_count || 0}</strong>명</div>
+					<div>오늘 근무: <strong class="text-slate-800">{statsLoaded ? (stats.duty_status?.working_count || 0) : '--'}</strong>명</div>
+					<div>오늘 휴무: <strong class="text-amber-600">{statsLoaded ? (stats.duty_status?.dayoff_count || 0) : '--'}</strong>명</div>
 				</div>
 			</div>
 			<div class="mt-3 text-[10px] text-slate-400 border-t pt-2">
@@ -503,14 +531,14 @@
 					<Icon icon="mdi:checkbox-marked-circle-outline" class="text-purple-600 text-base" /> 지시사항 인지율
 				</div>
 				<span
-					class="badge badge-xs font-bold {stats.instruction_watchdog?.unconfirmed_count > 0 ? 'badge-warning' : 'badge-success text-white'}"
+					class="badge badge-xs font-bold {!statsLoaded ? 'badge-ghost' : stats.instruction_watchdog?.unconfirmed_count > 0 ? 'badge-warning' : 'badge-success text-white'}"
 				>
-					{stats.instruction_watchdog?.unconfirmed_count > 0 ? '확인 필요' : '모두 확인'}
+					{!statsLoaded ? '확인 중' : stats.instruction_watchdog?.unconfirmed_count > 0 ? '확인 필요' : '모두 확인'}
 				</span>
 			</div>
 			<div class="flex items-baseline justify-between mt-2">
-				<div class="text-3xl font-black {stats.instruction_watchdog?.unconfirmed_count > 0 ? 'text-amber-600' : 'text-slate-800'}">
-					{stats.instruction_watchdog?.unconfirmed_count || 0}<span class="text-xs text-slate-400 font-normal ml-1">미확인</span>
+				<div class="text-3xl font-black {statsLoaded && stats.instruction_watchdog?.unconfirmed_count > 0 ? 'text-amber-600' : 'text-slate-800'}">
+					{statsLoaded ? (stats.instruction_watchdog?.unconfirmed_count || 0) : '--'}<span class="text-xs text-slate-400 font-normal ml-1">미확인</span>
 				</div>
 				<div class="text-right text-xs text-slate-500 font-medium space-y-0.5">
 					<div>알림 센터: <strong class="text-purple-600">지시사항</strong></div>
@@ -531,7 +559,7 @@
 				class="btn btn-xs join-item font-bold border-none {moduleCategory === 'ALL' ? 'bg-purple-700 text-white shadow' : 'bg-transparent text-slate-600'}"
 				onclick={() => moduleCategory = 'ALL'}
 			>
-				전체 모듈 ({systemModules.length + appModules.length})
+				전체 모듈 ({systemModules.length + dynamicAppModules.length})
 			</button>
 			<button 
 				class="btn btn-xs join-item font-bold border-none {moduleCategory === 'CORE' ? 'bg-purple-700 text-white shadow' : 'bg-transparent text-slate-600'}"
@@ -549,7 +577,7 @@
 				class="btn btn-xs join-item font-bold border-none {moduleCategory === 'BUSINESS' ? 'bg-blue-600 text-white shadow' : 'bg-transparent text-slate-600'}"
 				onclick={() => moduleCategory = 'BUSINESS'}
 			>
-				🚐 현장 업무 ({appModules.length})
+				🚐 현장 업무 ({dynamicAppModules.length})
 			</button>
 		</div>
 
@@ -689,7 +717,7 @@
 			</p>
 		</div>
 		<div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-			{#each filteredAppModules as mod (mod.link)}
+			{#each filteredAppModules as mod (mod.appId)}
 				{@const liveMod = getLiveMod(mod)}
 				{@const hasAccess = canAccess(mod)}
 				{#if hasAccess}

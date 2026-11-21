@@ -61,7 +61,7 @@
 			window.scrollTo(0, 0);
 		}
 
-		miniappStore.refresh();
+		miniappStore.ensureSummaryLoaded(true);
 
 		// 해시(#...) 기반 초기 탭 전환 보조 지원
 		const targetHash = typeof window !== 'undefined' ? window.location.hash.replace('#', '') : '';

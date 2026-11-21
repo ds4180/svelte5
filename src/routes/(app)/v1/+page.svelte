@@ -3,7 +3,7 @@
 	 * @file v1/+page.svelte (직급·역할별 맞춤형 /v1 렌딩 페이지)
 	 * @description 비회원(기본 안내) / 운전원(당일·명일 배차 브리핑 + 운행 링크) / 사무직 / 관리자별 맞춤 랜딩 뷰
 	 */
-	import { onMount } from 'svelte';
+	import { onMount, untrack } from 'svelte';
 	import { formatDateTime } from '$lib/utils';
 	import { customGetMyDispatchBriefing } from '$lib/api/custom';
 	import { miniappStore } from '$lib/runes/miniapps.svelte';
@@ -14,10 +14,21 @@
 
 	let now = $state(/** @type {Date | null} */ (null));
 	let briefing = $state(/** @type {any} */ (null));
+	let briefingLoaded = $state(false);
+	let briefingLoading = $state(false);
+	let briefingError = $state(false);
 
 	$effect(() => {
 		if (data?.dispatchBriefing) {
 			briefing = data.dispatchBriefing;
+			briefingLoaded = true;
+			briefingError = false;
+		}
+	});
+
+	$effect(() => {
+		if (data?.initialMiniappSummary) {
+			untrack(() => miniappStore.hydrateSummary(data.initialMiniappSummary));
 		}
 	});
 
@@ -76,15 +87,16 @@
 		MEMO: { label: '메모', badge: 'bg-slate-100 text-slate-700 border-slate-200' }
 	});
 
-	// 📌 관리자 칸반 보드용 요청 통계 (실시간 miniappStore + 기본 목 데이터 병합 시연 가능)
+	// 📌 관리자 칸반 보드용 요청 통계 (itemsLoaded 보장 후에만 처리율 산출 — 미로딩/실패 시 가짜 100% 차단)
 	let kanbanData = $derived.by(() => {
+		const ready = miniappStore.itemsLoaded;
 		const raw = miniappStore.items || [];
 		const pending = raw.filter((i) => i.status === 'PENDING');
 		const ongoing = raw.filter((i) => i.status === 'ONGOING');
 		const completed = raw.filter((i) => i.status === 'COMPLETED' || i.status === 'READ');
 		const total = pending.length + ongoing.length + completed.length;
-		const rate = total > 0 ? Math.round((completed.length / total) * 100) : 100;
-		return { pending, ongoing, completed, total, rate };
+		const rate = !ready ? null : total > 0 ? Math.round((completed.length / total) * 100) : 100;
+		return { ready, pending, ongoing, completed, total, rate };
 	});
 
 	// 📌 Lv.8~9 관리자 전용 Chart.js 반응형 데이터/옵션 ($lib/components/Chart.svelte 사용)
@@ -92,7 +104,7 @@
 		const pCount = kanbanData.pending.length;
 		const oCount = kanbanData.ongoing.length;
 		const cCount = kanbanData.completed.length;
-		const hasAny = pCount + oCount + cCount > 0;
+		const hasAny = kanbanData.ready && pCount + oCount + cCount > 0;
 		return {
 			labels: ['처리 완료', '처리 중', '접수 대기'],
 			datasets: [
@@ -174,17 +186,41 @@
 		}
 	};
 
-	onMount(async () => {
-		now = new Date();
-		if (userRole === 'DRIVER' && !briefing) {
+	async function loadDriverBriefing() {
+		if (briefingLoading) return;
+		briefingLoading = true;
+		briefingError = false;
+		for (let attempt = 0; attempt < 2; attempt++) {
 			try {
-				briefing = await customGetMyDispatchBriefing();
+				const res = await customGetMyDispatchBriefing();
+				briefing = res;
+				briefingLoaded = true;
+				briefingError = false;
+				briefingLoading = false;
+				return;
 			} catch {
-				// 무시
+				if (attempt === 0) {
+					await new Promise((r) => setTimeout(r, 1200));
+				}
 			}
 		}
-		if (userRole === 'OFFICE' || userRole === 'ADMIN') {
-			miniappStore.refresh();
+		briefingError = true;
+		briefingLoading = false;
+	}
+
+	onMount(async () => {
+		now = new Date();
+	});
+
+	$effect(() => {
+		if (user && userRole === 'DRIVER' && !briefingLoaded && !briefingLoading && !briefingError) {
+			untrack(() => loadDriverBriefing());
+		}
+	});
+
+	$effect(() => {
+		if (user && (userRole === 'OFFICE' || userRole === 'ADMIN')) {
+			untrack(() => miniappStore.ensureSummaryLoaded(true));
 		}
 	});
 
@@ -364,7 +400,11 @@
 					<span class="inline-block rounded-full bg-emerald-100 px-3 py-0.5 text-xs font-black text-emerald-800">
 						기사 전용 브리핑 · Lv.{rankLevel}
 					</span>
-					{#if isTodayDayoff}
+					{#if !briefingLoaded}
+						<span class="inline-flex items-center gap-1 rounded-full px-3 py-0.5 text-xs font-black {briefingError ? 'bg-rose-100 text-rose-700' : 'bg-slate-200 text-slate-600'}">
+							{briefingError ? '⚠️ 배차 브리핑 조회 실패' : '⏳ 배차 정보 확인 중...'}
+						</span>
+					{:else if isTodayDayoff}
 						<span class="inline-flex items-center gap-1 rounded-full bg-amber-500 px-3 py-0.5 text-xs font-black text-white">
 							🏖️ 오늘 휴무일 ({DAYOFF_TYPE_LABELS[briefing.today_dayoff.type] || briefing.today_dayoff.type})
 						</span>
@@ -400,20 +440,41 @@
 			>
 				<div class="mb-4 flex items-center justify-between">
 					<span
-						class="badge font-bold {isTodayDayoff
-							? 'border-none bg-amber-500 text-white'
-							: isTodayWork
-								? 'badge-primary'
-								: 'badge-ghost'}"
+						class="badge font-bold {!briefingLoaded
+							? 'badge-ghost'
+							: isTodayDayoff
+								? 'border-none bg-amber-500 text-white'
+								: isTodayWork
+									? 'badge-primary'
+									: 'badge-ghost'}"
 					>
-						{isTodayDayoff ? '오늘 · 휴무일' : isTodayWork ? '오늘 · 근무일' : '오늘 · 배차 없음'}
+						{!briefingLoaded
+							? (briefingError ? '조회 실패' : '확인 중...')
+							: isTodayDayoff
+								? '오늘 · 휴무일'
+								: isTodayWork
+									? '오늘 · 근무일'
+									: '오늘 · 배차 없음'}
 					</span>
 					<span class="font-mono text-xs font-bold text-slate-400">
 						기준 {briefing?.now_hhmm || '--:--'}
 					</span>
 				</div>
 
-				{#if isTodayDayoff}
+				{#if !briefingLoaded}
+					{#if briefingError}
+						<p class="text-lg font-black text-rose-700">배차 정보를 불러오지 못했습니다.</p>
+						<button
+							type="button"
+							onclick={loadDriverBriefing}
+							class="mt-3 rounded-xl bg-rose-600 px-4 py-2 text-xs font-black text-white hover:bg-rose-700"
+						>
+							다시 불러오기
+						</button>
+					{:else}
+						<p class="text-lg font-black text-slate-400">오늘의 배차·휴무 정보를 확인하고 있습니다...</p>
+					{/if}
+				{:else if isTodayDayoff}
 					<p class="text-2xl font-black tracking-tight text-amber-900 md:text-3xl">
 						오늘은 승인된 <span class="text-amber-600">{DAYOFF_TYPE_LABELS[briefing.today_dayoff.type] || briefing.today_dayoff.type}</span> 휴무일입니다.
 					</p>
@@ -537,9 +598,23 @@
 				</h1>
 			</div>
 			<div class="flex items-center gap-3">
-				<span class="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-black text-slate-700">
-					요청 처리율 <span class="ml-1 text-base text-blue-600">{kanbanData.rate}%</span>
-				</span>
+				{#if kanbanData.ready}
+					<span class="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-black text-slate-700">
+						요청 처리율 <span class="ml-1 text-base text-blue-600">{kanbanData.rate}%</span>
+					</span>
+				{:else if miniappStore.error}
+					<button
+						type="button"
+						onclick={() => miniappStore.refresh()}
+						class="rounded-xl border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-black text-rose-700 hover:bg-rose-100"
+					>
+						집계 실패 · 다시 시도
+					</button>
+				{:else}
+					<span class="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-black text-slate-400">
+						요청 처리율 <span class="ml-1 text-base">--%</span>
+					</span>
+				{/if}
 				<span class="font-mono text-lg font-black text-slate-700">
 					{now ? formatDateTime(now).split(' ')[0] : '-'}
 				</span>
@@ -552,9 +627,23 @@
 			<div class="rounded-2xl border-2 border-slate-200 bg-white p-4 shadow-xs">
 				<div class="mb-2 flex items-center justify-between">
 					<h2 class="text-sm font-black text-slate-900">전체 요청 처리율</h2>
-					<span class="rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-black text-emerald-700">
-						완료 {kanbanData.completed.length} / 총 {kanbanData.total}건
-					</span>
+					{#if kanbanData.ready}
+						<span class="rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-black text-emerald-700">
+							완료 {kanbanData.completed.length} / 총 {kanbanData.total}건
+						</span>
+					{:else if miniappStore.error}
+						<button
+							type="button"
+							onclick={() => miniappStore.refresh()}
+							class="rounded-full bg-rose-50 px-2.5 py-0.5 text-xs font-black text-rose-700 hover:bg-rose-100"
+						>
+							재시도
+						</button>
+					{:else}
+						<span class="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-black text-slate-400">
+							집계 중...
+						</span>
+					{/if}
 				</div>
 				<div class="relative h-48">
 					<Chart
@@ -565,8 +654,16 @@
 						ariaLabel="전체 요청 처리율"
 					/>
 					<div class="pointer-events-none absolute inset-0 flex flex-col items-center justify-center pb-6">
-						<span class="text-2xl font-black text-slate-900">{kanbanData.rate}%</span>
-						<span class="text-[10px] font-bold text-slate-400">처리율</span>
+						{#if kanbanData.ready}
+							<span class="text-2xl font-black text-slate-900">{kanbanData.rate}%</span>
+							<span class="text-[10px] font-bold text-slate-400">처리율</span>
+						{:else if miniappStore.error}
+							<span class="text-sm font-black text-rose-600">조회 실패</span>
+							<span class="text-[10px] font-bold text-slate-400">데이터 미확정</span>
+						{:else}
+							<span class="text-xl font-black text-slate-400">--%</span>
+							<span class="text-[10px] font-bold text-slate-400">로딩 중</span>
+						{/if}
 					</div>
 				</div>
 			</div>
