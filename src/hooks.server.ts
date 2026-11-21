@@ -15,8 +15,14 @@ export const handle: Handle = async ({ event, resolve }) => {
 	const sessionId = event.cookies.get('session_id');
 	const pathname = event.url.pathname;
 
-	// 📌 1. 정적 파일 및 특정 경로는 세션 체크 제외 (속도 향상)
-	const isStaticAsset = pathname.includes('.') || pathname.startsWith('/_app');
+	// 📌 1. 정적 파일 및 Vite 내부 모듈 경로는 세션 체크 제외 (초기 로딩 병목 방지)
+	const isStaticAsset =
+		pathname.includes('.') ||
+		pathname.startsWith('/_app') ||
+		pathname.startsWith('/@vite') ||
+		pathname.startsWith('/@id') ||
+		pathname.startsWith('/@fs') ||
+		pathname.startsWith('/node_modules');
 	const isAuthPath = pathname.startsWith('/login') || pathname.startsWith('/logout');
 
 	if (sessionId && !isStaticAsset && !isAuthPath) {

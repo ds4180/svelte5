@@ -386,7 +386,10 @@
 		const payload = {
 			...editingBoard,
 			service_instance_id: editingBoard.service_instance_id ? Number(editingBoard.service_instance_id) : null,
-			service_app_ids: (editingBoard.service_app_ids || []).map((id) => Number(id)),
+			// 정수 ID 또는 레이아웃 객체({ app_id, row, display, wrap, align }) 모두 안전하게 보존
+			service_app_ids: (editingBoard.service_app_ids || []).map((entry) =>
+				entry && typeof entry === 'object' ? entry : Number(entry)
+			),
 			fields_def: finalFields,
 			options: finalOptions
 		};

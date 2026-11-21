@@ -1,6 +1,7 @@
 <script>
   import { fade } from 'svelte/transition';
   import Icon from '@iconify/svelte';
+  import { getRankMeta } from '$lib/config/rank';
 
   let {
     users = [],
@@ -14,11 +15,8 @@
   let userSearchQuery = $state('');
 
   function getRankBadge(rank) {
-    if (rank === 9) return { label: 'ROOT (Lv.9)', class: 'bg-red-600 text-white' };
-    if (rank >= 4) return { label: `ADMIN (Lv.${rank})`, class: 'bg-indigo-600 text-white' };
-    if (rank >= 2) return { label: `STAFF (Lv.${rank})`, class: 'bg-emerald-600 text-white' };
-    if (rank === 1) return { label: `MEMBER (Lv.1)`, class: 'bg-blue-600 text-white' };
-    return { label: `GUEST (Lv.0)`, class: 'bg-slate-200 text-slate-700' };
+    const meta = getRankMeta(rank);
+    return { label: `${meta.shortLabel} (Lv.${meta.val})`, class: meta.badgeClass };
   }
 
   let filteredUsers = $derived(

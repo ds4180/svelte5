@@ -24,7 +24,7 @@
 {#if isEditQuery && isAdmin && pageData}
 	<PageEngine data={{ page: pageData }} />
 {:else}
-	<div class="mx-auto max-w-4xl p-6 sm:p-10">
+	<div class="mx-auto max-w-4xl px-4 py-6 pb-28 sm:px-6 md:py-10 md:pb-12">
 		{#if pageData}
 			<article class="page-viewer-card rounded-3xl border-2 border-slate-200 bg-white p-6 shadow-sm sm:p-10">
 				<!-- 헤더 -->

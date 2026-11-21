@@ -12,6 +12,7 @@
 	import { adminGetAppData, adminUpdateBoard } from '$lib/api/admin';
 	import { buildOptionMenuItems } from '$lib/utils/dynamicOptions';
 	import * as engines from '$lib/index';
+	import ServiceBundleRenderer from '$lib/components/ServiceBundleRenderer.svelte';
 	import { goto, invalidateAll } from '$app/navigation';
 	import TiptapEditor from '$lib/components/TiptapEditor.svelte';
 	import SafeHtml from '$lib/components/SafeHtml.svelte';
@@ -612,29 +613,15 @@
 								</footer>
 							</div>
 
-							<!-- 💬 Dynamic Service Bindings (댓글 등) -->
-							{#if bindings && bindings.length > 0}
-								<div class="mt-8 space-y-6 pb-16">
-									{#each bindings as binding, idx (binding.engine_id + '-' + idx)}
-										{#if engines[binding.service_component]}
-											{@const DynComp = engines[binding.service_component]}
-											<div
-												class="board-fullbleed-card rounded-3xl border-2 border-slate-200 bg-white p-6 shadow-sm"
-												in:fly={{ y: 16, duration: 300 }}
-											>
-												<DynComp
-													{post}
-													{appId}
-													instanceId={postId}
-													config={binding.config}
-													accessLevel={Number(board?.min_read_rank ?? 0) === 0 ? 'PUBLIC' : 'PROTECTED'}
-													{boardSlug}
-												/>
-											</div>
-										{/if}
-									{/each}
-								</div>
-							{/if}
+							<!-- 💬 Dynamic Service Bindings (블록/인라인/2분할/카드묶음 동적 레이아웃 렌더링) -->
+							<ServiceBundleRenderer
+								{bindings}
+								{post}
+								{appId}
+								instanceId={postId}
+								accessLevel={Number(board?.min_read_rank ?? 0) === 0 ? 'PUBLIC' : 'PROTECTED'}
+								{boardSlug}
+							/>
 						</article>
 					{/if}
 				{:else if mode === 'write' || mode === 'edit'}

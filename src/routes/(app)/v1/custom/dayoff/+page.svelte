@@ -90,13 +90,16 @@
 	const quotaDays = $derived<Record<string, DayoffQuotaDay>>(
 		quotaInfo?.days || data.quota_info?.days || {}
 	);
-	const maxMonthlyCount = $derived(Number(policy?.max_monthly_count || 0));
-	const maxDaysPerRequest = $derived(Number(policy?.max_days_per_request || 0));
+	// 💡 [자동승인 vs 허가제 분리]
+	// 자동승인(선착순 FCFS) 대상자에게만 월별 횟수·1회 일수·신청 가능 기간(D+X ~ D+Y) 제한을 적용합니다.
+	// 허가제(승인제 APPROVAL) 대상자는 관리자 검토를 거치므로 날짜/횟수 제한 없이 자유롭게 신청 가능합니다.
+	const maxMonthlyCount = $derived(isFcfsMode ? Number(policy?.max_monthly_count || 0) : 0);
+	const maxDaysPerRequest = $derived(isFcfsMode ? Number(policy?.max_days_per_request || 0) : 0);
 	const minAdvanceDays = $derived(
-		Number(requestWindow?.min_advance_days ?? todayPolicy?.min_advance_days ?? 0)
+		isFcfsMode ? Number(requestWindow?.min_advance_days ?? todayPolicy?.min_advance_days ?? 0) : 0
 	);
 	const maxAdvanceDays = $derived(
-		Number(requestWindow?.max_advance_days ?? todayPolicy?.max_advance_days ?? 0)
+		isFcfsMode ? Number(requestWindow?.max_advance_days ?? todayPolicy?.max_advance_days ?? 0) : 0
 	);
 	const monthlyUsedCount = $derived(
 		Number(quotaInfo?.monthly_used_count ?? data.quota_info?.monthly_used_count ?? 0)
@@ -109,10 +112,13 @@
 		return shiftCalendarDateStr(baseStr || todayStr, offsetDays);
 	}
 
-	const minAllowedDate = $derived(requestWindow?.min_date || shiftDateStr(todayStr, minAdvanceDays));
-	const maxAllowedDate = $derived(
-		requestWindow?.max_date ??
-			(maxAdvanceDays > 0 ? shiftDateStr(todayStr, maxAdvanceDays) : null)
+	const minAllowedDate = $derived<string | null>(
+		isFcfsMode ? requestWindow?.min_date || shiftDateStr(todayStr, minAdvanceDays) : null
+	);
+	const maxAllowedDate = $derived<string | null>(
+		isFcfsMode
+			? requestWindow?.max_date ?? (maxAdvanceDays > 0 ? shiftDateStr(todayStr, maxAdvanceDays) : null)
+			: null
 	);
 
 	const TYPE_LABELS: Record<string, string> = {
@@ -267,9 +273,15 @@
 		maxMonthlyCount > 0 && selectedDates.length > 0 && monthlyUsedCount >= maxMonthlyCount
 	);
 
-	/** 신청 가능 기간(D+X ~ D+Y)을 벗어난 날짜 */
+	/** 신청 가능 기간(D+X ~ D+Y)을 벗어난 날짜 (자동승인 전용, 허가제는 빈 배열) */
 	const outOfWindowDates = $derived(
-		selectedDates.filter((d) => d < minAllowedDate || (maxAllowedDate ? d > maxAllowedDate : false))
+		isFcfsMode
+			? selectedDates.filter(
+					(d) =>
+						(minAllowedDate ? d < minAllowedDate : false) ||
+						(maxAllowedDate ? d > maxAllowedDate : false)
+				)
+			: []
 	);
 
 	/**
@@ -360,24 +372,24 @@
 		<div>
 			<div class="flex flex-wrap items-center gap-2">
 				<span
-					class="inline-flex items-center gap-1.5 rounded-full bg-slate-900 px-3 py-1 text-[11px] font-black tracking-widest text-emerald-400 uppercase"
+					class="inline-flex items-center gap-1.5 rounded-full bg-slate-900 px-3 py-1 text-[11px] font-black tracking-wider text-emerald-400"
 				>
 					<span class="h-2 w-2 animate-ping rounded-full bg-emerald-400"></span>
-					Employee Self-Service
+					근무자 휴무 신청
 				</span>
 				{#if isFcfsMode}
 					<span
 						class="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[11px] font-black text-emerald-700"
 					>
 						<Icon icon="solar:bus-bold-duotone" class="text-sm" />
-						운전직 · 선착순 즉시 확정제 (기본 일 최대 {policy.daily_quota}명)
+						자동승인 (선착순 즉시 확정 · 기본 일 최대 {policy.daily_quota}명)
 					</span>
 				{:else}
 					<span
 						class="inline-flex items-center gap-1.5 rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-[11px] font-black text-blue-700"
 					>
 						<Icon icon="solar:buildings-2-bold-duotone" class="text-sm" />
-						사무직 · 신청 후 관리자 승인제
+						허가제 (관리자 승인 · 날짜 제한 없음)
 					</span>
 				{/if}
 				{#if maxMonthlyCount > 0}
@@ -425,7 +437,7 @@
 			class="flex flex-col justify-between rounded-[1.75rem] border-2 border-slate-200 bg-white p-5 shadow-sm"
 		>
 			<div class="flex items-center justify-between">
-				<span class="text-xs font-black tracking-wider text-slate-400 uppercase">Pending</span>
+				<span class="text-xs font-black tracking-wider text-slate-400">승인 대기</span>
 				<div class="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
 					<Icon icon="solar:clock-circle-bold-duotone" class="text-xl" />
 				</div>
@@ -442,7 +454,7 @@
 			class="flex flex-col justify-between rounded-[1.75rem] border-2 border-slate-200 bg-white p-5 shadow-sm"
 		>
 			<div class="flex items-center justify-between">
-				<span class="text-xs font-black tracking-wider text-slate-400 uppercase">Approved</span>
+				<span class="text-xs font-black tracking-wider text-slate-400">승인 확정</span>
 				<div
 					class="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600"
 				>
@@ -461,7 +473,7 @@
 			class="flex flex-col justify-between rounded-[1.75rem] border-2 border-slate-200 bg-white p-5 shadow-sm"
 		>
 			<div class="flex items-center justify-between">
-				<span class="text-xs font-black tracking-wider text-slate-400 uppercase">Rejected</span>
+				<span class="text-xs font-black tracking-wider text-slate-400">반려</span>
 				<div class="flex h-9 w-9 items-center justify-center rounded-xl bg-rose-50 text-rose-600">
 					<Icon icon="solar:close-circle-bold-duotone" class="text-xl" />
 				</div>
@@ -478,7 +490,7 @@
 			class="flex flex-col justify-between rounded-[1.75rem] border-2 border-slate-200 bg-white p-5 shadow-sm"
 		>
 			<div class="flex items-center justify-between">
-				<span class="text-xs font-black tracking-wider text-slate-400 uppercase">Lifetime</span>
+				<span class="text-xs font-black tracking-wider text-slate-400">전체 누적</span>
 				<div class="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
 					<Icon icon="solar:calendar-date-bold-duotone" class="text-xl" />
 				</div>
@@ -514,6 +526,7 @@
 				{events}
 				selectionMode="range"
 				fullBleedMobile={true}
+				showSelectedDayPanel={false}
 				minSelectableDate={minAllowedDate}
 				maxSelectableDate={maxAllowedDate}
 				onDisabledDateClick={handleDisabledDateClick}
@@ -544,8 +557,8 @@
 			>
 				<div class="border-b border-slate-100 bg-slate-50/50 p-5 md:p-6">
 					<div class="flex items-center justify-between">
-						<h3 class="text-lg font-black tracking-tighter text-slate-900 uppercase italic">
-							Application <span class="not-italic ml-1 text-sm font-bold text-blue-600">휴무 신청서</span>
+						<h3 class="text-lg font-black tracking-tight text-slate-900">
+							휴무 <span class="text-blue-600">신청서</span>
 						</h3>
 						<span
 							class="rounded-full px-2.5 py-0.5 text-[10px] font-black {isFcfsMode
@@ -568,8 +581,8 @@
 
 					<!-- 휴무 유형 -->
 					<div class="space-y-2.5">
-						<span class="block text-[10px] font-black tracking-[0.2em] text-slate-400 uppercase">
-							Absence Category
+						<span class="block text-xs font-black tracking-wider text-slate-500">
+							휴무 유형
 						</span>
 						<div class="grid grid-cols-2 gap-2">
 							{#each ['ANNUAL', 'SICK', 'SPECIAL', 'OFFICIAL'] as type (type)}
@@ -596,8 +609,8 @@
 					<!-- 사유 -->
 					<div class="space-y-2.5">
 						<label
-							class="block text-[10px] font-black tracking-[0.2em] text-slate-400 uppercase"
-							for="memo">Detail Reason / Memo</label
+							class="block text-xs font-black tracking-wider text-slate-500"
+							for="memo">상세 사유 / 메모</label
 						>
 						<textarea
 							id="memo"
@@ -612,11 +625,11 @@
 					<!-- 선택 요약 -->
 					<div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
 						<div class="mb-3 flex items-center justify-between border-b border-slate-200 pb-2">
-							<span class="text-[10px] font-black tracking-widest text-slate-400 uppercase">
-								Total selection
+							<span class="text-xs font-black tracking-wider text-slate-500">
+								선택한 기간
 							</span>
 							<span class="text-lg font-black text-blue-600">
-								{selectedDates.length} <span class="text-xs font-bold">DAYS</span>
+								{selectedDates.length} <span class="text-xs font-bold">일</span>
 							</span>
 						</div>
 
@@ -631,7 +644,10 @@
 							<div class="custom-scrollbar flex max-h-24 flex-wrap gap-1.5 overflow-y-auto pr-1">
 								{#each selectedDates as d (d)}
 									{@const qInfo = quotaDays[d]}
-									{@const outWin = d < minAllowedDate || (maxAllowedDate ? d > maxAllowedDate : false)}
+									{@const outWin =
+										isFcfsMode &&
+										((minAllowedDate ? d < minAllowedDate : false) ||
+											(maxAllowedDate ? d > maxAllowedDate : false))}
 									<span
 										class="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[9px] font-bold
 										{busyDates.has(d) || outWin || (isFcfsMode && qInfo?.is_full)
@@ -747,9 +763,9 @@
 		class="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg md:rounded-[2rem] md:shadow-2xl"
 	>
 		<div class="flex items-center justify-between border-b border-slate-100 bg-slate-50/50 p-6 md:p-8">
-			<h3 class="text-lg font-black tracking-tighter text-slate-900 uppercase italic">
-				Request Ledger
-				<span class="not-italic ml-2 text-sm font-bold text-blue-600">최근 신청 이력 현황</span>
+			<h3 class="text-lg font-black tracking-tight text-slate-900">
+				신청 이력
+				<span class="ml-2 text-sm font-bold text-blue-600">최근 신청 이력 현황</span>
 			</h3>
 		</div>
 
@@ -757,14 +773,14 @@
 			<div class="overflow-x-auto">
 				<table class="table w-full">
 					<thead
-						class="border-b border-slate-100 bg-slate-50 text-[10px] font-bold tracking-widest text-slate-500 uppercase"
+						class="border-b border-slate-100 bg-slate-50 text-xs font-bold tracking-wider text-slate-500"
 					>
 						<tr>
-							<th class="px-6 py-4">Application Date</th>
-							<th>Category</th>
-							<th>Status</th>
-							<th>Reason (Memo)</th>
-							<th class="px-6 text-right">Action</th>
+							<th class="px-6 py-4">신청 날짜</th>
+							<th>유형</th>
+							<th>상태</th>
+							<th>사유 (메모)</th>
+							<th class="px-6 text-right">관리</th>
 						</tr>
 					</thead>
 					<tbody class="divide-y divide-slate-50">
@@ -806,19 +822,19 @@
 											<input type="hidden" name="dayoff_id" value={d.id} />
 											<button
 												type="submit"
-												class="btn rounded-lg font-black text-rose-500 uppercase btn-ghost btn-sm hover:bg-rose-50"
+												class="btn rounded-lg font-black text-rose-500 btn-ghost btn-sm hover:bg-rose-50"
 												onclick={(e: MouseEvent) => {
 													if (!confirm('해당 휴무 신청을 취소하시겠습니까?')) e.preventDefault();
 												}}
 											>
-												Cancel
+												취소
 											</button>
 										</form>
 									{:else}
 										<span
-											class="rounded-md border border-slate-100 px-3 py-1 text-[10px] font-black tracking-widest text-slate-300 uppercase"
+											class="rounded-md border border-slate-100 px-3 py-1 text-[10px] font-black tracking-wider text-slate-300"
 										>
-											Locked
+											취소 불가
 										</span>
 									{/if}
 								</td>
@@ -830,10 +846,10 @@
 		{:else}
 			<div class="py-20 text-center">
 				<Icon icon="mdi:database-off-outline" class="mx-auto mb-4 h-14 w-14 text-slate-200" />
-				<p class="text-xl font-black tracking-widest text-slate-300 uppercase italic">
-					Records Not Found
+				<p class="text-xl font-black tracking-tight text-slate-300">
+					신청 내역 없음
 				</p>
-				<p class="mt-2 text-xs font-bold text-slate-400">최근 신청한 결근계 내역이 없습니다.</p>
+				<p class="mt-2 text-xs font-bold text-slate-400">최근 신청한 휴무 내역이 없습니다.</p>
 			</div>
 		{/if}
 	</div>

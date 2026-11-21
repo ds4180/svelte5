@@ -14,6 +14,7 @@
 	import * as api from '$lib/api/admin';
 	import { toast } from '$lib/runes/toast.svelte';
 	import { getSiteTitle } from '$lib/config/site';
+	import { USER_ASSIGNABLE_RANK_LEVELS, getRankMeta } from '$lib/config/rank';
 	import Icon from '@iconify/svelte';
 
 	let users = $state([]);
@@ -181,27 +182,13 @@
 		}
 	}
 
-	const rankLevels = [
-		{ val: 0, role: 'ROLE_GUEST', label: 'Lv.0 손님/미승인', color: 'badge-ghost', desc: '공개 데이터만 접근 가능' },
-		{ val: 1, role: 'ROLE_USER', label: 'Lv.1 정회원', color: 'badge-info', desc: '일반 사원 CRUD' },
-		{ val: 2, role: 'ROLE_STAFF', label: 'Lv.2 실무자', color: 'badge-success', desc: '배차/승무/현장 실무' },
-		{ val: 3, role: 'ROLE_MANAGER', label: 'Lv.3 부서장', color: 'badge-warning', desc: '부서 관리 및 비공개 결재' },
-		{ val: 4, role: 'ROLE_ADMIN', label: 'Lv.4 운영관리자', color: 'badge-primary', desc: '시스템 전반 운영' },
-		{ val: 8, role: 'ROLE_CORE', label: 'Lv.8 코어마스터', color: 'badge-secondary', desc: '감사로그/인프라 관제' },
-		{ val: 9, role: 'ROLE_ROOT', label: 'Lv.9 최고관리자', color: 'badge-error', desc: '시스템 절대 권한 (Master Key)' }
-	];
+	const rankLevels = USER_ASSIGNABLE_RANK_LEVELS;
 
 	function getRankInfo(level, isActive = true) {
 		if (!isActive) {
 			return { val: 0, role: 'INACTIVE', label: '퇴사/비활성', color: 'badge-ghost', desc: '계정 비활성화' };
 		}
-		return rankLevels.find(r => r.val === level) || {
-			val: level,
-			role: 'CUSTOM',
-			label: `Lv.${level} 특수`,
-			color: 'badge-neutral',
-			desc: '예비 확장 등급'
-		};
+		return getRankMeta(level);
 	}
 
 	function getModeLabel(mode) {

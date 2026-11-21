@@ -13,6 +13,38 @@
 			href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Outfit:wght@400;600;700;900&display=swap"
 		/>
 		<link rel="manifest" href="/manifest.json" />
+		<script>
+			// 🛡️ [프로덕션 배포 CSS 누락 자동 복구 가드]
+			// 새 버전 배포 직후 구버전 HTML이나 캐시 충돌로 /_app/immutable/assets/*.css 로드에 실패하면,
+			// CSS 없는 깨진 화면이 그대로 남지 않도록 15초 내 최대 1회 자동 새로고침하여 최신 번들을 받습니다.
+			(function () {
+				var GUARD_KEY = 'jeju_css_recovery_ts';
+				function recoverFromCssFailure(href) {
+					if (!href || href.indexOf('/_app/immutable/') === -1) return;
+					try {
+						var now = Date.now();
+						var last = Number(sessionStorage.getItem(GUARD_KEY) || '0');
+						if (now - last < 15000) return; // 무한 새로고침 원천 차단 (15초 쿨다운)
+						sessionStorage.setItem(GUARD_KEY, String(now));
+					} catch (e) {
+						// 시크릿 모드 등 storage 접근 불가 시 무시
+					}
+					window.location.reload();
+				}
+
+				// 캡처 단계에서 <link rel="stylesheet"> 로드 실패(404/네트워크 오류)를 즉시 포착
+				window.addEventListener(
+					'error',
+					function (event) {
+						var el = event && event.target;
+						if (el && el.tagName === 'LINK' && el.rel === 'stylesheet') {
+							recoverFromCssFailure(el.getAttribute('href') || el.href);
+						}
+					},
+					true
+				);
+			})();
+		</script>
 		%sveltekit.head%
 	</head>
 	<body data-sveltekit-preload-data="hover">

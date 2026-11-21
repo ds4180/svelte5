@@ -212,11 +212,11 @@
 			<!-- 헤더 -->
 			<div class="flex items-center justify-between border-b border-slate-200 bg-slate-900 px-6 py-5 text-white">
 				<div>
-					<span class="rounded-full bg-emerald-400/20 px-2.5 py-0.5 text-[10px] font-black tracking-widest text-emerald-300 uppercase">
-						Day-Off Policy
+					<span class="rounded-full bg-emerald-400/20 px-2.5 py-0.5 text-[10px] font-black tracking-wider text-emerald-300">
+						결근·휴무 운영 정책
 					</span>
 					<h3 id="dayoff-policy-modal-title" class="mt-1 text-lg font-black text-white md:text-xl">
-						선착순(운전직) · 승인제(사무직) 기본 정책 설정
+						자동승인(선착순) · 허가제(승인제) 정책 설정
 					</h3>
 				</div>
 				<button
@@ -411,8 +411,16 @@
 					</div>
 				</div>
 
-				<!-- 5. 사용 제한 -->
-				<div class="space-y-3 rounded-2xl border border-slate-200 bg-slate-50/60 p-4">
+				<!-- 5. 자동승인(선착순) 전용 사용 및 날짜 제한 -->
+				<div class="space-y-3 rounded-2xl border-2 border-emerald-200/80 bg-emerald-50/25 p-4">
+					<div class="flex flex-wrap items-center justify-between gap-2">
+						<span class="text-xs font-black text-emerald-900">
+							5. 자동승인(선착순) 전용 사용 · 날짜 제한
+						</span>
+						<span class="rounded-full bg-emerald-100 px-2.5 py-0.5 text-[10px] font-black text-emerald-800">
+							자동승인 대상자만 적용
+						</span>
+					</div>
 					<div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
 						<div>
 							<label for="max-monthly-count" class="block text-xs font-black text-slate-800">
@@ -477,7 +485,7 @@
 								⚠️ 최대 신청 가능일(D+{draft.max_advance_days})이 최소 신청 가능일(D+{draft.min_advance_days})보다 작습니다.
 							</span>
 						{:else}
-							📅 오늘({todayStr}) 신청 기준 허용 범위:
+							📅 오늘({todayStr}) 자동승인 신청 기준 허용 범위:
 							<span class="font-mono font-black">
 								{shiftDateStr(todayStr, Number(draft.min_advance_days || 0))} (D+{Number(draft.min_advance_days || 0)})
 								~
@@ -486,6 +494,18 @@
 									: '제한 없음'}
 							</span>
 						{/if}
+					</div>
+				</div>
+
+				<!-- 허가제(승인제) 운영 안내 -->
+				<div class="flex items-start gap-3 rounded-2xl border border-blue-200 bg-blue-50/50 p-4 text-xs text-blue-900">
+					<Icon icon="solar:shield-check-bold-duotone" class="mt-0.5 shrink-0 text-xl text-blue-600" />
+					<div>
+						<div class="font-black">허가제(승인제) 대상자 운영 방식</div>
+						<p class="mt-0.5 text-[11px] font-medium text-blue-800/90">
+							자동승인(선착순) 대상에 해당하지 않는 직원은 <b>허가제</b>로 동작하며, 위 4·5번의
+							<b>정원 · 날짜(D+X~D+Y) · 횟수 · 일수 제한 없이</b> 자유롭게 신청한 뒤 관리자 승인/반려를 거칩니다.
+						</p>
 					</div>
 				</div>
 

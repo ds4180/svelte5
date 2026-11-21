@@ -13,6 +13,21 @@
         customGetActiveRouteMasters,
         customGetDailyDispatch
     } from '$lib/api/custom';
+    import fleetData from '$lib/data/vehicles.json';
+
+    /** @param {string} routeName */
+    function getTargetFleet(routeName = '') {
+        if (routeName.includes('121') || routeName.includes('122')) {
+            return fleetData.vehicles['121/122'] || [];
+        }
+        if (routeName.includes('291') || routeName.includes('292') || routeName.includes('293')) {
+            return fleetData.vehicles['291/292/293'] || [];
+        }
+        return [
+            ...(fleetData.vehicles['121/122'] || []),
+            ...(fleetData.vehicles['291/292/293'] || [])
+        ];
+    }
 
     let { data } = $props();
 
@@ -141,10 +156,12 @@
                     const fetchPromises = routes.map(async (r) => {
                         try {
                             const data = await customGetDailyDispatch(dateKey, r.id);
-                            return data.map(row => ({
+                            const targetFleet = getTargetFleet(r.route_name || '');
+                            return data.map((row, index) => ({
                                 ...row,
                                 route_id: r.id,
-                                route_name: r.route_name
+                                route_name: r.route_name,
+                                vehicle_no: row.vehicle_no || targetFleet[index] || ''
                             }));
                         } catch (e) {
                             console.error(`❌ [${r.route_name}] 개별 노선 로드 실패:`, e);
@@ -162,10 +179,12 @@
                     // 단일 노선 조회 모드
                     const data = await customGetDailyDispatch(dateKey, selectedRoute.id);
                     if (token !== fetchToken) return;
-                    dispatchRows = data.map(row => ({
+                    const targetFleet = getTargetFleet(selectedRoute.route_name || '');
+                    dispatchRows = data.map((row, index) => ({
                         ...row,
                         route_id: selectedRoute.id,
-                        route_name: selectedRoute.route_name
+                        route_name: selectedRoute.route_name,
+                        vehicle_no: row.vehicle_no || targetFleet[index] || ''
                     }));
                 }
             } else {
@@ -347,90 +366,90 @@
                                 </span>
                             </div>
 
-                            <div class="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-md">
-                                <div class="overflow-x-auto">
-                                    <table class="w-full text-left border-collapse min-w-[750px]">
-                                        <thead>
-                                            <tr class="bg-slate-100 border-b border-slate-200 text-[11px] text-slate-600 font-extrabold uppercase">
-                                                <th class="py-2.5 px-3 border-r border-slate-200 text-center w-20">차량 번호</th>
-                                                <th class="py-2.5 px-3 border-r border-slate-200 text-center w-14">로번</th>
-                                                <th class="py-2.5 px-3 border-r border-slate-200 text-center w-16">출발</th>
-                                                <th class="py-2.5 px-3 border-r border-slate-200 text-center w-16">종료</th>
-                                                <th class="py-2.5 px-3 border-r border-slate-200 w-36">시작 위치</th>
-                                                <th class="py-2.5 px-3 border-r border-slate-200 w-36">종료 위치</th>
-                                                <th class="py-2.5 px-3 border-r border-slate-200 text-center w-24">기사</th>
-                                                <th class="py-2.5 px-3 border-r border-slate-200 text-center w-24">상태</th>
-                                                <th class="py-2.5 px-3">비고/메모</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody class="divide-y divide-slate-200">
-                                            {#each item.rows as row}
-                                                <tr class="hover:bg-indigo-50/20 text-xs transition-all {row.is_regular_duty ? 'bg-indigo-50/10' : ''}">
-                                                    <!-- 차량 번호 -->
-                                                    <td class="py-2 px-3 border-r border-slate-200 font-black text-slate-900 text-center">
-                                                        {row.vehicle_no || '-'}
-                                                    </td>
+                            <div class="w-full overflow-x-auto border-2 border-slate-900 rounded-xl shadow-[2px_2px_0_rgba(0,0,0,1)] bg-white">
+                                <table class="excel-table w-full text-center border-collapse">
+                                    <thead>
+                                        <tr class="bg-slate-100 border-b border-slate-200 text-slate-600 font-extrabold uppercase">
+                                            <th style="width: 72px;">차량 번호</th>
+                                            <th style="width: 48px;">로번</th>
+                                            <th style="width: 68px;">출발</th>
+                                            <th style="width: 68px;">종료</th>
+                                            <th style="width: 112px;">시작 위치</th>
+                                            <th style="width: 112px;">종료 위치</th>
+                                            <th style="width: 86px; background-color: #ecfdf5; color: #047857;">기사</th>
+                                            <th style="width: 60px;">상태</th>
+                                            <th style="width: 130px;">비고/메모</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-slate-200">
+                                        {#each item.rows as row}
+                                            <tr class="hover:bg-indigo-50/20 transition-all {row.is_regular_duty ? 'bg-indigo-50/10' : ''}">
+                                                <!-- 차량 번호 -->
+                                                <td class="bg-blue-50/10 font-bold {row.is_inherited ? 'text-indigo-700 italic' : 'text-blue-700'}">
+                                                    {row.vehicle_no || '-'}
+                                                </td>
 
-                                                    <!-- 로번 -->
-                                                    <td class="py-2 px-3 border-r border-slate-200 text-center font-black">
-                                                        <span class="inline-flex min-w-[20px] h-[20px] bg-slate-800 text-white rounded-md items-center justify-center text-[10px] px-1">
-                                                            {row.seq}
+                                                <!-- 로번 -->
+                                                <td class="turn-cell bg-amber-50/20 text-amber-900 font-extrabold relative">
+                                                    {row.seq}
+                                                    {#if row.is_regular_duty}
+                                                        <div class="absolute top-0.5 right-0.5 w-1.5 h-1.5 bg-indigo-600 rounded-full" title="당연 근무"></div>
+                                                    {/if}
+                                                </td>
+
+                                                <!-- 출발 -->
+                                                <td class="bg-blue-50/30 font-bold text-blue-700">
+                                                    {row.start_time}
+                                                </td>
+
+                                                <!-- 종료 -->
+                                                <td class="bg-slate-50/40 font-semibold text-slate-600">
+                                                    {row.end_time}
+                                                </td>
+
+                                                <!-- 시작 위치 -->
+                                                <td class="bg-slate-50/40 font-semibold text-slate-700" title={row.start_location}>
+                                                    {row.start_location}
+                                                </td>
+
+                                                <!-- 종료 위치 -->
+                                                <td class="bg-slate-50/40 font-semibold text-slate-600" title={row.end_location}>
+                                                    {row.end_location}
+                                                </td>
+
+                                                <!-- 기사 -->
+                                                <td class="font-black relative {row.driver_name ? (row.is_inherited ? 'bg-indigo-50/80 text-indigo-700 italic' : 'bg-emerald-50 text-emerald-700') : 'bg-emerald-50/20 text-slate-300 italic'}">
+                                                    {row.driver_name || '미지정'}
+                                                    {#if row.is_inherited && row.driver_name}
+                                                        <span class="absolute top-[1px] right-0.5 text-[10px] text-indigo-500 font-extrabold tracking-tighter leading-none">승계</span>
+                                                    {/if}
+                                                </td>
+
+                                                <!-- 상태 배지 -->
+                                                <td class="status-cell">
+                                                    {#if row.status === 'CONFIRMED'}
+                                                        <span class="inline-flex items-center justify-center bg-emerald-50 text-emerald-700 border border-emerald-200 px-1.5 py-0.5 rounded text-xs font-black leading-none">
+                                                            확정
                                                         </span>
-                                                    </td>
+                                                    {:else if row.status === 'ANNOUNCED'}
+                                                        <span class="inline-flex items-center justify-center bg-blue-50 text-blue-700 border border-blue-200 px-1.5 py-0.5 rounded text-xs font-black leading-none">
+                                                            공지
+                                                        </span>
+                                                    {:else}
+                                                        <span class="inline-flex items-center justify-center bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded text-xs font-black leading-none">
+                                                            임시
+                                                        </span>
+                                                    {/if}
+                                                </td>
 
-                                                    <!-- 출발 -->
-                                                    <td class="py-2 px-3 border-r border-slate-200 font-black text-indigo-700 text-center tracking-tight">
-                                                        {row.start_time}
-                                                    </td>
-
-                                                    <!-- 종료 -->
-                                                    <td class="py-2 px-3 border-r border-slate-200 font-semibold text-slate-600 text-center tracking-tight">
-                                                        {row.end_time}
-                                                    </td>
-
-                                                    <!-- 시작 위치 -->
-                                                    <td class="py-2 px-3 border-r border-slate-200 font-bold text-slate-700">
-                                                        {row.start_location}
-                                                    </td>
-
-                                                    <!-- 종료 위치 -->
-                                                    <td class="py-2 px-3 border-r border-slate-200 font-semibold text-slate-600">
-                                                        {row.end_location}
-                                                    </td>
-
-                                                    <!-- 기사 -->
-                                                    <td class="py-2 px-3 border-r border-slate-200 text-center font-black {row.driver_name ? 'text-slate-900' : 'text-slate-300 italic'}">
-                                                        {row.driver_name || '미지정'}
-                                                    </td>
-
-                                                    <!-- 상태 배지 -->
-                                                    <td class="py-2 px-3 border-r border-slate-200 text-center">
-                                                        {#if row.status === 'CONFIRMED'}
-                                                            <span class="inline-flex items-center gap-0.5 bg-emerald-50 text-emerald-700 border border-emerald-100 px-1.5 py-0.5 rounded text-[9px] font-black">
-                                                                <span class="w-1 h-1 rounded-full bg-emerald-500"></span>
-                                                                확정
-                                                            </span>
-                                                        {:else if row.status === 'ANNOUNCED'}
-                                                            <span class="inline-flex items-center gap-0.5 bg-blue-50 text-blue-700 border border-blue-100 px-1.5 py-0.5 rounded text-[9px] font-black">
-                                                                <span class="w-1 h-1 rounded-full bg-blue-500"></span>
-                                                                공지
-                                                            </span>
-                                                        {:else}
-                                                            <span class="inline-flex bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded text-[9px] font-black">
-                                                                임시
-                                                            </span>
-                                                        {/if}
-                                                    </td>
-
-                                                    <!-- 비고/메모 -->
-                                                    <td class="py-2 px-3 text-slate-500 font-medium max-w-[200px] truncate text-[11px]" title={row.memo}>
-                                                        {row.memo || '-'}
-                                                    </td>
-                                                </tr>
-                                            {/each}
-                                        </tbody>
-                                    </table>
-                                </div>
+                                                <!-- 비고/메모 -->
+                                                <td class="memo-cell text-slate-600 font-semibold" title={row.memo}>
+                                                    {row.memo || '-'}
+                                                </td>
+                                            </tr>
+                                        {/each}
+                                    </tbody>
+                                </table>
                             </div>
                         </div>
                     {/if}
@@ -449,6 +468,45 @@
 </div>
 
 <style>
+    .excel-table {
+        border-collapse: collapse;
+        width: 100%;
+        min-width: 756px;
+        table-layout: fixed;
+    }
+    .excel-table th,
+    .excel-table td {
+        box-sizing: border-box;
+        border: 1px solid #ddd;
+        padding: 0 2px !important;
+        height: 38px;
+        font-size: 16.5px;
+        letter-spacing: -0.03em;
+        line-height: 38px;
+        text-align: center;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .excel-table th {
+        background-color: #f8fafc;
+        font-weight: 800;
+        color: #64748b;
+        text-transform: uppercase;
+        font-size: 15px;
+        letter-spacing: -0.03em;
+    }
+    .excel-table td.turn-cell {
+        font-size: 18px;
+    }
+    .excel-table td.status-cell {
+        line-height: normal;
+        vertical-align: middle;
+    }
+    .excel-table td.memo-cell {
+        font-size: 14.5px;
+    }
+
     /* 스크롤바 커스텀 */
     .scrollbar-none::-webkit-scrollbar {
         display: none;

@@ -175,6 +175,8 @@
 		onRangeSelect?: (startDate: string, endDate: string, rangeDates: string[]) => void;
 		/** 선택된 날짜 패널에서 '+ 일정/알림 추가' 클릭 콜백 */
 		onAddEventClick?: (dateStr: string) => void;
+		/** 헤더 좌측 연/월 바로 옆 커스텀 스니펫 (필터 체크박스 등) */
+		headerLeftExtra?: Snippet;
 		/** 헤더 우측 커스텀 액션 영역 스니펫 */
 		headerRight?: Snippet;
 		/** 각 날짜 셀 하단 커스텀 렌더링 스니펫 */
@@ -213,12 +215,13 @@
 		lineThickness = $bindable<'thin' | 'normal' | 'thick'>('normal'),
 		showSelectedDayPanel = true,
 		fixedSixWeeks = true,
-		subtitle = 'Integrated Schedule & Alert Calendar',
+		subtitle = '통합 일정 및 알림 캘린더',
 		onDateClick,
 		onEventClick,
 		onMonthChange,
 		onRangeSelect,
 		onAddEventClick,
+		headerLeftExtra,
 		headerRight,
 		dayFooter,
 		minSelectableDate = null,
@@ -479,8 +482,7 @@
 			const splitHalf =
 				ev.bgPosition === 'top' ||
 				ev.bgPosition === 'bottom' ||
-				hasOverlapInSpan ||
-				ev.bgPosition !== 'full';
+				(ev.bgPosition !== 'full' && hasOverlapInSpan);
 
 			for (const dKey of days) {
 				const pair = occupied.get(dKey);
@@ -752,20 +754,25 @@
 		class="calendar-header mb-3 sm:mb-5 flex flex-wrap items-center justify-between gap-2 border-b-2 border-slate-900 pb-3 sm:pb-5
 		       {fullBleedMobile ? 'px-3 sm:px-0' : ''}"
 	>
-		<div class="flex flex-col">
-			{#if subtitle}
-				<span class="hidden sm:block text-[10px] font-black tracking-[0.3em] text-slate-400 uppercase italic">
-					{subtitle}
-				</span>
-			{/if}
-			<div class="flex items-baseline gap-2 sm:gap-3">
-				<h2 class="text-2xl sm:text-4xl md:text-5xl font-black tracking-tighter text-slate-900">
-					{year}년
-				</h2>
-				<h2 class="text-2xl sm:text-4xl md:text-5xl font-black tracking-tighter text-blue-600">
-					{String(month + 1).padStart(2, '0')}월
-				</h2>
+		<div class="flex flex-wrap items-center gap-3 sm:gap-5">
+			<div class="flex flex-col">
+				{#if subtitle}
+					<span class="hidden sm:block text-[10px] font-black tracking-wider text-slate-400">
+						{subtitle}
+					</span>
+				{/if}
+				<div class="flex items-baseline gap-2 sm:gap-3">
+					<h2 class="text-2xl sm:text-4xl md:text-5xl font-black tracking-tighter text-slate-900">
+						{year}년
+					</h2>
+					<h2 class="text-2xl sm:text-4xl md:text-5xl font-black tracking-tighter text-blue-600">
+						{String(month + 1).padStart(2, '0')}월
+					</h2>
+				</div>
 			</div>
+			{#if headerLeftExtra}
+				{@render headerLeftExtra()}
+			{/if}
 		</div>
 
 		<div class="flex flex-wrap items-center gap-1.5 sm:gap-2">
@@ -861,7 +868,8 @@
 				       {cell.isToday && !selected ? 'ring-2 ring-inset ring-slate-900' : ''}"
 			>
 				<!-- =============================================================== -->
-				<!-- [레이어 A] 중요 알람 배경색 레이어 (하루 최대 2개: 상단 50% / 하단 50% 분할 및 연속 연결) -->
+				<!-- [레이어 A] 중요 일정(배경색) 레이어 (단독 시 날짜 칸 전체 100%, 2개 겹침 시 상/하단 분할) -->
+				<!--            + 제목은 배경 투명 + 애니메이션이 들어간 중요 알람 배지 디자인 -->
 				<!-- =============================================================== -->
 				{#if bgAlarms.length > 0}
 					<div class="pointer-events-none absolute inset-0 z-0 overflow-visible">
@@ -877,15 +885,27 @@
 								: 'inset-x-0'}
 
 							<div
-								class="absolute {posClass} {connectClass} {style.bgFill} {style.bgBorder} transition-all"
-								style={bg.event.color ? `background-color: ${bg.event.color}33; border-color: ${bg.event.color};` : ''}
+								class="calendar-bg-important absolute {posClass} {connectClass} {style.bgFill} {style.bgBorder} transition-all"
+								style={bg.event.color ? `background-color: ${bg.event.color}38; border-color: ${bg.event.color};` : ''}
 							>
 								{#if bg.isStart || cell.dayOfWeek === 0}
 									<div
-										class="absolute {bg.splitHalf ? (bg.slot === 1 ? 'bottom-1 left-1 right-1' : 'top-1 right-1 left-8 sm:left-10') : 'bottom-1.5 left-1.5 right-1.5'} inline-flex items-center gap-1 sm:gap-1.5 rounded-lg bg-white/80 px-1.5 py-0.5 sm:px-2 sm:py-1 shadow-xs backdrop-blur-[1px] {style.bgText}"
+										class="absolute {bg.splitHalf ? (bg.slot === 1 ? 'bottom-1 left-1 right-1' : 'top-1 right-1 left-8 sm:left-10') : 'bottom-1.5 left-1.5 right-1.5'} inline-flex items-center gap-1 sm:gap-1.5 bg-transparent px-1 py-0.5"
+										style={bg.event.color ? `color: ${bg.event.color};` : ''}
 									>
-										<Icon icon="solar:bell-bing-bold" class="h-4 w-4 sm:h-5 sm:w-5 md:h-6 md:w-6 shrink-0" />
-										<span class="truncate text-[11px] sm:text-xs md:text-sm font-black leading-tight">
+										<span class="relative flex h-4 w-4 sm:h-5 sm:w-5 shrink-0 items-center justify-center">
+											<span
+												class="absolute inline-flex h-full w-full animate-ping rounded-full opacity-45"
+												style="background-color: {bg.event.color || '#e11d48'};"
+											></span>
+											<Icon
+												icon="solar:bell-bing-bold"
+												class="important-bell-shake relative h-3.5 w-3.5 sm:h-4 sm:w-4 md:h-5 md:w-5 drop-shadow-xs {bg.event.color ? '' : 'text-rose-600'}"
+											/>
+										</span>
+										<span
+											class="important-text-glow truncate text-[11px] sm:text-xs md:text-sm font-black leading-tight drop-shadow-[0_1px_1px_rgba(255,255,255,0.9)] {bg.event.color ? '' : 'text-rose-900'}"
+										>
 											{bg.event.title}
 										</span>
 									</div>
@@ -1202,6 +1222,46 @@
 </div>
 
 <style>
+	/* 🔔 중요 일정 애니메이션 (벨 흔들림 + 부드러운 강조 펄스) */
+	@keyframes important-bell-ring {
+		0%, 100% {
+			transform: rotate(0deg) scale(1);
+		}
+		15% {
+			transform: rotate(16deg) scale(1.12);
+		}
+		30% {
+			transform: rotate(-14deg) scale(1.12);
+		}
+		45% {
+			transform: rotate(10deg) scale(1.06);
+		}
+		60% {
+			transform: rotate(-8deg) scale(1.04);
+		}
+		75% {
+			transform: rotate(0deg) scale(1);
+		}
+	}
+
+	@keyframes important-bg-breathe {
+		0%, 100% {
+			filter: saturate(1);
+		}
+		50% {
+			filter: saturate(1.25) brightness(1.03);
+		}
+	}
+
+	:global(.important-bell-shake) {
+		transform-origin: top center;
+		animation: important-bell-ring 2.6s ease-in-out infinite;
+	}
+
+	.calendar-bg-important {
+		animation: important-bg-breathe 3.5s ease-in-out infinite;
+	}
+
 	/* 📱 모바일 세로 모드 + 하단 퀵 내비게이션 바 활성화(< 768px) 구간: 캘린더 좌우 여백 0 */
 	@media (max-width: 767px) and (orientation: portrait) {
 		.calendar-root.full-bleed-mobile {

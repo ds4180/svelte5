@@ -39,7 +39,9 @@
 
 			await api.adminUpdateBoard(boardId, {
 				...board,
-				service_instance_id: instanceId ? Number(instanceId) : null
+				service_instance_id: instanceId ? Number(instanceId) : null,
+				// 번들을 연결할 때 기존 게시판 직접 지정(service_app_ids)이 번들 레이아웃을 덮어쓰지 않도록 초기화
+				service_app_ids: []
 			});
 			
 			toast.success('서비스 바인딩이 업데이트되었습니다.');

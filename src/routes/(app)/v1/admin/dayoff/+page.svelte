@@ -54,8 +54,160 @@
 	/** @type {boolean} 로딩 상태 제어 */
 	let loading = $state(true);
 
-	/** @type {'list' | 'calendar' | 'timeline'} 현재 탭 보기 형식 */
+	/** @type {'list' | 'calendar' | 'timeline' | 'records'} 현재 탭 보기 형식 */
 	let currentView = $state('list');
+
+	// =====================================================================
+	// 📋 '결근 내역' 게시판 리스트 탭 전용 검색 · 필터링 · 정렬 · 페이지네이션 상태
+	// =====================================================================
+	/** @type {string} 검색어 (이름, 아이디, 부서, 사유, 신청일) */
+	let recordSearch = $state('');
+	/** @type {'ALL' | 'REQUESTED' | 'APPROVED' | 'REJECTED' | 'CANCELLED'} 상태 필터 */
+	let recordStatusFilter = $state('ALL');
+	/** @type {'ALL' | 'ANNUAL' | 'SICK' | 'SPECIAL' | 'OFFICIAL'} 유형 필터 */
+	let recordTypeFilter = $state('ALL');
+	/** @type {string} 부서(주그룹) 필터 ('ALL' 또는 그룹명) */
+	let recordGroupFilter = $state('ALL');
+	/** @type {string} 시작일 필터 ('YYYY-MM-DD') */
+	let recordStartDate = $state('');
+	/** @type {string} 종료일 필터 ('YYYY-MM-DD') */
+	let recordEndDate = $state('');
+	/** @type {'date_desc' | 'date_asc' | 'created_desc' | 'name_asc'} 정렬 기준 */
+	let recordSort = $state('date_desc');
+	/** @type {number} 현재 페이지 (1부터 시작) */
+	let recordPage = $state(1);
+	/** @type {number} 페이지당 표시 행 수 (0이면 전체 표시) */
+	let recordPageSize = $state(20);
+
+	/** 상태 코드 → 한글 레이블 변환 */
+	/** @param {string} s */
+	function getStatusLabel(s) {
+		if (s === 'REQUESTED') return '승인 대기';
+		if (s === 'APPROVED') return '승인 확정';
+		if (s === 'REJECTED') return '반려';
+		if (s === 'CANCELLED') return '취소';
+		return s || '-';
+	}
+
+	/** 결근 내역에 존재하는 고유 부서(주그룹) 목록 */
+	let recordGroupOptions = $derived.by(() => {
+		const set = new Set();
+		for (const d of dayoffs) {
+			if (d.primary_group) set.add(d.primary_group);
+		}
+		return Array.from(set).sort((a, b) => String(a).localeCompare(String(b), 'ko'));
+	});
+
+	/** 검색·필터·정렬이 적용된 전체 결근 내역 리스트 */
+	let filteredRecordList = $derived.by(() => {
+		const q = recordSearch.trim().toLowerCase();
+		const list = filteredDayoffs.filter((d) => {
+			if (recordStatusFilter !== 'ALL' && d.status !== recordStatusFilter) return false;
+			if (recordTypeFilter !== 'ALL' && d.type !== recordTypeFilter) return false;
+			if (recordGroupFilter !== 'ALL' && (d.primary_group || '미지정') !== recordGroupFilter)
+				return false;
+			if (recordStartDate && d.date < recordStartDate) return false;
+			if (recordEndDate && d.date > recordEndDate) return false;
+			if (q) {
+				const haystack = [
+					d.real_name,
+					d.username,
+					d.primary_group,
+					d.date,
+					d.memo,
+					getTypeLabel(d.type),
+					getStatusLabel(d.status)
+				]
+					.filter(Boolean)
+					.join(' ')
+					.toLowerCase();
+				if (!haystack.includes(q)) return false;
+			}
+			return true;
+		});
+
+		const sorted = [...list];
+		if (recordSort === 'date_desc') {
+			sorted.sort((a, b) => (b.date || '').localeCompare(a.date || '') || b.id - a.id);
+		} else if (recordSort === 'date_asc') {
+			sorted.sort((a, b) => (a.date || '').localeCompare(b.date || '') || a.id - b.id);
+		} else if (recordSort === 'created_desc') {
+			sorted.sort(
+				(a, b) => (b.create_date || '').localeCompare(a.create_date || '') || b.id - a.id
+			);
+		} else if (recordSort === 'name_asc') {
+			sorted.sort((a, b) =>
+				(a.real_name || a.username || '').localeCompare(b.real_name || b.username || '', 'ko')
+			);
+		}
+		return sorted;
+	});
+
+	/** 필터링된 결근 내역 요약 집계 */
+	let recordSummary = $derived.by(() => {
+		let approved = 0;
+		let requested = 0;
+		let rejected = 0;
+		let cancelled = 0;
+		for (const d of filteredRecordList) {
+			if (d.status === 'APPROVED') approved++;
+			else if (d.status === 'REQUESTED') requested++;
+			else if (d.status === 'REJECTED') rejected++;
+			else if (d.status === 'CANCELLED') cancelled++;
+		}
+		return {
+			total: filteredRecordList.length,
+			approved,
+			requested,
+			rejected,
+			cancelled
+		};
+	});
+
+	/** 페이지네이션 계산 */
+	let recordTotalPages = $derived(
+		recordPageSize <= 0 ? 1 : Math.max(1, Math.ceil(filteredRecordList.length / recordPageSize))
+	);
+	let pagedRecordList = $derived.by(() => {
+		if (recordPageSize <= 0) return filteredRecordList;
+		const safePage = Math.min(recordPage, recordTotalPages);
+		const start = (safePage - 1) * recordPageSize;
+		return filteredRecordList.slice(start, start + recordPageSize);
+	});
+
+	// 필터 조건이 바뀌면 1페이지로 자동 복귀
+	$effect(() => {
+		void [
+			workTypeFilter,
+			recordSearch,
+			recordStatusFilter,
+			recordTypeFilter,
+			recordGroupFilter,
+			recordStartDate,
+			recordEndDate,
+			recordSort,
+			recordPageSize
+		];
+		recordPage = 1;
+	});
+
+	/** 결근 내역 검색·필터 초기화 */
+	function resetRecordFilters() {
+		recordSearch = '';
+		recordStatusFilter = 'ALL';
+		recordTypeFilter = 'ALL';
+		recordGroupFilter = 'ALL';
+		recordStartDate = '';
+		recordEndDate = '';
+		recordSort = 'date_desc';
+		recordPage = 1;
+	}
+
+	/** 결근 내역 전용 인쇄 실행 (필터링된 전체 건을 A4 표로 인쇄) */
+	function printRecordLedger() {
+		if (typeof window === 'undefined') return;
+		window.print();
+	}
 
 	/** @type {'ALL' | 'APPROVAL' | 'FCFS'} 직군(운영 방식) 필터 */
 	let workTypeFilter = $state('ALL');
@@ -650,7 +802,7 @@
 	async function updateStatus(id, status) {
 		try {
 			await api.adminUpdateDayoffStatus(id, status);
-			toast.success(`[${status}] 처리가 완료되었습니다.`);
+			toast.success(`[${getStatusLabel(status)}] 처리가 완료되었습니다.`);
 			await loadDayoffs();
 		} catch (error) {
 			const e = /** @type {Error} */ (error);
@@ -693,24 +845,24 @@
 	<title>{getSiteTitle('근태·휴무 관리')}</title>
 </svelte:head>
 
-<div class="mx-auto max-w-7xl space-y-6 px-4 py-8 pb-24 font-['Noto_Sans_KR','Outfit'] md:space-y-8 md:px-6 lg:px-8">
+<div class="mx-auto max-w-7xl space-y-6 px-4 py-8 pb-24 font-['Noto_Sans_KR','Outfit'] md:space-y-8 md:px-6 lg:px-8 print:max-w-none print:space-y-4 print:p-0">
 	<!-- ===================================================================== -->
 	<!-- 1. 페이지 헤더 & 액션 바 (기본값: 새로고침 + 관리자 홈) -->
 	<!-- ===================================================================== -->
-	<div class="flex flex-col gap-4 border-b-2 border-slate-900 pb-6 md:flex-row md:items-end md:justify-between md:border-b-4 md:pb-8">
+	<div class="flex flex-col gap-4 border-b-2 border-slate-900 pb-6 md:flex-row md:items-end md:justify-between md:border-b-4 md:pb-8 print:hidden">
 		<div>
 			<div class="flex items-center gap-2">
-				<span class="inline-flex items-center gap-1.5 rounded-full bg-slate-900 px-3 py-1 text-[11px] font-black tracking-widest text-emerald-400 uppercase">
+				<span class="inline-flex items-center gap-1.5 rounded-full bg-slate-900 px-3 py-1 text-[11px] font-black tracking-wider text-emerald-400">
 					<span class="h-2 w-2 rounded-full bg-emerald-400 animate-ping"></span>
-					Governance HR-System
+					통합 근태·인사 관제
 				</span>
-				<span class="text-xs font-bold text-slate-400">v1/admin/dayoff</span>
+				<span class="text-xs font-bold text-slate-400">관리자 · 휴무/결근</span>
 			</div>
-			<h1 class="mt-2 text-3xl font-black tracking-tight text-slate-900 uppercase italic md:text-4xl">
-				근태·휴무 <span class="not-italic text-blue-600">관리</span>
+			<h1 class="mt-2 text-3xl font-black tracking-tight text-slate-900 md:text-4xl">
+				근태·휴무 <span class="text-blue-600">관리</span>
 			</h1>
 			<p class="mt-1 text-sm font-medium text-slate-500">
-				전체 사원의 휴무(결근계) 신청 내역을 검토·승인하고 전사 캘린더와 월간 타임라인으로 현황을 파악합니다.
+				전체 사원의 휴무(결근계) 신청 내역을 검토·승인하고 전사 캘린더, 타임라인 및 결근 내역 게시판으로 현황을 파악합니다.
 			</p>
 		</div>
 
@@ -738,10 +890,10 @@
 	<!-- ===================================================================== -->
 	<!-- 2. 상단 4대 관제 지표 요약 카드 (선택된 연/월 기준) -->
 	<!-- ===================================================================== -->
-	<div class="grid grid-cols-2 gap-4 md:grid-cols-4 md:gap-5">
+	<div class="grid grid-cols-2 gap-4 md:grid-cols-4 md:gap-5 print:hidden">
 		<div class="flex flex-col justify-between rounded-[1.75rem] border-2 border-slate-200 bg-white p-5 shadow-sm">
 			<div class="flex items-center justify-between">
-				<span class="text-xs font-black tracking-wider text-slate-400 uppercase">Approval Pending</span>
+				<span class="text-xs font-black tracking-wider text-slate-400">승인 대기</span>
 				<div class="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
 					<Icon icon="solar:clock-circle-bold-duotone" class="text-xl" />
 				</div>
@@ -754,7 +906,7 @@
 
 		<div class="flex flex-col justify-between rounded-[1.75rem] border-2 border-slate-200 bg-white p-5 shadow-sm">
 			<div class="flex items-center justify-between">
-				<span class="text-xs font-black tracking-wider text-slate-400 uppercase">Approved ({selectedMonth + 1}월)</span>
+				<span class="text-xs font-black tracking-wider text-slate-400">승인 확정 ({selectedMonth + 1}월)</span>
 				<div class="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
 					<Icon icon="solar:check-circle-bold-duotone" class="text-xl" />
 				</div>
@@ -767,7 +919,7 @@
 
 		<div class="flex flex-col justify-between rounded-[1.75rem] border-2 border-slate-200 bg-white p-5 shadow-sm">
 			<div class="flex items-center justify-between">
-				<span class="text-xs font-black tracking-wider text-slate-400 uppercase">Annual Leave</span>
+				<span class="text-xs font-black tracking-wider text-slate-400">정기 연차</span>
 				<div class="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
 					<Icon icon="solar:calendar-date-bold-duotone" class="text-xl" />
 				</div>
@@ -780,7 +932,7 @@
 
 		<div class="flex flex-col justify-between rounded-[1.75rem] border-2 border-slate-200 bg-white p-5 shadow-sm">
 			<div class="flex items-center justify-between">
-				<span class="text-xs font-black tracking-wider text-slate-400 uppercase">Others (Sick/ETC)</span>
+				<span class="text-xs font-black tracking-wider text-slate-400">기타 (병가·경조사·공가)</span>
 				<div class="flex h-9 w-9 items-center justify-center rounded-xl bg-rose-50 text-rose-600">
 					<Icon icon="solar:hospital-bold-duotone" class="text-xl" />
 				</div>
@@ -793,9 +945,9 @@
 	</div>
 
 	<!-- ===================================================================== -->
-	<!-- 3. 전사 공통 탭 바 (신청 승인 목록 | 월간 캘린더 | 월간 타임라인 현황) -->
+	<!-- 3. 전사 공통 탭 바 (신청 승인 목록 | 월간 캘린더 | 월간 타임라인 현황 | 결근 내역) -->
 	<!-- ===================================================================== -->
-	<div class="flex items-center overflow-x-auto border-b-2 border-slate-200">
+	<div class="flex items-center overflow-x-auto border-b-2 border-slate-200 print:hidden">
 		<button
 			type="button"
 			onclick={() => (currentView = 'list')}
@@ -823,12 +975,21 @@
 			<Icon icon="solar:calendar-bold-duotone" class="text-base" />
 			<span>월간 타임라인 현황</span>
 		</button>
+		<button
+			type="button"
+			onclick={() => (currentView = 'records')}
+			class="flex shrink-0 items-center gap-2 border-b-4 px-5 py-3 text-xs font-black rounded-t-2xl transition {currentView === 'records' ? 'border-blue-600 bg-blue-50/50 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-900'}"
+		>
+			<Icon icon="solar:document-text-bold-duotone" class="text-base" />
+			<span>결근 내역</span>
+			<span class="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-black text-slate-700">{filteredDayoffs.length}</span>
+		</button>
 	</div>
 
 	<!-- ===================================================================== -->
 	<!-- 3-1. 줄바꿈 후 직군 선택 필터 + 옆에 선착순·정원 설정 모달 버튼 -->
 	<!-- ===================================================================== -->
-	<div class="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+	<div class="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm print:hidden">
 		<div class="flex flex-wrap items-center gap-2">
 			<span class="mr-1 text-xs font-black tracking-wider text-slate-400 uppercase">직군 구분:</span>
 			<div class="inline-flex rounded-xl border border-slate-200 bg-slate-100 p-1 text-xs font-black">
@@ -951,14 +1112,14 @@
 				<td>
 					<div class="font-bold text-slate-800">{d.date}</div>
 					{#if d.group_id}
-						<div class="text-[8px] font-black text-blue-500 uppercase italic opacity-70">
-							GroupRef: {d.group_id}
+						<div class="text-[9px] font-bold text-blue-500 opacity-75">
+							묶음번호: {d.group_id}
 						</div>
 					{/if}
 				</td>
 				<td>
 					<span
-						class="rounded-md border border-slate-200 bg-slate-100 px-2 py-0.5 text-[10px] font-black tracking-tighter text-slate-700 uppercase"
+						class="rounded-md border border-slate-200 bg-slate-100 px-2 py-0.5 text-[10px] font-black tracking-tighter text-slate-700"
 					>
 						{getTypeLabel(d.type)}
 					</span>
@@ -969,10 +1130,10 @@
 							d.status
 						)}"
 					>
-						{d.status}
+						{getStatusLabel(d.status)}
 					</span>
 				</td>
-				<td class="max-w-[180px] truncate text-xs text-slate-500 italic">
+				<td class="max-w-[180px] truncate text-xs text-slate-500">
 					{d.memo || '-'}
 				</td>
 			{/snippet}
@@ -984,8 +1145,8 @@
 					<div
 						class="flex items-center justify-between border-b border-slate-100 bg-slate-50/50 p-6 md:p-8"
 					>
-						<h3 class="text-lg font-black tracking-tighter text-slate-900 uppercase italic">
-							Pending Applications <span class="NOT-ITALIC ml-2 text-sm font-bold text-blue-600"
+						<h3 class="text-lg font-black tracking-tight text-slate-900">
+							승인 대기 목록 <span class="ml-2 text-sm font-bold text-blue-600"
 								>검토 대기 중인 신청 건 (사무직 승인제 · {pendingList.length}건)</span
 							>
 						</h3>
@@ -994,16 +1155,16 @@
 					<div class="overflow-x-auto">
 						<table class="table w-full">
 							<thead
-								class="border-b border-slate-100 bg-slate-50 text-[10px] font-bold tracking-widest text-slate-500 uppercase"
+								class="border-b border-slate-100 bg-slate-50 text-xs font-bold tracking-wider text-slate-500"
 							>
 								<tr>
-									<th class="px-6 py-4">Name / Dept · Rank</th>
-									<th>Work Mode</th>
-									<th>Date / Range</th>
-									<th>Category</th>
-									<th>Status</th>
-									<th>Reason (Memo)</th>
-									<th class="px-6 text-right">Action Control</th>
+									<th class="px-6 py-4">성명 / 부서 · 직급</th>
+									<th>운영 방식</th>
+									<th>신청 날짜</th>
+									<th>유형</th>
+									<th>상태</th>
+									<th>사유 (메모)</th>
+									<th class="px-6 text-right">승인 처리</th>
 								</tr>
 							</thead>
 							<tbody class="divide-y divide-slate-50">
@@ -1017,7 +1178,7 @@
 									<tr
 										><td
 											colspan="7"
-											class="py-12 text-center text-base font-black tracking-widest text-slate-300 uppercase italic"
+											class="py-12 text-center text-base font-black tracking-wider text-slate-300"
 											>승인 대기 건 없음</td
 										></tr
 									>
@@ -1029,11 +1190,11 @@
 												<div class="flex justify-end gap-2 px-1 py-1">
 													<button
 														class="btn rounded-lg border-none bg-emerald-600 font-black text-white transition-all btn-sm hover:bg-emerald-700"
-														onclick={() => updateStatus(d.id, 'APPROVED')}>APPROVE</button
+														onclick={() => updateStatus(d.id, 'APPROVED')}>승인</button
 													>
 													<button
 														class="btn rounded-lg border-none bg-rose-500 font-black text-white transition-all btn-sm hover:bg-rose-600"
-														onclick={() => updateStatus(d.id, 'REJECTED')}>REJECT</button
+														onclick={() => updateStatus(d.id, 'REJECTED')}>반려</button
 													>
 												</div>
 											</td>
@@ -1054,9 +1215,9 @@
 					class="flex flex-col justify-between gap-3 border-b border-slate-100 {workTypeFilter === 'FCFS' ? 'bg-emerald-50/50' : 'bg-slate-50/50'} p-6 md:flex-row md:items-center md:p-8"
 				>
 					<div>
-						<h3 class="text-lg font-black tracking-tighter text-slate-900 uppercase italic">
-							{workTypeFilter === 'FCFS' ? 'FCFS Driver Ledger' : 'Processed & FCFS Ledger'}
-							<span class="NOT-ITALIC ml-2 text-sm font-bold {workTypeFilter === 'FCFS' ? 'text-emerald-700' : 'text-slate-600'}">
+						<h3 class="text-lg font-black tracking-tight text-slate-900">
+							{workTypeFilter === 'FCFS' ? '운전직 선착순 대장' : '처리 완료 · 선착순 대장'}
+							<span class="ml-2 text-sm font-bold {workTypeFilter === 'FCFS' ? 'text-emerald-700' : 'text-slate-600'}">
 								{workTypeFilter === 'FCFS'
 									? `🚌 운전직 선착순 신청·확정 목록 (${processedOrFcfsList.length}건)`
 									: `선착순 자동확정 및 처리 완료 내역 (${processedOrFcfsList.length}건)`}
@@ -1064,17 +1225,17 @@
 						</h3>
 						<p class="mt-0.5 text-[11px] font-medium text-slate-500">
 							{workTypeFilter === 'FCFS'
-								? '운전직(선착순) 신청은 정원 내 제출 시 즉시 APPROVED 확정되며, 필요 시 관리자 반려/되돌리기가 가능합니다.'
-								: '선착순 자동확정(APPROVED) 건과 관리자 승인·반려 처리 이력을 함께 확인할 수 있습니다.'}
+								? '운전직(선착순) 신청은 정원 내 제출 시 즉시 승인 확정되며, 필요 시 관리자 반려/되돌리기가 가능합니다.'
+								: '선착순 자동확정 건과 관리자 승인·반려 처리 이력을 함께 확인할 수 있습니다.'}
 						</p>
 					</div>
 
 					<div class="inline-flex shrink-0 rounded-xl border border-slate-200 bg-white p-1 text-[11px] font-black">
 						{#each [
 							{ id: 'ALL', label: '전체' },
-							{ id: 'APPROVED', label: '확정(APPROVED)' },
-							{ id: 'REJECTED', label: '반려(REJECTED)' },
-							...(workTypeFilter === 'FCFS' ? [{ id: 'REQUESTED', label: '대기(REQUESTED)' }] : [])
+							{ id: 'APPROVED', label: '승인 확정' },
+							{ id: 'REJECTED', label: '반려' },
+							...(workTypeFilter === 'FCFS' ? [{ id: 'REQUESTED', label: '승인 대기' }] : [])
 						] as stOpt (stOpt.id)}
 							<button
 								type="button"
@@ -1092,17 +1253,17 @@
 				<div class="overflow-x-auto">
 					<table class="table w-full">
 						<thead
-							class="border-b border-slate-100 bg-slate-50 text-[10px] font-bold tracking-widest text-slate-500 uppercase"
+							class="border-b border-slate-100 bg-slate-50 text-xs font-bold tracking-wider text-slate-500"
 						>
 							<tr>
-								<th class="px-6 py-4">Name / Dept · Rank</th>
-								<th>Work Mode</th>
-								<th>Date / Group</th>
-								<th>Category</th>
-								<th>Status</th>
-								<th>Reason (Memo)</th>
-								<th>Created At</th>
-								<th class="px-6 text-right">Action Control</th>
+								<th class="px-6 py-4">성명 / 부서 · 직급</th>
+								<th>운영 방식</th>
+								<th>신청 날짜</th>
+								<th>유형</th>
+								<th>상태</th>
+								<th>사유 (메모)</th>
+								<th>신청 일시</th>
+								<th class="px-6 text-right">상태 관리</th>
 							</tr>
 						</thead>
 						<tbody class="divide-y divide-slate-50">
@@ -1263,7 +1424,7 @@
 				<div class="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg md:rounded-[2rem] md:shadow-2xl">
 					<div class="flex items-center justify-between border-b border-slate-100 bg-slate-50/50 p-5 md:p-6">
 						<div>
-							<span class="text-[10px] font-black tracking-widest text-slate-400 uppercase">Selected Date Applications</span>
+							<span class="text-[10px] font-black tracking-wider text-slate-400">선택 날짜 신청 내역</span>
 							<h3 class="text-lg font-black tracking-tight text-slate-900">
 								{selectedCalendarDate || '-'} 신청 내역
 							</h3>
@@ -1300,7 +1461,7 @@
 											</div>
 										</div>
 										<span class="rounded-md border px-2 py-0.5 text-[10px] font-black {getBadgeClass(d.status)}">
-											{d.status === 'REQUESTED' ? '승인 대기' : d.status === 'APPROVED' ? '승인' : d.status}
+											{getStatusLabel(d.status)}
 										</span>
 									</div>
 
@@ -1352,8 +1513,8 @@
 				</div>
 			</div>
 		</div>
-	{:else}
-		<!-- 📅 월간 현황 (Timeline / Monthly Staff Record) -->
+	{:else if currentView === 'timeline'}
+		<!-- 📅 월간 현황 (타임라인) -->
 		<div
 			class="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg md:rounded-[2rem] md:shadow-2xl"
 		>
@@ -1362,10 +1523,8 @@
 			>
 				<div class="space-y-2">
 					<div class="flex flex-wrap items-center gap-2">
-						<h3 class="text-lg font-black tracking-tighter text-slate-900 uppercase italic">
-							Month Activity View <span class="NOT-ITALIC ml-2 text-sm font-bold text-blue-600"
-								>월간 결근계 타임라인</span
-							>
+						<h3 class="text-lg font-black tracking-tight text-slate-900">
+							월간 결근계 <span class="text-blue-600">타임라인</span>
 						</h3>
 						{#if timelineMonths.length > 0}
 							<span
@@ -1377,8 +1536,8 @@
 						{/if}
 					</div>
 					<div class="flex flex-wrap items-center gap-3 text-[10px] font-bold text-slate-500">
-						<span class="uppercase text-slate-400">
-							Continuous multi-month vertical tracks (단차 0px 직선 정렬 · 스크롤 시 다음 달 자동 연장)
+						<span class="text-slate-400">
+							다개월 연속 세로 트랙 (단차 0px 직선 정렬 · 스크롤 시 다음 달 자동 연장)
 						</span>
 						<span class="inline-flex items-center gap-1">
 							<span class="inline-block h-2.5 w-2.5 rounded-full bg-emerald-600"></span>
@@ -1421,7 +1580,7 @@
 							bind:value={selectedYear}
 						>
 							{#each yearOptions as year (year)}
-								<option value={year}>{year} YR</option>
+								<option value={year}>{year}년</option>
 							{/each}
 						</select>
 						<div class="h-6 w-px bg-slate-300"></div>
@@ -1430,7 +1589,7 @@
 							bind:value={selectedMonth}
 						>
 							{#each Array.from({ length: 12 }, (_, i) => i) as month (month)}
-								<option value={month}>{month + 1} MO</option>
+								<option value={month}>{month + 1}월</option>
 							{/each}
 						</select>
 					</div>
@@ -1446,7 +1605,7 @@
 					<span class="h-5 w-1 shrink-0 rounded-full {style.avatar}"></span>
 					<span class="flex min-w-0 flex-1 flex-col leading-none">
 						<span class="truncate text-[11px] font-black text-slate-900">{staffName}</span>
-						<span class="mt-0.5 truncate text-[8.5px] font-black uppercase {style.subText}">
+						<span class="mt-0.5 truncate text-[8.5px] font-black {style.subText}">
 							{subLabel}
 						</span>
 					</span>
@@ -1461,30 +1620,30 @@
 			>
 				<table class="w-full border-separate border-spacing-0 text-left">
 					<thead
-						class="sticky top-0 z-30 bg-slate-50 text-[10px] font-bold tracking-widest text-slate-500 uppercase shadow-2xs"
+						class="sticky top-0 z-30 bg-slate-50 text-xs font-bold tracking-wider text-slate-500 shadow-2xs"
 					>
 						<tr>
 							<th
 								class="sticky left-0 z-40 w-[68px] min-w-[68px] border-b border-slate-200 bg-slate-50 px-2 py-3.5 text-center"
 							>
-								Day
+								일
 							</th>
 							<th
 								class="sticky left-[68px] z-40 w-[46px] min-w-[46px] border-b border-slate-200 bg-slate-50 px-1 py-3.5 text-center"
 							>
-								Week
+								요일
 							</th>
 							<th
 								class="sticky left-[114px] z-40 w-[96px] min-w-[96px] border-r border-b border-slate-200 bg-slate-50 px-2 py-3.5 text-center"
 							>
-								Driver Quota
+								운전직 정원
 							</th>
 							<th class="min-w-[320px] border-b border-slate-200 bg-slate-50 px-4 py-3.5">
 								<div class="flex items-center justify-between gap-2">
 									<span>
 										{timelineStatusFilter === 'APPROVED'
-											? 'Approved Timeline Tracks (단차 0px 직선 배치)'
-											: 'Approved & Requested Tracks (단차 0px 직선 배치)'}
+											? '승인 확정 타임라인 (단차 0px 직선 배치)'
+											: '승인·대기 통합 타임라인 (단차 0px 직선 배치)'}
 									</span>
 									{#if timelineData.maxTrackCount > 0}
 										<span class="rounded-full bg-slate-200 px-2 py-0.5 text-[9px] font-black text-slate-700">
@@ -1567,8 +1726,8 @@
 									<div class="flex h-[52px] items-center px-3">
 										{#if day.tracks.length === 0}
 											<span
-												class="ml-1 text-[10px] font-bold tracking-widest text-slate-200 uppercase italic"
-												>Available</span
+												class="ml-1 text-[10px] font-bold tracking-wider text-slate-300"
+												>결근 없음</span
 											>
 										{:else}
 											{#each day.tracks as slot, tIdx (`${day.date}-t${tIdx}`)}
@@ -1691,6 +1850,386 @@
 				</div>
 			</div>
 		</div>
+	{:else if currentView === 'records'}
+		<!-- ===================================================================== -->
+		<!-- 📑 결근 내역 게시판 리스트 탭 (검색 · 다중 필터링 · 정렬 · 인쇄 지원) -->
+		<!-- ===================================================================== -->
+		<div
+			class="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg md:rounded-[2rem] md:shadow-2xl print:rounded-none print:border-none print:shadow-none"
+		>
+			<!-- 인쇄 전용 공식 문서 헤더 (화면에서는 숨김, 프린트 시 최상단 출력) -->
+			<div class="hidden border-b-2 border-slate-900 pb-4 mb-4 print:block">
+				<div class="flex items-end justify-between">
+					<div>
+						<h2 class="text-2xl font-black text-slate-900">사원 결근·휴무 내역 대장</h2>
+						<p class="mt-1 text-xs font-bold text-slate-600">
+							직군: {workTypeFilter === 'ALL' ? '전체' : workTypeFilter === 'FCFS' ? '운전직(선착순)' : '사무직(승인제)'}
+							· 상태: {recordStatusFilter === 'ALL' ? '전체' : getStatusLabel(recordStatusFilter)}
+							· 유형: {recordTypeFilter === 'ALL' ? '전체' : getTypeLabel(recordTypeFilter)}
+							· 부서: {recordGroupFilter === 'ALL' ? '전체' : recordGroupFilter}
+							{#if recordStartDate || recordEndDate}
+								· 기간: {recordStartDate || '처음'} ~ {recordEndDate || '현재'}
+							{/if}
+							{#if recordSearch.trim()}
+								· 검색어: "{recordSearch.trim()}"
+							{/if}
+						</p>
+					</div>
+					<div class="text-right text-xs font-bold text-slate-600">
+						<div>출력일: {todayStr}</div>
+						<div>총 {recordSummary.total}건 (승인 {recordSummary.approved} / 대기 {recordSummary.requested} / 반려 {recordSummary.rejected})</div>
+					</div>
+				</div>
+			</div>
+
+			<!-- 상단 타이틀 & 인쇄/초기화 액션 바 (인쇄 시 숨김) -->
+			<div
+				class="flex flex-col justify-between gap-4 border-b border-slate-100 bg-slate-50/50 p-6 md:flex-row md:items-center md:p-8 print:hidden"
+			>
+				<div>
+					<h3 class="text-lg font-black tracking-tight text-slate-900">
+						결근 내역 <span class="text-blue-600">전체 게시판</span>
+					</h3>
+					<p class="mt-0.5 text-xs font-medium text-slate-500">
+						전체 사원의 결근·휴무 신청 내역을 검색·필터링하고 A4 양식으로 바로 인쇄할 수 있습니다.
+					</p>
+				</div>
+
+				<div class="flex flex-wrap items-center gap-2">
+					<button
+						type="button"
+						onclick={resetRecordFilters}
+						class="inline-flex items-center gap-1.5 rounded-xl border border-slate-300 bg-white px-3.5 py-2 text-xs font-black text-slate-600 shadow-xs transition hover:bg-slate-50 active:scale-95"
+					>
+						<Icon icon="solar:refresh-bold" class="text-sm" />
+						<span>필터 초기화</span>
+					</button>
+					<button
+						type="button"
+						onclick={printRecordLedger}
+						disabled={filteredRecordList.length === 0}
+						class="inline-flex items-center gap-1.5 rounded-xl border-2 border-slate-900 bg-slate-900 px-4 py-2 text-xs font-black text-white shadow-sm transition hover:border-blue-600 hover:bg-blue-600 active:scale-95 disabled:opacity-40"
+					>
+						<Icon icon="solar:printer-bold-duotone" class="text-base text-emerald-400" />
+						<span>인쇄 ({filteredRecordList.length}건)</span>
+					</button>
+				</div>
+			</div>
+
+			<!-- 검색 및 다중 필터링 바 (인쇄 시 숨김) -->
+			<div class="space-y-3 border-b border-slate-100 bg-white p-5 md:px-8 print:hidden">
+				<div class="grid grid-cols-1 gap-3 md:grid-cols-12">
+					<!-- 키워드 검색 -->
+					<div class="relative md:col-span-4">
+						<Icon
+							icon="solar:magnifer-bold-duotone"
+							class="pointer-events-none absolute top-1/2 left-3.5 -translate-y-1/2 text-base text-slate-400"
+						/>
+						<input
+							type="search"
+							bind:value={recordSearch}
+							placeholder="이름, 아이디, 부서, 사유, 날짜 검색..."
+							class="w-full rounded-xl border border-slate-300 bg-slate-50/70 py-2.5 pr-3 pl-10 text-xs font-bold text-slate-800 placeholder:text-slate-400 focus:border-blue-500 focus:bg-white focus:outline-none"
+						/>
+					</div>
+
+					<!-- 상태 필터 -->
+					<div class="md:col-span-2">
+						<select
+							bind:value={recordStatusFilter}
+							aria-label="상태 필터"
+							class="select select-sm h-[38px] w-full rounded-xl border border-slate-300 bg-slate-50/70 text-xs font-bold text-slate-800 focus:border-blue-500 focus:bg-white focus:outline-none"
+						>
+							<option value="ALL">상태: 전체</option>
+							<option value="APPROVED">승인 확정</option>
+							<option value="REQUESTED">승인 대기</option>
+							<option value="REJECTED">반려</option>
+							<option value="CANCELLED">취소</option>
+						</select>
+					</div>
+
+					<!-- 유형 필터 -->
+					<div class="md:col-span-2">
+						<select
+							bind:value={recordTypeFilter}
+							aria-label="유형 필터"
+							class="select select-sm h-[38px] w-full rounded-xl border border-slate-300 bg-slate-50/70 text-xs font-bold text-slate-800 focus:border-blue-500 focus:bg-white focus:outline-none"
+						>
+							<option value="ALL">유형: 전체</option>
+							<option value="ANNUAL">연차</option>
+							<option value="SICK">병가</option>
+							<option value="SPECIAL">경조사</option>
+							<option value="OFFICIAL">공가</option>
+						</select>
+					</div>
+
+					<!-- 부서(주그룹) 필터 -->
+					<div class="md:col-span-2">
+						<select
+							bind:value={recordGroupFilter}
+							aria-label="부서 필터"
+							class="select select-sm h-[38px] w-full rounded-xl border border-slate-300 bg-slate-50/70 text-xs font-bold text-slate-800 focus:border-blue-500 focus:bg-white focus:outline-none"
+						>
+							<option value="ALL">부서: 전체</option>
+							{#each recordGroupOptions as grp (grp)}
+								<option value={grp}>{grp}</option>
+							{/each}
+						</select>
+					</div>
+
+					<!-- 정렬 기준 -->
+					<div class="md:col-span-2">
+						<select
+							bind:value={recordSort}
+							aria-label="정렬 기준"
+							class="select select-sm h-[38px] w-full rounded-xl border border-slate-300 bg-slate-50/70 text-xs font-bold text-slate-800 focus:border-blue-500 focus:bg-white focus:outline-none"
+						>
+							<option value="date_desc">결근일 최신순</option>
+							<option value="date_asc">결근일 오래된순</option>
+							<option value="created_desc">신청일시 최신순</option>
+							<option value="name_asc">이름 가나다순</option>
+						</select>
+					</div>
+				</div>
+
+				<!-- 기간 필터 + 결과 요약 배지 -->
+				<div class="flex flex-wrap items-center justify-between gap-3 pt-1">
+					<div class="flex flex-wrap items-center gap-2">
+						<span class="text-xs font-black text-slate-500">기간 조회:</span>
+						<input
+							type="date"
+							bind:value={recordStartDate}
+							aria-label="조회 시작일"
+							class="rounded-xl border border-slate-300 bg-slate-50/70 px-3 py-1.5 text-xs font-bold text-slate-800 focus:border-blue-500 focus:bg-white focus:outline-none"
+						/>
+						<span class="text-xs font-bold text-slate-400">~</span>
+						<input
+							type="date"
+							bind:value={recordEndDate}
+							aria-label="조회 종료일"
+							class="rounded-xl border border-slate-300 bg-slate-50/70 px-3 py-1.5 text-xs font-bold text-slate-800 focus:border-blue-500 focus:bg-white focus:outline-none"
+						/>
+					</div>
+
+					<div class="flex flex-wrap items-center gap-2 text-[11px] font-black">
+						<span class="rounded-lg bg-slate-100 px-2.5 py-1 text-slate-700">
+							검색 결과 {recordSummary.total}건
+						</span>
+						<span class="rounded-lg bg-emerald-50 px-2.5 py-1 text-emerald-700">
+							승인 {recordSummary.approved}
+						</span>
+						<span class="rounded-lg bg-amber-50 px-2.5 py-1 text-amber-700">
+							대기 {recordSummary.requested}
+						</span>
+						<span class="rounded-lg bg-rose-50 px-2.5 py-1 text-rose-700">
+							반려 {recordSummary.rejected}
+						</span>
+						<select
+							bind:value={recordPageSize}
+							aria-label="페이지당 표시 개수"
+							class="rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px] font-bold text-slate-600 focus:border-blue-500 focus:outline-none"
+						>
+							<option value={20}>20건씩 보기</option>
+							<option value={50}>50건씩 보기</option>
+							<option value={100}>100건씩 보기</option>
+							<option value={0}>전체 보기</option>
+						</select>
+					</div>
+				</div>
+			</div>
+
+			<!-- 게시판 리스트 테이블 (화면: 페이지네이션 표시 / 인쇄: 필터링된 전체 건 출력) -->
+			<div class="overflow-x-auto print:overflow-visible">
+				<table class="table w-full print:text-xs">
+					<thead
+						class="border-b border-slate-200 bg-slate-50 text-xs font-bold tracking-wider text-slate-600 print:bg-slate-100"
+					>
+						<tr>
+							<th class="w-14 px-4 py-3.5 text-center">번호</th>
+							<th class="px-4 py-3.5">성명 / 부서</th>
+							<th class="px-4 py-3.5">운영 방식</th>
+							<th class="px-4 py-3.5">결근·휴무일</th>
+							<th class="px-4 py-3.5">유형</th>
+							<th class="px-4 py-3.5">상태</th>
+							<th class="px-4 py-3.5">사유 (메모)</th>
+							<th class="px-4 py-3.5">신청 일시</th>
+							<th class="px-4 py-3.5 text-right print:hidden">상태 관리</th>
+						</tr>
+					</thead>
+					<!-- 화면 표시용 tbody (페이지네이션 적용) -->
+					<tbody class="divide-y divide-slate-100 print:hidden">
+						{#if loading}
+							<tr>
+								<td colspan="9" class="py-16 text-center">
+									<span class="loading loading-lg loading-bars text-blue-600"></span>
+								</td>
+							</tr>
+						{:else if pagedRecordList.length === 0}
+							<tr>
+								<td colspan="9" class="py-16 text-center">
+									<Icon icon="solar:document-text-bold-duotone" class="mx-auto mb-2 text-4xl text-slate-200" />
+									<p class="text-sm font-black text-slate-400">조건에 해당하는 결근 내역이 없습니다.</p>
+								</td>
+							</tr>
+						{:else}
+							{#each pagedRecordList as d, idx (d.id)}
+								{@const rowNum =
+									filteredRecordList.length -
+									((recordPageSize > 0 ? (Math.min(recordPage, recordTotalPages) - 1) * recordPageSize : 0) + idx)}
+								<tr class="transition-colors hover:bg-slate-50">
+									<td class="px-4 py-3.5 text-center font-mono text-xs font-bold text-slate-400">
+										{rowNum}
+									</td>
+									<td class="px-4 py-3.5">
+										<div class="font-black text-slate-900">{d.real_name || d.username}</div>
+										<div class="text-[11px] font-bold text-slate-400">
+											{d.primary_group || '미지정'} · Lv.{d.rank_level ?? 0}
+										</div>
+									</td>
+									<td class="px-4 py-3.5">
+										{#if d.work_type === 'FCFS'}
+											<span class="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-[10px] font-black text-emerald-700">
+												🚌 운전직(선착순)
+											</span>
+										{:else}
+											<span class="rounded-full border border-blue-200 bg-blue-50 px-2.5 py-0.5 text-[10px] font-black text-blue-700">
+												🏢 사무직(승인제)
+											</span>
+										{/if}
+									</td>
+									<td class="px-4 py-3.5 font-mono text-xs font-black text-slate-800">
+										{d.date}
+									</td>
+									<td class="px-4 py-3.5">
+										<span class="rounded-md border border-slate-200 bg-slate-100 px-2 py-0.5 text-[10px] font-black text-slate-700">
+											{getTypeLabel(d.type)}
+										</span>
+									</td>
+									<td class="px-4 py-3.5">
+										<span class="rounded-md border px-2 py-0.5 text-[10px] font-black {getBadgeClass(d.status)}">
+											{getStatusLabel(d.status)}
+										</span>
+									</td>
+									<td class="max-w-[240px] truncate px-4 py-3.5 text-xs text-slate-600" title={d.memo || ''}>
+										{d.memo || '-'}
+									</td>
+									<td class="px-4 py-3.5 font-mono text-[11px] text-slate-400">
+										{formatDateTime(d.create_date)}
+									</td>
+									<td class="px-4 py-3.5 text-right">
+										<div class="flex justify-end gap-2">
+											{#if d.status === 'REQUESTED'}
+												<button
+													type="button"
+													class="btn btn-xs rounded-lg border-none bg-emerald-600 font-black text-white hover:bg-emerald-700"
+													onclick={() => updateStatus(d.id, 'APPROVED')}>승인</button
+												>
+												<button
+													type="button"
+													class="btn btn-xs rounded-lg border-none bg-rose-500 font-black text-white hover:bg-rose-600"
+													onclick={() => updateStatus(d.id, 'REJECTED')}>반려</button
+												>
+											{:else if d.status === 'APPROVED'}
+												<button
+													type="button"
+													class="text-[11px] font-black text-slate-500 underline hover:text-blue-600"
+													onclick={() => updateStatus(d.id, 'REQUESTED')}>대기전환</button
+												>
+												<button
+													type="button"
+													class="text-[11px] font-black text-rose-500 underline hover:text-rose-700"
+													onclick={() => updateStatus(d.id, 'REJECTED')}>반려</button
+												>
+											{:else}
+												<button
+													type="button"
+													class="text-[11px] font-black text-emerald-600 underline hover:text-emerald-800"
+													onclick={() => updateStatus(d.id, 'APPROVED')}>승인복원</button
+												>
+												<button
+													type="button"
+													class="text-[11px] font-black text-slate-500 underline hover:text-blue-600"
+													onclick={() => updateStatus(d.id, 'REQUESTED')}>대기전환</button
+												>
+											{/if}
+										</div>
+									</td>
+								</tr>
+							{/each}
+						{/if}
+					</tbody>
+
+					<!-- 인쇄 전용 tbody (필터링된 전체 건을 끊김 없이 출력) -->
+					<tbody class="hidden divide-y divide-slate-200 print:table-row-group">
+						{#each filteredRecordList as d, idx (d.id)}
+							<tr class="break-inside-avoid">
+								<td class="px-2 py-2 text-center font-mono text-[11px] text-slate-600">
+									{filteredRecordList.length - idx}
+								</td>
+								<td class="px-2 py-2">
+									<div class="font-bold text-slate-900">{d.real_name || d.username}</div>
+									<div class="text-[10px] text-slate-500">{d.primary_group || '미지정'}</div>
+								</td>
+								<td class="px-2 py-2 text-[11px] text-slate-700">
+									{d.work_type === 'FCFS' ? '운전직(선착순)' : '사무직(승인제)'}
+								</td>
+								<td class="px-2 py-2 font-mono text-[11px] font-bold text-slate-900">{d.date}</td>
+								<td class="px-2 py-2 text-[11px] text-slate-800">{getTypeLabel(d.type)}</td>
+								<td class="px-2 py-2 text-[11px] font-bold text-slate-800">{getStatusLabel(d.status)}</td>
+								<td class="px-2 py-2 text-[11px] text-slate-700">{d.memo || '-'}</td>
+								<td class="px-2 py-2 font-mono text-[10px] text-slate-500">{formatDateTime(d.create_date)}</td>
+							</tr>
+						{/each}
+					</tbody>
+				</table>
+			</div>
+
+			<!-- 하단 페이지네이션 바 (인쇄 시 숨김) -->
+			{#if recordPageSize > 0 && recordTotalPages > 1}
+				<div class="flex items-center justify-between border-t border-slate-100 bg-slate-50/50 px-6 py-4 print:hidden">
+					<span class="text-xs font-bold text-slate-500">
+						총 {filteredRecordList.length}건 중 {Math.min(recordPage, recordTotalPages)} / {recordTotalPages} 페이지
+					</span>
+					<div class="flex items-center gap-1.5">
+						<button
+							type="button"
+							onclick={() => (recordPage = 1)}
+							disabled={recordPage <= 1}
+							class="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-black text-slate-600 transition hover:bg-slate-100 disabled:opacity-40"
+						>
+							처음
+						</button>
+						<button
+							type="button"
+							onclick={() => (recordPage = Math.max(1, recordPage - 1))}
+							disabled={recordPage <= 1}
+							class="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-black text-slate-600 transition hover:bg-slate-100 disabled:opacity-40"
+						>
+							이전
+						</button>
+						<span class="px-2 text-xs font-black text-blue-600">
+							{Math.min(recordPage, recordTotalPages)} / {recordTotalPages}
+						</span>
+						<button
+							type="button"
+							onclick={() => (recordPage = Math.min(recordTotalPages, recordPage + 1))}
+							disabled={recordPage >= recordTotalPages}
+							class="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-black text-slate-600 transition hover:bg-slate-100 disabled:opacity-40"
+						>
+							다음
+						</button>
+						<button
+							type="button"
+							onclick={() => (recordPage = recordTotalPages)}
+							disabled={recordPage >= recordTotalPages}
+							class="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-black text-slate-600 transition hover:bg-slate-100 disabled:opacity-40"
+						>
+							마지막
+						</button>
+					</div>
+				</div>
+			{/if}
+		</div>
 	{/if}
 </div>
 
@@ -1730,7 +2269,7 @@
 		</p>
 		<div class="flex flex-col gap-0.5 text-[9px] font-bold tracking-tight text-slate-400">
 			<span>신청: {formatDateTime(tipEntry.create_date)}</span>
-			<span>코드: {tipEntry.group_id || 'SINGLE_REQ'}</span>
+			<span>코드: {tipEntry.group_id || '단일 신청'}</span>
 		</div>
 	</div>
 {/if}

@@ -1,6 +1,7 @@
 <script>
   import { fade } from 'svelte/transition';
   import Icon from '@iconify/svelte';
+  import { RANK_LEVELS } from '$lib/config/rank';
 
   let {
     instances = [],
@@ -229,28 +230,28 @@
             </div>
 
             <!-- 4단계: 랭킹 설정 슬롯 -->
-            <div class="flex items-center gap-4 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+            <div class="flex flex-wrap items-center gap-4 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
               <div class="flex items-center gap-2">
                 <span class="text-xs font-black text-slate-600">읽기 최소 랭킹:</span>
                 <select 
-                  class="select select-bordered select-xs w-20 font-bold bg-white"
+                  class="select select-bordered select-xs w-44 font-bold bg-white"
                   bind:value={inst.min_read_rank}
                   onchange={() => onSavePermissions?.(inst)}
                 >
-                  {#each Array(10) as _, i}
-                    <option value={i}>Lv.{i}</option>
+                  {#each RANK_LEVELS as r}
+                    <option value={r.val}>{r.label}</option>
                   {/each}
                 </select>
               </div>
               <div class="flex items-center gap-2 border-l border-slate-200 pl-4">
                 <span class="text-xs font-black text-slate-600">쓰기 최소 랭킹:</span>
                 <select 
-                  class="select select-bordered select-xs w-20 font-bold bg-white"
+                  class="select select-bordered select-xs w-44 font-bold bg-white"
                   bind:value={inst.min_write_rank}
                   onchange={() => onSavePermissions?.(inst)}
                 >
-                  {#each Array(10) as _, i}
-                    <option value={i}>Lv.{i}</option>
+                  {#each RANK_LEVELS as r}
+                    <option value={r.val}>{r.label}</option>
                   {/each}
                 </select>
               </div>

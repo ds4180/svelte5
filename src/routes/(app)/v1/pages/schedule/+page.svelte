@@ -41,6 +41,13 @@
     let rawSchedules = $state<any[]>([]);
     let myDayoffs = $state<any[]>([]);
     let officeDayoffs = $state<any[]>([]);
+    /** 작년 동월(calYear - 1, calMonth) 중요 일정 목록 */
+    let lastYearImportantSchedules = $state<any[]>([]);
+    let loadingLastYear = $state(false);
+
+    // 📌 상단 연/월 옆 캘린더 표시 필터 체크박스 ('개인일정' / '사무실 일정')
+    let showPersonalEvents = $state(true);
+    let showOfficeEvents = $state(true);
 
     const CATEGORY_META: Record<string, { type: CalendarEvent['type']; badge: string }> = {
         HOLIDAY: { type: 'HOLIDAY', badge: '공휴일' },
@@ -51,29 +58,49 @@
         PERSONAL: { type: 'SUCCESS', badge: '개인' }
     };
 
+    /**
+     * 체크박스('개인일정', '사무실 일정')에 따라 달력에 표시할 이벤트 필터링
+     * - 공휴일(HOLIDAY)은 항상 표시
+     * - 개인일정: PERSONAL / ATTENDANCE / 본인 결근계(scope === 'PERSONAL')
+     * - 사무실 일정: OFFICE / GLOBAL / 사무실 직원 결근계(scope === 'OFFICE' 등)
+     */
     let calendarEvents = $derived<CalendarEvent[]>(
-        rawEvents.map((ev) => {
-            const meta = CATEGORY_META[ev.category] || { type: 'PRIMARY', badge: ev.category };
-            const isBg = ev.display_mode === 'background';
-            return {
-                id: ev.id,
-                date: ev.date,
-                endDate: ev.endDate ?? undefined,
-                title: ev.title,
-                time: ev.time,
-                type: ev.category === 'HOLIDAY' ? 'HOLIDAY' : isBg ? 'DANGER' : meta.type,
-                display: isBg ? 'background' : 'bar',
-                color: ev.color || undefined,
-                badge: ev.source === 'DAYOFF' ? (ev.dayoff_status === 'APPROVED' ? '결근확정' : '결근대기') : meta.badge,
-                isDday: Boolean(ev.is_dday),
-                isHoliday: Boolean(ev.is_holiday || ev.category === 'HOLIDAY'),
-                raw: ev
-            };
-        })
-    );
+        rawEvents
+            .filter((ev) => {
+                if (ev.is_holiday || ev.category === 'HOLIDAY') return true;
+                const isPersonal =
+                    ev.category === 'PERSONAL' ||
+                    ev.category === 'ATTENDANCE' ||
+                    (ev.source === 'DAYOFF' && (ev.scope === 'PERSONAL' || ev.user_id === auth?.user?.id));
+                const isOffice =
+                    ev.category === 'OFFICE' ||
+                    ev.category === 'GLOBAL' ||
+                    (ev.source === 'DAYOFF' && ev.scope !== 'PERSONAL' && ev.user_id !== auth?.user?.id);
 
-    let activeDdaySchedules = $derived(
-        rawSchedules.filter((s) => s.is_dday).slice(0, 2)
+                if (isPersonal) return showPersonalEvents;
+                if (isOffice) return showOfficeEvents;
+                return showOfficeEvents;
+            })
+            .map((ev) => {
+                const meta = CATEGORY_META[ev.category] || { type: 'PRIMARY', badge: ev.category };
+                const isBg = ev.display_mode === 'background';
+                return {
+                    id: ev.id,
+                    date: ev.date,
+                    endDate: ev.endDate ?? undefined,
+                    title: ev.title,
+                    time: ev.time,
+                    type: ev.category === 'HOLIDAY' ? 'HOLIDAY' : isBg ? 'DANGER' : meta.type,
+                    display: isBg ? 'background' : 'bar',
+                    // 중요 일정(배경 강조)은 해당 날짜 칸 전체(100%) 배경색으로 적용
+                    bgPosition: isBg ? 'full' : 'auto',
+                    color: ev.color || undefined,
+                    badge: ev.source === 'DAYOFF' ? (ev.dayoff_status === 'APPROVED' ? '결근확정' : '결근대기') : meta.badge,
+                    isDday: Boolean(ev.is_dday),
+                    isHoliday: Boolean(ev.is_holiday || ev.category === 'HOLIDAY'),
+                    raw: ev
+                };
+            })
     );
 
     let todayPersonalSchedules = $derived(
@@ -99,8 +126,15 @@
 
     async function loadMonthSchedules(y = calYear, mIdx = calMonth) {
         loading = true;
+        loadingLastYear = true;
+        const targetMonth = mIdx + 1;
+        const lastYearPrefix = `${y - 1}-${String(targetMonth).padStart(2, '0')}`;
         try {
-            const res = await scheduleApi.getSchedules({ year: y, month: mIdx + 1 });
+            // 현재 월 일정과 작년 동월 일정을 병렬 조회하여 참조용 중요 일정 카드 구성
+            const [res, lastYearRes] = await Promise.all([
+                scheduleApi.getSchedules({ year: y, month: targetMonth }),
+                scheduleApi.getSchedules({ year: y - 1, month: targetMonth }).catch(() => null)
+            ]);
             rawEvents = res?.events || [];
             rawSchedules = res?.schedules || [];
             myDayoffs = res?.my_dayoffs || [];
@@ -108,11 +142,62 @@
             if (typeof res?.user_rank === 'number') {
                 userRank = res.user_rank;
             }
+
+            // 작년 동월 일정 중 중요 일정(배경 강조 또는 중요도 4 이상, 공휴일 제외)만 추출 및 날짜순 정렬
+            const prevSchedules: any[] = lastYearRes?.schedules || [];
+            const seen = new Set<string>();
+            lastYearImportantSchedules = prevSchedules
+                .filter((s) => {
+                    if (!s || s.category === 'HOLIDAY' || s.is_holiday) return false;
+                    const isImportant = s.display_mode === 'background' || Number(s.importance || 0) >= 4;
+                    if (!isImportant) return false;
+                    // 달력 패딩(전월/익월) 제외하고 정확히 작년 동월과 겹치는 일정만 필터링
+                    const startYm = String(s.date || '').slice(0, 7);
+                    const endYm = String(s.endDate || s.date || '').slice(0, 7);
+                    if (startYm !== lastYearPrefix && endYm !== lastYearPrefix) return false;
+                    const dedupKey = `${s.schedule_id ?? s.id}-${s.date}-${s.endDate || ''}`;
+                    if (seen.has(dedupKey)) return false;
+                    seen.add(dedupKey);
+                    return true;
+                })
+                .sort((a, b) => String(a.date || '').localeCompare(String(b.date || '')));
         } catch (err) {
             toast.error(formatApiError(err, '일정을 불러오지 못했습니다.'));
         } finally {
             loading = false;
+            loadingLastYear = false;
         }
+    }
+
+    /**
+     * 작년 동월 중요 일정을 올해 동월 날짜로 변환하여 신규 등록 모달에 바로 복사해 줍니다.
+     */
+    function copyLastYearScheduleToThisYear(s: any) {
+        editingScheduleId = null;
+        const shiftYear = (dateStr: string) => {
+            if (!dateStr || dateStr.length < 10) return `${calYear}-${String(calMonth + 1).padStart(2, '0')}-01`;
+            const rest = dateStr.slice(4); // '-MM-DD...'
+            return `${calYear}${rest}`;
+        };
+        const isAllDay = Boolean(s.is_all_day);
+        timeMode = isAllDay ? 'all-day' : 'timed';
+        const rawStart = isAllDay ? String(s.start_at || s.date).slice(0, 10) : String(s.start_at || `${s.date}T09:00`).slice(0, 16);
+        const rawEnd = isAllDay ? String(s.end_at || s.endDate || s.date).slice(0, 10) : String(s.end_at || s.start_at || `${s.date}T18:00`).slice(0, 16);
+
+        newSchedule = {
+            title: s.title || '',
+            color: s.color || '#ef4444',
+            content: s.content || '',
+            start_at: shiftYear(rawStart),
+            end_at: shiftYear(rawEnd),
+            is_all_day: isAllDay,
+            display_mode: s.display_mode === 'background' ? 'background' : 'bar',
+            is_dday: Boolean(s.is_dday),
+            importance: Number(s.importance || 4),
+            category: s.category || (isTier2 ? 'OFFICE' : 'PERSONAL'),
+            recurrence: { freq: 'NONE', interval: 1, byDay: [], byMonthDay: null, until: null, count: null }
+        };
+        showAddModal = true;
     }
 
     function openAddModal(dateObj: Date, presetCategory = 'PERSONAL') {
@@ -242,16 +327,27 @@
     });
 </script>
 
-<div class="flex flex-col min-h-screen gap-10 p-4 lg:p-10 bg-base-200/30 pb-32">
-    <!-- Header Section -->
-    <header class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+<div class="mx-auto flex min-h-screen max-w-7xl flex-col gap-8 px-4 py-6 pb-32 font-['Noto_Sans_KR','Outfit'] md:px-6 lg:px-8">
+    <!-- 상단 헤더 섹션 (전면 한글화 + 모던 대시보드 헤더) -->
+    <header class="flex flex-col justify-between gap-4 border-b-2 border-slate-900 pb-6 md:flex-row md:items-end md:border-b-4">
         <div>
-            <h1 class="text-3xl sm:text-4xl font-black tracking-tighter text-slate-900">SCHEDULE</h1>
-            <p class="text-xs font-bold text-slate-500 uppercase tracking-widest mt-1">
-                Integrated Task & Attendance Management
+            <div class="flex flex-wrap items-center gap-2">
+                <span class="inline-flex items-center gap-1.5 rounded-full bg-slate-900 px-3 py-1 text-[11px] font-black tracking-wider text-emerald-400">
+                    <span class="h-2 w-2 animate-ping rounded-full bg-emerald-400"></span>
+                    통합 일정 · 근태 캘린더
+                </span>
                 {#if isTier2}
-                    <span class="badge badge-info ml-2 text-[10px] font-black text-white">TIER 2 · 사무실/공휴일 관제</span>
+                    <span class="inline-flex items-center gap-1 rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-[11px] font-black text-sky-700">
+                        <Icon icon="solar:shield-check-bold-duotone" class="text-sm" />
+                        사무실 · 공휴일 관제 권한
+                    </span>
                 {/if}
+            </div>
+            <h1 class="mt-2 text-3xl font-black tracking-tight text-slate-900 md:text-4xl">
+                일정 <span class="text-blue-600">관리</span>
+            </h1>
+            <p class="mt-1 text-sm font-medium text-slate-500">
+                개인 일정, 사무실 일정, 공휴일 및 결근계 현황을 한 화면에서 통합 관리합니다.
             </p>
         </div>
         <div class="flex flex-wrap items-center gap-2">
@@ -259,31 +355,33 @@
                 <button
                     type="button"
                     onclick={() => openAddModal(selectedDate ? parseDateStrAsLocalDate(selectedDate) : new Date(initialTodayDate), 'HOLIDAY')}
-                    class="btn btn-sm rounded-xl border-rose-200 bg-rose-50 font-black text-rose-700 hover:bg-rose-100"
+                    class="inline-flex items-center gap-1.5 rounded-xl border border-rose-200 bg-rose-50 px-3.5 py-2 text-xs font-black text-rose-700 shadow-xs transition hover:bg-rose-100 active:scale-95"
                 >
-                    🚩 공휴일 등록
+                    <Icon icon="solar:flag-bold-duotone" class="text-sm" />
+                    <span>공휴일 등록</span>
                 </button>
                 <button
                     type="button"
                     onclick={() => openAddModal(selectedDate ? parseDateStrAsLocalDate(selectedDate) : new Date(initialTodayDate), 'OFFICE')}
-                    class="btn btn-sm rounded-xl border-sky-200 bg-sky-50 font-black text-sky-700 hover:bg-sky-100"
+                    class="inline-flex items-center gap-1.5 rounded-xl border border-sky-200 bg-sky-50 px-3.5 py-2 text-xs font-black text-sky-700 shadow-xs transition hover:bg-sky-100 active:scale-95"
                 >
-                    🏢 사무실 일정 작성
+                    <Icon icon="solar:buildings-2-bold-duotone" class="text-sm" />
+                    <span>사무실 일정 작성</span>
                 </button>
             {/if}
             <button
                 type="button"
                 onclick={() => loadMonthSchedules(calYear, calMonth)}
                 disabled={loading}
-                class="btn btn-sm btn-outline rounded-xl font-bold"
+                class="inline-flex items-center gap-1.5 rounded-xl border border-slate-300 bg-white px-3.5 py-2 text-xs font-bold text-slate-700 shadow-xs transition hover:bg-slate-50 active:scale-95 disabled:opacity-50"
             >
                 <Icon icon="solar:restart-bold" class="text-base {loading ? 'animate-spin' : ''}" />
-                새로고침
+                <span>새로고침</span>
             </button>
         </div>
     </header>
 
-    <!-- Main Calendar Area (공용 Calendar 컴포넌트) -->
+    <!-- 메인 캘린더 영역 (공용 Calendar 컴포넌트 + 연/월 옆 개인일정·사무실 일정 체크박스) -->
     <main class="w-full">
         <Calendar
             bind:year={calYear}
@@ -294,16 +392,39 @@
             selectionMode="single"
             fullBleedMobile={true}
             showSelectedDayPanel={true}
-            subtitle="Integrated Task & Attendance Calendar"
+            subtitle="통합 업무 · 근태 캘린더"
             onMonthChange={(y, m) => loadMonthSchedules(y, m)}
             onEventClick={handleEventClick}
             onAddEventClick={(dateStr) => openAddModal(parseDateStrAsLocalDate(dateStr))}
         >
+            {#snippet headerLeftExtra()}
+                <div class="flex flex-wrap items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-1.5">
+                    <label class="flex cursor-pointer items-center gap-1.5 text-xs font-black text-slate-700 select-none">
+                        <input
+                            type="checkbox"
+                            bind:checked={showPersonalEvents}
+                            class="checkbox checkbox-xs checkbox-success rounded"
+                        />
+                        <span class="inline-block h-2 w-2 rounded-full bg-emerald-500"></span>
+                        <span>개인일정</span>
+                    </label>
+                    <span class="h-3.5 w-px bg-slate-200"></span>
+                    <label class="flex cursor-pointer items-center gap-1.5 text-xs font-black text-slate-700 select-none">
+                        <input
+                            type="checkbox"
+                            bind:checked={showOfficeEvents}
+                            class="checkbox checkbox-xs checkbox-info rounded"
+                        />
+                        <span class="inline-block h-2 w-2 rounded-full bg-sky-500"></span>
+                        <span>사무실 일정</span>
+                    </label>
+                </div>
+            {/snippet}
             {#snippet headerRight()}
                 <button
                     type="button"
                     onclick={() => openAddModal(selectedDate ? parseDateStrAsLocalDate(selectedDate) : new Date(initialTodayDate))}
-                    class="inline-flex items-center gap-1.5 rounded-xl bg-blue-600 px-3 py-1.5 text-xs font-black text-white shadow-sm transition hover:bg-blue-700"
+                    class="inline-flex items-center gap-1.5 rounded-xl bg-blue-600 px-3.5 py-2 text-xs font-black text-white shadow-sm transition hover:bg-blue-700 active:scale-95"
                 >
                     <Icon icon="solar:add-circle-bold" class="text-sm" />
                     <span>일정 추가</span>
@@ -312,121 +433,92 @@
         </Calendar>
     </main>
 
-    <!-- Bottom Feature Blocks (2-Tier 통합 구조: Tier 3은 Tier 2로 통합) -->
-    <div class="flex flex-col gap-10">
+    <!-- 하단 기능 카드 영역 (전면 한글화 + 깔끔한 대시보드 스타일) -->
+    <div class="flex flex-col gap-8">
 
-        <!-- [Tier 1] PERSONAL FOCUS & 내 결근계 확인: 모든 사용자 공통 (Rank 0+) -->
-        <section class="flex flex-col gap-6">
-            <div class="flex items-center gap-3">
-                <div class="w-1.5 h-6 bg-success rounded-full"></div>
-                <h3 class="text-xl font-black tracking-tight italic uppercase">Tier 1: Personal Focus & 내 결근계</h3>
-            </div>
-            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <!-- Today's Focus + My Dayoffs -->
-                <div class="lg:col-span-2 bg-white border border-slate-200 p-6 sm:p-8 rounded-3xl shadow-sm space-y-6">
-                    <div class="flex items-center justify-between">
-                        <div class="flex items-center gap-4">
-                            <div class="p-3 bg-success/10 rounded-2xl">
-                                <Icon icon="lucide:sparkles" class="text-2xl text-success" />
-                            </div>
-                            <div>
-                                <h4 class="text-lg font-black tracking-tight">오늘의 집중 일정 · 내 결근계</h4>
-                                <p class="text-xs font-bold text-slate-400">개인 일정과 승인·대기 중인 본인 결근계가 함께 표시됩니다</p>
-                            </div>
-                        </div>
-                        <a href="/v1/custom/dayoff" class="btn btn-ghost btn-sm text-xs font-bold text-blue-600">결근계 신청 →</a>
-                    </div>
-
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div class="space-y-2">
-                            <div class="text-[11px] font-black uppercase text-slate-400">오늘 개인 일정 ({todayPersonalSchedules.length})</div>
-                            {#each todayPersonalSchedules as s}
-                                <button
-                                    type="button"
-                                    onclick={() => openEditModal(s)}
-                                    class="w-full flex items-center justify-between p-3.5 bg-slate-50 rounded-2xl border border-slate-100 text-left hover:border-blue-300"
-                                >
-                                    <div class="flex items-center gap-3 min-w-0">
-                                        <div class="w-2.5 h-2.5 rounded-full shrink-0" style="background-color: {s.color || '#10b981'};"></div>
-                                        <span class="font-black text-slate-700 truncate text-sm">{s.title}</span>
-                                    </div>
-                                    <span class="text-[11px] font-mono font-bold text-slate-400 shrink-0 ml-2">{s.time}</span>
-                                </button>
-                            {:else}
-                                <div class="p-5 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-200">
-                                    <p class="text-xs font-bold text-slate-400">오늘 예정된 개인 일정이 없습니다.</p>
-                                </div>
-                            {/each}
-                        </div>
-
-                        <div class="space-y-2">
-                            <div class="text-[11px] font-black uppercase text-slate-400">이번 조회구간 내 결근계 ({myDayoffs.length})</div>
-                            {#each myDayoffs.slice(0, 4) as d}
-                                <div class="flex items-center justify-between p-3.5 bg-amber-50/70 rounded-2xl border border-amber-200">
-                                    <div class="min-w-0">
-                                        <div class="text-xs font-black text-slate-800 truncate">{d.title}</div>
-                                        <div class="text-[11px] font-mono text-slate-500">
-                                            {d.date}{d.endDate ? ` ~ ${d.endDate}` : ''} ({d.days_count}일)
-                                        </div>
-                                    </div>
-                                    <span class="badge badge-xs font-bold {d.dayoff_status === 'APPROVED' ? 'badge-success text-white' : 'badge-warning'}">
-                                        {d.dayoff_status === 'APPROVED' ? '확정' : '대기'}
-                                    </span>
-                                </div>
-                            {:else}
-                                <div class="p-5 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-200">
-                                    <p class="text-xs font-bold text-slate-400">조회 구간 내 본인 결근계가 없습니다.</p>
-                                </div>
-                            {/each}
-                        </div>
-                    </div>
+        <!-- 개인 집중 일정 & 내 결근계 확인 (사무실 관제 카드와 동일한 단일 풀폭 레이아웃) -->
+        <section class="flex flex-col gap-5">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+                <div class="flex items-center gap-3">
+                    <div class="h-6 w-1.5 rounded-full bg-emerald-500"></div>
+                    <h3 class="text-xl font-black tracking-tight text-slate-900">개인 집중 일정 · 내 결근계</h3>
                 </div>
-
-                <!-- Active D-Days -->
-                <div class="bg-slate-900 text-white p-8 rounded-3xl shadow-2xl flex flex-col justify-between group overflow-hidden relative">
-                    <div class="absolute -right-4 -top-4 opacity-10 group-hover:scale-110 transition-transform duration-500">
-                        <Icon icon="lucide:flag" class="text-9xl" />
-                    </div>
-                    <div class="relative z-10">
-                        <div class="flex items-center justify-between mb-6">
-                            <h4 class="text-lg font-black tracking-tight italic">ACTIVE D-DAY</h4>
-                            <Icon icon="lucide:arrow-up-right" class="text-xl opacity-40" />
-                        </div>
-                        <div class="flex flex-col gap-5">
-                            {#each activeDdaySchedules as s}
-                                <button
-                                    type="button"
-                                    onclick={() => openEditModal(s)}
-                                    class="text-left hover:opacity-80 transition"
-                                >
-                                    <p class="text-xs font-bold opacity-50 mb-1 uppercase tracking-widest">{s.title}</p>
-                                    <p class="text-4xl font-black italic">
-                                        {formatDDay(parseDateStrAsLocalDate(s.date), initialTodayDate)}
-                                    </p>
-                                </button>
-                            {:else}
-                                <p class="text-xs font-bold opacity-40">활성화된 디데이가 없습니다.</p>
-                            {/each}
-                        </div>
-                    </div>
+                <div class="flex flex-wrap gap-2">
                     <button
                         type="button"
                         onclick={() => openAddModal(selectedDate ? parseDateStrAsLocalDate(selectedDate) : new Date(initialTodayDate), 'PERSONAL')}
-                        class="btn btn-primary btn-sm w-full mt-8 rounded-xl font-black"
+                        class="btn btn-sm rounded-xl border-emerald-200 bg-emerald-50 font-black text-emerald-700 hover:bg-emerald-100"
                     >
-                        D-Day 일정 추가
+                        + 개인 일정
                     </button>
+                    <a href="/v1/custom/dayoff" class="btn btn-sm btn-outline rounded-xl font-bold">
+                        휴무 신청 →
+                    </a>
+                </div>
+            </div>
+
+            <div class="space-y-6 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h4 class="text-base font-black text-slate-900">오늘의 개인 일정 · 본인 결근계 현황</h4>
+                        <p class="text-xs font-medium text-slate-400">오늘 예정된 개인 일정과 조회 구간 내 승인·대기 중인 본인 결근계가 함께 표시됩니다.</p>
+                    </div>
+                    <span class="badge badge-success badge-sm font-black text-white">개인 일정 관리</span>
+                </div>
+
+                <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    <div class="space-y-2">
+                        <div class="text-xs font-black text-slate-500">오늘 개인 일정 ({todayPersonalSchedules.length}건)</div>
+                        {#each todayPersonalSchedules as s}
+                            <button
+                                type="button"
+                                onclick={() => openEditModal(s)}
+                                class="flex w-full items-center justify-between rounded-2xl border border-slate-100 bg-slate-50 p-3.5 text-left transition hover:border-blue-300"
+                            >
+                                <div class="flex min-w-0 items-center gap-3">
+                                    <div class="h-2.5 w-2.5 shrink-0 rounded-full" style="background-color: {s.color || '#10b981'};"></div>
+                                    <span class="truncate text-sm font-black text-slate-700">{s.title}</span>
+                                </div>
+                                <span class="ml-2 shrink-0 font-mono text-[11px] font-bold text-slate-400">{s.time}</span>
+                            </button>
+                        {:else}
+                            <div class="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-5 text-center">
+                                <p class="text-xs font-bold text-slate-400">오늘 예정된 개인 일정이 없습니다.</p>
+                            </div>
+                        {/each}
+                    </div>
+
+                    <div class="space-y-2">
+                        <div class="text-xs font-black text-slate-500">이번 조회구간 내 결근계 ({myDayoffs.length}건)</div>
+                        {#each myDayoffs.slice(0, 4) as d}
+                            <div class="flex items-center justify-between rounded-2xl border border-amber-200 bg-amber-50/70 p-3.5">
+                                <div class="min-w-0">
+                                    <div class="truncate text-xs font-black text-slate-800">{d.title}</div>
+                                    <div class="font-mono text-[11px] text-slate-500">
+                                        {d.date}{d.endDate ? ` ~ ${d.endDate}` : ''} ({d.days_count}일)
+                                    </div>
+                                </div>
+                                <span class="badge badge-xs font-bold {d.dayoff_status === 'APPROVED' ? 'badge-success text-white' : 'badge-warning'}">
+                                    {d.dayoff_status === 'APPROVED' ? '확정' : '대기'}
+                                </span>
+                            </div>
+                        {:else}
+                            <div class="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-5 text-center">
+                                <p class="text-xs font-bold text-slate-400">조회 구간 내 본인 결근계가 없습니다.</p>
+                            </div>
+                        {/each}
+                    </div>
                 </div>
             </div>
         </section>
 
-        <!-- [Tier 2] OFFICE & HOLIDAY GOVERNANCE (기존 Tier 3 기능 통합, Rank 2+) -->
+        <!-- 사무실 · 공휴일 및 직원 결근계 관제 (권한자 전용) -->
         {#if isTier2}
-            <section class="flex flex-col gap-6">
+            <section class="flex flex-col gap-5">
                 <div class="flex flex-wrap items-center justify-between gap-3">
                     <div class="flex items-center gap-3">
-                        <div class="w-1.5 h-6 bg-primary rounded-full"></div>
-                        <h3 class="text-xl font-black tracking-tight italic uppercase">Tier 2: 공휴일 · 사무실 일정 & 사무실 결근계 관제</h3>
+                        <div class="h-6 w-1.5 rounded-full bg-blue-600"></div>
+                        <h3 class="text-xl font-black tracking-tight text-slate-900">공휴일 · 사무실 일정 및 결근계 관제</h3>
                     </div>
                     <div class="flex flex-wrap gap-2">
                         <button
@@ -451,13 +543,13 @@
                     </div>
                 </div>
 
-                <div class="bg-white border border-slate-200 p-6 sm:p-8 rounded-3xl shadow-sm space-y-4">
+                <div class="space-y-4 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
                     <div class="flex items-center justify-between">
                         <div>
                             <h4 class="text-base font-black text-slate-900">사무실 직원 결근계 현황 ({officeDayoffs.length}건)</h4>
-                            <p class="text-xs font-medium text-slate-400">운전직(FCFS) 제외, 사무실 전 직원의 조회 기간 내 휴무/연차 내역입니다.</p>
+                            <p class="text-xs font-medium text-slate-400">운전직(선착순) 제외, 사무실 전 직원의 조회 기간 내 휴무/연차 내역입니다.</p>
                         </div>
-                        <span class="badge badge-info badge-sm font-black text-white">Tier 2 통합 관제</span>
+                        <span class="badge badge-info badge-sm font-black text-white">사무실 통합 관제</span>
                     </div>
 
                     {#if officeDayoffs.length === 0}
@@ -502,21 +594,96 @@
                         </div>
                     {/if}
                 </div>
+
+                <!-- 작년 동월 중요 일정 참조 카드 (올해 업무/일정 계획 참조용) -->
+                <div class="space-y-4 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+                    <div class="flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                            <h4 class="text-base font-black text-slate-900">
+                                작년 동월({calYear - 1}년 {calMonth + 1}월) 중요 일정 참조 ({lastYearImportantSchedules.length}건)
+                            </h4>
+                            <p class="text-xs font-medium text-slate-400">
+                                전년도 같은 달에 등록된 중요 일정(배경 강조 · 중요도 4점 이상)을 올해 일정 계획에 참고하거나 바로 복사해 등록할 수 있습니다.
+                            </p>
+                        </div>
+                        <span class="badge badge-warning badge-sm font-black text-slate-900">전년도 참조</span>
+                    </div>
+
+                    {#if loadingLastYear}
+                        <div class="py-8 text-center">
+                            <span class="loading loading-md loading-spinner text-blue-600"></span>
+                        </div>
+                    {:else if lastYearImportantSchedules.length === 0}
+                        <div class="rounded-2xl border border-dashed border-slate-200 bg-slate-50 py-8 text-center text-xs font-bold text-slate-400">
+                            {calYear - 1}년 {calMonth + 1}월에 등록된 중요 일정이 없습니다.
+                        </div>
+                    {:else}
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left text-xs">
+                                <thead class="border-b border-slate-200 bg-slate-50 font-black text-slate-500">
+                                    <tr>
+                                        <th class="px-3 py-2.5 whitespace-nowrap">날짜 / 기간</th>
+                                        <th class="px-3 py-2.5 whitespace-nowrap">분류</th>
+                                        <th class="px-3 py-2.5">내용</th>
+                                        <th class="px-3 py-2.5 text-right whitespace-nowrap">올해 적용</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-100">
+                                    {#each lastYearImportantSchedules as item (item.id ?? `${item.schedule_id}-${item.date}`)}
+                                        <tr class="hover:bg-slate-50">
+                                            <td class="px-3 py-2.5 font-mono font-bold text-slate-700 whitespace-nowrap">
+                                                {item.date}{#if item.endDate && item.endDate !== item.date} ~ {item.endDate}{/if}
+                                            </td>
+                                            <td class="px-3 py-2.5 whitespace-nowrap">
+                                                <span
+                                                    class="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-2.5 py-0.5 text-[10px] font-black text-slate-700"
+                                                >
+                                                    <span
+                                                        class="h-2 w-2 rounded-full"
+                                                        style="background-color: {item.color || '#ef4444'};"
+                                                    ></span>
+                                                    {CATEGORY_META[item.category]?.badge || item.category}
+                                                </span>
+                                            </td>
+                                            <td class="px-3 py-2.5">
+                                                <div class="font-black text-slate-900">{item.title}</div>
+                                                {#if item.content}
+                                                    <div class="mt-0.5 text-[11px] font-medium text-slate-500">{item.content}</div>
+                                                {/if}
+                                            </td>
+                                            <td class="px-3 py-2.5 text-right whitespace-nowrap">
+                                                <button
+                                                    type="button"
+                                                    onclick={() => copyLastYearScheduleToThisYear(item)}
+                                                    class="btn btn-xs rounded-lg border-blue-200 bg-blue-50 font-black text-blue-700 hover:bg-blue-100"
+                                                >
+                                                    올해로 복사
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    {/each}
+                                </tbody>
+                            </table>
+                        </div>
+                    {/if}
+                </div>
             </section>
         {/if}
     </div>
 </div>
 
-<!-- Add/Edit Modal -->
+<!-- 일정 등록 / 수정 모달 (전면 한글화 + 중요일정 배경색 전체 적용 안내) -->
 {#if showAddModal}
     <div class="modal modal-open p-4">
-        <div class="modal-box w-full max-w-2xl max-h-[90vh] overflow-y-auto overflow-x-hidden p-5 sm:p-8 rounded-3xl bg-base-100 border border-base-200 shadow-2xl">
-            <!-- Header -->
-            <div class="flex justify-between items-center mb-8">
+        <div class="modal-box max-h-[90vh] w-full max-w-2xl overflow-x-hidden overflow-y-auto rounded-3xl border border-base-200 bg-base-100 p-5 shadow-2xl sm:p-8">
+            <!-- 모달 헤더 -->
+            <div class="mb-7 flex items-center justify-between border-b border-slate-100 pb-4">
                 <div>
-                    <h3 class="text-3xl font-black tracking-tighter italic">{editingScheduleId ? 'EDIT EVENT' : 'NEW EVENT'}</h3>
-                    <p class="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] mt-1">
-                        {editingScheduleId ? '일정 수정 및 삭제' : '신규 일정 등록'}
+                    <h3 class="text-2xl font-black tracking-tight text-slate-900">
+                        {editingScheduleId ? '일정 수정' : '신규 일정 등록'}
+                    </h3>
+                    <p class="mt-0.5 text-xs font-bold text-slate-400">
+                        {editingScheduleId ? '등록된 일정의 내용을 수정하거나 삭제합니다.' : '새로운 개인 또는 사무실 일정을 등록합니다.'}
                     </p>
                 </div>
                 <button type="button" aria-label="모달 닫기" class="btn btn-circle btn-ghost bg-slate-50" onclick={() => (showAddModal = false)}>
@@ -524,27 +691,27 @@
                 </button>
             </div>
 
-            <div class="flex flex-col gap-8">
-                <!-- Section 1: Basic Info (Title & Color) -->
+            <div class="flex flex-col gap-7">
+                <!-- 1. 기본 정보 (제목 및 색상) -->
                 <div class="flex flex-col gap-3">
-                    <label for="sched-title" class="text-[10px] font-black uppercase opacity-40 tracking-widest">Event Identity</label>
-                    <div class="flex flex-col md:flex-row gap-4 items-center">
-                        <div class="flex-1 w-full">
+                    <label for="sched-title" class="text-xs font-black text-slate-500">일정 제목 및 색상</label>
+                    <div class="flex flex-col items-center gap-4 md:flex-row">
+                        <div class="w-full flex-1">
                             <input
                                 id="sched-title"
                                 type="text"
-                                class="input input-ghost w-full text-3xl font-black placeholder:opacity-20 border-b-4 focus:bg-transparent px-0 rounded-none transition-all outline-none"
+                                class="input input-ghost w-full rounded-none border-b-4 px-0 text-2xl font-black transition-all outline-none placeholder:opacity-25 focus:bg-transparent sm:text-3xl"
                                 placeholder="제목을 입력하세요"
                                 bind:value={newSchedule.title}
                                 style="color: {newSchedule.color}; border-color: {newSchedule.color}40;"
                             />
                         </div>
-                        <div class="flex gap-2 p-2 bg-slate-50 rounded-2xl border border-slate-100 shrink-0">
+                        <div class="flex shrink-0 gap-2 rounded-2xl border border-slate-100 bg-slate-50 p-2">
                             {#each ['#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6', '#0f172a'] as color}
                                 <button
                                     type="button"
                                     aria-label={`색상 ${color}`}
-                                    class="w-7 h-7 rounded-full transition-all hover:scale-125 {newSchedule.color === color ? 'ring-4 ring-offset-2 ring-slate-200 scale-110' : 'opacity-60 hover:opacity-100'}"
+                                    class="h-7 w-7 rounded-full transition-all hover:scale-125 {newSchedule.color === color ? 'scale-110 ring-4 ring-slate-200 ring-offset-2' : 'opacity-60 hover:opacity-100'}"
                                     style="background-color: {color};"
                                     onclick={() => (newSchedule.color = color)}
                                 ></button>
@@ -553,15 +720,15 @@
                     </div>
                 </div>
 
-                <!-- Section 2: Time Configuration & Category -->
+                <!-- 2. 시간 방식 및 분류 -->
                 <div class="flex flex-col gap-5">
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-end">
+                    <div class="grid grid-cols-1 items-end gap-6 md:grid-cols-2">
                         <div class="flex flex-col gap-2">
-                            <span class="text-[10px] font-black uppercase opacity-40 tracking-widest">Time Mode</span>
-                            <div class="flex gap-2 p-1.5 bg-slate-100 rounded-2xl w-fit">
+                            <span class="text-xs font-black text-slate-500">시간 설정 방식</span>
+                            <div class="flex w-fit gap-2 rounded-2xl bg-slate-100 p-1.5">
                                 <button
                                     type="button"
-                                    class="btn btn-sm border-none rounded-xl px-6 {timeMode === 'all-day' ? 'bg-white shadow-md font-black text-slate-900' : 'bg-transparent opacity-50 font-bold'}"
+                                    class="btn btn-sm rounded-xl border-none px-6 {timeMode === 'all-day' ? 'bg-white font-black text-slate-900 shadow-md' : 'bg-transparent font-bold opacity-50'}"
                                     onclick={() => {
                                         timeMode = 'all-day';
                                         newSchedule.is_all_day = true;
@@ -571,7 +738,7 @@
                                 >종일</button>
                                 <button
                                     type="button"
-                                    class="btn btn-sm border-none rounded-xl px-6 {timeMode === 'timed' ? 'bg-white shadow-md font-black text-slate-900' : 'bg-transparent opacity-50 font-bold'}"
+                                    class="btn btn-sm rounded-xl border-none px-6 {timeMode === 'timed' ? 'bg-white font-black text-slate-900 shadow-md' : 'bg-transparent font-bold opacity-50'}"
                                     onclick={() => {
                                         timeMode = 'timed';
                                         newSchedule.is_all_day = false;
@@ -581,37 +748,37 @@
                                 >시간 지정</button>
                             </div>
                         </div>
-                        <div class="form-control min-w-0 w-full">
-                            <label for="sched-cat" class="label font-black text-[10px] uppercase opacity-40"><span class="label-text">Category</span></label>
-                            <select id="sched-cat" class="select select-bordered w-full min-w-0 bg-slate-50 border-slate-200 font-bold rounded-xl" bind:value={newSchedule.category}>
+                        <div class="form-control w-full min-w-0">
+                            <label for="sched-cat" class="label text-xs font-black text-slate-500"><span class="label-text">일정 분류</span></label>
+                            <select id="sched-cat" class="select select-bordered w-full min-w-0 rounded-xl border-slate-200 bg-slate-50 font-bold" bind:value={newSchedule.category}>
                                 <option value="PERSONAL">🙋 개인 일정</option>
                                 <option value="ATTENDANCE">💼 근태 기록</option>
                                 {#if isTier2}
-                                    <option value="OFFICE">🏢 사무실 일정 (Tier 2)</option>
-                                    <option value="GLOBAL">📢 전사 공지 (Tier 2)</option>
-                                    <option value="HOLIDAY">🚩 공휴일 설정 (Tier 2)</option>
+                                    <option value="OFFICE">🏢 사무실 일정</option>
+                                    <option value="GLOBAL">📢 전사 공지</option>
+                                    <option value="HOLIDAY">🚩 공휴일 설정</option>
                                 {/if}
                             </select>
                         </div>
                     </div>
 
-                    <!-- Date/Time Inputs -->
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 sm:p-5 bg-slate-50 rounded-3xl border border-slate-100">
-                        <div class="form-control min-w-0 w-full">
-                            <label for="sched-start" class="label font-black text-[10px] uppercase opacity-40"><span class="label-text">Start {timeMode === 'all-day' ? 'Date' : 'Time'}</span></label>
+                    <!-- 날짜/시간 입력 -->
+                    <div class="grid grid-cols-1 gap-4 rounded-3xl border border-slate-100 bg-slate-50 p-4 sm:grid-cols-2 sm:p-5">
+                        <div class="form-control w-full min-w-0">
+                            <label for="sched-start" class="label text-xs font-black text-slate-500"><span class="label-text">시작 {timeMode === 'all-day' ? '날짜' : '일시'}</span></label>
                             <input
                                 id="sched-start"
                                 type={timeMode === 'all-day' ? 'date' : 'datetime-local'}
-                                class="input input-bordered w-full min-w-0 bg-white border-slate-200 font-bold rounded-xl"
+                                class="input input-bordered w-full min-w-0 rounded-xl border-slate-200 bg-white font-bold"
                                 bind:value={newSchedule.start_at}
                             />
                         </div>
-                        <div class="form-control min-w-0 w-full">
-                            <label for="sched-end" class="label font-black text-[10px] uppercase opacity-40"><span class="label-text">End {timeMode === 'all-day' ? 'Date' : 'Time'}</span></label>
+                        <div class="form-control w-full min-w-0">
+                            <label for="sched-end" class="label text-xs font-black text-slate-500"><span class="label-text">종료 {timeMode === 'all-day' ? '날짜' : '일시'}</span></label>
                             <input
                                 id="sched-end"
                                 type={timeMode === 'all-day' ? 'date' : 'datetime-local'}
-                                class="input input-bordered w-full min-w-0 bg-white border-slate-200 font-bold rounded-xl"
+                                class="input input-bordered w-full min-w-0 rounded-xl border-slate-200 bg-white font-bold"
                                 bind:value={newSchedule.end_at}
                             />
                         </div>
@@ -619,66 +786,64 @@
                 </div>
 
                 <div>
-                    <label for="sched-content" class="block text-[10px] font-black uppercase opacity-40 mb-1">메모 (선택)</label>
+                    <label for="sched-content" class="mb-1 block text-xs font-black text-slate-500">메모 (선택)</label>
                     <textarea id="sched-content" rows="2" bind:value={newSchedule.content} placeholder="일정 상세 내용..." class="textarea textarea-bordered w-full rounded-xl bg-slate-50 font-medium"></textarea>
                 </div>
 
-                <!-- Section 3: Importance, Display Mode & D-Day -->
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- 3. 중요도, 중요 일정 배경 강조 & 디데이 -->
+                <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
                     <div class="space-y-3">
                         <div class="form-control">
-                            <span class="label font-black text-[10px] uppercase opacity-40 mb-1">Importance</span>
+                            <span class="label mb-1 text-xs font-black text-slate-500">중요도</span>
                             <div class="rating rating-md gap-1">
                                 {#each [1, 2, 3, 4, 5] as i}
                                     <input type="radio" aria-label={`중요도 ${i}`} name="importance" class="mask mask-star-2 bg-warning" checked={newSchedule.importance === i} onclick={() => (newSchedule.importance = i)} />
                                 {/each}
                             </div>
                         </div>
-                        {#if isTier2}
-                            <label class="flex cursor-pointer items-center gap-2 text-xs font-bold text-slate-700">
-                                <input
-                                    type="checkbox"
-                                    class="checkbox checkbox-sm checkbox-error"
-                                    checked={newSchedule.display_mode === 'background'}
-                                    onchange={(e) => (newSchedule.display_mode = e.currentTarget.checked ? 'background' : 'bar')}
-                                />
-                                <span>중요 배경 알람으로 표시 (달력 칸 배경색 강조)</span>
-                            </label>
-                        {/if}
+                        <label class="flex cursor-pointer items-center gap-2 rounded-2xl border border-rose-200 bg-rose-50/70 p-3 text-xs font-black text-rose-800">
+                            <input
+                                type="checkbox"
+                                class="checkbox checkbox-sm checkbox-error"
+                                checked={newSchedule.display_mode === 'background'}
+                                onchange={(e) => (newSchedule.display_mode = e.currentTarget.checked ? 'background' : 'bar')}
+                            />
+                            <span>중요 일정으로 강조 (선택 색상으로 날짜 칸 전체 채움 + 애니메이션)</span>
+                        </label>
                     </div>
-                    <div class="p-5 bg-primary/5 rounded-[22px] border border-primary/10 flex items-center justify-between">
+                    <div class="flex items-center justify-between rounded-[22px] border border-primary/10 bg-primary/5 p-5">
                         <div class="flex items-center gap-4">
-                            <div class="p-3 bg-primary/10 rounded-xl">
+                            <div class="rounded-xl bg-primary/10 p-3">
                                 <Icon icon="lucide:flag" class="text-xl text-primary" />
                             </div>
                             <div>
-                                <h4 class="font-black text-sm">D-Day Mode</h4>
-                                <p class="text-[10px] font-bold opacity-40">메인 화면 카운트다운</p>
+                                <h4 class="text-sm font-black">디데이 표시</h4>
+                                <p class="text-[11px] font-bold opacity-50">메인 화면 카운트다운</p>
                             </div>
                         </div>
-                        <input type="checkbox" aria-label="D-Day 모드" class="toggle toggle-primary toggle-md" bind:checked={newSchedule.is_dday} />
+                        <input type="checkbox" aria-label="디데이 표시" class="toggle toggle-primary toggle-md" bind:checked={newSchedule.is_dday} />
                     </div>
                 </div>
 
                 {#if newSchedule.is_dday && newSchedule.start_at}
-                    <div class="bg-slate-900 text-white p-5 rounded-3xl flex items-center justify-between shadow-xl shadow-slate-200">
+                    <div class="flex items-center justify-between rounded-3xl bg-slate-900 p-5 text-white shadow-xl shadow-slate-200">
                         <div class="flex items-center gap-4">
                             <Icon icon="lucide:zap" class="text-2xl text-yellow-400" />
-                            <span class="text-[10px] font-black opacity-40 uppercase tracking-widest">Countdown Preview</span>
+                            <span class="text-xs font-black opacity-60">디데이 미리보기</span>
                         </div>
-                        <span class="text-3xl font-black italic">
+                        <span class="text-3xl font-black">
                             {formatDDay(parseDateStrAsLocalDate(newSchedule.start_at.slice(0, 10)), initialTodayDate)}
                         </span>
                     </div>
                 {/if}
 
-                <!-- Recurrence -->
+                <!-- 반복 설정 -->
                 <div class="border-t border-base-200 pt-6">
-                    <h4 class="text-xs font-black uppercase opacity-40 mb-3">반복 설정 (Recurrence)</h4>
+                    <h4 class="mb-3 text-xs font-black text-slate-500">반복 설정</h4>
                     <RecurrenceEditor bind:recurrence={newSchedule.recurrence} />
                 </div>
 
-                <div class="modal-action flex flex-wrap justify-between items-center gap-3">
+                <div class="modal-action flex flex-wrap items-center justify-between gap-3">
                     <div>
                         {#if editingScheduleId}
                             <button type="button" disabled={saving} class="btn btn-error btn-outline rounded-xl font-bold" onclick={removeEditingSchedule}>삭제</button>
@@ -686,7 +851,7 @@
                     </div>
                     <div class="flex flex-wrap gap-2">
                         <button type="button" class="btn btn-ghost rounded-xl font-bold" onclick={() => (showAddModal = false)}>취소</button>
-                        <button type="button" disabled={saving} class="btn btn-primary px-6 rounded-xl font-black text-white" onclick={saveSchedule}>
+                        <button type="button" disabled={saving} class="btn btn-primary rounded-xl px-6 font-black text-white" onclick={saveSchedule}>
                             {#if saving}<span class="loading loading-xs loading-spinner"></span>{/if}
                             {editingScheduleId ? '수정 저장' : '저장하기'}
                         </button>

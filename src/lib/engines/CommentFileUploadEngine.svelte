@@ -5,7 +5,7 @@
 	 * @prop {{ id: number }} post - 부모 게시물 객체 (id 필수)
 	 */
 	import * as commentApi from '$lib/api/comment';
-	import { uploadFiles, publishAssets } from '$lib/services/mediaService';
+	import { uploadFiles, publishAssets, deleteAsset } from '$lib/services/mediaService';
 	import { getSecureMediaUrl } from '$lib/config/media';
 	import { env } from '$env/dynamic/public';
 	import { getAuthContext } from '$lib/runes/auth.svelte';
@@ -41,6 +41,55 @@
 	let savingEdit = $state(false);
 	let uploadingEdit = $state(false);
 	let editFileInputEl = $state(/** @type {HTMLInputElement | null} */ (null));
+
+	// --- [이미지 미리보기 모달 상태 (PWA 친화적)] ---
+	let previewImages = $state(/** @type {any[]} */ ([]));
+	let previewIndex = $state(-1);
+	const activePreview = $derived(
+		previewIndex >= 0 && previewIndex < previewImages.length ? previewImages[previewIndex] : null
+	);
+
+	/**
+	 * @param {any[]} assets
+	 * @param {any} targetAsset
+	 */
+	function openImagePreview(assets, targetAsset) {
+		const imgs = (assets || []).filter((a) => a?.mime_type?.startsWith('image/'));
+		if (imgs.length === 0) return;
+		const idx = imgs.findIndex((a) => a.id === targetAsset?.id);
+		previewImages = imgs;
+		previewIndex = idx >= 0 ? idx : 0;
+	}
+
+	function closeImagePreview() {
+		previewIndex = -1;
+		previewImages = [];
+	}
+
+	function prevPreviewImage() {
+		if (previewImages.length <= 1) return;
+		previewIndex = (previewIndex - 1 + previewImages.length) % previewImages.length;
+	}
+
+	function nextPreviewImage() {
+		if (previewImages.length <= 1) return;
+		previewIndex = (previewIndex + 1) % previewImages.length;
+	}
+
+	/** @param {KeyboardEvent} e */
+	function handlePreviewKeydown(e) {
+		if (!activePreview) return;
+		if (e.key === 'Escape') {
+			e.preventDefault();
+			closeImagePreview();
+		} else if (e.key === 'ArrowLeft') {
+			e.preventDefault();
+			prevPreviewImage();
+		} else if (e.key === 'ArrowRight') {
+			e.preventDefault();
+			nextPreviewImage();
+		}
+	}
 
 	// --- [데이터 로드] ---
 	async function loadComments() {
@@ -84,8 +133,13 @@
 	}
 
 	/** @param {number} assetId */
-	function removePendingAsset(assetId) {
+	async function removePendingAsset(assetId) {
 		pendingAssets = pendingAssets.filter((a) => a.id !== assetId);
+		try {
+			await deleteAsset(assetId);
+		} catch (e) {
+			console.error('[CommentFileUploadEngine] 임시 파일 삭제 실패:', e);
+		}
 	}
 
 	// --- [댓글 등록 핸들러: 2단계 물리 복사 배포 및 댓글 연결] ---
@@ -140,12 +194,17 @@
 		removeMediaIds = [];
 	}
 
-	function cancelEdit() {
+	/** @param {boolean} [cleanupPending=true] */
+	async function cancelEdit(cleanupPending = true) {
+		const assetsToClean = cleanupPending ? [...editPendingAssets] : [];
 		editingId = null;
 		editContent = '';
 		editAttachments = [];
 		editPendingAssets = [];
 		removeMediaIds = [];
+		if (assetsToClean.length > 0) {
+			await Promise.allSettled(assetsToClean.map((a) => deleteAsset(a.id)));
+		}
 	}
 
 	/** @param {number} assetId */
@@ -157,8 +216,13 @@
 	}
 
 	/** @param {number} assetId */
-	function removeEditPendingAsset(assetId) {
+	async function removeEditPendingAsset(assetId) {
 		editPendingAssets = editPendingAssets.filter((a) => a.id !== assetId);
+		try {
+			await deleteAsset(assetId);
+		} catch (e) {
+			console.error('[CommentFileUploadEngine] 수정 임시 파일 삭제 실패:', e);
+		}
 	}
 
 	/** @param {Event} event */
@@ -213,7 +277,7 @@
 				remove_media_ids: removeMediaIds
 			});
 			toast.success('댓글이 수정되었습니다.');
-			cancelEdit();
+			await cancelEdit(false);
 			await loadComments();
 		} catch (e) {
 			toast.error('댓글 수정 실패: ' + formatApiError(e, '오류'));
@@ -268,11 +332,18 @@
 						{#each pendingAssets as asset (asset.id)}
 							<div class="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 text-xs shadow-xs">
 								{#if asset.mime_type?.startsWith('image/')}
-									<img
-										src={getSecureMediaUrl(PUBLIC_SERVER_URL, asset, 'sm')}
-										alt={asset.original_name}
-										class="h-7 w-7 rounded-md object-cover"
-									/>
+									<button
+										type="button"
+										onclick={() => openImagePreview(pendingAssets, asset)}
+										class="shrink-0 overflow-hidden rounded-md"
+										aria-label="이미지 미리보기"
+									>
+										<img
+											src={getSecureMediaUrl(PUBLIC_SERVER_URL, asset, 'sm')}
+											alt={asset.original_name}
+											class="h-7 w-7 object-cover"
+										/>
+									</button>
 								{:else}
 									<Icon icon="ph:file-bold" class="h-4 w-4 text-slate-500" />
 								{/if}
@@ -459,7 +530,7 @@
 										<div></div>
 									{/if}
 									<div class="flex gap-1.5">
-										<button type="button" onclick={cancelEdit} class="btn btn-xs btn-ghost">취소</button>
+										<button type="button" onclick={() => cancelEdit()} class="btn btn-xs btn-ghost">취소</button>
 										<button
 											type="button"
 											disabled={savingEdit || uploadingEdit}
@@ -479,19 +550,19 @@
 								<div class="mt-2 flex flex-wrap gap-2">
 									{#each comment.attachments as att (att.id)}
 										{#if att.mime_type?.startsWith('image/')}
-											<a
-												href={getSecureMediaUrl(PUBLIC_SERVER_URL, att)}
-												target="_blank"
-												rel="noopener noreferrer"
-												class="group overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xs transition hover:border-blue-400"
+											<button
+												type="button"
+												onclick={() => openImagePreview(comment.attachments, att)}
+												class="group cursor-pointer overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xs transition hover:border-blue-400"
 												title={att.original_name}
+												aria-label="{att.original_name} 미리보기"
 											>
 												<img
 													src={getSecureMediaUrl(PUBLIC_SERVER_URL, att, 'sm')}
 													alt={att.original_name}
 													class="h-20 w-20 object-cover transition group-hover:scale-105"
 												/>
-											</a>
+											</button>
 										{:else}
 											<a
 												href={getSecureMediaUrl(PUBLIC_SERVER_URL, att)}
@@ -513,3 +584,82 @@
 		{/if}
 	</div>
 </div>
+
+<svelte:window onkeydown={handlePreviewKeydown} />
+
+{#if activePreview}
+	<!-- svelte-ignore a11y_click_events_have_key_events -->
+	<!-- svelte-ignore a11y_no_static_element_interactions -->
+	<div
+		class="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-black/85 p-3 backdrop-blur-xs sm:p-6"
+		onclick={(e) => {
+			if (e.target === e.currentTarget) closeImagePreview();
+		}}
+		role="dialog"
+		aria-modal="true"
+		aria-label="이미지 미리보기"
+	>
+		<!-- 상단 바 -->
+		<div class="mb-3 flex w-full max-w-4xl items-center justify-between gap-3 text-white">
+			<div class="flex min-w-0 items-center gap-2">
+				<span class="truncate text-sm font-bold">{activePreview.original_name || '이미지 미리보기'}</span>
+				{#if previewImages.length > 1}
+					<span class="shrink-0 rounded-full bg-white/15 px-2.5 py-0.5 text-xs font-bold">
+						{previewIndex + 1} / {previewImages.length}
+					</span>
+				{/if}
+			</div>
+			<div class="flex shrink-0 items-center gap-2">
+				<a
+					href={getSecureMediaUrl(PUBLIC_SERVER_URL, activePreview)}
+					download={activePreview.original_name || 'image'}
+					class="flex h-9 w-9 items-center justify-center rounded-full bg-white/15 text-white transition hover:bg-white/25"
+					title="다운로드"
+					aria-label="이미지 다운로드"
+				>
+					<Icon icon="ph:download-simple-bold" class="h-4 w-4" />
+				</a>
+				<button
+					type="button"
+					onclick={closeImagePreview}
+					class="flex h-9 w-9 items-center justify-center rounded-full bg-white/15 text-white transition hover:bg-white/25"
+					title="닫기 (ESC)"
+					aria-label="미리보기 닫기"
+				>
+					<Icon icon="ph:x-bold" class="h-5 w-5" />
+				</button>
+			</div>
+		</div>
+
+		<!-- 이미지 본문 영역 -->
+		<div class="relative flex w-full max-w-4xl flex-1 items-center justify-center overflow-hidden">
+			{#if previewImages.length > 1}
+				<button
+					type="button"
+					onclick={prevPreviewImage}
+					class="absolute left-2 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-black/50 text-white transition hover:bg-black/75"
+					aria-label="이전 이미지"
+				>
+					<Icon icon="ph:caret-left-bold" class="h-5 w-5" />
+				</button>
+			{/if}
+
+			<img
+				src={getSecureMediaUrl(PUBLIC_SERVER_URL, activePreview, 'lg') || getSecureMediaUrl(PUBLIC_SERVER_URL, activePreview)}
+				alt={activePreview.original_name || '이미지'}
+				class="max-h-[82dvh] max-w-full rounded-xl object-contain shadow-2xl"
+			/>
+
+			{#if previewImages.length > 1}
+				<button
+					type="button"
+					onclick={nextPreviewImage}
+					class="absolute right-2 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-black/50 text-white transition hover:bg-black/75"
+					aria-label="다음 이미지"
+				>
+					<Icon icon="ph:caret-right-bold" class="h-5 w-5" />
+				</button>
+			{/if}
+		</div>
+	</div>
+{/if}

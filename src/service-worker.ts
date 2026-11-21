@@ -44,10 +44,14 @@ interface OutboxTask {
 	jsonBody?: Record<string, any>;
 }
 
-// 1) 설치 시 즉시 선적재할 최소 셸 자산 (오프라인 폴백 페이지 및 필수 아이콘만)
+// 1) 설치 시 즉시 선적재할 최소 셸 자산 (오프라인 폴백 페이지, 필수 아이콘, 및 전체 빌드 CSS 번들)
+// 💡 프로덕션 배포 직후나 네트워크 순단 시에도 스타일시트(CSS)가 누락되어 화면이 깨지지 않도록
+//    빌드된 모든 CSS 청크(/_app/immutable/assets/*.css)를 설치 시점에 사전 캐싱합니다.
+const PRECACHE_CSS = build.filter((f) => f.endsWith('.css'));
 const PRECACHE_ASSETS = Array.from(
 	new Set([
 		'/offline.html',
+		...PRECACHE_CSS,
 		...files.filter((f) => f === '/favicon.png' || f === '/icons/icon-192.png')
 	])
 );
@@ -59,13 +63,46 @@ const ASSET_SET = new Set([
 	...files.filter((f) => !f.endsWith('/sw.js'))
 ]);
 
-// 1. 설치(Install): 최소 오프라인 셸만 즉시 캐싱 (나머지 청크는 실제 방문 시 온디맨드 캐싱)
+/**
+ * 캐시 저장 전 응답 무결성(상태코드 + MIME 타입) 검증 헬퍼
+ * 💡 재배포 직후 502/404 에러 페이지나 Cloudflare HTML 페이지가 .css/.js 캐시에 오염되어
+ *    영구적으로 CSS가 적용되지 않는 현상을 원천 차단합니다.
+ */
+function isCacheableAssetResponse(pathname: string, response: Response): boolean {
+	if (!response || response.status !== 200) return false;
+	const contentType = (response.headers.get('content-type') || '').toLowerCase();
+
+	// HTML 에러/리다이렉트 응답은 정적 CSS/JS/폰트/이미지 자산으로 절대 캐싱 금지
+	if (pathname.endsWith('.css')) {
+		return contentType.includes('text/css');
+	}
+	if (pathname.endsWith('.js') || pathname.endsWith('.mjs')) {
+		return contentType.includes('javascript') || contentType.includes('ecmascript');
+	}
+	if (pathname.endsWith('.json')) {
+		return contentType.includes('application/json');
+	}
+	if (pathname !== '/offline.html' && contentType.includes('text/html')) {
+		return false;
+	}
+	return true;
+}
+
+// 1. 설치(Install): 오프라인 셸 + CSS 번들 선적재 (개별 실패가 전체 SW 설치를 깨지 않도록 안전 처리)
 sw.addEventListener('install', (event: ExtendableEvent) => {
 	async function addFilesToCache() {
 		if (build.length === 0) return;
 		const cache = await caches.open(CACHE);
 		if (PRECACHE_ASSETS.length > 0) {
-			await cache.addAll(PRECACHE_ASSETS);
+			// 개별 자산별로 fetch + MIME 검증 후 캐싱하여 오염된 응답 저장 방지
+			await Promise.allSettled(
+				PRECACHE_ASSETS.map(async (assetPath) => {
+					const res = await fetch(assetPath, { cache: 'no-cache' });
+					if (isCacheableAssetResponse(assetPath, res)) {
+						await cache.put(assetPath, res.clone());
+					}
+				})
+			);
 		}
 	}
 
@@ -110,15 +147,25 @@ if (build.length > 0) {
 			// [A] 빌드된 해시 청크(build) 및 정적 파일(files)은 온디맨드 Cache-First로 응답·저장
 			if (ASSET_SET.has(url.pathname)) {
 				const cachedAsset = await cache.match(url.pathname);
-				if (cachedAsset) {
+				// 기존에 오염된(예: HTML이 잘못 들어간) 캐시가 있다면 즉시 폐기하고 네트워크에서 재조회
+				if (cachedAsset && isCacheableAssetResponse(url.pathname, cachedAsset)) {
 					return cachedAsset;
+				}
+				if (cachedAsset) {
+					await cache.delete(url.pathname);
 				}
 
 				const networkResponse = await fetch(event.request);
-				if (networkResponse.status === 200) {
+				if (isCacheableAssetResponse(url.pathname, networkResponse)) {
 					cache.put(url.pathname, networkResponse.clone());
 				}
 				return networkResponse;
+			}
+
+			// [A-1] 현재 빌드에 없는 구버전 /_app/immutable/* 자산 요청 (배포 직후 구버전 HTML -> 신버전 SW 충돌)
+			//       캐시에 넣지 않고 네트워크 직통 처리하여 404 시 클라이언트의 자동 복구 가드가 즉시 작동하도록 보장
+			if (url.pathname.startsWith('/_app/immutable/')) {
+				return await fetch(event.request);
 			}
 
 			// [B] SSR HTML 문서(navigate) / version.json / __data.json 은 절대 캐시하지 않고 네트워크 직통 처리
@@ -149,8 +196,7 @@ if (build.length > 0) {
 					throw new Error('Invalid response from fetch');
 				}
 
-				const contentType = response.headers.get('content-type') || '';
-				if (response.status === 200 && !contentType.includes('text/html')) {
+				if (isCacheableAssetResponse(url.pathname, response)) {
 					cache.put(event.request, response.clone());
 				}
 
