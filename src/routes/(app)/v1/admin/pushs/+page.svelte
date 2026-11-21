@@ -31,7 +31,8 @@
 		dayoff_request: true,
 		dayoff_result: true,
 		blackbox_request: true,
-		alert_instruction: true
+		alert_instruction: true,
+		survey_request: true
 	}));
 	let savingDomainPushOptions = $state(false);
 
@@ -60,6 +61,11 @@
 			key: 'alert_instruction',
 			title: '공지·지시(INSTRUCTION) 웹 푸시 동시 발송',
 			desc: '/v1/admin/alerts에서 공지·지시 발송 시 웹소켓과 함께 Web Push를 자동으로 동시 발송합니다.'
+		},
+		{
+			key: 'survey_request',
+			title: '현장 조사·설문 요청 및 미제출 독촉 알림 (사원)',
+			desc: '/v1/admin/survey에서 조사를 배포하거나 미제출자를 독촉할 때 대상 사원에게 Web Push를 발송합니다.'
 		}
 	];
 

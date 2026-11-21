@@ -14,3 +14,4 @@ export { default as coment_ext_fileupload } from '$lib/engines/CommentFileUpload
 export { default as UploadEngine } from '$lib/engines/UploadEngine.svelte';
 export { default as ReactionEngine } from '$lib/engines/ReactionEngine.svelte';
 export { default as ReadReceiptEngine } from '$lib/engines/ReadReceiptEngine.svelte';
+export { default as SurveyServiceEngine } from '$lib/engines/SurveyServiceEngine.svelte';

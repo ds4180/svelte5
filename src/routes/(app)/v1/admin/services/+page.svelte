@@ -50,7 +50,7 @@
 	onMount(loadAll);
 
 	// 사용 가능한 프론트엔드 서비스 플러그인 목록 ($lib/index.ts 기준)
-	const AVAILABLE_PLUGINS = ['CommentEngine', 'CommentFileUploadEngine', 'UploadEngine', 'ReactionEngine', 'ReadReceiptEngine'];
+	const AVAILABLE_PLUGINS = ['CommentEngine', 'CommentFileUploadEngine', 'UploadEngine', 'ReactionEngine', 'ReadReceiptEngine', 'SurveyServiceEngine'];
 
 	// --- [CRUD Helpers] ---
 	let showModal = $state(false);
