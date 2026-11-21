@@ -88,11 +88,11 @@
 	<!-- ===================================================================== -->
 	<!-- 2. 상단 핵심 지표 요약 카드 (Status Cards: 1~4개) -->
 	<!-- ===================================================================== -->
-	<div class="grid grid-cols-2 gap-4 md:grid-cols-3 md:gap-5">
+	<div class="grid grid-cols-1 gap-4 sm:grid-cols-3 md:gap-5">
 		<div class="flex flex-col justify-between rounded-[1.75rem] border-2 border-slate-200 bg-white p-5 shadow-sm">
-			<div class="flex items-center justify-between">
-				<span class="text-xs font-black tracking-wider text-slate-400 uppercase">Active Sessions</span>
-				<div class="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
+			<div class="flex w-full items-center justify-between gap-2">
+				<span class="min-w-0 truncate text-xs font-black tracking-wider text-slate-400 uppercase">Active Sessions</span>
+				<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
 					<Icon icon="solar:users-group-rounded-bold-duotone" class="text-xl" />
 				</div>
 			</div>
@@ -103,9 +103,9 @@
 		</div>
 
 		<div class="flex flex-col justify-between rounded-[1.75rem] border-2 border-slate-200 bg-white p-5 shadow-sm">
-			<div class="flex items-center justify-between">
-				<span class="text-xs font-black tracking-wider text-slate-400 uppercase">Mobile Devices</span>
-				<div class="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
+			<div class="flex w-full items-center justify-between gap-2">
+				<span class="min-w-0 truncate text-xs font-black tracking-wider text-slate-400 uppercase">Mobile Devices</span>
+				<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
 					<Icon icon="solar:smartphone-bold-duotone" class="text-xl" />
 				</div>
 			</div>
@@ -115,10 +115,10 @@
 			</div>
 		</div>
 
-		<div class="flex flex-col justify-between rounded-[1.75rem] border-2 border-slate-200 bg-white p-5 shadow-sm col-span-2 md:col-span-1">
-			<div class="flex items-center justify-between">
-				<span class="text-xs font-black tracking-wider text-slate-400 uppercase">Kicked Out</span>
-				<div class="flex h-9 w-9 items-center justify-center rounded-xl bg-rose-50 text-rose-600">
+		<div class="flex flex-col justify-between rounded-[1.75rem] border-2 border-slate-200 bg-white p-5 shadow-sm">
+			<div class="flex w-full items-center justify-between gap-2">
+				<span class="min-w-0 truncate text-xs font-black tracking-wider text-slate-400 uppercase">Kicked Out</span>
+				<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-rose-50 text-rose-600">
 					<Icon icon="solar:shield-warning-bold-duotone" class="text-xl" />
 				</div>
 			</div>

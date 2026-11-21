@@ -219,15 +219,15 @@
 	<!-- ===================================================================== -->
 	<!-- 2. 상단 4대 관제 지표 요약 카드 (Status Cards) -->
 	<!-- ===================================================================== -->
-	<div class="grid grid-cols-2 gap-4 md:grid-cols-4 md:gap-5">
+	<div class="grid grid-cols-1 gap-4 sm:grid-cols-2 md:gap-5 xl:grid-cols-4">
 		<!-- 카드 1: 전체 등록 공지 -->
 		<button
 			onclick={() => (selectedCategory = 'ALL')}
-			class="group flex flex-col justify-between rounded-2xl border-2 p-5 text-left transition {selectedCategory === 'ALL' ? 'border-slate-900 bg-slate-50 shadow-md ring-2 ring-slate-900/20' : 'border-slate-200 bg-white hover:border-slate-300'}"
+			class="group flex w-full flex-col justify-between rounded-2xl border-2 p-5 text-left transition {selectedCategory === 'ALL' ? 'border-slate-900 bg-slate-50 shadow-md ring-2 ring-slate-900/20' : 'border-slate-200 bg-white hover:border-slate-300'}"
 		>
-			<div class="flex items-center justify-between">
-				<span class="text-xs font-black tracking-wider text-slate-400 uppercase">Total Alerts</span>
-				<div class="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-100 text-slate-700">
+			<div class="flex w-full items-center justify-between gap-2">
+				<span class="min-w-0 truncate text-xs font-black tracking-wider text-slate-400 uppercase">Total Alerts</span>
+				<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-700">
 					<Icon icon="solar:bell-bold-duotone" class="text-xl" />
 				</div>
 			</div>
@@ -244,9 +244,9 @@
 
 		<!-- 카드 2: 현재 실시간 노출 중 (활성) -->
 		<div class="flex flex-col justify-between rounded-2xl border-2 border-emerald-200 bg-emerald-50/30 p-5 shadow-sm">
-			<div class="flex items-center justify-between">
-				<span class="text-xs font-black tracking-wider text-emerald-600 uppercase">Live Active</span>
-				<div class="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-100 text-emerald-600">
+			<div class="flex w-full items-center justify-between gap-2">
+				<span class="min-w-0 truncate text-xs font-black tracking-wider text-emerald-600 uppercase">Live Active</span>
+				<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-emerald-600">
 					<Icon icon="solar:check-circle-bold-duotone" class="text-xl" />
 				</div>
 			</div>
@@ -256,7 +256,7 @@
 					<span class="text-xs font-normal text-slate-500">건 표출 중</span>
 				</div>
 				<div class="mt-1 flex items-center gap-1.5 text-xs font-semibold text-emerald-600">
-					<span class="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
+					<span class="h-2 w-2 shrink-0 rounded-full bg-emerald-500 animate-pulse"></span>
 					사원 화면에 실시간 노출
 				</div>
 			</div>
@@ -265,11 +265,11 @@
 		<!-- 카드 3: 현장 업무 지시 -->
 		<button
 			onclick={() => (selectedCategory = 'INSTRUCTION')}
-			class="group flex flex-col justify-between rounded-2xl border-2 p-5 text-left transition {selectedCategory === 'INSTRUCTION' ? 'border-purple-600 bg-purple-50/50 shadow-md ring-2 ring-purple-500/20' : 'border-slate-200 bg-white hover:border-slate-300'}"
+			class="group flex w-full flex-col justify-between rounded-2xl border-2 p-5 text-left transition {selectedCategory === 'INSTRUCTION' ? 'border-purple-600 bg-purple-50/50 shadow-md ring-2 ring-purple-500/20' : 'border-slate-200 bg-white hover:border-slate-300'}"
 		>
-			<div class="flex items-center justify-between">
-				<span class="text-xs font-black tracking-wider text-slate-400 uppercase">Instructions</span>
-				<div class="flex h-9 w-9 items-center justify-center rounded-xl bg-purple-100 text-purple-600">
+			<div class="flex w-full items-center justify-between gap-2">
+				<span class="min-w-0 truncate text-xs font-black tracking-wider text-slate-400 uppercase">Instructions</span>
+				<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-purple-100 text-purple-600">
 					<Icon icon="solar:clipboard-check-bold-duotone" class="text-xl" />
 				</div>
 			</div>
@@ -287,11 +287,11 @@
 		<!-- 카드 4: 중요/비상 공지 (L4~L5) -->
 		<button
 			onclick={() => (selectedCategory = 'URGENT_NOTICE')}
-			class="group flex flex-col justify-between rounded-2xl border-2 p-5 text-left transition {selectedCategory === 'URGENT_NOTICE' ? 'border-rose-600 bg-rose-50/50 shadow-md ring-2 ring-rose-500/20' : 'border-slate-200 bg-white hover:border-slate-300'}"
+			class="group flex w-full flex-col justify-between rounded-2xl border-2 p-5 text-left transition {selectedCategory === 'URGENT_NOTICE' ? 'border-rose-600 bg-rose-50/50 shadow-md ring-2 ring-rose-500/20' : 'border-slate-200 bg-white hover:border-slate-300'}"
 		>
-			<div class="flex items-center justify-between">
-				<span class="text-xs font-black tracking-wider text-slate-400 uppercase">Urgent Alerts</span>
-				<div class="flex h-9 w-9 items-center justify-center rounded-xl bg-rose-100 text-rose-600">
+			<div class="flex w-full items-center justify-between gap-2">
+				<span class="min-w-0 truncate text-xs font-black tracking-wider text-slate-400 uppercase">Urgent Alerts</span>
+				<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-rose-100 text-rose-600">
 					<Icon icon="solar:danger-triangle-bold-duotone" class="text-xl" />
 				</div>
 			</div>

@@ -422,34 +422,37 @@
 			</button>
 		</div>
 	{/if}
-	<div class="grid grid-cols-1 gap-4 md:grid-cols-2 md:gap-6 lg:grid-cols-4">
+	<div class="grid grid-cols-1 gap-4 sm:grid-cols-2 md:gap-5 xl:grid-cols-4">
 		<!-- 위젯 1: 자율신경계 태스크 워커 -->
 		<a
 			href="/v1/admin/tasks"
-			class="group rounded-xl border border-slate-200 bg-white p-6 shadow-md hover:shadow-xl hover:border-indigo-300 transition-all md:rounded-2xl md:p-7 block"
+			class="group flex flex-col justify-between rounded-xl border border-slate-200 bg-white p-5 shadow-md hover:shadow-xl hover:border-indigo-300 transition-all md:rounded-2xl md:p-6"
 		>
-			<div class="flex items-center justify-between mb-3">
-				<div class="flex items-center gap-1.5 text-[11px] font-black tracking-wider text-slate-500 uppercase">
-					<Icon icon="mdi:cog-sync-outline" class="text-indigo-600 text-base" /> 자율신경계 워커
+			<div>
+				<div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+					<div class="flex min-w-0 items-center gap-1.5 text-[11px] font-black tracking-wider text-slate-500 uppercase">
+						<Icon icon="mdi:cog-sync-outline" class="shrink-0 text-indigo-600 text-base" />
+						<span class="truncate">자율신경계 워커</span>
+					</div>
+					<div class="flex shrink-0 flex-wrap items-center gap-1">
+						<span class="badge badge-xs whitespace-nowrap bg-blue-100 text-blue-700 font-bold border-blue-200">
+							⚡ Watchdog
+						</span>
+						<span
+							class="badge badge-xs whitespace-nowrap font-bold {!statsLoaded ? 'badge-ghost' : stats.task_engine?.is_healthy ? 'badge-success text-white' : 'badge-error text-white'}"
+						>
+							{!statsLoaded ? '확인 중' : stats.task_engine?.is_healthy ? '정상 가동' : '경보 발생'}
+						</span>
+					</div>
 				</div>
-				<div class="flex items-center gap-1">
-					<span class="badge badge-xs bg-blue-100 text-blue-700 font-bold border-blue-200">
-						⚡ Watchdog
-					</span>
-					<span
-						class="badge badge-xs font-bold {!statsLoaded ? 'badge-ghost' : stats.task_engine?.is_healthy ? 'badge-success text-white' : 'badge-error text-white'}"
-					>
-						{!statsLoaded ? '확인 중' : stats.task_engine?.is_healthy ? '정상 가동' : '경보 발생'}
-					</span>
-				</div>
-			</div>
-			<div class="flex items-baseline justify-between mt-2">
-				<div class="text-3xl font-black text-slate-800">
-					{statsLoaded ? (stats.task_engine?.running_count || 0) : '--'}<span class="text-xs text-slate-400 font-normal ml-1">실행중</span>
-				</div>
-				<div class="text-right text-xs text-slate-500 font-medium space-y-0.5">
-					<div>대기: <strong class="text-amber-600">{statsLoaded ? (stats.task_engine?.pending_count || 0) : '--'}</strong>건</div>
-					<div>실패: <strong class={statsLoaded && stats.task_engine?.failed_count > 0 ? 'text-rose-600 font-black' : 'text-slate-400'}>{statsLoaded ? (stats.task_engine?.failed_count || 0) : '--'}</strong>건</div>
+				<div class="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-1 mt-2">
+					<div class="min-w-0 text-3xl font-black text-slate-800">
+						{statsLoaded ? (stats.task_engine?.running_count || 0) : '--'}<span class="text-xs text-slate-400 font-normal ml-1 whitespace-nowrap">실행중</span>
+					</div>
+					<div class="shrink-0 text-right text-xs text-slate-500 font-medium space-y-0.5">
+						<div>대기: <strong class="text-amber-600">{statsLoaded ? (stats.task_engine?.pending_count || 0) : '--'}</strong>건</div>
+						<div>실패: <strong class={statsLoaded && stats.task_engine?.failed_count > 0 ? 'text-rose-600 font-black' : 'text-slate-400'}>{statsLoaded ? (stats.task_engine?.failed_count || 0) : '--'}</strong>건</div>
+					</div>
 				</div>
 			</div>
 			{#if stats.task_engine?.next_scheduled_task}
@@ -460,7 +463,7 @@
 			{:else}
 				<div class="mt-3 text-[10px] text-slate-400 border-t pt-2 truncate flex items-center justify-between">
 					<span>정기 Cron 스케줄러</span>
-					<span class="text-emerald-600 font-bold">자율 순환</span>
+					<span class="text-emerald-600 font-bold shrink-0 ml-1">자율 순환</span>
 				</div>
 			{/if}
 		</a>
@@ -468,25 +471,28 @@
 		<!-- 위젯 2: 보안 & 시스템 건강도 -->
 		<a
 			href="/v1/admin/observability"
-			class="group rounded-xl border border-slate-200 bg-white p-6 shadow-md hover:shadow-xl hover:border-blue-300 transition-all md:rounded-2xl md:p-7 block"
+			class="group flex flex-col justify-between rounded-xl border border-slate-200 bg-white p-5 shadow-md hover:shadow-xl hover:border-blue-300 transition-all md:rounded-2xl md:p-6"
 		>
-			<div class="flex items-center justify-between mb-3">
-				<div class="flex items-center gap-1.5 text-[11px] font-black tracking-wider text-slate-500 uppercase">
-					<Icon icon="mdi:shield-check-outline" class="text-blue-600 text-base" /> 보안 & 시스템
+			<div>
+				<div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+					<div class="flex min-w-0 items-center gap-1.5 text-[11px] font-black tracking-wider text-slate-500 uppercase">
+						<Icon icon="mdi:shield-check-outline" class="shrink-0 text-blue-600 text-base" />
+						<span class="truncate">보안 & 시스템</span>
+					</div>
+					<span
+						class="badge badge-xs shrink-0 whitespace-nowrap font-bold {!statsLoaded ? 'badge-ghost' : stats.observability?.security_breach_24h > 0 ? 'badge-error text-white' : 'badge-info text-white'}"
+					>
+						{!statsLoaded ? '확인 중' : stats.observability?.security_breach_24h > 0 ? '침해 감지' : '안전 보호'}
+					</span>
 				</div>
-				<span
-					class="badge badge-xs font-bold {!statsLoaded ? 'badge-ghost' : stats.observability?.security_breach_24h > 0 ? 'badge-error text-white' : 'badge-info text-white'}"
-				>
-					{!statsLoaded ? '확인 중' : stats.observability?.security_breach_24h > 0 ? '침해 감지' : '안전 보호'}
-				</span>
-			</div>
-			<div class="flex items-baseline justify-between mt-2">
-				<div class="text-3xl font-black {statsLoaded && stats.observability?.security_breach_24h > 0 ? 'text-rose-600' : 'text-slate-800'}">
-					{statsLoaded ? (stats.observability?.security_breach_24h || 0) : '--'}<span class="text-xs text-slate-400 font-normal ml-1">보안침해 24h</span>
-				</div>
-				<div class="text-right text-xs text-slate-500 font-medium space-y-0.5">
-					<div>장애 에러: <strong class={statsLoaded && stats.observability?.error_log_24h > 0 ? 'text-rose-500' : 'text-slate-400'}>{statsLoaded ? (stats.observability?.error_log_24h || 0) : '--'}</strong>건</div>
-					<div>시스템 상태: <strong class="text-emerald-600">{statsLoaded ? '안정' : '확인 중'}</strong></div>
+				<div class="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-1 mt-2">
+					<div class="min-w-0 text-3xl font-black {statsLoaded && stats.observability?.security_breach_24h > 0 ? 'text-rose-600' : 'text-slate-800'}">
+						{statsLoaded ? (stats.observability?.security_breach_24h || 0) : '--'}<span class="text-[11px] text-slate-400 font-normal ml-1">보안침해 24h</span>
+					</div>
+					<div class="ml-auto text-right text-xs text-slate-500 font-medium space-y-0.5">
+						<div>장애 에러: <strong class={statsLoaded && stats.observability?.error_log_24h > 0 ? 'text-rose-500' : 'text-slate-400'}>{statsLoaded ? (stats.observability?.error_log_24h || 0) : '--'}</strong>건</div>
+						<div>시스템 상태: <strong class="text-emerald-600">{statsLoaded ? '안정' : '확인 중'}</strong></div>
+					</div>
 				</div>
 			</div>
 			<div class="mt-3 text-[10px] text-slate-400 border-t pt-2">
@@ -497,23 +503,26 @@
 		<!-- 위젯 3: 실시간 접속 세션 & 근무 현황 -->
 		<a
 			href="/v1/admin/target-groups"
-			class="group rounded-xl border border-slate-200 bg-white p-6 shadow-md hover:shadow-xl hover:border-emerald-300 transition-all md:rounded-2xl md:p-7 block"
+			class="group flex flex-col justify-between rounded-xl border border-slate-200 bg-white p-5 shadow-md hover:shadow-xl hover:border-emerald-300 transition-all md:rounded-2xl md:p-6"
 		>
-			<div class="flex items-center justify-between mb-3">
-				<div class="flex items-center gap-1.5 text-[11px] font-black tracking-wider text-slate-500 uppercase">
-					<Icon icon="mdi:account-clock-outline" class="text-emerald-600 text-base" /> 세션 & 근무
+			<div>
+				<div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+					<div class="flex min-w-0 items-center gap-1.5 text-[11px] font-black tracking-wider text-slate-500 uppercase">
+						<Icon icon="mdi:account-clock-outline" class="shrink-0 text-emerald-600 text-base" />
+						<span class="truncate">세션 & 근무</span>
+					</div>
+					<span class="badge badge-xs shrink-0 whitespace-nowrap {statsLoaded ? 'badge-success text-white animate-pulse' : 'badge-ghost'} font-bold">
+						{statsLoaded ? 'LIVE' : '확인 중'}
+					</span>
 				</div>
-				<span class="badge badge-xs {statsLoaded ? 'badge-success text-white animate-pulse' : 'badge-ghost'} font-bold">
-					{statsLoaded ? 'LIVE' : '확인 중'}
-				</span>
-			</div>
-			<div class="flex items-baseline justify-between mt-2">
-				<div class="text-3xl font-black text-emerald-600">
-					{statsLoaded ? (stats.observability?.active_sessions || 0) : '--'}<span class="text-xs text-slate-500 font-normal ml-1">온라인</span>
-				</div>
-				<div class="text-right text-xs text-slate-500 font-medium space-y-0.5">
-					<div>오늘 근무: <strong class="text-slate-800">{statsLoaded ? (stats.duty_status?.working_count || 0) : '--'}</strong>명</div>
-					<div>오늘 휴무: <strong class="text-amber-600">{statsLoaded ? (stats.duty_status?.dayoff_count || 0) : '--'}</strong>명</div>
+				<div class="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-1 mt-2">
+					<div class="min-w-0 text-3xl font-black text-emerald-600">
+						{statsLoaded ? (stats.observability?.active_sessions || 0) : '--'}<span class="text-xs text-slate-500 font-normal ml-1 whitespace-nowrap">온라인</span>
+					</div>
+					<div class="ml-auto text-right text-xs text-slate-500 font-medium space-y-0.5">
+						<div>오늘 근무: <strong class="text-slate-800">{statsLoaded ? (stats.duty_status?.working_count || 0) : '--'}</strong>명</div>
+						<div>오늘 휴무: <strong class="text-amber-600">{statsLoaded ? (stats.duty_status?.dayoff_count || 0) : '--'}</strong>명</div>
+					</div>
 				</div>
 			</div>
 			<div class="mt-3 text-[10px] text-slate-400 border-t pt-2">
@@ -524,25 +533,28 @@
 		<!-- 위젯 4: 현장 지시사항 인지율 -->
 		<a
 			href="/v1/admin/alerts"
-			class="group rounded-xl border border-slate-200 bg-white p-6 shadow-md hover:shadow-xl hover:border-purple-300 transition-all md:rounded-2xl md:p-7 block"
+			class="group flex flex-col justify-between rounded-xl border border-slate-200 bg-white p-5 shadow-md hover:shadow-xl hover:border-purple-300 transition-all md:rounded-2xl md:p-6"
 		>
-			<div class="flex items-center justify-between mb-3">
-				<div class="flex items-center gap-1.5 text-[11px] font-black tracking-wider text-slate-500 uppercase">
-					<Icon icon="mdi:checkbox-marked-circle-outline" class="text-purple-600 text-base" /> 지시사항 인지율
+			<div>
+				<div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+					<div class="flex min-w-0 items-center gap-1.5 text-[11px] font-black tracking-wider text-slate-500 uppercase">
+						<Icon icon="mdi:checkbox-marked-circle-outline" class="shrink-0 text-purple-600 text-base" />
+						<span class="truncate">지시사항 인지율</span>
+					</div>
+					<span
+						class="badge badge-xs shrink-0 whitespace-nowrap font-bold {!statsLoaded ? 'badge-ghost' : stats.instruction_watchdog?.unconfirmed_count > 0 ? 'badge-warning' : 'badge-success text-white'}"
+					>
+						{!statsLoaded ? '확인 중' : stats.instruction_watchdog?.unconfirmed_count > 0 ? '확인 필요' : '모두 확인'}
+					</span>
 				</div>
-				<span
-					class="badge badge-xs font-bold {!statsLoaded ? 'badge-ghost' : stats.instruction_watchdog?.unconfirmed_count > 0 ? 'badge-warning' : 'badge-success text-white'}"
-				>
-					{!statsLoaded ? '확인 중' : stats.instruction_watchdog?.unconfirmed_count > 0 ? '확인 필요' : '모두 확인'}
-				</span>
-			</div>
-			<div class="flex items-baseline justify-between mt-2">
-				<div class="text-3xl font-black {statsLoaded && stats.instruction_watchdog?.unconfirmed_count > 0 ? 'text-amber-600' : 'text-slate-800'}">
-					{statsLoaded ? (stats.instruction_watchdog?.unconfirmed_count || 0) : '--'}<span class="text-xs text-slate-400 font-normal ml-1">미확인</span>
-				</div>
-				<div class="text-right text-xs text-slate-500 font-medium space-y-0.5">
-					<div>알림 센터: <strong class="text-purple-600">지시사항</strong></div>
-					<div>양방향 피드백: <strong class="text-emerald-600">연동</strong></div>
+				<div class="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-1 mt-2">
+					<div class="min-w-0 text-3xl font-black {statsLoaded && stats.instruction_watchdog?.unconfirmed_count > 0 ? 'text-amber-600' : 'text-slate-800'}">
+						{statsLoaded ? (stats.instruction_watchdog?.unconfirmed_count || 0) : '--'}<span class="text-xs text-slate-400 font-normal ml-1 whitespace-nowrap">미확인</span>
+					</div>
+					<div class="ml-auto text-right text-xs text-slate-500 font-medium space-y-0.5">
+						<div>알림 센터: <strong class="text-purple-600">지시사항</strong></div>
+						<div>양방향 피드백: <strong class="text-emerald-600">연동</strong></div>
+					</div>
 				</div>
 			</div>
 			<div class="mt-3 text-[10px] text-slate-400 border-t pt-2">

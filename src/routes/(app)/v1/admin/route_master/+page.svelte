@@ -464,9 +464,9 @@
 				? 'border-blue-500 bg-blue-50/20 ring-2 ring-blue-500/20'
 				: 'border-slate-100 hover:border-blue-300'}"
 		>
-			<div class="mb-3 flex items-center justify-between">
-				<span class="rounded-lg bg-blue-50 px-2 py-0.5 text-[11px] font-black text-blue-700">1단계 · 노선 정의</span>
-				<div class="flex h-10 w-10 items-center justify-center rounded-2xl bg-blue-50 text-blue-600">
+			<div class="mb-3 flex w-full items-center justify-between gap-2">
+				<span class="min-w-0 truncate rounded-lg bg-blue-50 px-2 py-0.5 text-[11px] font-black text-blue-700">1단계 · 노선 정의</span>
+				<div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-blue-50 text-blue-600">
 					<Icon icon="ph:map-trifold-bold" class="text-2xl" />
 				</div>
 			</div>
@@ -480,13 +480,13 @@
 		<button
 			type="button"
 			onclick={() => (activeTab = 'rosters')}
-			class="group rounded-[1.75rem] border-2 bg-white p-5 text-left shadow-sm transition {activeTab === 'rosters'
+			class="group w-full rounded-[1.75rem] border-2 bg-white p-5 text-left shadow-sm transition {activeTab === 'rosters'
 				? 'border-emerald-500 bg-emerald-50/20 ring-2 ring-emerald-500/20'
 				: 'border-slate-100 hover:border-emerald-300'}"
 		>
-			<div class="mb-3 flex items-center justify-between">
-				<span class="rounded-lg bg-emerald-50 px-2 py-0.5 text-[11px] font-black text-emerald-700">2단계 · 로번 생성</span>
-				<div class="flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600">
+			<div class="mb-3 flex w-full items-center justify-between gap-2">
+				<span class="min-w-0 truncate rounded-lg bg-emerald-50 px-2 py-0.5 text-[11px] font-black text-emerald-700">2단계 · 로번 생성</span>
+				<div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600">
 					<Icon icon="ph:calendar-check-bold" class="text-2xl" />
 				</div>
 			</div>

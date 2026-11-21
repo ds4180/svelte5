@@ -12,9 +12,13 @@
 	 * - 거대한 모달이나 전역 쉬머 배너를 띄우지 않고, 우측 하단에서 3~4초 뒤 자동 소멸합니다.
 	 * - 사내 업무 공지와 시스템 피드백이 시각적으로 명확하게 구분됩니다.
 	 */
+	import { page } from '$app/state';
 	import { toast, type ToastItem } from '$lib/runes/toast.svelte';
 	import { fly } from 'svelte/transition';
 	import Icon from '@iconify/svelte';
+
+	// 카메라 화면에서는 하단/우측 셔터를 가리지 않도록 상단으로 배치
+	const isCameraPage = $derived(page.url.pathname.startsWith('/v1/pages/camera'));
 
 	// 타입별 DaisyUI 클래스 및 아이콘 매핑
 	const TYPE_CONFIG = {
@@ -44,7 +48,9 @@
 <!-- 🍞 화면 우측 하단 기본 토스트 컨테이너 (모바일 퀵메뉴 상단 안착 및 z-index 최상위 보장) -->
 {#if toast.items.length > 0}
 	<aside
-		class="toast toast-end toast-bottom z-[10002] mb-20 mr-2 flex max-w-sm flex-col gap-2 p-0 md:mb-4 md:mr-4"
+		class="toast z-[10002] flex max-w-sm flex-col gap-2 p-0 {isCameraPage
+			? 'toast-top toast-center sm:toast-end mt-[52px] mx-2 sm:mx-0 sm:mr-4'
+			: 'toast-end toast-bottom mb-20 mr-2 md:mb-4 md:mr-4'}"
 		aria-live="polite"
 		aria-label="시스템 알림"
 	>
@@ -52,7 +58,7 @@
 			{@const config = TYPE_CONFIG[item.type] || TYPE_CONFIG.info}
 			<div
 				class="alert {config.alertClass} flex items-center justify-between rounded-2xl border-none px-4 py-3 shadow-xl backdrop-blur-md"
-				transition:fly={{ y: 20, duration: 250 }}
+				transition:fly={{ y: isCameraPage ? -20 : 20, duration: 250 }}
 				role="alert"
 			>
 				<div class="flex items-center gap-3 overflow-hidden">

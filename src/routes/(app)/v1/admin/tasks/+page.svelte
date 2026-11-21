@@ -419,12 +419,12 @@
 	<!-- ===================================================================== -->
 	<!-- 2. 상단 4대 로봇 일꾼 상태 요약 카드 (Status Cards: 1~4개) -->
 	<!-- ===================================================================== -->
-	<div class="grid grid-cols-2 gap-4 md:grid-cols-4 md:gap-5">
+	<div class="grid grid-cols-1 gap-4 sm:grid-cols-2 md:gap-5 xl:grid-cols-4">
 		<!-- 카드 1: 워커 가동 상태 -->
 		<div class="flex flex-col justify-between rounded-[1.75rem] border-2 border-slate-200 bg-white p-5 shadow-sm">
-			<div class="flex items-center justify-between">
-				<span class="text-xs font-black tracking-wider text-slate-400 uppercase">Worker Engine</span>
-				<div class="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-100 text-emerald-600">
+			<div class="flex w-full items-center justify-between gap-2">
+				<span class="min-w-0 truncate text-xs font-black tracking-wider text-slate-400 uppercase">Worker Engine</span>
+				<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-emerald-600">
 					<Icon icon="solar:robot-2-bold-duotone" class="text-xl" />
 				</div>
 			</div>
@@ -433,7 +433,7 @@
 					1대 가동 중
 				</div>
 				<div class="mt-1 flex items-center gap-1.5 text-xs font-semibold text-emerald-600">
-					<span class="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
+					<span class="h-2 w-2 shrink-0 rounded-full bg-emerald-500 animate-pulse"></span>
 					24시간 자율 가동 (정상)
 				</div>
 			</div>
@@ -442,11 +442,11 @@
 		<!-- 카드 2: 밀린 할 일 (대기중) -->
 		<button
 			onclick={() => { activeTab = 'monitor'; selectedStatus = 'PENDING'; loadAllData(); }}
-			class="group flex flex-col justify-between rounded-2xl border-2 p-5 text-left transition {activeTab === 'monitor' && selectedStatus === 'PENDING' ? 'border-amber-500 bg-amber-50/50 shadow-md ring-2 ring-amber-500/20' : 'border-slate-200 bg-white hover:border-slate-300'}"
+			class="group flex w-full flex-col justify-between rounded-2xl border-2 p-5 text-left transition {activeTab === 'monitor' && selectedStatus === 'PENDING' ? 'border-amber-500 bg-amber-50/50 shadow-md ring-2 ring-amber-500/20' : 'border-slate-200 bg-white hover:border-slate-300'}"
 		>
-			<div class="flex items-center justify-between">
-				<span class="text-xs font-black tracking-wider text-slate-400 uppercase">Pending Queue</span>
-				<div class="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-100 text-amber-600">
+			<div class="flex w-full items-center justify-between gap-2">
+				<span class="min-w-0 truncate text-xs font-black tracking-wider text-slate-400 uppercase">Pending Queue</span>
+				<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-600">
 					<Icon icon="solar:clock-circle-bold-duotone" class="text-xl" />
 				</div>
 			</div>
@@ -464,11 +464,11 @@
 		<!-- 카드 3: 매일 정기 작업 (Cron) -->
 		<button
 			onclick={() => { activeTab = 'schedule'; selectedStatus = ''; loadAllData(); }}
-			class="group flex flex-col justify-between rounded-2xl border-2 p-5 text-left transition {activeTab === 'schedule' ? 'border-blue-600 bg-blue-50/50 shadow-md ring-2 ring-blue-500/20' : 'border-slate-200 bg-white hover:border-slate-300'}"
+			class="group flex w-full flex-col justify-between rounded-2xl border-2 p-5 text-left transition {activeTab === 'schedule' ? 'border-blue-600 bg-blue-50/50 shadow-md ring-2 ring-blue-500/20' : 'border-slate-200 bg-white hover:border-slate-300'}"
 		>
-			<div class="flex items-center justify-between">
-				<span class="text-xs font-black tracking-wider text-slate-400 uppercase">Scheduled Cron</span>
-				<div class="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-100 text-blue-600">
+			<div class="flex w-full items-center justify-between gap-2">
+				<span class="min-w-0 truncate text-xs font-black tracking-wider text-slate-400 uppercase">Scheduled Cron</span>
+				<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-100 text-blue-600">
 					<Icon icon="solar:calendar-date-bold-duotone" class="text-xl" />
 				</div>
 			</div>
@@ -486,11 +486,11 @@
 		<!-- 카드 4: 실패한 작업 (오류) -->
 		<button
 			onclick={() => { activeTab = 'monitor'; selectedStatus = 'FAILED'; loadAllData(); }}
-			class="group flex flex-col justify-between rounded-2xl border-2 p-5 text-left transition {summary.failed_count > 0 ? 'border-rose-500 bg-rose-50/50 shadow-md ring-2 ring-rose-500/20' : 'border-slate-200 bg-white hover:border-slate-300'}"
+			class="group flex w-full flex-col justify-between rounded-2xl border-2 p-5 text-left transition {summary.failed_count > 0 ? 'border-rose-500 bg-rose-50/50 shadow-md ring-2 ring-rose-500/20' : 'border-slate-200 bg-white hover:border-slate-300'}"
 		>
-			<div class="flex items-center justify-between">
-				<span class="text-xs font-black tracking-wider text-slate-400 uppercase">Failed Tasks</span>
-				<div class="flex h-9 w-9 items-center justify-center rounded-xl bg-rose-100 text-rose-600">
+			<div class="flex w-full items-center justify-between gap-2">
+				<span class="min-w-0 truncate text-xs font-black tracking-wider text-slate-400 uppercase">Failed Tasks</span>
+				<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-rose-100 text-rose-600">
 					<Icon icon="solar:danger-triangle-bold-duotone" class="text-xl" />
 				</div>
 			</div>

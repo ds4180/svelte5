@@ -650,8 +650,8 @@
                       {isMobile ? 'absolute top-0 bottom-0 left-0 h-full' : ''} 
                       {isLeftOpen ? 'w-72 border-r-4 border-slate-900' : 'w-0 border-r-0'}"
 		>
-			<div class="custom-scrollbar-dark flex h-full w-72 flex-col overflow-y-auto px-4 pt-6 pb-32">
-				<div class="mb-6 rounded-2xl border border-slate-800 bg-slate-800/50 p-4">
+			<div class="custom-scrollbar-dark flex h-full w-72 flex-col overflow-y-auto px-3.5 pt-4 pb-32">
+				<div class="mb-4 rounded-2xl border border-slate-800 bg-slate-800/50 p-3.5">
 					<span
 						class="block text-[10px] leading-none font-black tracking-widest text-blue-400 uppercase"
 						>Console System</span
@@ -661,24 +661,24 @@
 					</h2>
 				</div>
 
-				<nav class="mb-20 flex flex-col gap-1.5">
+				<nav class="mb-20 flex flex-col gap-0.5">
 					{#if data.menus}
 						{#each data.menus as m, i (m.id || i)}
 							{#if m.sub_menus && m.sub_menus.length > 0}
 								{@const menuKey = m.id ?? i}
-								<div class="group mb-1 flex flex-col">
+								<div class="group flex flex-col">
 									<button
 										type="button"
-										class="flex w-full items-center justify-between rounded-2xl px-4 py-3 text-sm font-black tracking-tight text-slate-200 transition-all hover:bg-slate-800 hover:text-white"
+										class="flex w-full items-center justify-between rounded-xl px-3 py-2 text-sm font-black tracking-tight text-slate-200 transition-all hover:bg-slate-800 hover:text-white"
 										onclick={() => toggleMenu(menuKey)}
 									>
-										<span class="flex items-center gap-3.5">
-											<span class="flex h-8 w-8 items-center justify-center rounded-xl bg-slate-800 transition-colors {(openMenus[menuKey] ?? true) ? 'text-blue-400 bg-blue-500/10' : 'text-slate-500'}">
+										<span class="flex items-center gap-3">
+											<span class="flex h-7 w-7 items-center justify-center rounded-lg bg-slate-800 transition-colors {(openMenus[menuKey] ?? true) ? 'text-blue-400 bg-blue-500/10' : 'text-slate-500'}">
 												<SmartIcon
 													icon={m.icon_name}
 													fallback="ph:folder-fill"
-													class="h-4.5 w-4.5"
-													emojiClass="text-base leading-none"
+													class="h-4 w-4"
+													emojiClass="text-sm leading-none"
 												/>
 											</span>
 											<span>{m.title}</span>
@@ -691,14 +691,14 @@
 										/>
 									</button>
 									{#if (openMenus[menuKey] ?? true)}
-										<div class="mt-1 ml-4 flex flex-col gap-1 border-l-2 border-slate-800 pl-3 transition-all">
+										<div class="mt-0.5 ml-4 flex flex-col gap-0.5 border-l-2 border-slate-800 pl-2.5 transition-all">
 											{#each m.sub_menus as sub, si (sub.id || si)}
 												<a
 													href={sub.external_url}
 													onclick={() => {
 														if (sub.external_url?.includes('/v1/pages/camera')) enterCameraFullscreen();
 													}}
-													class="flex items-center gap-2.5 rounded-xl px-3.5 py-2.5 text-xs font-bold tracking-tight transition-all
+													class="flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-bold tracking-tight transition-all
                                                          {isActive(sub.external_url)
 														? 'bg-blue-600 text-white font-black shadow-md shadow-blue-900/20'
 														: 'text-slate-400 hover:bg-slate-800/80 hover:text-white'}"
@@ -725,17 +725,17 @@
 									onclick={() => {
 										if (m.external_url?.includes('/v1/pages/camera')) enterCameraFullscreen();
 									}}
-									class="mb-1 flex items-center gap-3.5 rounded-2xl px-4 py-3 text-sm font-black tracking-tight transition-all
+									class="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-black tracking-tight transition-all
                                            {isActive(m.external_url)
 										? 'bg-blue-600 text-white shadow-md shadow-blue-900/20'
 										: 'text-slate-300 hover:bg-slate-800 hover:text-white'}"
 								>
-									<div class="flex h-8 w-8 items-center justify-center rounded-xl {isActive(m.external_url) ? 'bg-blue-500 text-white' : 'bg-slate-800 text-slate-400'}">
+									<div class="flex h-7 w-7 items-center justify-center rounded-lg {isActive(m.external_url) ? 'bg-blue-500 text-white' : 'bg-slate-800 text-slate-400'}">
 										<SmartIcon
 											icon={m.icon_name}
 											fallback="ph:rocket-fill"
-											class="h-4.5 w-4.5"
-											emojiClass="text-base leading-none"
+											class="h-4 w-4"
+											emojiClass="text-sm leading-none"
 										/>
 									</div>
 									<span>{m.title}</span>

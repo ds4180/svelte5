@@ -136,10 +136,10 @@
 				msg.type === 'BIOMETRIC_COOP_REQUEST' &&
 				typeof navigator !== 'undefined' &&
 				/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) &&
-				window.location.pathname !== '/v1/pages/device-test'
+				window.location.pathname !== '/v1/pages/biometric'
 			) {
 				toast.info('📲 데스크톱에서 중요 문서 지문 승인을 요청했습니다! 승인 화면으로 이동합니다.');
-				goto('/v1/pages/device-test');
+				goto('/v1/pages/biometric');
 			}
 		});
 

@@ -281,9 +281,9 @@
 	<section class="grid grid-cols-1 sm:grid-cols-3 gap-4 md:gap-5">
 		<!-- 카드 1: 전체 페이지 -->
 		<div class="relative overflow-hidden rounded-[1.75rem] border-2 border-slate-100 bg-white p-5 shadow-sm hover:border-blue-300 transition group">
-			<div class="flex items-center justify-between mb-3">
-				<span class="text-xs font-black tracking-widest uppercase text-slate-400 group-hover:text-blue-600">Total Pages</span>
-				<div class="flex h-10 w-10 items-center justify-center rounded-2xl bg-blue-50 text-blue-600">
+			<div class="flex w-full items-center justify-between gap-2 mb-3">
+				<span class="min-w-0 truncate text-xs font-black tracking-widest uppercase text-slate-400 group-hover:text-blue-600">Total Pages</span>
+				<div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-blue-50 text-blue-600">
 					<Icon icon="ph:files-bold" class="text-2xl" />
 				</div>
 			</div>
@@ -298,9 +298,9 @@
 
 		<!-- 카드 2: 게시 중 -->
 		<div class="relative overflow-hidden rounded-[1.75rem] border-2 border-slate-100 bg-white p-5 shadow-sm hover:border-emerald-300 transition group">
-			<div class="flex items-center justify-between mb-3">
-				<span class="text-xs font-black tracking-widest uppercase text-slate-400 group-hover:text-emerald-600">Published Live</span>
-				<div class="flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600">
+			<div class="flex w-full items-center justify-between gap-2 mb-3">
+				<span class="min-w-0 truncate text-xs font-black tracking-widest uppercase text-slate-400 group-hover:text-emerald-600">Published Live</span>
+				<div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600">
 					<Icon icon="ph:check-circle-bold" class="text-2xl" />
 				</div>
 			</div>
@@ -315,9 +315,9 @@
 
 		<!-- 카드 3: 임시 저장 -->
 		<div class="relative overflow-hidden rounded-[1.75rem] border-2 border-slate-100 bg-white p-5 shadow-sm hover:border-amber-300 transition group">
-			<div class="flex items-center justify-between mb-3">
-				<span class="text-xs font-black tracking-widest uppercase text-slate-400 group-hover:text-amber-600">Drafts</span>
-				<div class="flex h-10 w-10 items-center justify-center rounded-2xl bg-amber-50 text-amber-600">
+			<div class="flex w-full items-center justify-between gap-2 mb-3">
+				<span class="min-w-0 truncate text-xs font-black tracking-widest uppercase text-slate-400 group-hover:text-amber-600">Drafts</span>
+				<div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-amber-50 text-amber-600">
 					<Icon icon="ph:note-pencil-bold" class="text-2xl" />
 				</div>
 			</div>

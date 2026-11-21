@@ -5,6 +5,7 @@
 	 */
 	import { onMount, untrack } from 'svelte';
 	import { formatDateTime } from '$lib/utils';
+	import { fastApi } from '$lib/api';
 	import { customGetMyDispatchBriefing } from '$lib/api/custom';
 	import { miniappStore } from '$lib/runes/miniapps.svelte';
 	import Chart from '$lib/components/Chart.svelte';
@@ -29,6 +30,41 @@
 	$effect(() => {
 		if (data?.initialMiniappSummary) {
 			untrack(() => miniappStore.hydrateSummary(data.initialMiniappSummary));
+		}
+	});
+
+	let dispatchWorkRates = $state(/** @type {any[] | null} */ (null));
+	let dispatchWorkRatesLoading = $state(false);
+	let dispatchWorkRatesError = $state(false);
+
+	$effect(() => {
+		if (Array.isArray(data?.initialDispatchWorkRates)) {
+			dispatchWorkRates = data.initialDispatchWorkRates;
+			dispatchWorkRatesError = false;
+		}
+	});
+
+	async function loadDispatchWorkRates() {
+		if (dispatchWorkRatesLoading) return;
+		dispatchWorkRatesLoading = true;
+		dispatchWorkRatesError = false;
+		try {
+			const res = await fastApi('GET', '/api/v1/admin/dispatch/work-rates?days=10', {}, { offline: false });
+			if (Array.isArray(res)) {
+				dispatchWorkRates = res;
+			} else {
+				dispatchWorkRatesError = true;
+			}
+		} catch {
+			dispatchWorkRatesError = true;
+		} finally {
+			dispatchWorkRatesLoading = false;
+		}
+	}
+
+	$effect(() => {
+		if (rankLevel >= 8 && dispatchWorkRates === null && !dispatchWorkRatesLoading && !dispatchWorkRatesError) {
+			untrack(() => loadDispatchWorkRates());
 		}
 	});
 
@@ -128,35 +164,59 @@
 		}
 	};
 
-	let trendChartData = $derived.by(() => ({
-		labels: ['6일전', '5일전', '4일전', '3일전', '2일전', '어제', '오늘'],
-		datasets: [
-			{
-				label: '접수',
-				data: [5, 8, 6, 9, 7, 11, Math.max(kanbanData.total, 4)],
-				backgroundColor: '#94a3b8',
-				borderRadius: 6
-			},
-			{
-				label: '완료',
-				data: [5, 7, 6, 8, 7, 10, kanbanData.completed.length],
-				backgroundColor: '#2563eb',
-				borderRadius: 6
-			}
-		]
-	}));
+	let dispatchWorkRateChartData = $derived.by(() => {
+		const items = Array.isArray(dispatchWorkRates) ? dispatchWorkRates : [];
+		return {
+			labels: items.map((d) => d.label),
+			datasets: [
+				{
+					label: '배차 작업률 (%)',
+					data: items.map((d) => Number(d.rate ?? 0)),
+					backgroundColor: items.map((d) => {
+						const r = Number(d.rate ?? 0);
+						if (r >= 90) return '#10b981';
+						if (r >= 50) return '#2563eb';
+						if (r > 0) return '#f59e0b';
+						return '#cbd5e1';
+					}),
+					borderRadius: 6
+				}
+			]
+		};
+	});
 
-	const trendChartOptions = {
-		responsive: true,
-		maintainAspectRatio: false,
-		plugins: {
-			legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 11, weight: 'bold' } } }
-		},
-		scales: {
-			y: { beginAtZero: true, ticks: { precision: 0, font: { size: 10 } } },
-			x: { ticks: { font: { size: 10 } }, grid: { display: false } }
-		}
-	};
+	let dispatchWorkRateChartOptions = $derived.by(() => {
+		const items = Array.isArray(dispatchWorkRates) ? dispatchWorkRates : [];
+		return {
+			responsive: true,
+			maintainAspectRatio: false,
+			plugins: {
+				legend: { display: false },
+				tooltip: {
+					callbacks: {
+						label: (/** @type {any} */ ctx) => {
+							const item = items[ctx.dataIndex];
+							if (!item) return `${ctx.parsed.y}%`;
+							return ` ${item.rate}% (${item.assigned}/${item.total}대) · ${item.date}`;
+						}
+					}
+				}
+			},
+			scales: {
+				y: {
+					beginAtZero: true,
+					min: 0,
+					max: 100,
+					ticks: {
+						stepSize: 25,
+						font: { size: 10 },
+						callback: (/** @type {any} */ v) => `${v}%`
+					}
+				},
+				x: { ticks: { font: { size: 10, weight: 'bold' } }, grid: { display: false } }
+			}
+		};
+	});
 
 	let categoryChartData = $derived.by(() => ({
 		labels: ['비디오 확인', '만차 신고', '습득물', '지시·메시지'],
@@ -668,20 +728,39 @@
 				</div>
 			</div>
 
-			<!-- 그래프 2: 최근 7일 접수 vs 처리 추이 -->
+			<!-- 그래프 2: 향후 10일(D+1 ~ D+10) 배차 작업률 -->
 			<div class="rounded-2xl border-2 border-slate-200 bg-white p-4 shadow-xs">
 				<div class="mb-2 flex items-center justify-between">
-					<h2 class="text-sm font-black text-slate-900">최근 7일 접수 · 완료 추이</h2>
-					<span class="text-[11px] font-bold text-slate-400">일별 현황</span>
+					<h2 class="text-sm font-black text-slate-900">배차 작업률</h2>
+					<span class="rounded-full bg-blue-50 px-2.5 py-0.5 text-[11px] font-black text-blue-700">
+						D+1 ~ D+10{dispatchWorkRates?.[0]?.is_mock ? ' (예시)' : ''}
+					</span>
 				</div>
 				<div class="h-48">
-					<Chart
-						type="bar"
-						data={trendChartData}
-						options={trendChartOptions}
-						containerClass="relative h-48 w-full"
-						ariaLabel="최근 7일 접수 완료 추이"
-					/>
+					{#if Array.isArray(dispatchWorkRates) && dispatchWorkRates.length > 0}
+						<Chart
+							type="bar"
+							data={dispatchWorkRateChartData}
+							options={dispatchWorkRateChartOptions}
+							containerClass="relative h-48 w-full"
+							ariaLabel="D+1부터 D+10일까지 배차 작업률"
+						/>
+					{:else if dispatchWorkRatesError}
+						<div class="flex h-full flex-col items-center justify-center gap-2 text-center">
+							<span class="text-xs font-bold text-rose-600">배차 작업률을 불러오지 못했습니다.</span>
+							<button
+								type="button"
+								onclick={loadDispatchWorkRates}
+								class="rounded-lg bg-slate-100 px-3 py-1 text-xs font-bold text-slate-700 hover:bg-slate-200"
+							>
+								다시 시도
+							</button>
+						</div>
+					{:else}
+						<div class="flex h-full items-center justify-center text-xs font-bold text-slate-400">
+							배차 작업률 집계 중...
+						</div>
+					{/if}
 				</div>
 			</div>
 

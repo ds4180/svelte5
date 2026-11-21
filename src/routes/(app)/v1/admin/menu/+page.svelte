@@ -292,12 +292,12 @@
 	<!-- ===================================================================== -->
 	<!-- 2. 알림/요약 지표 카드 (최대 4개, 최소 1개 규격) -->
 	<!-- ===================================================================== -->
-	<section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-5">
+	<section class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 md:gap-5">
 		<!-- 카드 1: 전체 메뉴 항목 수 -->
 		<div class="relative overflow-hidden rounded-[1.75rem] border-2 border-slate-100 bg-white p-5 shadow-sm hover:border-blue-300 transition group">
-			<div class="flex items-center justify-between mb-3">
-				<span class="text-xs font-black tracking-widest uppercase text-slate-400 group-hover:text-blue-600">Total Items</span>
-				<div class="flex h-10 w-10 items-center justify-center rounded-2xl bg-blue-50 text-blue-600">
+			<div class="flex w-full items-center justify-between gap-2 mb-3">
+				<span class="min-w-0 truncate text-xs font-black tracking-widest uppercase text-slate-400 group-hover:text-blue-600">Total Items</span>
+				<div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-blue-50 text-blue-600">
 					<Icon icon="ph:list-numbers-bold" class="text-2xl" />
 				</div>
 			</div>
@@ -312,9 +312,9 @@
 
 		<!-- 카드 2: 최상위 폴더 그룹 -->
 		<div class="relative overflow-hidden rounded-[1.75rem] border-2 border-slate-100 bg-white p-5 shadow-sm hover:border-amber-300 transition group">
-			<div class="flex items-center justify-between mb-3">
-				<span class="text-xs font-black tracking-widest uppercase text-slate-400 group-hover:text-amber-600">Root Folders</span>
-				<div class="flex h-10 w-10 items-center justify-center rounded-2xl bg-amber-50 text-amber-600">
+			<div class="flex w-full items-center justify-between gap-2 mb-3">
+				<span class="min-w-0 truncate text-xs font-black tracking-widest uppercase text-slate-400 group-hover:text-amber-600">Root Folders</span>
+				<div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-amber-50 text-amber-600">
 					<Icon icon="ph:folder-notch-open-bold" class="text-2xl" />
 				</div>
 			</div>
@@ -329,9 +329,9 @@
 
 		<!-- 카드 3: 하위 서브메뉴 -->
 		<div class="relative overflow-hidden rounded-[1.75rem] border-2 border-slate-100 bg-white p-5 shadow-sm hover:border-emerald-300 transition group">
-			<div class="flex items-center justify-between mb-3">
-				<span class="text-xs font-black tracking-widest uppercase text-slate-400 group-hover:text-emerald-600">Sub Menus</span>
-				<div class="flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600">
+			<div class="flex w-full items-center justify-between gap-2 mb-3">
+				<span class="min-w-0 truncate text-xs font-black tracking-widest uppercase text-slate-400 group-hover:text-emerald-600">Sub Menus</span>
+				<div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600">
 					<Icon icon="ph:git-fork-bold" class="text-2xl" />
 				</div>
 			</div>
@@ -346,9 +346,9 @@
 
 		<!-- 카드 4: 앱 엔진 직결 링크 -->
 		<div class="relative overflow-hidden rounded-[1.75rem] border-2 border-slate-100 bg-white p-5 shadow-sm hover:border-purple-300 transition group">
-			<div class="flex items-center justify-between mb-3">
-				<span class="text-xs font-black tracking-widest uppercase text-slate-400 group-hover:text-purple-600">App Bindings</span>
-				<div class="flex h-10 w-10 items-center justify-center rounded-2xl bg-purple-50 text-purple-600">
+			<div class="flex w-full items-center justify-between gap-2 mb-3">
+				<span class="min-w-0 truncate text-xs font-black tracking-widest uppercase text-slate-400 group-hover:text-purple-600">App Bindings</span>
+				<div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-purple-50 text-purple-600">
 					<Icon icon="ph:link-bold" class="text-2xl" />
 				</div>
 			</div>

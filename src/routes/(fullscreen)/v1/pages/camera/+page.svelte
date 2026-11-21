@@ -989,10 +989,10 @@
 	<!-- [3] 셔터 컨트롤러 (플로팅 아일랜드: 우측/하단 여백 넉넉히 확보) -->
 	<!-- ----------------------------------------------------------------- -->
 	<footer
-		class="absolute z-30 flex items-center justify-between bg-black/85 backdrop-blur-md border border-white/20 shadow-2xl transition-all
+		class="absolute z-30 flex items-center bg-black/85 backdrop-blur-md border border-white/20 shadow-2xl transition-all
 			{isLandscape 
-				? 'right-6 top-4 bottom-4 w-24 flex-col py-5 px-2 rounded-3xl' 
-				: 'bottom-7 sm:bottom-9 left-4 right-4 h-26 flex-col px-5 pb-3 pt-2 rounded-3xl'}"
+				? 'right-6 top-4 bottom-4 w-24 flex-col justify-between py-5 px-2 rounded-3xl' 
+				: 'bottom-3 sm:bottom-4 left-4 right-4 min-h-32 h-auto flex-col justify-center gap-2 px-5 pt-2.5 pb-4 rounded-3xl'}"
 	>
 		<!-- 렌즈 퀵 스위처 버튼들 -->
 		<div class="flex items-center justify-center gap-2 {isLandscape ? 'flex-col' : 'flex-row mb-1.5'}">
@@ -1040,7 +1040,7 @@
 			<button
 				onclick={requestCapture}
 				disabled={!isCameraOn || isCountingDown}
-				class="group relative flex h-18 w-18 items-center justify-center rounded-full border-4 border-white/90 p-1 shadow-[0_0_25px_rgba(255,255,255,0.4)] transition active:scale-90 disabled:opacity-50"
+				class="group relative flex h-16 w-16 items-center justify-center rounded-full border-4 border-white/90 p-1 shadow-[0_0_25px_rgba(255,255,255,0.4)] transition active:scale-90 disabled:opacity-50"
 				title="사진 촬영"
 			>
 				<div class="h-full w-full rounded-full bg-white transition group-hover:scale-95 group-active:bg-rose-500"></div>

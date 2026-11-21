@@ -376,15 +376,15 @@
 	<!-- ===================================================================== -->
 	<!-- 2. 상단 4대 핵심 지표 요약 카드 (Summary Cards) -->
 	<!-- ===================================================================== -->
-	<div class="grid grid-cols-2 gap-4 md:grid-cols-4 md:gap-5">
+	<div class="grid grid-cols-1 gap-4 sm:grid-cols-2 md:gap-5 xl:grid-cols-4">
 		<!-- 카드 1: 실시간 활성 세션 -->
 		<button
 			onclick={() => switchTab('SESSIONS')}
-			class="group flex flex-col justify-between rounded-2xl border-2 p-5 text-left transition duration-200 {currentTab === 'SESSIONS' ? 'border-emerald-600 bg-emerald-50/50 shadow-md ring-2 ring-emerald-500/30' : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-sm'}"
+			class="group flex w-full flex-col justify-between rounded-2xl border-2 p-5 text-left transition duration-200 {currentTab === 'SESSIONS' ? 'border-emerald-600 bg-emerald-50/50 shadow-md ring-2 ring-emerald-500/30' : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-sm'}"
 		>
-			<div class="flex items-center justify-between">
-				<span class="text-xs font-black tracking-wider text-slate-400 uppercase">Live Sessions</span>
-				<div class="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-100 text-emerald-600">
+			<div class="flex w-full items-center justify-between gap-2">
+				<span class="min-w-0 truncate text-xs font-black tracking-wider text-slate-400 uppercase">Live Sessions</span>
+				<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-emerald-600">
 					<Icon icon="solar:users-group-rounded-bold-duotone" class="text-xl" />
 				</div>
 			</div>
@@ -394,7 +394,7 @@
 					<span class="text-xs font-bold text-slate-500 font-normal">명 접속 중</span>
 				</div>
 				<div class="mt-1 flex items-center gap-1.5 text-xs font-semibold text-emerald-600">
-					<span class="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
+					<span class="h-2 w-2 shrink-0 rounded-full bg-emerald-500 animate-pulse"></span>
 					Redis 자기치유 활성
 				</div>
 			</div>
@@ -403,11 +403,11 @@
 		<!-- 카드 2: 오늘 접근/인증 -->
 		<button
 			onclick={() => switchTab('ACCESS')}
-			class="group flex flex-col justify-between rounded-2xl border-2 p-5 text-left transition duration-200 {currentTab === 'ACCESS' ? 'border-blue-600 bg-blue-50/50 shadow-md ring-2 ring-blue-500/30' : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-sm'}"
+			class="group flex w-full flex-col justify-between rounded-2xl border-2 p-5 text-left transition duration-200 {currentTab === 'ACCESS' ? 'border-blue-600 bg-blue-50/50 shadow-md ring-2 ring-blue-500/30' : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-sm'}"
 		>
-			<div class="flex items-center justify-between">
-				<span class="text-xs font-black tracking-wider text-slate-400 uppercase">Today Access</span>
-				<div class="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-100 text-blue-600">
+			<div class="flex w-full items-center justify-between gap-2">
+				<span class="min-w-0 truncate text-xs font-black tracking-wider text-slate-400 uppercase">Today Access</span>
+				<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-100 text-blue-600">
 					<Icon icon="solar:shield-keyhole-bold-duotone" class="text-xl" />
 				</div>
 			</div>
@@ -425,11 +425,11 @@
 		<!-- 카드 3: 데이터 변경 (Diff) -->
 		<button
 			onclick={() => switchTab('CHANGE')}
-			class="group flex flex-col justify-between rounded-2xl border-2 p-5 text-left transition duration-200 {currentTab === 'CHANGE' ? 'border-amber-600 bg-amber-50/50 shadow-md ring-2 ring-amber-500/30' : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-sm'}"
+			class="group flex w-full flex-col justify-between rounded-2xl border-2 p-5 text-left transition duration-200 {currentTab === 'CHANGE' ? 'border-amber-600 bg-amber-50/50 shadow-md ring-2 ring-amber-500/30' : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-sm'}"
 		>
-			<div class="flex items-center justify-between">
-				<span class="text-xs font-black tracking-wider text-slate-400 uppercase">Today Changes</span>
-				<div class="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-100 text-amber-600">
+			<div class="flex w-full items-center justify-between gap-2">
+				<span class="min-w-0 truncate text-xs font-black tracking-wider text-slate-400 uppercase">Today Changes</span>
+				<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-600">
 					<Icon icon="solar:document-add-bold-duotone" class="text-xl" />
 				</div>
 			</div>
@@ -447,11 +447,11 @@
 		<!-- 카드 4: 장애 및 보안 경보 -->
 		<button
 			onclick={() => switchTab(summary.today_security_count > 0 ? 'SECURITY' : 'ERROR')}
-			class="group flex flex-col justify-between rounded-2xl border-2 p-5 text-left transition duration-200 {currentTab === 'ERROR' || currentTab === 'SECURITY' ? 'border-rose-600 bg-rose-50/50 shadow-md ring-2 ring-rose-500/30' : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-sm'}"
+			class="group flex w-full flex-col justify-between rounded-2xl border-2 p-5 text-left transition duration-200 {currentTab === 'ERROR' || currentTab === 'SECURITY' ? 'border-rose-600 bg-rose-50/50 shadow-md ring-2 ring-rose-500/30' : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-sm'}"
 		>
-			<div class="flex items-center justify-between">
-				<span class="text-xs font-black tracking-wider text-slate-400 uppercase">Errors & Alerts</span>
-				<div class="flex h-9 w-9 items-center justify-center rounded-xl bg-rose-100 text-rose-600">
+			<div class="flex w-full items-center justify-between gap-2">
+				<span class="min-w-0 truncate text-xs font-black tracking-wider text-slate-400 uppercase">Errors & Alerts</span>
+				<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-rose-100 text-rose-600">
 					<Icon icon="solar:danger-triangle-bold-duotone" class="text-xl" />
 				</div>
 			</div>

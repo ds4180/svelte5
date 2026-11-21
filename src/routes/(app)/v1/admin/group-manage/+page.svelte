@@ -248,14 +248,14 @@
   </header>
 
   <!-- 📊 2. 알림/요약 지표 카드 4종 -->
-  <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-5">
+  <section class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 md:gap-5">
     <button
       onclick={() => (activeMainTab = 'group')}
-      class="text-left relative overflow-hidden rounded-[1.75rem] border-2 bg-white p-5 shadow-sm transition group {activeMainTab === 'group' ? 'border-cyan-500 bg-cyan-50/20 ring-2 ring-cyan-500/20' : 'border-slate-100 hover:border-cyan-300'}"
+      class="w-full text-left relative overflow-hidden rounded-[1.75rem] border-2 bg-white p-5 shadow-sm transition group {activeMainTab === 'group' ? 'border-cyan-500 bg-cyan-50/20 ring-2 ring-cyan-500/20' : 'border-slate-100 hover:border-cyan-300'}"
     >
-      <div class="flex items-center justify-between mb-3">
-        <span class="text-xs font-black uppercase tracking-wider text-slate-400 group-hover:text-cyan-600">Primary Groups</span>
-        <div class="flex h-10 w-10 items-center justify-center rounded-2xl bg-cyan-50 text-cyan-600 group-hover:scale-110 transition-transform">
+      <div class="flex w-full items-center justify-between gap-2 mb-3">
+        <span class="min-w-0 truncate text-xs font-black uppercase tracking-wider text-slate-400 group-hover:text-cyan-600">Primary Groups</span>
+        <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-cyan-50 text-cyan-600 group-hover:scale-110 transition-transform">
           <Icon icon="ph:folder-user-bold" class="text-2xl" />
         </div>
       </div>
@@ -267,11 +267,11 @@
 
     <button
       onclick={() => (activeMainTab = 'group')}
-      class="text-left relative overflow-hidden rounded-[1.75rem] border-2 bg-white p-5 shadow-sm transition group border-slate-100 hover:border-purple-300"
+      class="w-full text-left relative overflow-hidden rounded-[1.75rem] border-2 bg-white p-5 shadow-sm transition group border-slate-100 hover:border-purple-300"
     >
-      <div class="flex items-center justify-between mb-3">
-        <span class="text-xs font-black uppercase tracking-wider text-purple-600">Secondary Groups</span>
-        <div class="flex h-10 w-10 items-center justify-center rounded-2xl bg-purple-50 text-purple-600 group-hover:scale-110 transition-transform">
+      <div class="flex w-full items-center justify-between gap-2 mb-3">
+        <span class="min-w-0 truncate text-xs font-black uppercase tracking-wider text-purple-600">Secondary Groups</span>
+        <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-purple-50 text-purple-600 group-hover:scale-110 transition-transform">
           <Icon icon="ph:folders-bold" class="text-2xl" />
         </div>
       </div>
@@ -283,11 +283,11 @@
 
     <button
       onclick={() => (activeMainTab = 'user')}
-      class="text-left relative overflow-hidden rounded-[1.75rem] border-2 bg-white p-5 shadow-sm transition group {activeMainTab === 'user' ? 'border-emerald-500 bg-emerald-50/20 ring-2 ring-emerald-500/20' : 'border-slate-100 hover:border-emerald-300'}"
+      class="w-full text-left relative overflow-hidden rounded-[1.75rem] border-2 bg-white p-5 shadow-sm transition group {activeMainTab === 'user' ? 'border-emerald-500 bg-emerald-50/20 ring-2 ring-emerald-500/20' : 'border-slate-100 hover:border-emerald-300'}"
     >
-      <div class="flex items-center justify-between mb-3">
-        <span class="text-xs font-black uppercase tracking-wider text-emerald-600">User Mappings</span>
-        <div class="flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600 group-hover:scale-110 transition-transform">
+      <div class="flex w-full items-center justify-between gap-2 mb-3">
+        <span class="min-w-0 truncate text-xs font-black uppercase tracking-wider text-emerald-600">User Mappings</span>
+        <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600 group-hover:scale-110 transition-transform">
           <Icon icon="ph:users-bold" class="text-2xl" />
         </div>
       </div>
@@ -299,11 +299,11 @@
 
     <button
       onclick={() => (activeMainTab = 'instance')}
-      class="text-left relative overflow-hidden rounded-[1.75rem] border-2 bg-white p-5 shadow-sm transition group {activeMainTab === 'instance' ? 'border-indigo-500 bg-indigo-50/20 ring-2 ring-indigo-500/20' : 'border-slate-100 hover:border-indigo-300'}"
+      class="w-full text-left relative overflow-hidden rounded-[1.75rem] border-2 bg-white p-5 shadow-sm transition group {activeMainTab === 'instance' ? 'border-indigo-500 bg-indigo-50/20 ring-2 ring-indigo-500/20' : 'border-slate-100 hover:border-indigo-300'}"
     >
-      <div class="flex items-center justify-between mb-3">
-        <span class="text-xs font-black uppercase tracking-wider text-indigo-600">Controlled Apps</span>
-        <div class="flex h-10 w-10 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600 group-hover:scale-110 transition-transform">
+      <div class="flex w-full items-center justify-between gap-2 mb-3">
+        <span class="min-w-0 truncate text-xs font-black uppercase tracking-wider text-indigo-600">Controlled Apps</span>
+        <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600 group-hover:scale-110 transition-transform">
           <Icon icon="ph:shield-lock-bold" class="text-2xl" />
         </div>
       </div>

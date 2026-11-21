@@ -470,15 +470,15 @@
 	<!-- ===================================================================== -->
 	<!-- 2. 4단계 조립 파이프라인 요약 카드 (1단계 분류 → 2단계 엔진 → 3단계 설정 모듈 → 4단계 조립 번들) -->
 	<!-- ===================================================================== -->
-	<section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-5">
+	<section class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 md:gap-5">
 		<!-- 1단계: 서비스 분류 (레지스트리) -->
 		<button
 			onclick={() => (activeTab = 'registries')}
-			class="text-left relative overflow-hidden rounded-[1.75rem] border-2 bg-white p-5 shadow-sm transition group {activeTab === 'registries' ? 'border-amber-500 bg-amber-50/20 ring-2 ring-amber-500/20' : 'border-slate-100 hover:border-amber-300'}"
+			class="w-full text-left relative overflow-hidden rounded-[1.75rem] border-2 bg-white p-5 shadow-sm transition group {activeTab === 'registries' ? 'border-amber-500 bg-amber-50/20 ring-2 ring-amber-500/20' : 'border-slate-100 hover:border-amber-300'}"
 		>
-			<div class="flex items-center justify-between mb-3">
-				<span class="text-[11px] font-black tracking-wide text-amber-700 bg-amber-50 px-2 py-0.5 rounded-lg">1단계 · 서비스 분류</span>
-				<div class="flex h-10 w-10 items-center justify-center rounded-2xl bg-amber-50 text-amber-600 group-hover:scale-110 transition-transform">
+			<div class="flex w-full items-center justify-between gap-2 mb-3">
+				<span class="min-w-0 truncate text-[11px] font-black tracking-wide text-amber-700 bg-amber-50 px-2 py-0.5 rounded-lg">1단계 · 서비스 분류</span>
+				<div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-amber-50 text-amber-600 group-hover:scale-110 transition-transform">
 					<Icon icon="ph:books-bold" class="text-2xl" />
 				</div>
 			</div>
@@ -492,11 +492,11 @@
 		<!-- 2단계: 구현 엔진 (플러그인) -->
 		<button
 			onclick={() => (activeTab = 'engines')}
-			class="text-left relative overflow-hidden rounded-[1.75rem] border-2 bg-white p-5 shadow-sm transition group {activeTab === 'engines' ? 'border-emerald-500 bg-emerald-50/20 ring-2 ring-emerald-500/20' : 'border-slate-100 hover:border-emerald-300'}"
+			class="w-full text-left relative overflow-hidden rounded-[1.75rem] border-2 bg-white p-5 shadow-sm transition group {activeTab === 'engines' ? 'border-emerald-500 bg-emerald-50/20 ring-2 ring-emerald-500/20' : 'border-slate-100 hover:border-emerald-300'}"
 		>
-			<div class="flex items-center justify-between mb-3">
-				<span class="text-[11px] font-black tracking-wide text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-lg">2단계 · 구현 엔진</span>
-				<div class="flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600 group-hover:scale-110 transition-transform">
+			<div class="flex w-full items-center justify-between gap-2 mb-3">
+				<span class="min-w-0 truncate text-[11px] font-black tracking-wide text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-lg">2단계 · 구현 엔진</span>
+				<div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600 group-hover:scale-110 transition-transform">
 					<Icon icon="ph:cpu-bold" class="text-2xl" />
 				</div>
 			</div>
@@ -510,11 +510,11 @@
 		<!-- 3단계: 엔진 인스턴스 (서비스 앱) -->
 		<button
 			onclick={() => (activeTab = 'apps')}
-			class="text-left relative overflow-hidden rounded-[1.75rem] border-2 bg-white p-5 shadow-sm transition group {activeTab === 'apps' ? 'border-purple-500 bg-purple-50/20 ring-2 ring-purple-500/20' : 'border-slate-100 hover:border-purple-300'}"
+			class="w-full text-left relative overflow-hidden rounded-[1.75rem] border-2 bg-white p-5 shadow-sm transition group {activeTab === 'apps' ? 'border-purple-500 bg-purple-50/20 ring-2 ring-purple-500/20' : 'border-slate-100 hover:border-purple-300'}"
 		>
-			<div class="flex items-center justify-between mb-3">
-				<span class="text-[11px] font-black tracking-wide text-purple-700 bg-purple-50 px-2 py-0.5 rounded-lg">3단계 · 엔진 인스턴스</span>
-				<div class="flex h-10 w-10 items-center justify-center rounded-2xl bg-purple-50 text-purple-600 group-hover:scale-110 transition-transform">
+			<div class="flex w-full items-center justify-between gap-2 mb-3">
+				<span class="min-w-0 truncate text-[11px] font-black tracking-wide text-purple-700 bg-purple-50 px-2 py-0.5 rounded-lg">3단계 · 엔진 인스턴스</span>
+				<div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-purple-50 text-purple-600 group-hover:scale-110 transition-transform">
 					<Icon icon="ph:puzzle-piece-bold" class="text-2xl" />
 				</div>
 			</div>
@@ -528,11 +528,11 @@
 		<!-- 4단계: 조립 번들 (완성 패키지) -->
 		<button
 			onclick={() => (activeTab = 'instances')}
-			class="text-left relative overflow-hidden rounded-[1.75rem] border-2 bg-white p-5 shadow-sm transition group {activeTab === 'instances' ? 'border-rose-500 bg-rose-50/20 ring-2 ring-rose-500/20' : 'border-slate-100 hover:border-rose-300'}"
+			class="w-full text-left relative overflow-hidden rounded-[1.75rem] border-2 bg-white p-5 shadow-sm transition group {activeTab === 'instances' ? 'border-rose-500 bg-rose-50/20 ring-2 ring-rose-500/20' : 'border-slate-100 hover:border-rose-300'}"
 		>
-			<div class="flex items-center justify-between mb-3">
-				<span class="text-[11px] font-black tracking-wide text-rose-700 bg-rose-50 px-2 py-0.5 rounded-lg">4단계 · 조립 번들</span>
-				<div class="flex h-10 w-10 items-center justify-center rounded-2xl bg-rose-50 text-rose-600 group-hover:scale-110 transition-transform">
+			<div class="flex w-full items-center justify-between gap-2 mb-3">
+				<span class="min-w-0 truncate text-[11px] font-black tracking-wide text-rose-700 bg-rose-50 px-2 py-0.5 rounded-lg">4단계 · 조립 번들</span>
+				<div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-rose-50 text-rose-600 group-hover:scale-110 transition-transform">
 					<Icon icon="ph:package-bold" class="text-2xl" />
 				</div>
 			</div>

@@ -338,12 +338,12 @@
 	<!-- ===================================================================== -->
 	<!-- 3. 통계 지표 카드 -->
 	<!-- ===================================================================== -->
-	<div data-print-section="플랫폼별 구독 통계" class="grid grid-cols-2 gap-4 md:grid-cols-4 md:gap-5 print:break-inside-avoid">
+	<div data-print-section="플랫폼별 구독 통계" class="grid grid-cols-1 gap-4 sm:grid-cols-2 md:gap-5 xl:grid-cols-4 print:break-inside-avoid">
 		<!-- 카드 1: 전체 구독 기기 -->
-		<div class="rounded-2xl border-2 border-slate-200 bg-white p-5 shadow-sm">
-			<div class="flex items-center justify-between">
-				<span class="text-xs font-black tracking-wider text-slate-400 uppercase">Active Devices</span>
-				<div class="flex h-9 w-9 items-center justify-center rounded-xl bg-pink-100 text-pink-600">
+		<div class="flex flex-col justify-between rounded-2xl border-2 border-slate-200 bg-white p-5 shadow-sm">
+			<div class="flex w-full items-center justify-between gap-2">
+				<span class="min-w-0 truncate text-xs font-black tracking-wider text-slate-400 uppercase">Active Devices</span>
+				<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-pink-100 text-pink-600">
 					<Icon icon="solar:devices-bold-duotone" class="text-xl" />
 				</div>
 			</div>
@@ -353,17 +353,17 @@
 					<span class="text-xs font-bold text-slate-500 font-normal">대 등록</span>
 				</div>
 				<div class="mt-1 flex items-center gap-1.5 text-xs font-semibold text-emerald-600">
-					<span class="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
+					<span class="h-2 w-2 shrink-0 rounded-full bg-emerald-500 animate-pulse"></span>
 					FCM & WPush 정상 가동
 				</div>
 			</div>
 		</div>
 
 		<!-- 카드 2: Chrome / Android -->
-		<div class="rounded-2xl border-2 border-slate-200 bg-white p-5 shadow-sm">
-			<div class="flex items-center justify-between">
-				<span class="text-xs font-black tracking-wider text-slate-400 uppercase">Google / FCM</span>
-				<div class="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-100 text-blue-600">
+		<div class="flex flex-col justify-between rounded-2xl border-2 border-slate-200 bg-white p-5 shadow-sm">
+			<div class="flex w-full items-center justify-between gap-2">
+				<span class="min-w-0 truncate text-xs font-black tracking-wider text-slate-400 uppercase">Google / FCM</span>
+				<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-100 text-blue-600">
 					<Icon icon="mdi:google-chrome" class="text-xl" />
 				</div>
 			</div>
@@ -379,10 +379,10 @@
 		</div>
 
 		<!-- 카드 3: Firefox -->
-		<div class="rounded-2xl border-2 border-slate-200 bg-white p-5 shadow-sm">
-			<div class="flex items-center justify-between">
-				<span class="text-xs font-black tracking-wider text-slate-400 uppercase">Mozilla Firefox</span>
-				<div class="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-100 text-amber-600">
+		<div class="flex flex-col justify-between rounded-2xl border-2 border-slate-200 bg-white p-5 shadow-sm">
+			<div class="flex w-full items-center justify-between gap-2">
+				<span class="min-w-0 truncate text-xs font-black tracking-wider text-slate-400 uppercase">Mozilla Firefox</span>
+				<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-600">
 					<Icon icon="mdi:firefox" class="text-xl" />
 				</div>
 			</div>
@@ -398,10 +398,10 @@
 		</div>
 
 		<!-- 카드 4: Apple & 기타 -->
-		<div class="rounded-2xl border-2 border-slate-200 bg-white p-5 shadow-sm">
-			<div class="flex items-center justify-between">
-				<span class="text-xs font-black tracking-wider text-slate-400 uppercase">Safari & Others</span>
-				<div class="flex h-9 w-9 items-center justify-center rounded-xl bg-purple-100 text-purple-600">
+		<div class="flex flex-col justify-between rounded-2xl border-2 border-slate-200 bg-white p-5 shadow-sm">
+			<div class="flex w-full items-center justify-between gap-2">
+				<span class="min-w-0 truncate text-xs font-black tracking-wider text-slate-400 uppercase">Safari & Others</span>
+				<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-purple-100 text-purple-600">
 					<Icon icon="mdi:apple-safari" class="text-xl" />
 				</div>
 			</div>

@@ -578,12 +578,12 @@
 	</header>
 
 	<!-- 📊 전사 표준 4대 핵심 관제 지표 요약 카드 -->
-	<section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+	<section class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5">
 		<!-- 카드 1: 전체 미디어 자산 -->
 		<div class="relative overflow-hidden rounded-[2rem] border-2 border-slate-100 bg-white p-6 shadow-sm hover:border-indigo-200 transition-all">
-			<div class="flex items-center justify-between mb-4">
-				<span class="text-[11px] font-black tracking-widest uppercase text-slate-400">Total Assets</span>
-				<div class="flex h-11 w-11 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600">
+			<div class="flex w-full items-center justify-between gap-2 mb-4">
+				<span class="min-w-0 truncate text-[11px] font-black tracking-widest uppercase text-slate-400">Total Assets</span>
+				<div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600">
 					<Icon icon="ph:files-bold" class="text-2xl" />
 				</div>
 			</div>
@@ -600,11 +600,11 @@
 		<!-- 카드 2: 공개 서비스 자산 (PUBLIC) -->
 		<button 
 			onclick={() => { const tab = tabConfigs.find(t => t.id === 'PUBLIC'); if (tab) selectTab(tab); }}
-			class="text-left relative overflow-hidden rounded-[2rem] border-2 border-slate-100 bg-white p-6 shadow-sm hover:border-emerald-300 transition-all group"
+			class="w-full text-left relative overflow-hidden rounded-[2rem] border-2 border-slate-100 bg-white p-6 shadow-sm hover:border-emerald-300 transition-all group"
 		>
-			<div class="flex items-center justify-between mb-4">
-				<span class="text-[11px] font-black tracking-widest uppercase text-slate-400 group-hover:text-emerald-600">Public Tier</span>
-				<div class="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600 group-hover:scale-110 transition-transform">
+			<div class="flex w-full items-center justify-between gap-2 mb-4">
+				<span class="min-w-0 truncate text-[11px] font-black tracking-widest uppercase text-slate-400 group-hover:text-emerald-600">Public Tier</span>
+				<div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600 group-hover:scale-110 transition-transform">
 					<Icon icon="ph:globe-hemisphere-west-bold" class="text-2xl" />
 				</div>
 			</div>
@@ -621,11 +621,11 @@
 		<!-- 카드 3: 사내 보안 자산 (PROTECTED) -->
 		<button 
 			onclick={() => { const tab = tabConfigs.find(t => t.id === 'PROTECTED'); if (tab) selectTab(tab); }}
-			class="text-left relative overflow-hidden rounded-[2rem] border-2 border-slate-100 bg-white p-6 shadow-sm hover:border-amber-300 transition-all group"
+			class="w-full text-left relative overflow-hidden rounded-[2rem] border-2 border-slate-100 bg-white p-6 shadow-sm hover:border-amber-300 transition-all group"
 		>
-			<div class="flex items-center justify-between mb-4">
-				<span class="text-[11px] font-black tracking-widest uppercase text-slate-400 group-hover:text-amber-600">Protected Tier</span>
-				<div class="flex h-11 w-11 items-center justify-center rounded-2xl bg-amber-50 text-amber-600 group-hover:scale-110 transition-transform">
+			<div class="flex w-full items-center justify-between gap-2 mb-4">
+				<span class="min-w-0 truncate text-[11px] font-black tracking-widest uppercase text-slate-400 group-hover:text-amber-600">Protected Tier</span>
+				<div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-amber-50 text-amber-600 group-hover:scale-110 transition-transform">
 					<Icon icon="ph:shield-check-bold" class="text-2xl" />
 				</div>
 			</div>
@@ -642,11 +642,11 @@
 		<!-- 카드 4: 개인·시스템 자산 (PRIVATE & SYSTEM) -->
 		<button 
 			onclick={() => { const tab = tabConfigs.find(t => t.id === 'PERSONAL' || t.id === 'SHARED'); if (tab) selectTab(tab); }}
-			class="text-left relative overflow-hidden rounded-[2rem] border-2 border-slate-100 bg-white p-6 shadow-sm hover:border-rose-300 transition-all group"
+			class="w-full text-left relative overflow-hidden rounded-[2rem] border-2 border-slate-100 bg-white p-6 shadow-sm hover:border-rose-300 transition-all group"
 		>
-			<div class="flex items-center justify-between mb-4">
-				<span class="text-[11px] font-black tracking-widest uppercase text-slate-400 group-hover:text-rose-600">Private & Core</span>
-				<div class="flex h-11 w-11 items-center justify-center rounded-2xl bg-rose-50 text-rose-600 group-hover:scale-110 transition-transform">
+			<div class="flex w-full items-center justify-between gap-2 mb-4">
+				<span class="min-w-0 truncate text-[11px] font-black tracking-widest uppercase text-slate-400 group-hover:text-rose-600">Private & Core</span>
+				<div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-rose-50 text-rose-600 group-hover:scale-110 transition-transform">
 					<Icon icon="ph:lock-key-bold" class="text-2xl" />
 				</div>
 			</div>

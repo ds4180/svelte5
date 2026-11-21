@@ -508,15 +508,15 @@
 	<!-- ===================================================================== -->
 	<!-- 2. 알림/요약 지표 카드 (최대 4개, 최소 1개 규격) -->
 	<!-- ===================================================================== -->
-	<section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-5">
+	<section class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 md:gap-5">
 		<!-- 카드 1: 전체 게시판 -->
 		<button
 			onclick={() => { activeTab = 'list'; filterLayout = 'ALL'; }}
-			class="text-left relative overflow-hidden rounded-[1.75rem] border-2 bg-white p-5 shadow-sm transition group {filterLayout === 'ALL' ? 'border-blue-500 bg-blue-50/20 ring-2 ring-blue-500/20' : 'border-slate-100 hover:border-blue-300'}"
+			class="w-full text-left relative overflow-hidden rounded-[1.75rem] border-2 bg-white p-5 shadow-sm transition group {filterLayout === 'ALL' ? 'border-blue-500 bg-blue-50/20 ring-2 ring-blue-500/20' : 'border-slate-100 hover:border-blue-300'}"
 		>
-			<div class="flex items-center justify-between mb-3">
-				<span class="text-xs font-black tracking-widest uppercase text-slate-400 group-hover:text-blue-600">Total Boards</span>
-				<div class="flex h-10 w-10 items-center justify-center rounded-2xl bg-blue-50 text-blue-600 group-hover:scale-110 transition-transform">
+			<div class="flex w-full items-center justify-between gap-2 mb-3">
+				<span class="min-w-0 truncate text-xs font-black tracking-widest uppercase text-slate-400 group-hover:text-blue-600">Total Boards</span>
+				<div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-blue-50 text-blue-600 group-hover:scale-110 transition-transform">
 					<Icon icon="ph:squares-four-bold" class="text-2xl" />
 				</div>
 			</div>
@@ -533,11 +533,11 @@
 		<!-- 카드 2: 표준 리스트형 -->
 		<button
 			onclick={() => { activeTab = 'list'; filterLayout = 'list'; }}
-			class="text-left relative overflow-hidden rounded-[1.75rem] border-2 bg-white p-5 shadow-sm transition group {filterLayout === 'list' ? 'border-emerald-500 bg-emerald-50/20 ring-2 ring-emerald-500/20' : 'border-slate-100 hover:border-emerald-300'}"
+			class="w-full text-left relative overflow-hidden rounded-[1.75rem] border-2 bg-white p-5 shadow-sm transition group {filterLayout === 'list' ? 'border-emerald-500 bg-emerald-50/20 ring-2 ring-emerald-500/20' : 'border-slate-100 hover:border-emerald-300'}"
 		>
-			<div class="flex items-center justify-between mb-3">
-				<span class="text-xs font-black tracking-widest uppercase text-slate-400 group-hover:text-emerald-600">List Layout</span>
-				<div class="flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600 group-hover:scale-110 transition-transform">
+			<div class="flex w-full items-center justify-between gap-2 mb-3">
+				<span class="min-w-0 truncate text-xs font-black tracking-widest uppercase text-slate-400 group-hover:text-emerald-600">List Layout</span>
+				<div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600 group-hover:scale-110 transition-transform">
 					<Icon icon="ph:list-bullets-bold" class="text-2xl" />
 				</div>
 			</div>
@@ -554,11 +554,11 @@
 		<!-- 카드 3: 갤러리/사진형 -->
 		<button
 			onclick={() => { activeTab = 'list'; filterLayout = 'gallery'; }}
-			class="text-left relative overflow-hidden rounded-[1.75rem] border-2 bg-white p-5 shadow-sm transition group {filterLayout === 'gallery' ? 'border-amber-500 bg-amber-50/20 ring-2 ring-amber-500/20' : 'border-slate-100 hover:border-amber-300'}"
+			class="w-full text-left relative overflow-hidden rounded-[1.75rem] border-2 bg-white p-5 shadow-sm transition group {filterLayout === 'gallery' ? 'border-amber-500 bg-amber-50/20 ring-2 ring-amber-500/20' : 'border-slate-100 hover:border-amber-300'}"
 		>
-			<div class="flex items-center justify-between mb-3">
-				<span class="text-xs font-black tracking-widest uppercase text-slate-400 group-hover:text-amber-600">Gallery Layout</span>
-				<div class="flex h-10 w-10 items-center justify-center rounded-2xl bg-amber-50 text-amber-600 group-hover:scale-110 transition-transform">
+			<div class="flex w-full items-center justify-between gap-2 mb-3">
+				<span class="min-w-0 truncate text-xs font-black tracking-widest uppercase text-slate-400 group-hover:text-amber-600">Gallery Layout</span>
+				<div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-amber-50 text-amber-600 group-hover:scale-110 transition-transform">
 					<Icon icon="ph:image-square-bold" class="text-2xl" />
 				</div>
 			</div>
@@ -575,11 +575,11 @@
 		<!-- 카드 4: 블로그/피드형 -->
 		<button
 			onclick={() => { activeTab = 'list'; filterLayout = 'blog'; }}
-			class="text-left relative overflow-hidden rounded-[1.75rem] border-2 bg-white p-5 shadow-sm transition group {filterLayout === 'blog' ? 'border-purple-500 bg-purple-50/20 ring-2 ring-purple-500/20' : 'border-slate-100 hover:border-purple-300'}"
+			class="w-full text-left relative overflow-hidden rounded-[1.75rem] border-2 bg-white p-5 shadow-sm transition group {filterLayout === 'blog' ? 'border-purple-500 bg-purple-50/20 ring-2 ring-purple-500/20' : 'border-slate-100 hover:border-purple-300'}"
 		>
-			<div class="flex items-center justify-between mb-3">
-				<span class="text-xs font-black tracking-widest uppercase text-slate-400 group-hover:text-purple-600">Blog Layout</span>
-				<div class="flex h-10 w-10 items-center justify-center rounded-2xl bg-purple-50 text-purple-600 group-hover:scale-110 transition-transform">
+			<div class="flex w-full items-center justify-between gap-2 mb-3">
+				<span class="min-w-0 truncate text-xs font-black tracking-widest uppercase text-slate-400 group-hover:text-purple-600">Blog Layout</span>
+				<div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-purple-50 text-purple-600 group-hover:scale-110 transition-transform">
 					<Icon icon="ph:article-medium-bold" class="text-2xl" />
 				</div>
 			</div>

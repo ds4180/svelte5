@@ -282,15 +282,15 @@
 	</header>
 
 	<!-- 📊 전사 표준 4대 핵심 관제 지표 요약 카드 -->
-	<section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+	<section class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5">
 		<!-- 카드 1: 전체 타겟 그룹 -->
 		<button 
 			onclick={() => { activeTab = 'list'; listFilterCategory = 'all'; }}
-			class="text-left relative overflow-hidden rounded-[2rem] border-2 border-slate-100 bg-white p-6 shadow-sm hover:border-indigo-300 transition-all group"
+			class="w-full text-left relative overflow-hidden rounded-[2rem] border-2 border-slate-100 bg-white p-6 shadow-sm hover:border-indigo-300 transition-all group"
 		>
-			<div class="flex items-center justify-between mb-4">
-				<span class="text-[11px] font-black tracking-widest uppercase text-slate-400 group-hover:text-indigo-600">Total Targets</span>
-				<div class="flex h-11 w-11 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600 group-hover:scale-110 transition-transform">
+			<div class="flex w-full items-center justify-between gap-2 mb-4">
+				<span class="min-w-0 truncate text-[11px] font-black tracking-widest uppercase text-slate-400 group-hover:text-indigo-600">Total Targets</span>
+				<div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600 group-hover:scale-110 transition-transform">
 					<Icon icon="ph:users-three-bold" class="text-2xl" />
 				</div>
 			</div>
@@ -307,11 +307,11 @@
 		<!-- 카드 2: 실시간 자동 연산 그룹 (Dynamic) -->
 		<button 
 			onclick={() => { activeTab = 'list'; listFilterCategory = 'dynamic'; }}
-			class="text-left relative overflow-hidden rounded-[2rem] border-2 border-slate-100 bg-white p-6 shadow-sm hover:border-emerald-300 transition-all group"
+			class="w-full text-left relative overflow-hidden rounded-[2rem] border-2 border-slate-100 bg-white p-6 shadow-sm hover:border-emerald-300 transition-all group"
 		>
-			<div class="flex items-center justify-between mb-4">
-				<span class="text-[11px] font-black tracking-widest uppercase text-slate-400 group-hover:text-emerald-600">자동 타겟 (Dynamic)</span>
-				<div class="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600 group-hover:scale-110 transition-transform">
+			<div class="flex w-full items-center justify-between gap-2 mb-4">
+				<span class="min-w-0 truncate text-[11px] font-black tracking-widest uppercase text-slate-400 group-hover:text-emerald-600">자동 타겟 (Dynamic)</span>
+				<div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600 group-hover:scale-110 transition-transform">
 					<Icon icon="ph:lightning-bold" class="text-2xl" />
 				</div>
 			</div>
@@ -328,11 +328,11 @@
 		<!-- 카드 3: 수동 지정 그룹 (Manual) -->
 		<button 
 			onclick={() => { activeTab = 'list'; listFilterCategory = 'manual'; }}
-			class="text-left relative overflow-hidden rounded-[2rem] border-2 border-slate-100 bg-white p-6 shadow-sm hover:border-amber-300 transition-all group"
+			class="w-full text-left relative overflow-hidden rounded-[2rem] border-2 border-slate-100 bg-white p-6 shadow-sm hover:border-amber-300 transition-all group"
 		>
-			<div class="flex items-center justify-between mb-4">
-				<span class="text-[11px] font-black tracking-widest uppercase text-slate-400 group-hover:text-amber-600">수동 타겟 (Manual)</span>
-				<div class="flex h-11 w-11 items-center justify-center rounded-2xl bg-amber-50 text-amber-600 group-hover:scale-110 transition-transform">
+			<div class="flex w-full items-center justify-between gap-2 mb-4">
+				<span class="min-w-0 truncate text-[11px] font-black tracking-widest uppercase text-slate-400 group-hover:text-amber-600">수동 타겟 (Manual)</span>
+				<div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-amber-50 text-amber-600 group-hover:scale-110 transition-transform">
 					<Icon icon="ph:pencil-simple-line-bold" class="text-2xl" />
 				</div>
 			</div>
@@ -349,11 +349,11 @@
 		<!-- 카드 4: 연산된 그룹 (Combined) -->
 		<button 
 			onclick={() => { activeTab = 'list'; listFilterCategory = 'combined'; }}
-			class="text-left relative overflow-hidden rounded-[2rem] border-2 border-slate-100 bg-white p-6 shadow-sm hover:border-purple-300 transition-all group"
+			class="w-full text-left relative overflow-hidden rounded-[2rem] border-2 border-slate-100 bg-white p-6 shadow-sm hover:border-purple-300 transition-all group"
 		>
-			<div class="flex items-center justify-between mb-4">
-				<span class="text-[11px] font-black tracking-widest uppercase text-slate-400 group-hover:text-purple-600">연산된 그룹 (Combined)</span>
-				<div class="flex h-11 w-11 items-center justify-center rounded-2xl bg-purple-50 text-purple-600 group-hover:scale-110 transition-transform">
+			<div class="flex w-full items-center justify-between gap-2 mb-4">
+				<span class="min-w-0 truncate text-[11px] font-black tracking-widest uppercase text-slate-400 group-hover:text-purple-600">연산된 그룹 (Combined)</span>
+				<div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-purple-50 text-purple-600 group-hover:scale-110 transition-transform">
 					<Icon icon="ph:intersect-bold" class="text-2xl" />
 				</div>
 			</div>

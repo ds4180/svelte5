@@ -308,14 +308,14 @@
 	</header>
 
 	<!-- 📊 상태 요약 카드 4종 -->
-	<section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-5">
+	<section class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 md:gap-5">
 		<button
 			onclick={() => (activeTab = 'ALL')}
-			class="text-left relative overflow-hidden rounded-[1.75rem] border-2 bg-white p-5 shadow-sm transition group {activeTab === 'ALL' ? 'border-slate-800 bg-slate-50/50 ring-2 ring-slate-800/10' : 'border-slate-100 hover:border-slate-300'}"
+			class="w-full text-left relative overflow-hidden rounded-[1.75rem] border-2 bg-white p-5 shadow-sm transition group {activeTab === 'ALL' ? 'border-slate-800 bg-slate-50/50 ring-2 ring-slate-800/10' : 'border-slate-100 hover:border-slate-300'}"
 		>
-			<div class="flex items-center justify-between mb-3">
-				<span class="text-xs font-black uppercase tracking-wider text-slate-400 group-hover:text-slate-700">Total Users</span>
-				<div class="flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-100 text-slate-700 group-hover:scale-110 transition-transform">
+			<div class="flex w-full items-center justify-between gap-2 mb-3">
+				<span class="min-w-0 truncate text-xs font-black uppercase tracking-wider text-slate-400 group-hover:text-slate-700">Total Users</span>
+				<div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-slate-700 group-hover:scale-110 transition-transform">
 					<Icon icon="ph:users-bold" class="text-2xl" />
 				</div>
 			</div>
@@ -327,11 +327,11 @@
 
 		<button
 			onclick={() => (activeTab = 'ALL')}
-			class="text-left relative overflow-hidden rounded-[1.75rem] border-2 bg-white p-5 shadow-sm transition group border-slate-100 hover:border-emerald-300"
+			class="w-full text-left relative overflow-hidden rounded-[1.75rem] border-2 bg-white p-5 shadow-sm transition group border-slate-100 hover:border-emerald-300"
 		>
-			<div class="flex items-center justify-between mb-3">
-				<span class="text-xs font-black uppercase tracking-wider text-emerald-600">Active Staff</span>
-				<div class="flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600 group-hover:scale-110 transition-transform">
+			<div class="flex w-full items-center justify-between gap-2 mb-3">
+				<span class="min-w-0 truncate text-xs font-black uppercase tracking-wider text-emerald-600">Active Staff</span>
+				<div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600 group-hover:scale-110 transition-transform">
 					<Icon icon="ph:user-check-bold" class="text-2xl" />
 				</div>
 			</div>
@@ -343,11 +343,11 @@
 
 		<button
 			onclick={() => (activeTab = 'PENDING')}
-			class="text-left relative overflow-hidden rounded-[1.75rem] border-2 bg-white p-5 shadow-sm transition group {activeTab === 'PENDING' ? 'border-amber-500 bg-amber-50/20 ring-2 ring-amber-500/20' : 'border-slate-100 hover:border-amber-300'}"
+			class="w-full text-left relative overflow-hidden rounded-[1.75rem] border-2 bg-white p-5 shadow-sm transition group {activeTab === 'PENDING' ? 'border-amber-500 bg-amber-50/20 ring-2 ring-amber-500/20' : 'border-slate-100 hover:border-amber-300'}"
 		>
-			<div class="flex items-center justify-between mb-3">
-				<span class="text-xs font-black uppercase tracking-wider text-amber-700">Pending Approval</span>
-				<div class="flex h-10 w-10 items-center justify-center rounded-2xl bg-amber-50 text-amber-600 group-hover:scale-110 transition-transform">
+			<div class="flex w-full items-center justify-between gap-2 mb-3">
+				<span class="min-w-0 truncate text-xs font-black uppercase tracking-wider text-amber-700">Pending Approval</span>
+				<div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-amber-50 text-amber-600 group-hover:scale-110 transition-transform">
 					<Icon icon="ph:hourglass-bold" class="text-2xl" />
 				</div>
 			</div>
@@ -359,11 +359,11 @@
 
 		<button
 			onclick={() => (activeTab = 'INACTIVE')}
-			class="text-left relative overflow-hidden rounded-[1.75rem] border-2 bg-white p-5 shadow-sm transition group {activeTab === 'INACTIVE' ? 'border-slate-500 bg-slate-50/50 ring-2 ring-slate-500/20' : 'border-slate-100 hover:border-slate-300'}"
+			class="w-full text-left relative overflow-hidden rounded-[1.75rem] border-2 bg-white p-5 shadow-sm transition group {activeTab === 'INACTIVE' ? 'border-slate-500 bg-slate-50/50 ring-2 ring-slate-500/20' : 'border-slate-100 hover:border-slate-300'}"
 		>
-			<div class="flex items-center justify-between mb-3">
-				<span class="text-xs font-black uppercase tracking-wider text-slate-400">Soft Deleted</span>
-				<div class="flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-100 text-slate-500 group-hover:scale-110 transition-transform">
+			<div class="flex w-full items-center justify-between gap-2 mb-3">
+				<span class="min-w-0 truncate text-xs font-black uppercase tracking-wider text-slate-400">Soft Deleted</span>
+				<div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-slate-500 group-hover:scale-110 transition-transform">
 					<Icon icon="ph:user-minus-bold" class="text-2xl" />
 				</div>
 			</div>

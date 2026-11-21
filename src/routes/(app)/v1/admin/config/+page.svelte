@@ -333,11 +333,11 @@
 	<!-- ===================================================================== -->
 	<!-- 2. 상단 4대 핵심 지표 요약 카드 (Status Cards: 1~4개) -->
 	<!-- ===================================================================== -->
-	<div class="grid grid-cols-2 gap-4 md:grid-cols-4 md:gap-5">
+	<div class="grid grid-cols-1 gap-4 sm:grid-cols-2 md:gap-5 xl:grid-cols-4">
 		<div class="flex flex-col justify-between rounded-[1.75rem] border-2 border-slate-200 bg-white p-5 shadow-sm">
-			<div class="flex items-center justify-between">
-				<span class="text-xs font-black tracking-wider text-slate-400 uppercase">Site Title</span>
-				<div class="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
+			<div class="flex w-full items-center justify-between gap-2">
+				<span class="min-w-0 truncate text-xs font-black tracking-wider text-slate-400 uppercase">Site Title</span>
+				<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
 					<Icon icon="solar:widget-5-bold-duotone" class="text-xl" />
 				</div>
 			</div>
@@ -348,9 +348,9 @@
 		</div>
 
 		<div class="flex flex-col justify-between rounded-[1.75rem] border-2 border-slate-200 bg-white p-5 shadow-sm">
-			<div class="flex items-center justify-between">
-				<span class="text-xs font-black tracking-wider text-slate-400 uppercase">Register Policy</span>
-				<div class="flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
+			<div class="flex w-full items-center justify-between gap-2">
+				<span class="min-w-0 truncate text-xs font-black tracking-wider text-slate-400 uppercase">Register Policy</span>
+				<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
 					<Icon icon="solar:users-group-rounded-bold-duotone" class="text-xl" />
 				</div>
 			</div>
@@ -363,9 +363,9 @@
 		</div>
 
 		<div class="flex flex-col justify-between rounded-[1.75rem] border-2 border-slate-200 bg-white p-5 shadow-sm">
-			<div class="flex items-center justify-between">
-				<span class="text-xs font-black tracking-wider text-slate-400 uppercase">Watchdog Sentinel</span>
-				<div class="flex h-9 w-9 items-center justify-center rounded-xl {watchdogEnabled ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}">
+			<div class="flex w-full items-center justify-between gap-2">
+				<span class="min-w-0 truncate text-xs font-black tracking-wider text-slate-400 uppercase">Watchdog Sentinel</span>
+				<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl {watchdogEnabled ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}">
 					<Icon icon="solar:shield-warning-bold-duotone" class="text-xl" />
 				</div>
 			</div>
@@ -378,9 +378,9 @@
 		</div>
 
 		<div class="flex flex-col justify-between rounded-[1.75rem] border-2 border-slate-200 bg-white p-5 shadow-sm">
-			<div class="flex items-center justify-between">
-				<span class="text-xs font-black tracking-wider text-slate-400 uppercase">Redis & GC Life</span>
-				<div class="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
+			<div class="flex w-full items-center justify-between gap-2">
+				<span class="min-w-0 truncate text-xs font-black tracking-wider text-slate-400 uppercase">Redis & GC Life</span>
+				<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
 					<Icon icon="solar:trash-bin-trash-bold-duotone" class="text-xl" />
 				</div>
 			</div>
