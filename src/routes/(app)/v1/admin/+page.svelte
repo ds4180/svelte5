@@ -7,6 +7,7 @@
 	import * as api from '$lib/api/admin';
 	import { toast } from '$lib/runes/toast.svelte';
 	import { getSiteTitle } from '$lib/config/site';
+	import { extractGroupsForAction } from '$lib/runes/auth.svelte';
 	import { fade, fly } from 'svelte/transition';
 	import Icon from '@iconify/svelte';
 
@@ -39,6 +40,9 @@
 				const map = {};
 				for (const a of stats.system_apps) {
 					map[a.app_id] = a;
+					if (a.app_id === 'boards' && !map['board']) {
+						map['board'] = a;
+					}
 				}
 				liveAppMap = map;
 			}
@@ -233,10 +237,10 @@
 		},
 		{
 			type: 'INSTANCE',
-			appId: 'boards',
+			appId: 'board',
 			title: '게시판 인스턴스 관리',
 			desc: '추상화 다중 게시판(공지, 자유 등) 슬러그 생성 및 레이아웃 정책 설정 (사용자: /v1/app/board/[slug])',
-			link: '/v1/admin/boards',
+			link: '/v1/admin/board',
 			icon: 'mdi:clipboard-text-outline',
 			color: 'bg-orange-600'
 		},
@@ -305,17 +309,22 @@
 		return set;
 	});
 
-	// 실시간 AppRegistry 거버넌스 메타데이터 오버라이드 헬퍼
+	// 실시간 AppRegistry 거버넌스 메타데이터 오버라이드 헬퍼 (배열 및 { all, read, write } 객체 지원)
 	function getLiveMod(mod) {
 		const live = mod.appId ? liveAppMap[mod.appId] : null;
 		const minRank = live?.min_read_rank != null ? Number(live.min_read_rank) : Number(mod.minRank ?? 4);
-		const allowGroups = Array.isArray(live?.allow_groups) ? live.allow_groups : [];
-		const denyGroups = Array.isArray(live?.deny_groups) ? live.deny_groups : [];
+		const normalizedRoute =
+			live?.frontend_route === '/v1/admin/boards' ? '/v1/admin/board' : live?.frontend_route;
 		return {
 			...mod,
+			title: live?.title || live?.name || mod.title,
+			desc: live?.description || mod.desc,
+			icon: live?.icon_default || mod.icon,
+			link: normalizedRoute || mod.link,
 			minRank,
-			allowGroups,
-			denyGroups
+			allowGroups: extractGroupsForAction(live?.allow_groups, 'read'),
+			denyGroups: extractGroupsForAction(live?.deny_groups, 'read'),
+			isActive: live ? live.is_active !== false : true
 		};
 	}
 
@@ -323,17 +332,16 @@
 	function canAccess(mod) {
 		if (isRoot) return true;
 		const live = getLiveMod(mod);
+		if (!live.isActive) return false;
 
 		// [1단계] deny_groups 검사 (Deny-Wins)
-		if (live.denyGroups.length > 0) {
-			const isDenied = live.denyGroups.some(g => userGroups.has(String(g)));
-			if (isDenied) return false;
+		if (live.denyGroups.some((g) => userGroups.has(String(g)))) {
+			return false;
 		}
 
 		// [2단계] allow_groups 검사 (Allow-Wins)
-		if (live.allowGroups.length > 0) {
-			const isAllowed = live.allowGroups.some(g => userGroups.has(String(g)));
-			if (isAllowed) return true;
+		if (live.allowGroups.some((g) => userGroups.has(String(g)))) {
+			return true;
 		}
 
 		// [3단계] min_read_rank 대소비교
@@ -582,14 +590,14 @@
 				{#if hasAccess}
 					<!-- 접근 권한 있음: 정상 진입 링크 -->
 					<a
-						href={mod.link}
+						href={liveMod.link}
 						class="group relative overflow-hidden rounded-xl border border-slate-200 bg-white p-6 shadow-md transition-all duration-300 hover:border-purple-400 hover:bg-slate-50 md:rounded-2xl md:p-8 md:shadow-lg"
 					>
 						<div class="relative z-10 flex items-start justify-between">
 							<div
 								class="h-12 w-12 md:h-14 md:w-14 {mod.color} flex items-center justify-center rounded-lg text-xl text-white shadow-md transition-transform group-hover:scale-110 md:rounded-xl md:text-2xl"
 							>
-								<Icon icon={mod.icon} />
+								<Icon icon={liveMod.icon} />
 							</div>
 							<div class="flex flex-col items-end gap-1.5">
 								<span
@@ -613,12 +621,12 @@
 							<h4
 								class="mb-1 text-xl font-black tracking-tighter text-slate-900 md:mb-2 md:text-2xl"
 							>
-								{mod.title}
+								{liveMod.title}
 							</h4>
 							<p
 								class="text-xs leading-relaxed font-bold text-slate-500 opacity-70 group-hover:opacity-90"
 							>
-								{mod.desc}
+								{liveMod.desc}
 							</p>
 						</div>
 					</a>
@@ -626,17 +634,17 @@
 					<!-- 접근 권한 없음: 비활성화 카드 (링크 없음, L2 알림 배너 미호출) -->
 					<div
 						class="relative overflow-hidden rounded-xl border border-slate-200 bg-slate-50/70 p-6 opacity-65 md:rounded-2xl md:p-8 select-none"
-						title="해당 시스템 모듈은 Lv.{liveMod.minRank} 이상 관리자 권한이 필요합니다."
+						title={liveMod.isActive ? `해당 시스템 모듈은 Lv.${liveMod.minRank} 이상 관리자 권한이 필요합니다.` : '현재 관리자에 의해 비활성화된 모듈입니다.'}
 					>
 						<div class="relative z-10 flex items-start justify-between">
 							<div
 								class="h-12 w-12 md:h-14 md:w-14 bg-slate-300 text-slate-500 flex items-center justify-center rounded-lg text-xl md:rounded-xl md:text-2xl"
 							>
-								<Icon icon={mod.icon} />
+								<Icon icon={liveMod.icon} />
 							</div>
 							<div class="flex flex-col items-end gap-1.5">
 								<span class="rounded bg-rose-50 text-rose-700 border border-rose-200 px-2 py-0.5 text-[10px] font-bold flex items-center gap-1">
-									<Icon icon="mdi:lock" class="text-xs" /> Lv.{liveMod.minRank} 이상 권한 필요
+									<Icon icon="mdi:lock" class="text-xs" /> {liveMod.isActive ? `Lv.${liveMod.minRank} 이상 권한 필요` : '비활성화됨'}
 								</span>
 							</div>
 						</div>
@@ -645,14 +653,14 @@
 								<h4
 									class="mb-1 text-xl font-bold tracking-tighter text-slate-500 md:mb-2 md:text-2xl"
 								>
-									{mod.title}
+									{liveMod.title}
 								</h4>
 								<Icon icon="mdi:lock-outline" class="text-slate-400 text-lg mb-1" />
 							</div>
 							<p
 								class="text-xs leading-relaxed font-medium text-slate-400"
 							>
-								{mod.desc}
+								{liveMod.desc}
 							</p>
 						</div>
 					</div>
@@ -686,14 +694,14 @@
 				{@const hasAccess = canAccess(mod)}
 				{#if hasAccess}
 					<a
-						href={mod.link}
+						href={liveMod.link}
 						class="group relative overflow-hidden rounded-xl border border-slate-200 bg-white p-6 shadow-md transition-all duration-300 hover:border-blue-400 hover:bg-slate-50 md:rounded-2xl md:p-8 md:shadow-lg"
 					>
 						<div class="relative z-10 flex items-start justify-between">
 							<div
 								class="h-12 w-12 md:h-14 md:w-14 {mod.color} flex items-center justify-center rounded-lg text-xl text-white shadow-md transition-transform group-hover:scale-110 md:rounded-xl md:text-2xl"
 							>
-								<Icon icon={mod.icon} />
+								<Icon icon={liveMod.icon} />
 							</div>
 							<div class="flex flex-col items-end gap-1.5">
 								<span
@@ -717,29 +725,29 @@
 							<h4
 								class="mb-1 text-xl font-black tracking-tighter text-slate-900 md:mb-2 md:text-2xl"
 							>
-								{mod.title}
+								{liveMod.title}
 							</h4>
 							<p
 								class="text-xs leading-relaxed font-bold text-slate-500 opacity-70 group-hover:opacity-90"
 							>
-								{mod.desc}
+								{liveMod.desc}
 							</p>
 						</div>
 					</a>
 				{:else}
 					<div
 						class="relative overflow-hidden rounded-xl border border-slate-200 bg-slate-50/70 p-6 opacity-65 md:rounded-2xl md:p-8 select-none"
-						title="해당 업무 모듈은 Lv.{liveMod.minRank} 이상 관리자 권한이 필요합니다."
+						title={liveMod.isActive ? `해당 업무 모듈은 Lv.${liveMod.minRank} 이상 관리자 권한이 필요합니다.` : '현재 관리자에 의해 비활성화된 모듈입니다.'}
 					>
 						<div class="relative z-10 flex items-start justify-between">
 							<div
 								class="h-12 w-12 md:h-14 md:w-14 bg-slate-300 text-slate-500 flex items-center justify-center rounded-lg text-xl md:rounded-xl md:text-2xl"
 							>
-								<Icon icon={mod.icon} />
+								<Icon icon={liveMod.icon} />
 							</div>
 							<div class="flex flex-col items-end gap-1.5">
 								<span class="rounded bg-rose-50 text-rose-700 border border-rose-200 px-2 py-0.5 text-[10px] font-bold flex items-center gap-1">
-									<Icon icon="mdi:lock" class="text-xs" /> Lv.{liveMod.minRank} 이상 권한 필요
+									<Icon icon="mdi:lock" class="text-xs" /> {liveMod.isActive ? `Lv.${liveMod.minRank} 이상 권한 필요` : '비활성화됨'}
 								</span>
 							</div>
 						</div>
@@ -748,14 +756,14 @@
 								<h4
 									class="mb-1 text-xl font-bold tracking-tighter text-slate-500 md:mb-2 md:text-2xl"
 								>
-									{mod.title}
+									{liveMod.title}
 								</h4>
 								<Icon icon="mdi:lock-outline" class="text-slate-400 text-lg mb-1" />
 							</div>
 							<p
 								class="text-xs leading-relaxed font-medium text-slate-400"
 							>
-								{mod.desc}
+								{liveMod.desc}
 							</p>
 						</div>
 					</div>

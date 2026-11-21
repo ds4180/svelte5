@@ -15,6 +15,7 @@
 	import * as api from '$lib/api/admin';
 	import { toast } from '$lib/runes/toast.svelte';
 	import { getSiteTitle } from '$lib/config/site';
+	import PushOptionSection from '$lib/components/PushOptionSection.svelte';
 	import Icon from '@iconify/svelte';
 
 	// 🌐 1. 글로벌 사이트 기본 설정
@@ -35,6 +36,43 @@
 	let retentionSystemTaskDays = $state(30);
 	let retentionSessionHistoryDays = $state(60);
 	let retentionRedisDynamicHours = $state(48);
+
+	// 🔔 5. 도메인별 Web Push 자동 발송 설정
+	let domainPushOptions = $state(/** @type {Record<string, boolean>} */ ({
+		dispatch_confirmed: true,
+		dayoff_request: true,
+		dayoff_result: true,
+		blackbox_request: true,
+		alert_instruction: true
+	}));
+
+	const domainPushOptionItems = [
+		{
+			key: 'dispatch_confirmed',
+			title: '배차 확정 알림 (운전원)',
+			desc: '/v1/admin/dispatch에서 배차 확정(CONFIRMED) 저장 시 배정된 운전원에게 노선 확정 푸시를 발송합니다.'
+		},
+		{
+			key: 'dayoff_request',
+			title: '휴무·결근계 승인 요청 알림 (관리자)',
+			desc: '허가제(APPROVAL) 대상자가 휴무를 신청하면 휴무 관리 권한자에게 즉시 푸시를 발송합니다.'
+		},
+		{
+			key: 'dayoff_result',
+			title: '휴무 승인·반려 결과 알림 (신청자)',
+			desc: '관리자가 휴무 신청을 승인(APPROVED) 또는 반려(REJECTED) 처리하면 신청 사원에게 결과를 발송합니다.'
+		},
+		{
+			key: 'blackbox_request',
+			title: '블랙박스 확인·교체 요청 알림 (사무실)',
+			desc: '운전원이 블랙박스 영상 확인/교체 요청을 접수하면 담당 사무실/관리자 직원에게 푸시를 발송합니다.'
+		},
+		{
+			key: 'alert_instruction',
+			title: '공지·지시(INSTRUCTION) 웹 푸시 동시 발송',
+			desc: '/v1/admin/alerts에서 공지·지시 발송 시 웹소켓과 함께 Web Push를 자동으로 동시 발송합니다.'
+		}
+	];
 
 	// 상태 제어
 	let isLoading = $state(true);
@@ -104,6 +142,9 @@
 			if (configMap.retention_redis_dynamic_hours !== undefined) {
 				retentionRedisDynamicHours = Number(configMap.retention_redis_dynamic_hours) || 48;
 			}
+			if (configMap.PUSH_DOMAIN_OPTIONS && typeof configMap.PUSH_DOMAIN_OPTIONS === 'object') {
+				domainPushOptions = { ...domainPushOptions, ...configMap.PUSH_DOMAIN_OPTIONS };
+			}
 
 			// 변경 비교용 원본 스냅샷 저장
 			originalSettings = {
@@ -117,7 +158,8 @@
 				retention_audit_log_days: retentionAuditLogDays,
 				retention_system_task_days: retentionSystemTaskDays,
 				retention_session_history_days: retentionSessionHistoryDays,
-				retention_redis_dynamic_hours: retentionRedisDynamicHours
+				retention_redis_dynamic_hours: retentionRedisDynamicHours,
+				PUSH_DOMAIN_OPTIONS: { ...domainPushOptions }
 			};
 		} catch (e) {
 			console.error('❌ [Config] 설정 불러오기 실패:', e);
@@ -167,6 +209,9 @@
 			}
 			if (retentionRedisDynamicHours !== originalSettings.retention_redis_dynamic_hours) {
 				changedConfigs.retention_redis_dynamic_hours = Number(retentionRedisDynamicHours);
+			}
+			if (JSON.stringify(domainPushOptions) !== JSON.stringify(originalSettings.PUSH_DOMAIN_OPTIONS)) {
+				changedConfigs.PUSH_DOMAIN_OPTIONS = { ...domainPushOptions };
 			}
 
 			// 1. 가입 정책 모드 변경 시 저장
@@ -712,6 +757,19 @@
 				</div>
 			</div>
 		</div>
+
+		<!-- ===================================================================== -->
+		<!-- 5. 도메인별 Web Push 자동 발송 설정 -->
+		<!-- ===================================================================== -->
+		<PushOptionSection
+			title="도메인별 Web Push 자동 발송 설정"
+			subtitle="배차 확정, 휴무 신청·결재, 블랙박스 요청, 공지·지시 발송 시 Web Push 자동 전송 여부를 제어합니다. 변경 후 하단 [설정 전체 저장]을 눌러 반영하세요."
+			options={domainPushOptions}
+			items={domainPushOptionItems}
+			onToggle={(key, val) => {
+				domainPushOptions = { ...domainPushOptions, [key]: val };
+			}}
+		/>
 
 		<!-- ===================================================================== -->
 		<!-- 6. 하단 고정 액션 바 -->

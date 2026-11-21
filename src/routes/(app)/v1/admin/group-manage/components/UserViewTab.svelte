@@ -16,7 +16,7 @@
 
   function getRankBadge(rank) {
     const meta = getRankMeta(rank);
-    return { label: `${meta.shortLabel} (Lv.${meta.val})`, class: meta.badgeClass };
+    return { label: meta.label, class: meta.badgeClass };
   }
 
   let filteredUsers = $derived(

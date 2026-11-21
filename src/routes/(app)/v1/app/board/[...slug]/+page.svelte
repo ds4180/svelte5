@@ -14,4 +14,4 @@
 	<title>{slug.split('/')[0] || '게시판'} | jeju.live</title>
 </svelte:head>
 
-<BoardEngine {slug} appId="boards" />
+<BoardEngine {slug} appId="board" />

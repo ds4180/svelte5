@@ -1,5 +1,6 @@
 import { error, isHttpError } from '@sveltejs/kit';
 import { formatApiError } from '$lib/utils/error';
+import { extractGroupsForAction } from '$lib/runes/auth.svelte';
 import type { PageServerLoad } from './$types';
 
 /**
@@ -78,8 +79,12 @@ export const load: PageServerLoad = async ({ params, fetch, locals }) => {
 		}
 	}
 
-	// 1-1. 🛡️ [4단계 권한 SSR 입구 검문] (1.root(9) ➔ 2.deny_groups ➔ 3.allow_groups ➔ 4.min_read_rank)
-	// 📌 백엔드 `/api/users/me` 응답 스키마의 공식 필드명인 `rank_level`을 우선 참조합니다.
+	const normalizedAppId = appId.toLowerCase();
+	const isInstanceScopedApp = normalizedAppId === 'board' || normalizedAppId === 'boards' || normalizedAppId === 'page';
+
+	// 1-1. 🛡️ [4단계 권한 SSR 입구 검문] (1.root(9) ➔ 2.is_active ➔ 3.deny_groups ➔ 4.allow_groups ➔ 5.min_read_rank)
+	// - board / page 처럼 개별 인스턴스(BoardConfig, Page)가 자체 권한을 가지는 앱은
+	//   AppRegistry의 관리자 등급(min_read_rank=4)으로 가로막지 않고 앱 활성화 여부와 하위 인스턴스 권한으로 판단합니다.
 	const userRank = Number(user?.rank_level ?? user?.rank ?? 0);
 	const userGroups: string[] = [];
 	if (user?.primary_group) userGroups.push(user.primary_group);
@@ -88,23 +93,30 @@ export const load: PageServerLoad = async ({ params, fetch, locals }) => {
 			if (g && !userGroups.includes(g)) userGroups.push(g);
 		}
 	}
-	const denyGroups: string[] = Array.isArray(appInfo.deny_groups) ? appInfo.deny_groups : [];
-	const allowGroups: string[] = Array.isArray(appInfo.allow_groups) ? appInfo.allow_groups : [];
-	const minReadRank = Number(appInfo.min_read_rank ?? 0);
 
-	let canReadApp = false;
-	if (userRank === 9) {
-		canReadApp = true; // [1단계] root(9) 프리패스
-	} else if (denyGroups.some((g) => userGroups.includes(g))) {
-		canReadApp = false; // [2단계] Deny-Wins
-	} else if (allowGroups.some((g) => userGroups.includes(g))) {
-		canReadApp = true; // [3단계] Allow-Wins
-	} else {
-		canReadApp = userRank >= minReadRank; // [4단계] 읽기 랭킹 비교
+	if (appInfo.is_active === false && userRank !== 9) {
+		throw error(403, `비활성화된 앱("${appInfo.title || appId}")입니다.`);
 	}
 
-	if (!canReadApp) {
-		throw error(403, `해당 앱("${appInfo.title || appId}")에 접근할 권한이 없습니다.`);
+	if (!isInstanceScopedApp) {
+		const denyGroups = extractGroupsForAction(appInfo.deny_groups, 'read');
+		const allowGroups = extractGroupsForAction(appInfo.allow_groups, 'read');
+		const minReadRank = Number(appInfo.min_read_rank ?? 0);
+
+		let canReadApp = false;
+		if (userRank === 9) {
+			canReadApp = true; // [1단계] root(9) 프리패스
+		} else if (denyGroups.some((g) => userGroups.includes(g))) {
+			canReadApp = false; // [2단계] Deny-Wins
+		} else if (allowGroups.some((g) => userGroups.includes(g))) {
+			canReadApp = true; // [3단계] Allow-Wins
+		} else {
+			canReadApp = userRank >= minReadRank; // [4단계] 읽기 랭킹 비교
+		}
+
+		if (!canReadApp) {
+			throw error(403, `해당 앱("${appInfo.title || appId}")에 접근할 권한이 없습니다.`);
+		}
 	}
 
 	// 2. [Data-Driven] 범용 데이터 로딩 (병렬 시작된 응답 수신)

@@ -158,6 +158,9 @@ export const adminSendPush = <T = any>(data: Record<string, any>) =>
 	request<T>(`${BASE_URL}/push/send`, 'POST', data);
 export const adminDeletePushSubscription = <T = any>(id: number | string) =>
 	request<T>(`${BASE_URL}/push/subscriptions/${id}`, 'DELETE');
+export const adminGetPushOptions = <T = any>() => request<T>('/api/push/options');
+export const adminUpdatePushOptions = <T = any>(options: Record<string, boolean>) =>
+	request<T>('/api/push/options', 'PUT', { options });
 export const adminDeleteAllPushSubscriptions = <T = any>() =>
 	request<T>(`${BASE_URL}/push/subscriptions`, 'DELETE');
 

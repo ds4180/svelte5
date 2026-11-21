@@ -59,7 +59,7 @@
 							App Registry에 등록된 컴포넌트명 (<strong>{data.appInfo?.main_component}</strong>)이 엔진 지도(<code>$lib/index.ts</code>)에 존재하는지 확인하세요.
 						</p>
 					</div>
-					<a href="/v1/admin/app" class="btn btn-sm btn-primary"> App 설정 확인하러 가기 </a>
+					<a href="/v1/admin/apps" class="btn btn-sm btn-primary"> App 설정 확인하러 가기 </a>
 				</div>
 			</div>
 		{/if}

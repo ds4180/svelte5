@@ -43,8 +43,15 @@
 		redirect_url: ''
 	});
 
-	// 권한 체크
-	let isAdmin = $derived((auth.user?.rank_level ?? 0) >= 4);
+	// 권한 체크 (4단계 권한 판별 SSOT 사용)
+	let isAdmin = $derived(
+		auth.canAccess({
+			action: 'write',
+			minWriteRank: page?.min_write_rank ?? page?.min_rank ?? 4,
+			allowGroups: page?.allow_groups,
+			denyGroups: page?.deny_groups
+		})
+	);
 
 	// 초기화
 	onMount(() => {

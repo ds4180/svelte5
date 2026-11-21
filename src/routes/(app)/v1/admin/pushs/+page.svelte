@@ -17,6 +17,7 @@
 	import { toast } from '$lib/runes/toast.svelte';
 	import { getSiteTitle } from '$lib/config/site';
 	import PrintAssist from '$lib/components/PrintAssist.svelte';
+	import PushOptionSection from '$lib/components/PushOptionSection.svelte';
 	import Icon from '@iconify/svelte';
 
 	let subscriptions = $state(/** @type {any[]} */ ([]));
@@ -25,6 +26,42 @@
 	let showSendModal = $state(false);
 	let searchKeyword = $state('');
 	let platformFilter = $state('');
+	let domainPushOptions = $state(/** @type {Record<string, boolean>} */ ({
+		dispatch_confirmed: true,
+		dayoff_request: true,
+		dayoff_result: true,
+		blackbox_request: true,
+		alert_instruction: true
+	}));
+	let savingDomainPushOptions = $state(false);
+
+	const domainPushOptionItems = [
+		{
+			key: 'dispatch_confirmed',
+			title: '배차 확정 알림 (운전원)',
+			desc: '/v1/admin/dispatch에서 배차 확정(CONFIRMED) 저장 시 배정된 운전원에게 노선 확정 푸시를 발송합니다.'
+		},
+		{
+			key: 'dayoff_request',
+			title: '휴무·결근계 승인 요청 알림 (관리자)',
+			desc: '허가제(APPROVAL) 대상자가 휴무를 신청하면 휴무 관리 권한자에게 즉시 푸시를 발송합니다.'
+		},
+		{
+			key: 'dayoff_result',
+			title: '휴무 승인·반려 결과 알림 (신청자)',
+			desc: '관리자가 휴무 신청을 승인(APPROVED) 또는 반려(REJECTED) 처리하면 신청 사원에게 결과를 발송합니다.'
+		},
+		{
+			key: 'blackbox_request',
+			title: '블랙박스 확인·교체 요청 알림 (사무실)',
+			desc: '운전원이 블랙박스 영상 확인/교체 요청을 접수하면 담당 사무실/관리자 직원에게 푸시를 발송합니다.'
+		},
+		{
+			key: 'alert_instruction',
+			title: '공지·지시(INSTRUCTION) 웹 푸시 동시 발송',
+			desc: '/v1/admin/alerts에서 공지·지시 발송 시 웹소켓과 함께 Web Push를 자동으로 동시 발송합니다.'
+		}
+	];
 
 	// 📊 푸시 발송 폼 상태
 	let pushData = $state({
@@ -165,7 +202,45 @@
 		other: subscriptions.filter(s => !(s.browser_type || '').includes('Chrome') && !(s.browser_type || '').includes('Firefox') && !(s.browser_type || '').includes('Safari')).length
 	});
 
-	onMount(loadSubscriptions);
+	async function loadDomainPushOptions() {
+		try {
+			const res = await api.adminGetPushOptions();
+			if (res?.options && typeof res.options === 'object') {
+				domainPushOptions = { ...domainPushOptions, ...res.options };
+			}
+		} catch (/** @type {any} */ e) {
+			// 권한/네트워크 문제 시 기본 상태 유지
+			console.warn('도메인 푸시 옵션 로드 실패:', e?.message || e);
+		}
+	}
+
+	/**
+	 * 도메인별 Web Push 옵션 토글 즉시 저장
+	 * @param {string} key
+	 * @param {boolean} nextValue
+	 */
+	async function handleToggleDomainPushOption(key, nextValue) {
+		const prev = { ...domainPushOptions };
+		domainPushOptions = { ...domainPushOptions, [key]: nextValue };
+		savingDomainPushOptions = true;
+		try {
+			const res = await api.adminUpdatePushOptions(domainPushOptions);
+			if (res?.options) {
+				domainPushOptions = { ...domainPushOptions, ...res.options };
+			}
+			toast.success('도메인 푸시 발송 옵션이 저장되었습니다.');
+		} catch (/** @type {any} */ e) {
+			domainPushOptions = prev;
+			toast.error('옵션 저장 실패: ' + (e?.message || e));
+		} finally {
+			savingDomainPushOptions = false;
+		}
+	}
+
+	onMount(() => {
+		loadSubscriptions();
+		loadDomainPushOptions();
+	});
 </script>
 
 <svelte:head>
@@ -242,7 +317,20 @@
 	</div>
 
 	<!-- ===================================================================== -->
-	<!-- 2. 통계 지표 카드 -->
+	<!-- 2. 도메인별 자동 Web Push 발송 옵션 -->
+	<!-- ===================================================================== -->
+	<div class="print:hidden">
+		<PushOptionSection
+			title="도메인별 자동 Web Push 발송 옵션 {savingDomainPushOptions ? '(저장 중...)' : ''}"
+			subtitle="배차 확정, 휴무 신청·결재, 블랙박스 요청, 공지·지시 발송 시 Web Push 자동 전송 여부를 즉시 제어합니다. (게시판별 푸시 옵션은 /v1/admin/board에서 설정)"
+			options={domainPushOptions}
+			items={domainPushOptionItems}
+			onToggle={handleToggleDomainPushOption}
+		/>
+	</div>
+
+	<!-- ===================================================================== -->
+	<!-- 3. 통계 지표 카드 -->
 	<!-- ===================================================================== -->
 	<div data-print-section="플랫폼별 구독 통계" class="grid grid-cols-2 gap-4 md:grid-cols-4 md:gap-5 print:break-inside-avoid">
 		<!-- 카드 1: 전체 구독 기기 -->

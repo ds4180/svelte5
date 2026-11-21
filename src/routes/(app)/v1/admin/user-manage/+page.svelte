@@ -533,10 +533,7 @@
 														onclick={() => changeRank(user.id, r.val)}
 														class="flex items-center justify-between text-xs font-bold py-2 {user.profile?.rank_level === r.val ? 'bg-emerald-50 text-emerald-600' : 'text-slate-700 hover:bg-slate-50'}"
 													>
-														<div class="flex flex-col items-start text-left">
-															<span>{r.label}</span>
-															<span class="text-[10px] text-slate-400 font-normal">{r.desc}</span>
-														</div>
+														<span>{r.label}</span>
 														{#if (user.profile?.rank_level ?? 0) === r.val}
 															<Icon icon="mdi:check" class="text-emerald-600 text-base flex-shrink-0" />
 														{/if}

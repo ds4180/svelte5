@@ -1,70 +1,48 @@
 import { redirect } from '@sveltejs/kit';
 import type { LayoutServerLoad } from './$types';
+import { extractGroupsForAction } from '$lib/runes/auth.svelte';
 
 /**
  * ============================================================================
  * [관리자 영역 SSR 라우트 가드 (+layout.server.ts)]
  * ============================================================================
- * 
- * 💡 이 파일의 역할:
- * SvelteKit SSR 환경에서 /v1/admin 및 하위 /v1/admin/* 경로로의 진입을 선제적으로 감시합니다.
- * 정책에 따라 .js가 아닌 TypeScript (.ts)로 엄격히 구현되었습니다.
- * 
+ *
  * 🛡️ 4단계 권한 인가 정책:
  * 1. 비로그인 접근 -> /login?redirect=... 302 리다이렉트
  * 2. 특정 시스템 앱(/v1/admin/{subpath}) 진입 시:
  *    - [1단계] root (rank_level == 9) -> 무조건 허용
- *    - [2단계] deny_groups에 소속 그룹 포함 시 -> 무조건 차단 (Deny-Wins)
- *    - [3단계] allow_groups에 소속 그룹 포함 시 -> 랭크 무관 즉시 허용 (Allow-Wins)
- *    - [4단계] rank_level >= min_read_rank 대소비교
+ *    - [2단계] 앱 비활성화(is_active === false) -> 차단
+ *    - [3단계] deny_groups에 소속 그룹 포함 시 -> 무조건 차단 (Deny-Wins)
+ *    - [4단계] allow_groups에 소속 그룹 포함 시 -> 랭크 무관 즉시 허용 (Allow-Wins)
+ *    - [5단계] rank_level >= min_read_rank 대소비교
  */
 
-// 🌐 시스템 앱 경로와 app_id 매핑 테이블 (대시보드 포함 18종)
+// 🌐 시스템 앱 경로와 AppRegistry app_id 표준 매핑 테이블
 const PATH_TO_APP_ID: Record<string, string> = {
-	'/v1/admin': 'admin_dashboard',
-	'/v1/admin/dashboard': 'admin_dashboard',
-	'/v1/admin/alerts': 'admin_alerts',
-	'/v1/admin/media': 'admin_media',
-	'/v1/admin/target-groups': 'admin_target_groups',
-	'/v1/admin/pushs': 'admin_pushs',
-	'/v1/admin/sessions': 'admin_sessions',
-	'/v1/admin/dispatch': 'admin_dispatch',
-	'/v1/admin/route_master': 'admin_route_master',
-	'/v1/admin/dayoff': 'admin_dayoff',
-	'/v1/admin/boards': 'admin_boards',
-	'/v1/admin/observability': 'admin_observability',
-	'/v1/admin/user-manage': 'admin_user_manage',
-	'/v1/admin/group-manage': 'admin_group_manage',
-	'/v1/admin/tasks': 'admin_tasks',
-	'/v1/admin/config': 'admin_config',
-	'/v1/admin/apps': 'admin_apps',
-	'/v1/admin/menu': 'admin_menu',
-	'/v1/admin/services': 'admin_services'
+	'/v1/admin': 'dashboard',
+	'/v1/admin/dashboard': 'dashboard',
+	'/v1/admin/alerts': 'alerts',
+	'/v1/admin/media': 'media',
+	'/v1/admin/target-groups': 'target_groups',
+	'/v1/admin/pushs': 'pushs',
+	'/v1/admin/sessions': 'observability',
+	'/v1/admin/observability': 'observability',
+	'/v1/admin/dispatch': 'dispatch',
+	'/v1/admin/route_master': 'route_master',
+	'/v1/admin/dayoff': 'dayoff',
+	'/v1/admin/blackbox': 'blackbox',
+	'/v1/admin/board': 'board',
+	'/v1/admin/boards': 'board',
+	'/v1/admin/page': 'page',
+	'/v1/admin/user-manage': 'user_manage',
+	'/v1/admin/group-manage': 'group_manage',
+	'/v1/admin/tasks': 'tasks',
+	'/v1/admin/backup': 'backup',
+	'/v1/admin/config': 'config',
+	'/v1/admin/apps': 'apps',
+	'/v1/admin/menu': 'menu',
+	'/v1/admin/services': 'services'
 };
-
-// 📌 그룹 추출 헬퍼 (단순 리스트 또는 {"read": [...], "write": [...]} 객체 호환)
-function extractGroups(groupData: any, action = 'read'): Set<string> {
-	if (!groupData) return new Set();
-	if (Array.isArray(groupData)) {
-		return new Set(groupData.map(String).filter(Boolean));
-	}
-	if (typeof groupData === 'object') {
-		const result = new Set<string>();
-		const specific = groupData[action];
-		if (Array.isArray(specific)) {
-			specific.forEach((g: any) => g && result.add(String(g)));
-		}
-		const all = groupData['all'];
-		if (Array.isArray(all)) {
-			all.forEach((g: any) => g && result.add(String(g)));
-		}
-		return result;
-	}
-	if (typeof groupData === 'string' && groupData) {
-		return new Set([groupData]);
-	}
-	return new Set();
-}
 
 export const load: LayoutServerLoad = async ({ locals, url, fetch }) => {
 	const user = locals.user;
@@ -108,17 +86,23 @@ export const load: LayoutServerLoad = async ({ locals, url, fetch }) => {
 				const targetApp = await res.json();
 
 				if (targetApp) {
-					// [1단계] deny_groups 검사 (Deny-Wins)
-					const denyGroups = extractGroups(targetApp.deny_groups, 'read');
-					const isDenied = [...userGroups].some(g => denyGroups.has(g));
+					// [1단계] 앱 비활성화(Kill-Switch) 검사 (root는 이미 상단에서 통과)
+					if (targetApp.is_active === false) {
+						console.warn(`🚧 [RouteGuard] ${targetAppId} 비활성화(점검 중) - ${user.username} 차단`);
+						throw redirect(302, isDashboard ? '/' : '/v1/admin?inactive=true');
+					}
+
+					// [2단계] deny_groups 검사 (Deny-Wins)
+					const denyGroups = new Set(extractGroupsForAction(targetApp.deny_groups, 'read'));
+					const isDenied = [...userGroups].some((g) => denyGroups.has(g));
 					if (isDenied) {
 						console.warn(`🚨 [RouteGuard] ${user.username} - ${targetAppId} 접근 차단됨 (deny_groups 소속)`);
 						throw redirect(302, isDashboard ? '/' : '/v1/admin?denied=true');
 					}
 
-					// [2단계] allow_groups 검사 (Allow-Wins)
-					const allowGroups = extractGroups(targetApp.allow_groups, 'read');
-					const isAllowed = [...userGroups].some(g => allowGroups.has(g));
+					// [3단계] allow_groups 검사 (Allow-Wins)
+					const allowGroups = new Set(extractGroupsForAction(targetApp.allow_groups, 'read'));
+					const isAllowed = [...userGroups].some((g) => allowGroups.has(g));
 					if (isAllowed) {
 						return {
 							user,
@@ -128,7 +112,7 @@ export const load: LayoutServerLoad = async ({ locals, url, fetch }) => {
 						};
 					}
 
-					// [3단계] min_read_rank 비교
+					// [4단계] min_read_rank 비교
 					const minRank = Number(targetApp.min_read_rank ?? 4);
 					if (rank < minRank) {
 						console.warn(

@@ -26,6 +26,7 @@
 	import { enterCameraFullscreen } from '$lib/utils/fullscreen';
 	import { createLogoutSubmitHandler } from '$lib/utils/logout';
 	import { toast } from '$lib/runes/toast.svelte';
+	import { getRankMeta } from '$lib/config/rank';
 	import DynamicSidebar from '$lib/components/Nav/DynamicSidebar.svelte';
 	import SmartIcon from '$lib/components/SmartIcon.svelte';
 	import Icon from '@iconify/svelte';
@@ -83,16 +84,11 @@
 	let isFullscreen = $state(false);
 
 	/**
-	 * 직급/랭크 레이블 반환 헬퍼
+	 * 직급/랭크 레이블 반환 헬퍼 (SSOT: $lib/config/rank)
 	 * @param {any} rank
 	 */
 	function getUserRankLabel(rank) {
-		const r = Number(rank ?? 0);
-		if (r >= 9) return '최고관리자 (Lv.9)';
-		if (r >= 8) return '시스템관리자 (Lv.8)';
-		if (r >= 4) return `운영관리자 (Lv.${r})`;
-		if (r >= 1) return `정회원 (Lv.${r})`;
-		return '일반회원 (Lv.0)';
+		return getRankMeta(rank).label;
 	}
 
 	/**
@@ -464,7 +460,7 @@
 								{auth.user.real_name || auth.user.username}
 							</span>
 							<span class="mt-0.5 text-[10px] font-bold text-blue-600 leading-none">
-								{auth.user.role_name || getUserRankLabel(auth.user.rank_level)}
+								{getUserRankLabel(auth.user.rank_level)}
 							</span>
 						</span>
 						<Icon icon="ph:caret-down-bold" class="text-[10px] md:text-xs text-slate-400 transition-transform {isUserMenuOpen ? 'rotate-180' : ''}" />
@@ -500,7 +496,7 @@
 								</div>
 								<div class="mt-2 flex flex-wrap items-center gap-1.5">
 									<span class="rounded-lg bg-blue-50 border border-blue-200 px-2 py-0.5 text-[10px] font-black text-blue-700">
-										{auth.user.role_name || getUserRankLabel(auth.user.rank_level)}
+										{getUserRankLabel(auth.user.rank_level)}
 									</span>
 									{#if auth.user.primary_group}
 										<span class="rounded-lg bg-slate-200 px-2 py-0.5 text-[10px] font-bold text-slate-700">

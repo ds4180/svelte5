@@ -2,6 +2,7 @@
   import { fade } from 'svelte/transition';
   import Icon from '@iconify/svelte';
   import { RANK_LEVELS } from '$lib/config/rank';
+  import { getGroupBadges } from '$lib/runes/auth.svelte';
 
   let {
     instances = [],
@@ -34,37 +35,6 @@
       return matchesType && matchesSearch;
     })
   );
-
-  function getGroupBadges(groupData) {
-    if (!groupData) return [];
-    if (Array.isArray(groupData)) {
-      return groupData.filter(Boolean).map(code => ({
-        code: String(code),
-        action: 'all',
-        label: '전체'
-      }));
-    }
-    if (typeof groupData === 'object' && groupData !== null) {
-      const badges = [];
-      if (Array.isArray(groupData.all)) {
-        groupData.all.forEach(code => {
-          if (code) badges.push({ code: String(code), action: 'all', label: '전체' });
-        });
-      }
-      if (Array.isArray(groupData.read)) {
-        groupData.read.forEach(code => {
-          if (code) badges.push({ code: String(code), action: 'read', label: '읽기' });
-        });
-      }
-      if (Array.isArray(groupData.write)) {
-        groupData.write.forEach(code => {
-          if (code) badges.push({ code: String(code), action: 'write', label: '쓰기' });
-        });
-      }
-      return badges;
-    }
-    return [];
-  }
 
   function addGroupToAction(groupData, code, action = 'all') {
     const spec = { read: [], write: [], all: [] };

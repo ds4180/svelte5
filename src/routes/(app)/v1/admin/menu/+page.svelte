@@ -69,15 +69,21 @@
 			if (is_admin) {
 				currentPath = targetApp?.frontend_route || (cleanId === 'dashboard' || cleanId === '' ? '/v1/admin' : `/v1/admin/${cleanId}`);
 			} else if (menu.link_type === 'CUSTOM' || targetApp?.app_type === 'CUSTOM') {
-				currentPath = `/v1/custom/${cleanId}`;
+				if (cleanId === 'page' && menu.app_instance_id && String(menu.app_instance_id) !== '-1') {
+					const targetPage = pages.find((p) => String(p.id) === String(menu.app_instance_id));
+					const slug = targetPage ? targetPage.slug : String(menu.app_instance_id);
+					currentPath = `/v1/custom/page/${slug}`;
+				} else {
+					currentPath = `/v1/custom/${cleanId}`;
+				}
 			} else if (menu.link_type === 'INSTANCE' || targetApp?.app_type === 'INSTANCE') {
+				const appPrefix = cleanId === 'boards' ? 'board' : cleanId;
 				if (menu.app_instance_id && String(menu.app_instance_id) !== '-1') {
 					const target = boards.find((b) => String(b.id) === String(menu.app_instance_id));
 					const slug = target ? target.slug : String(menu.app_instance_id);
-					const prefix = cleanId.endsWith('s') ? cleanId.slice(0, -1) : cleanId;
-					currentPath = `/v1/app/${prefix}/${slug}`;
+					currentPath = `/v1/app/${appPrefix}/${slug}`;
 				} else {
-					currentPath = `/v1/app/${cleanId}`;
+					currentPath = `/v1/app/${appPrefix}`;
 				}
 			} else {
 				currentPath = `/v1/app/${cleanId}`;
@@ -673,17 +679,25 @@
 								>
 									<option value="-1">🛠️ 관리자 화면 ({apps.find((a) => a.app_id === editingMenu.app_id)?.frontend_route || `/v1/admin/${editingMenu.app_id}`})</option>
 									<option value="">👤 사용자 화면 (/v1/custom/{editingMenu.app_id})</option>
+									{#if editingMenu.app_id === 'page' && pages && pages.length > 0}
+										<optgroup label="개별 페이지 인스턴스 (/v1/custom/page/[slug])">
+											{#each pages as p}
+												<option value={String(p.id)}>📄 {p.title} (/{p.slug})</option>
+											{/each}
+										</optgroup>
+									{/if}
 								</select>
 							{:else}
+								{@const hubPrefix = editingMenu.app_id === 'boards' ? 'board' : editingMenu.app_id}
 								<select
 									id="menu-instance"
 									bind:value={editingMenu.app_instance_id}
 									class="w-full px-4 py-3 rounded-2xl border-2 border-blue-200 text-xs font-bold text-slate-800 bg-white focus:border-blue-600 focus:outline-none transition"
 								>
-									<option value="-1">🛠️ 관리자 관제탑 (/v1/admin/{editingMenu.app_id})</option>
-									<option value="">🌐 인스턴스 카탈로그 허브 (/v1/app/{editingMenu.app_id})</option>
+									<option value="-1">🛠️ 관리자 관제탑 (/v1/admin/{hubPrefix})</option>
+									<option value="">🌐 인스턴스 카탈로그 허브 (/v1/app/{hubPrefix})</option>
 									{#if boards && boards.length > 0}
-										<optgroup label="개별 게시판 인스턴스">
+										<optgroup label="개별 게시판 인스턴스 (/v1/app/board/[slug])">
 											{#each boards as b}
 												<option value={String(b.id)}>📋 {b.name} (/{b.slug})</option>
 											{/each}

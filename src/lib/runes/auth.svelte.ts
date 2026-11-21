@@ -41,6 +41,41 @@ export function extractGroupsForAction(groupData: any, action: AccessAction = 'r
 	return [];
 }
 
+export interface GroupBadge {
+	code: string;
+	action: 'all' | 'read' | 'write';
+	label: string;
+}
+
+/**
+ * [그룹 배지 목록 추출 헬퍼 (관리자 UI 공용)]
+ * 배열 및 { all, read, write } 객체를 배지 리스트로 변환합니다.
+ */
+export function getGroupBadges(groupData: any): GroupBadge[] {
+	if (!groupData) return [];
+	if (Array.isArray(groupData)) {
+		return groupData.filter(Boolean).map((code) => ({
+			code: String(code),
+			action: 'all' as const,
+			label: '전체'
+		}));
+	}
+	if (typeof groupData === 'object' && groupData !== null) {
+		const badges: GroupBadge[] = [];
+		const append = (list: unknown, action: 'all' | 'read' | 'write', label: string) => {
+			if (!Array.isArray(list)) return;
+			for (const code of list) {
+				if (code) badges.push({ code: String(code), action, label });
+			}
+		};
+		append(groupData.all, 'all', '전체');
+		append(groupData.read, 'read', '읽기');
+		append(groupData.write, 'write', '쓰기');
+		return badges;
+	}
+	return [];
+}
+
 export class AuthState {
 	// 반응형 유저 정보 상태
 	user = $state<UserProfile | null>(null);

@@ -236,7 +236,7 @@
 		errorMessage = '';
 		try {
 			// ✅ [Hardcoding Zero] 게시판 전용 API 대신 범용 데이터 API 호출
-			const data = await adminGetAppData('boards', slug, { 
+			const data = await adminGetAppData('board', slug, { 
 				page: currentPage - 1, 
 				size: pageSize, 
 				keyword: keyword,
@@ -411,7 +411,7 @@
 					</p>
 				</div>
 				<a
-					href="/v1/app/boards"
+					href="/v1/app/board"
 					class="inline-flex items-center justify-center rounded-2xl bg-slate-900 px-6 py-3 text-xs font-black text-white transition hover:bg-blue-600"
 				>
 					전체 게시판 목록 보기
@@ -462,7 +462,7 @@
 							</a>
 						{/if}
 						<a
-							href="/v1/app/boards"
+							href="/v1/app/board"
 							class="inline-flex h-10 items-center justify-center rounded-xl border-2 border-slate-200 bg-white px-4 text-xs font-bold text-slate-600 transition hover:bg-slate-50"
 							title="전체 게시판 목록"
 						>
