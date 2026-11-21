@@ -13,6 +13,7 @@
 	import { navState } from '$lib/runes/nav.svelte';
 	import { buildOptionMenuItems } from '$lib/utils/dynamicOptions';
 	import { getSiteTitle } from '$lib/config/site';
+	import { RANK_LEVELS } from '$lib/config/rank';
 	import Icon from '@iconify/svelte';
 
 	let boards = $state(/** @type {any[]} */ ([]));
@@ -761,11 +762,9 @@
 							bind:value={editingBoard.min_read_rank}
 							class="w-full px-4 py-3 rounded-2xl border-2 border-slate-200 text-xs font-bold text-slate-800 bg-white focus:border-blue-600 focus:outline-none transition"
 						>
-							<option value={0}>전체 공개 (R0)</option>
-							<option value={1}>로그인 · 직원 전용 (R1)</option>
-							<option value={2}>중간 관리자 이상 (R2)</option>
-							<option value={4}>시스템 마스터 이상 (R4)</option>
-							<option value={9}>최고 관리자(root) 전용 (R9)</option>
+							{#each RANK_LEVELS as r (r.val)}
+								<option value={r.val}>Lv.{r.val}</option>
+							{/each}
 						</select>
 					</div>
 
@@ -776,11 +775,9 @@
 							bind:value={editingBoard.min_write_rank}
 							class="w-full px-4 py-3 rounded-2xl border-2 border-slate-200 text-xs font-bold text-slate-800 bg-white focus:border-blue-600 focus:outline-none transition"
 						>
-							<option value={0}>전체 허용 (R0)</option>
-							<option value={1}>로그인 · 직원 이상 (R1)</option>
-							<option value={2}>중간 관리자 이상 (R2)</option>
-							<option value={4}>시스템 마스터 이상 (R4)</option>
-							<option value={9}>최고 관리자(root) 전용 (R9)</option>
+							{#each RANK_LEVELS as r (r.val)}
+								<option value={r.val}>Lv.{r.val}</option>
+							{/each}
 						</select>
 					</div>
 				</div>

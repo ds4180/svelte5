@@ -18,11 +18,17 @@
 	 *   type?: import('chart.js').ChartType,
 	 *   data?: import('chart.js').ChartData,
 	 *   options?: import('chart.js').ChartOptions,
-	 *   ariaLabel?: string
+	 *   ariaLabel?: string,
+	 *   containerClass?: string
 	 * }}
 	 */
-	let { type = 'bar', data = { labels: [], datasets: [] }, options = {}, ariaLabel = '데이터 차트' } =
-		$props();
+	let {
+		type = 'bar',
+		data = { labels: [], datasets: [] },
+		options = {},
+		ariaLabel = '데이터 차트',
+		containerClass = 'relative h-full min-h-[300px] w-full'
+	} = $props();
 
 	/** @type {HTMLCanvasElement | undefined} */
 	let canvasElement = $state();
@@ -89,6 +95,6 @@
 	});
 </script>
 
-<div class="relative h-full min-h-[300px] w-full">
+<div class={containerClass}>
 	<canvas bind:this={canvasElement} role="img" aria-label={ariaLabel}></canvas>
 </div>

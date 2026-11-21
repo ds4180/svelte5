@@ -11,6 +11,7 @@
 	import * as api from '$lib/api/admin';
 	import { toast } from '$lib/runes/toast.svelte';
 	import { getSiteTitle } from '$lib/config/site';
+	import { RANK_LEVELS } from '$lib/config/rank';
 	import Icon from '@iconify/svelte';
 	import SmartIcon from '$lib/components/SmartIcon.svelte';
 
@@ -468,12 +469,12 @@
 						</div>
 
 						<div class="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between">
-							<div class="flex items-center gap-1.5">
+							<div class="flex flex-wrap items-center gap-1.5">
 								<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-600">
-									R{app.min_read_rank ?? 0} 읽기
+									Lv.{app.min_read_rank ?? 0} 읽기
 								</span>
 								<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-600">
-									R{app.min_write_rank ?? 2} 쓰기
+									Lv.{app.min_write_rank ?? 2} 쓰기
 								</span>
 							</div>
 
@@ -652,12 +653,9 @@
 							bind:value={editingApp.min_read_rank}
 							class="w-full px-4 py-3 rounded-2xl border-2 border-slate-200 text-xs font-bold text-slate-800 bg-white focus:border-purple-600 focus:outline-none transition"
 						>
-							<option value={0}>R0 (일반회원)</option>
-							<option value={1}>R1 (정회원)</option>
-							<option value={2}>R2 (매니저)</option>
-							<option value={4}>R4 (운영관리자)</option>
-							<option value={8}>R8 (시스템관리자)</option>
-							<option value={9}>R9 (최고관리자)</option>
+							{#each RANK_LEVELS as r (r.val)}
+								<option value={r.val}>Lv.{r.val}</option>
+							{/each}
 						</select>
 					</div>
 
@@ -670,12 +668,9 @@
 							bind:value={editingApp.min_write_rank}
 							class="w-full px-4 py-3 rounded-2xl border-2 border-slate-200 text-xs font-bold text-slate-800 bg-white focus:border-purple-600 focus:outline-none transition"
 						>
-							<option value={0}>R0 (일반회원)</option>
-							<option value={1}>R1 (정회원)</option>
-							<option value={2}>R2 (매니저)</option>
-							<option value={4}>R4 (운영관리자)</option>
-							<option value={8}>R8 (시스템관리자)</option>
-							<option value={9}>R9 (최고관리자)</option>
+							{#each RANK_LEVELS as r (r.val)}
+								<option value={r.val}>Lv.{r.val}</option>
+							{/each}
 						</select>
 					</div>
 

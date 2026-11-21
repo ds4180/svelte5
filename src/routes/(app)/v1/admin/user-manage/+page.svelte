@@ -673,10 +673,9 @@
 					<div>
 						<label for="new-rank" class="block text-xs font-bold text-slate-600 mb-1">초기 권한 랭크</label>
 						<select id="new-rank" bind:value={newEmployee.rank_level} class="select select-bordered select-sm w-full rounded-xl font-bold">
-							<option value={1}>Lv.1 정회원 (일반 사원)</option>
-							<option value={2}>Lv.2 실무자 (승무/배차 등)</option>
-							<option value={3}>Lv.3 부서장 (팀장급)</option>
-							<option value={4}>Lv.4 운영 관리자</option>
+							{#each USER_ASSIGNABLE_RANK_LEVELS as r (r.val)}
+								<option value={r.val}>Lv.{r.val}</option>
+							{/each}
 						</select>
 					</div>
 				</div>

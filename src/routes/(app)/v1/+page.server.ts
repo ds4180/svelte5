@@ -6,12 +6,8 @@ export const load: PageServerLoad = async ({ locals, fetch }) => {
 
 	if (user) {
 		const rank = Number(user.rank_level ?? 0);
-		const groups = [user.primary_group, ...(Array.isArray(user.all_groups) ? user.all_groups : [])]
-			.filter(Boolean)
-			.join(' ');
-		const isDriver = rank < 4 && (rank === 1 || /운전|운수|승무/.test(groups));
-
-		if (isDriver) {
+		// 랭크 2: 기사 화면 전용 당일/명일 근무·휴무 브리핑 선조회
+		if (rank === 2) {
 			try {
 				const res = await fetch('/api/v1/custom/my-dispatch-briefing');
 				if (res.ok) {

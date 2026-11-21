@@ -14,6 +14,7 @@
 	import { adminGetPages } from '$lib/api/page';
 	import { toast } from '$lib/runes/toast.svelte';
 	import { getSiteTitle } from '$lib/config/site';
+	import { RANK_LEVELS } from '$lib/config/rank';
 	import { browser } from '$app/environment';
 	import Icon from '@iconify/svelte';
 	import SmartIcon from '$lib/components/SmartIcon.svelte';
@@ -594,11 +595,9 @@
 							bind:value={editingMenu.min_rank}
 							class="w-full px-4 py-3 rounded-2xl border-2 border-slate-200 text-xs font-bold text-slate-800 bg-white focus:border-blue-600 focus:outline-none transition"
 						>
-							<option value={0}>전체 (R0)</option>
-							<option value={1}>직원 (R1)</option>
-							<option value={2}>관리자 (R2)</option>
-							<option value={4}>마스터 (R4)</option>
-							<option value={8}>시스템관리자 (R8)</option>
+							{#each RANK_LEVELS as r (r.val)}
+								<option value={r.val}>Lv.{r.val}</option>
+							{/each}
 						</select>
 					</div>
 

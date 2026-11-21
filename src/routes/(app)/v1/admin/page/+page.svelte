@@ -10,6 +10,7 @@
 	import * as api from '$lib/api/page';
 	import { toast } from '$lib/runes/toast.svelte';
 	import { getSiteTitle } from '$lib/config/site';
+	import { RANK_LEVELS } from '$lib/config/rank';
 	import { toLocalISOString } from '$lib/utils';
 	import { env } from '$env/dynamic/public';
 	import { publishEditorContentAssets } from '$lib/services/mediaService';
@@ -435,10 +436,9 @@
 							bind:value={createForm.min_rank}
 							class="w-full px-4 py-3 rounded-2xl border-2 border-slate-200 text-xs font-bold focus:border-blue-600 focus:outline-none bg-white transition"
 						>
-							<option value={0}>전체 공개 (R0)</option>
-							<option value={1}>직원 전용 (R1)</option>
-							<option value={2}>관리자 전용 (R2)</option>
-							<option value={4}>시스템 마스터 전용 (R4)</option>
+							{#each RANK_LEVELS as r (r.val)}
+								<option value={r.val}>Lv.{r.val}</option>
+							{/each}
 						</select>
 					</div>
 
@@ -666,10 +666,9 @@
 							bind:value={metaForm.min_rank}
 							class="w-full px-3 py-2.5 rounded-2xl border-2 border-slate-200 text-xs font-bold focus:border-blue-600 focus:outline-none bg-white transition"
 						>
-							<option value={0}>전체 (R0)</option>
-							<option value={1}>직원 (R1)</option>
-							<option value={2}>관리자 (R2)</option>
-							<option value={4}>마스터 (R4)</option>
+							{#each RANK_LEVELS as r (r.val)}
+								<option value={r.val}>Lv.{r.val}</option>
+							{/each}
 						</select>
 					</div>
 
