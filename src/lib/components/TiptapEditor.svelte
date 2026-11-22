@@ -570,7 +570,7 @@
 			<div class="mx-1 h-5 w-px bg-slate-200"></div>
 
 			<!-- 7. Media & Table -->
-			<div class="flex items-center gap-0.5">
+			<div class="flex flex-wrap items-center gap-0.5">
 				<button type="button" title="링크 삽입" onclick={addLink} class="tool-btn {editor.isActive('link') ? 'active' : ''}"><Icon icon="ph:link-bold" /></button>
 				<button type="button" title="이미지 URL 삽입" onclick={addImage} class="tool-btn"><Icon icon="ph:image-square-bold" /></button>
 				{#if enableUpload}
@@ -585,17 +585,7 @@
 							<span class="loading loading-spinner loading-xs"></span>
 						{:else}
 							<Icon icon="ph:images-bold" />
-							{#if isCalloutActive}
-			<div class="flex flex-wrap items-center gap-1 border-b border-slate-200 bg-slate-100/80 px-3 py-1.5 text-xs">
-				<span class="mr-1 font-bold text-slate-700">콜아웃 스타일:</span>
-				<button type="button" onclick={() => insertCallout('info')} class="table-btn">안내(파랑)</button>
-				<button type="button" onclick={() => insertCallout('warning')} class="table-btn">주의(노랑)</button>
-				<button type="button" onclick={() => insertCallout('danger')} class="table-btn">위험(빨강)</button>
-				<button type="button" onclick={() => insertCallout('success')} class="table-btn">완료(초록)</button>
-				<button type="button" onclick={() => editor?.chain().focus().lift('callout').run()} class="table-btn text-rose-600">박스 해제</button>
-			</div>
-		{/if}
-	{/if}
+						{/if}
 					</button>
 					<button
 						type="button"
@@ -623,17 +613,7 @@
 						onchange={(e) => uploadAndInsertDirect(e.currentTarget.files)}
 						class="hidden"
 					/>
-					{#if isCalloutActive}
-			<div class="flex flex-wrap items-center gap-1 border-b border-slate-200 bg-slate-100/80 px-3 py-1.5 text-xs">
-				<span class="mr-1 font-bold text-slate-700">콜아웃 스타일:</span>
-				<button type="button" onclick={() => insertCallout('info')} class="table-btn">안내(파랑)</button>
-				<button type="button" onclick={() => insertCallout('warning')} class="table-btn">주의(노랑)</button>
-				<button type="button" onclick={() => insertCallout('danger')} class="table-btn">위험(빨강)</button>
-				<button type="button" onclick={() => insertCallout('success')} class="table-btn">완료(초록)</button>
-				<button type="button" onclick={() => editor?.chain().focus().lift('callout').run()} class="table-btn text-rose-600">박스 해제</button>
-			</div>
-		{/if}
-	{/if}
+				{/if}
 				<button type="button" title="표 삽입 (3×3)" onclick={insertTable} class="tool-btn {isTableActive ? 'active' : ''}"><Icon icon="ph:table-bold" /></button>
 				<button type="button" title="콜아웃 박스" onclick={() => insertCallout('info')} class="tool-btn {isCalloutActive ? 'active' : ''}"><Icon icon="ph:megaphone-bold" /></button>
 				<button type="button" title="접기 / 펼치기" onclick={insertDetails} class="tool-btn"><Icon icon="ph:caret-circle-down-bold" /></button>
@@ -695,16 +675,6 @@
 			<span class="loading loading-md loading-spinner text-blue-600"></span>
 			<p class="text-xs font-medium text-slate-400">에디터를 불러오는 중...</p>
 		</div>
-		{#if isCalloutActive}
-			<div class="flex flex-wrap items-center gap-1 border-b border-slate-200 bg-slate-100/80 px-3 py-1.5 text-xs">
-				<span class="mr-1 font-bold text-slate-700">콜아웃 스타일:</span>
-				<button type="button" onclick={() => insertCallout('info')} class="table-btn">안내(파랑)</button>
-				<button type="button" onclick={() => insertCallout('warning')} class="table-btn">주의(노랑)</button>
-				<button type="button" onclick={() => insertCallout('danger')} class="table-btn">위험(빨강)</button>
-				<button type="button" onclick={() => insertCallout('success')} class="table-btn">완료(초록)</button>
-				<button type="button" onclick={() => editor?.chain().focus().lift('callout').run()} class="table-btn text-rose-600">박스 해제</button>
-			</div>
-		{/if}
 	{/if}
 </div>
 

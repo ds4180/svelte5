@@ -45,19 +45,19 @@
 	};
 </script>
 
-<!-- 🍞 화면 우측 하단 기본 토스트 컨테이너 (모바일 퀵메뉴 상단 안착 및 z-index 최상위 보장) -->
+<!-- 🍞 화면 중앙 정렬 시스템 기본 토스트 컨테이너 (반응형 최대 폭 및 z-index 최상위 보장) -->
 {#if toast.items.length > 0}
 	<aside
-		class="toast z-[10002] flex max-w-sm flex-col gap-2 p-0 {isCameraPage
-			? 'toast-top toast-center sm:toast-end mt-[52px] mx-2 sm:mx-0 sm:mr-4'
-			: 'toast-end toast-bottom mb-20 mr-2 md:mb-4 md:mr-4'}"
+		class="toast toast-center z-[10002] flex w-full max-w-[min(94vw,30rem)] flex-col items-center gap-2 px-2 py-0 {isCameraPage
+			? 'toast-top mt-[52px]'
+			: 'toast-bottom mb-20 md:mb-6'}"
 		aria-live="polite"
 		aria-label="시스템 알림"
 	>
 		{#each toast.items as item (item.id)}
 			{@const config = TYPE_CONFIG[item.type] || TYPE_CONFIG.info}
 			<div
-				class="alert {config.alertClass} flex items-center justify-between rounded-2xl border-none px-4 py-3 shadow-xl backdrop-blur-md"
+				class="alert {config.alertClass} flex w-full items-center justify-between rounded-2xl border-none px-4 py-3 shadow-xl backdrop-blur-md"
 				transition:fly={{ y: isCameraPage ? -20 : 20, duration: 250 }}
 				role="alert"
 			>

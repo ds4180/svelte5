@@ -239,9 +239,10 @@
 										</div>
 									</div>
 									<input
-										type="text"
+										type={pc.inputType || 'text'}
 										value={pc.value ?? ''}
-										onchange={(e) => pc.onChange?.(e.currentTarget.value)}
+										placeholder={pc.placeholder || ''}
+										oninput={(e) => pc.onChange?.(e.currentTarget.value)}
 										aria-label={pc.title}
 										class="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-bold text-slate-800 focus:border-blue-500 focus:bg-white focus:outline-none"
 									/>

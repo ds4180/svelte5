@@ -21,6 +21,11 @@
 	import BoardListLayout from './layouts/BoardListLayout.svelte';
 	import BoardGalleryLayout from './layouts/BoardGalleryLayout.svelte';
 	import BoardBlogLayout from './layouts/BoardBlogLayout.svelte';
+	import {
+		POST_CATEGORIES,
+		buildPostMetaMenuItems,
+		getPostMetaPresentation
+	} from './layouts/boardUtils';
 	import { getAuthContext } from '$lib/runes/auth.svelte';
 	import { navState } from '$lib/runes/nav.svelte';
 	import { toast } from '$lib/runes/toast.svelte';
@@ -43,6 +48,7 @@
 	let currentPage = $state(1);
 	let pageSize = $state(10);
 	let keyword = $state('');
+	let selectedCategory = $state('전체');
 	let sort = $state('latest');
 
 	// --- [데이터 상태] ---
@@ -136,6 +142,9 @@
 			try {
 				await adminUpdateBoard(board.id, { options: nextOptions });
 				toast.success(`세부 옵션('${key}')이 저장되었습니다.`);
+				if (key === 'use_pin' && mode === 'list') {
+					await loadData(true);
+				}
 			} catch (e) {
 				board = { ...board, options: prevOptions };
 				toast.error('옵션 저장 실패: ' + formatApiError(e));
@@ -145,17 +154,78 @@
 		}
 	}
 
-	// 📌 우측 다이나믹 폼(DynamicSidebar) 상단 구역에 게시판 세부 옵션(options JSON)만 주입
+	let activeExtra = $derived(/** @type {Record<string, any>} */ (editForm.extra_data || {}));
+	let isPinFeatureEnabled = $derived.by(() => {
+		const raw = board?.options?.use_pin;
+		if (raw === undefined) return true;
+		if (raw && typeof raw === 'object' && 'value' in raw) return Boolean(raw.value);
+		return Boolean(raw);
+	});
+
+	async function handleQuickPostMetaToggle(/** @type {string} */ key, /** @type {any} */ nextValue) {
+		if (!post?.id) return;
+		const prevExtra = post.extra_data && typeof post.extra_data === 'object' ? post.extra_data : {};
+		const nextExtra = { ...prevExtra, [key]: nextValue };
+		post = { ...post, extra_data: nextExtra };
+		try {
+			await api.updatePost(post.id, { extra_data: nextExtra });
+			if (key === 'is_pinned') {
+				toast.success(nextValue ? '📌 이 글이 상단 고정되었습니다.' : '상단 고정이 해제되었습니다.');
+			} else {
+				toast.success('게시물 설정이 저장되었습니다.');
+			}
+		} catch (e) {
+			post = { ...post, extra_data: prevExtra };
+			toast.error('저장 실패: ' + formatApiError(e));
+		}
+	}
+
+	function handlePostMetaChange(/** @type {string} */ key, /** @type {any} */ nextValue) {
+		const prev = editForm.extra_data && typeof editForm.extra_data === 'object' ? editForm.extra_data : {};
+		editForm.extra_data = /** @type {Record<string, any>} */ ({ ...prev, [key]: nextValue });
+	}
+
+	// 📌 우측 다이나믹 폼(DynamicSidebar): 글쓰기/수정 시 게시물 메타 폼, 목록/상세 시 게시판 설정(+관리자 빠른 고정) 폼 주입
 	$effect(() => {
 		const slugVal = boardSlug;
 		const b = board;
+		const currentMode = mode;
+		const currentPost = post;
+		const pinEnabled = isPinFeatureEnabled;
 
 		if (!slugVal || !b) {
 			navState.clearPageMenus();
 			return;
 		}
 
-		navState.setPageMenus(buildOptionMenuItems(b.options, handleBoardOptionChange));
+		const isAdmin = (auth.user?.rank_level ?? 0) >= 4;
+
+		if (currentMode === 'write' || currentMode === 'edit') {
+			const metaSnapshot = editForm.extra_data;
+			const writeKeys = Array.isArray(b.options?.write_meta_keys) ? b.options.write_meta_keys : null;
+			let items = buildPostMetaMenuItems(metaSnapshot, isAdmin, handlePostMetaChange, writeKeys);
+			if (!pinEnabled) {
+				items = items.filter((item) => item.metaKey !== 'is_pinned' && item.metaKey !== 'pin_until');
+			}
+			navState.setPageMenus(items);
+		} else {
+			const items = [];
+			if (currentMode === 'view' && currentPost && (isAdmin || canModifyPost)) {
+				const viewKeys = Array.isArray(b.options?.view_meta_keys) ? b.options.view_meta_keys : null;
+				let metaItems = buildPostMetaMenuItems(
+					currentPost.extra_data,
+					isAdmin,
+					handleQuickPostMetaToggle,
+					viewKeys
+				);
+				if (!pinEnabled) {
+					metaItems = metaItems.filter((item) => item.metaKey !== 'is_pinned' && item.metaKey !== 'pin_until');
+				}
+				items.push(...metaItems);
+			}
+			items.push(...buildOptionMenuItems(b.options, handleBoardOptionChange));
+			navState.setPageMenus(items);
+		}
 	});
 
 	onDestroy(() => {
@@ -240,7 +310,8 @@
 				page: currentPage - 1, 
 				size: pageSize, 
 				keyword: keyword,
-				sort: sort
+				sort: sort,
+				category: selectedCategory === '전체' ? '' : selectedCategory
 			});
 
 			if (mode === 'list') {
@@ -315,8 +386,10 @@
 				media_ids: publishedMedia.publishedAssetIds || []
 			};
 
+			let savedId = postId;
 			if (mode === 'write') {
-				await api.createPost(boardSlug, payload);
+				const created = await api.createPost(boardSlug, payload);
+				savedId = created?.id ?? created?.post?.id ?? null;
 				toast.success('게시글이 등록되었습니다.');
 			} else if (mode === 'edit') {
 				await api.updatePost(postId, payload);
@@ -329,7 +402,10 @@
 			}
 			resetEditForm();
 			isLoading = false;
-			await goto(`/v1/app/board/${boardSlug}`, { invalidateAll: true });
+			const targetUrl = savedId
+				? `/v1/app/board/${boardSlug}/${savedId}`
+				: `/v1/app/board/${boardSlug}`;
+			await goto(targetUrl, { invalidateAll: true });
 			await invalidateAll();
 		} catch (e) {
 			toast.error('저장 실패: ' + formatApiError(e));
@@ -476,6 +552,25 @@
 			<main class="animate-fade-in">
 				{#if mode === 'list'}
 					<div class="flex flex-col gap-4">
+						<!-- 카테고리 필터 바 -->
+						<div class="flex flex-wrap items-center gap-1.5">
+							{#each POST_CATEGORIES as cat}
+								<button
+									type="button"
+									onclick={() => {
+										selectedCategory = cat;
+										currentPage = 1;
+										loadData(true);
+									}}
+									class="rounded-xl px-3 py-1.5 text-xs font-black transition {selectedCategory === cat
+										? 'bg-slate-900 text-white shadow-xs'
+										: 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-100'}"
+								>
+									{cat}
+								</button>
+							{/each}
+						</div>
+
 						<SearchFilterBar
 							bind:keyword
 							bind:sort
@@ -492,7 +587,7 @@
 								<p class="text-sm font-bold">등록된 게시글이 없습니다.</p>
 							</div>
 						{:else}
-							<ActiveListLayout {posts} {boardSlug} />
+							<ActiveListLayout {posts} {boardSlug} boardOptions={board?.options || {}} />
 
 							<!-- 🔢 PAGINATION (공용 Pagination 컴포넌트) -->
 							<Pagination
@@ -518,11 +613,33 @@
 							</a>
 						</div>
 					{:else if post}
+						{@const viewMeta = getPostMetaPresentation(post, board?.options)}
+						{@const viewBindings = viewMeta.allowComment
+							? bindings
+							: (bindings || []).filter((/** @type {any} */ b) => !String(b?.engine_key || b?.registry_code || b?.app_id || '').includes('comment'))}
 						<article class="mx-auto max-w-4xl" in:fade={{ duration: 250 }}>
-							<div class="board-fullbleed-card rounded-3xl border-2 border-slate-200 bg-white p-6 shadow-sm sm:p-10">
+							<div class="board-fullbleed-card rounded-3xl border-2 p-6 shadow-sm sm:p-10 {viewMeta.cardToneClass}">
 								<!-- 📋 게시물 헤더 블록 -->
 								<header class="border-b border-slate-200 pb-6">
 									<div class="flex flex-wrap items-center gap-2">
+										{#if viewMeta.isPinned}
+											<span class="rounded-lg bg-amber-500 px-2.5 py-1 text-xs font-black text-white">📌 상단고정</span>
+										{/if}
+										{#if viewMeta.category}
+											<span class="rounded-lg px-2.5 py-1 text-xs font-black {viewMeta.categoryClass}">{viewMeta.category}</span>
+										{/if}
+										{#if viewMeta.isNew}
+											<span class="rounded-lg bg-rose-500 px-2 py-0.5 text-[11px] font-black text-white">NEW</span>
+										{/if}
+										{#if viewMeta.isSecret}
+											<span class="rounded-lg bg-slate-800 px-2.5 py-1 text-xs font-black text-white">🔒 비밀글</span>
+										{/if}
+										{#if viewMeta.effectiveDate}
+											<span class="rounded-lg bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700">시행일 {viewMeta.effectiveDate}</span>
+										{/if}
+										{#if viewMeta.routeNo || viewMeta.vehicleNo}
+											<span class="rounded-lg bg-sky-50 px-2.5 py-1 text-xs font-bold text-sky-700">{[viewMeta.routeNo, viewMeta.vehicleNo].filter(Boolean).join(' · ')}</span>
+										{/if}
 										<a
 											href="/v1/app/board/{boardSlug}"
 											class="rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-600 hover:bg-slate-200 transition"
@@ -536,8 +653,8 @@
 										{/if}
 									</div>
 
-									<h1 class="mt-3 text-2xl font-black tracking-tight text-slate-900 sm:text-3xl">
-										{post.title}
+									<h1 class="mt-3 text-2xl tracking-tight sm:text-3xl {viewMeta.titleWeightClass} {viewMeta.titleColorClass}">
+										{#if viewMeta.icon}<span class="mr-2">{viewMeta.icon}</span>{/if}{post.title}
 									</h1>
 
 									<div class="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs font-bold text-slate-500">
@@ -567,6 +684,18 @@
 									html={post.content}
 									class="prose prose-slate max-w-none pt-8 text-base leading-relaxed text-slate-800"
 								/>
+
+								{#if viewMeta.ctaUrl}
+									<div class="mt-6">
+										<a
+											href={viewMeta.ctaUrl}
+											class="inline-flex items-center gap-2 rounded-2xl bg-indigo-600 px-5 py-3 text-xs font-black text-white shadow-sm transition hover:bg-indigo-700"
+										>
+											<Icon icon="ph:arrow-square-out-bold" class="h-4 w-4" />
+											<span>{viewMeta.ctaLabel}</span>
+										</a>
+									</div>
+								{/if}
 
 								<!-- 🗂 extra_data 필드 표시 -->
 								{#if post.extra_data && Object.keys(post.extra_data).length > 0}
@@ -615,7 +744,7 @@
 
 							<!-- 💬 Dynamic Service Bindings (블록/인라인/2분할/카드묶음 동적 레이아웃 렌더링) -->
 							<ServiceBundleRenderer
-								{bindings}
+								bindings={viewBindings}
 								{post}
 								{appId}
 								instanceId={postId}
@@ -650,6 +779,25 @@
 							</div>
 
 							<div class="space-y-6">
+								<!-- 우측 다이나믹 폼 메타 안내 배너 -->
+								<div class="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-indigo-200 bg-indigo-50/70 px-4 py-3 text-xs">
+									<div class="flex items-center gap-2 font-bold text-indigo-800">
+										<Icon icon="ph:magic-wand-bold" class="h-4 w-4 shrink-0 text-indigo-600" />
+										<span>우측 <strong>Dynamic Form</strong> 패널에서 카테고리·상단고정·배경색·NEW·비밀글·예약게시 등 메타 정보를 설정할 수 있습니다.</span>
+									</div>
+									<div class="flex flex-wrap items-center gap-1.5">
+										{#if activeExtra.category}
+											<span class="rounded-md bg-white px-2 py-0.5 text-[11px] font-black text-indigo-700">{activeExtra.category}</span>
+										{/if}
+										{#if activeExtra.is_pinned}
+											<span class="rounded-md bg-amber-500 px-2 py-0.5 text-[11px] font-black text-white">📌 상단고정</span>
+										{/if}
+										{#if activeExtra.is_secret}
+											<span class="rounded-md bg-slate-800 px-2 py-0.5 text-[11px] font-black text-white">🔒 비밀글</span>
+										{/if}
+									</div>
+								</div>
+
 								<div>
 									<label for="board-title-input" class="mb-2 block text-xs font-bold text-slate-700">
 										제목 <span class="text-rose-500">*</span>

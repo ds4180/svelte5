@@ -216,13 +216,17 @@
 		}
 	}
 
-	function sendCoopRequest() {
+	function sendCoopRequest(includeSelf = false) {
 		if (!user) return;
 		if (websocket.status !== 'connected') {
 			toast.error('실시간 WebSocket 연결을 확인해 주세요.');
 			return;
 		}
 		clearCoopTimer();
+		const isMobileDevice =
+			typeof navigator !== 'undefined' &&
+			/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+		const allowSelf = includeSelf || isMobileDevice;
 		const reqId = `coop_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
 		coopRequestId = reqId;
 		coopWaiting = true;
@@ -232,11 +236,16 @@
 		websocket.send({
 			type: 'BIOMETRIC_COOP_REQUEST',
 			requestId: reqId,
+			includeSelf: allowSelf,
 			docTitle: '1급 대외비 운행·관제 보안 문서',
 			requesterName: user.real_name || user.username,
 			requestedAt: new Date().toLocaleTimeString('ko-KR')
 		});
-		toast.info('📲 내 스마트폰으로 원격 지문 승인 요청을 발송했습니다!');
+		toast.info(
+			allowSelf
+				? '📲 현재 휴대폰(자기 자신)으로 지문 승인 요청을 발송했습니다!'
+				: '📲 내 스마트폰으로 원격 지문 승인 요청을 발송했습니다!'
+		);
 
 		coopTimer = setInterval(() => {
 			coopCountdown -= 1;
@@ -265,11 +274,17 @@
 			websocket.send({
 				type: 'BIOMETRIC_COOP_RESULT',
 				requestId: req.requestId,
+				includeSelf: coopRequestId === req.requestId,
 				approved: true,
 				approverName: user?.real_name || user?.username || '본인'
 			});
+			if (coopRequestId === req.requestId) {
+				clearCoopTimer();
+				coopWaiting = false;
+				coopDocUnlocked = true;
+			}
 			coopIncoming = null;
-			toast.success('🔓 지문 서명 검증 완료! 데스크톱 문서 잠금이 해제되었습니다.');
+			toast.success('🔓 지문 서명 검증 완료! 문서 잠금이 해제되었습니다.');
 		}
 	}
 
@@ -279,9 +294,14 @@
 		websocket.send({
 			type: 'BIOMETRIC_COOP_RESULT',
 			requestId: req.requestId,
+			includeSelf: coopRequestId === req.requestId,
 			approved: false,
 			reason: '스마트폰에서 열람 요청을 거부했습니다.'
 		});
+		if (coopRequestId === req.requestId) {
+			clearCoopTimer();
+			coopWaiting = false;
+		}
 		coopIncoming = null;
 		try {
 			await fastApi(
@@ -606,7 +626,7 @@
 							<p class="text-sm font-bold text-slate-700">이 문서는 스마트폰 원격 지문 승인이 필요합니다.</p>
 							<button
 								type="button"
-								onclick={sendCoopRequest}
+								onclick={() => sendCoopRequest()}
 								class="btn rounded-xl bg-violet-600 font-black text-white hover:bg-violet-700"
 							>
 								<Icon icon="ph:paper-plane-tilt-bold" class="text-lg" />

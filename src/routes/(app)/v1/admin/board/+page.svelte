@@ -12,6 +12,7 @@
 	import { toast } from '$lib/runes/toast.svelte';
 	import { navState } from '$lib/runes/nav.svelte';
 	import { buildOptionMenuItems } from '$lib/utils/dynamicOptions';
+	import { ALL_POST_META_KEYS, POST_META_CATALOG } from '../../app/board/layouts/boardUtils';
 	import { getSiteTitle } from '$lib/config/site';
 	import { RANK_LEVELS } from '$lib/config/rank';
 	import PushOptionSection from '$lib/components/PushOptionSection.svelte';
@@ -28,8 +29,22 @@
 	let filterLayout = $state('ALL'); // 'ALL' | 'list' | 'gallery' | 'blog'
 	let fieldsJsonMode = $state(false);
 	let fieldsJsonText = $state('[]');
+	const DEFAULT_BOARD_OPTIONS = {
+		use_list: true,
+		use_view: true,
+		use_pin: {
+			label: '상단 고정 사용',
+			type: 'toggle',
+			description: '공지글 상단 고정 기능 활성화',
+			value: true
+		},
+		new_hours: 24,
+		view_meta_keys: [...ALL_POST_META_KEYS],
+		write_meta_keys: [...ALL_POST_META_KEYS]
+	};
+
 	let optionsJsonMode = $state(false);
-	let optionsJsonText = $state('{\n  "use_list": true,\n  "use_view": true\n}');
+	let optionsJsonText = $state(JSON.stringify(DEFAULT_BOARD_OPTIONS, null, 2));
 
 	let editingBoard = $state({
 		id: /** @type {number|null} */ (null),
@@ -43,7 +58,7 @@
 		service_instance_id: /** @type {number|null} */ (null),
 		service_app_ids: /** @type {number[]} */ ([]),
 		fields_def: /** @type {any[]} */ ([]),
-		options: /** @type {Record<string, any>} */ ({ use_list: true, use_view: true }),
+		options: /** @type {Record<string, any>} */ (structuredClone(DEFAULT_BOARD_OPTIONS)),
 		is_active: true
 	});
 
@@ -116,7 +131,7 @@
 		optionsJsonMode = false;
 		serviceSearchQuery = '';
 		fieldsJsonText = '[]';
-		optionsJsonText = JSON.stringify({ use_list: true, use_view: true }, null, 2);
+		optionsJsonText = JSON.stringify(DEFAULT_BOARD_OPTIONS, null, 2);
 		editingBoard = {
 			id: null,
 			slug: '',
@@ -129,7 +144,7 @@
 			service_instance_id: null,
 			service_app_ids: [],
 			fields_def: [],
-			options: { use_list: true, use_view: true },
+			options: structuredClone(DEFAULT_BOARD_OPTIONS),
 			is_active: true
 		};
 	}
@@ -256,9 +271,35 @@
 		}
 	}
 
+	function isMetaKeyEnabled(/** @type {'write_meta_keys'|'view_meta_keys'} */ modeKey, /** @type {string} */ metaKey) {
+		const list = editingBoard.options?.[modeKey];
+		if (!Array.isArray(list)) return true;
+		return list.includes(metaKey);
+	}
+
+	function toggleMetaKey(/** @type {'write_meta_keys'|'view_meta_keys'} */ modeKey, /** @type {string} */ metaKey) {
+		const opts = { ...(editingBoard.options || {}) };
+		const current = Array.isArray(opts[modeKey]) ? [...opts[modeKey]] : [...ALL_POST_META_KEYS];
+		const exists = current.includes(metaKey);
+		const next = exists ? current.filter((k) => k !== metaKey) : [...current, metaKey];
+		const ordered = ALL_POST_META_KEYS.filter((k) => next.includes(k));
+		opts[modeKey] = ordered;
+		editingBoard.options = opts;
+		optionsJsonText = JSON.stringify(opts, null, 2);
+	}
+
+	function setAllMetaKeys(/** @type {'write_meta_keys'|'view_meta_keys'} */ modeKey, /** @type {boolean} */ enabled) {
+		const opts = { ...(editingBoard.options || {}) };
+		opts[modeKey] = enabled ? [...ALL_POST_META_KEYS] : [];
+		editingBoard.options = opts;
+		optionsJsonText = JSON.stringify(opts, null, 2);
+	}
+
 	function getOptionEntries() {
 		const opts = editingBoard.options && typeof editingBoard.options === 'object' ? editingBoard.options : {};
-		return Object.entries(opts).map(([key, raw]) => {
+		return Object.entries(opts)
+			.filter(([key]) => key !== 'view_meta_keys' && key !== 'write_meta_keys')
+			.map(([key, raw]) => {
 			const isObj = raw !== null && typeof raw === 'object' && !Array.isArray(raw) && ('value' in raw || 'type' in raw);
 			if (isObj) {
 				const inferredType =
@@ -1070,12 +1111,12 @@
 					{/if}
 				</div>
 
-				<!-- 세부 옵션 (options JSON) -->
+				<!-- 게시판 리스트 전역 옵션 (options JSON) -->
 				<div class="space-y-3 rounded-2xl border-2 border-slate-200 bg-slate-50/70 p-4 sm:p-5">
 					<div class="flex flex-wrap items-center justify-between gap-2">
 						<div>
-							<h4 class="text-xs font-black text-slate-800">게시판 세부 옵션 (options JSON)</h4>
-							<p class="text-[11px] text-slate-500">한글 라벨(`label`)과 우측 다이나믹 폼 표시 여부(`dynamic_form`)를 설정합니다.</p>
+							<h4 class="text-xs font-black text-slate-800">게시판 리스트 전역 옵션 (options JSON)</h4>
+							<p class="text-[11px] text-slate-500">목록·상세 전역 동작과 우측 다이나믹 폼 표시 여부(<code class="font-mono">dynamic_form</code>)를 설정합니다.</p>
 						</div>
 						<div class="flex items-center gap-2">
 							<button
@@ -1195,6 +1236,53 @@
 							</div>
 						{/if}
 					{/if}
+
+					<!-- 게시물 메타 Dynamic Form 노출 체크박스 매트릭스 -->
+					<div class="mt-4 rounded-xl border border-slate-200 bg-white p-3.5">
+						<div class="mb-3 flex flex-wrap items-center justify-between gap-2">
+							<div>
+								<h5 class="text-xs font-black text-slate-800">게시물 메타 Dynamic Form 노출 설정</h5>
+								<p class="text-[11px] text-slate-500">체크박스를 클릭하면 위 options JSON의 <code class="font-mono">write_meta_keys</code> / <code class="font-mono">view_meta_keys</code>에 자동 반영됩니다.</p>
+							</div>
+							<div class="flex flex-wrap items-center gap-1.5 text-[11px]">
+								<button type="button" onclick={() => setAllMetaKeys('write_meta_keys', true)} class="rounded-lg bg-slate-100 px-2 py-1 font-bold text-slate-700 hover:bg-slate-200">작성 전체</button>
+								<button type="button" onclick={() => setAllMetaKeys('write_meta_keys', false)} class="rounded-lg bg-slate-100 px-2 py-1 font-bold text-slate-500 hover:bg-slate-200">작성 해제</button>
+								<button type="button" onclick={() => setAllMetaKeys('view_meta_keys', true)} class="rounded-lg bg-blue-50 px-2 py-1 font-bold text-blue-700 hover:bg-blue-100">상세 전체</button>
+								<button type="button" onclick={() => setAllMetaKeys('view_meta_keys', false)} class="rounded-lg bg-blue-50 px-2 py-1 font-bold text-blue-500 hover:bg-blue-100">상세 해제</button>
+							</div>
+						</div>
+
+						<div class="grid grid-cols-1 gap-1.5 sm:grid-cols-2 lg:grid-cols-3">
+							{#each POST_META_CATALOG as item (item.key)}
+								<div class="flex items-center justify-between gap-2 rounded-lg border border-slate-100 bg-slate-50/60 px-2.5 py-1.5 text-xs">
+									<div class="min-w-0">
+										<div class="truncate font-bold text-slate-800">{item.label}</div>
+										<div class="truncate font-mono text-[10px] text-slate-400">{item.key}{item.adminOnly ? ' · 관리자' : ''}</div>
+									</div>
+									<div class="flex shrink-0 items-center gap-2">
+										<label class="inline-flex cursor-pointer items-center gap-1 text-[11px] font-bold text-slate-600">
+											<input
+												type="checkbox"
+												checked={isMetaKeyEnabled('write_meta_keys', item.key)}
+												onchange={() => toggleMetaKey('write_meta_keys', item.key)}
+												class="checkbox checkbox-xs"
+											/>
+											<span>작성</span>
+										</label>
+										<label class="inline-flex cursor-pointer items-center gap-1 text-[11px] font-bold text-blue-700">
+											<input
+												type="checkbox"
+												checked={isMetaKeyEnabled('view_meta_keys', item.key)}
+												onchange={() => toggleMetaKey('view_meta_keys', item.key)}
+												class="checkbox checkbox-xs checkbox-primary"
+											/>
+											<span>상세</span>
+										</label>
+									</div>
+								</div>
+							{/each}
+						</div>
+					</div>
 				</div>
 
 				<div class="pt-6 border-t border-slate-100 flex flex-wrap items-center gap-3">
