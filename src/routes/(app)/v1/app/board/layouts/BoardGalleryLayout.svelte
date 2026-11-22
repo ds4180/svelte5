@@ -43,7 +43,7 @@
 						<span class="rounded-lg bg-rose-500 px-1.5 py-0.5 text-[10px] font-black text-white shadow-xs">NEW</span>
 					{/if}
 					<span class="rounded-lg bg-slate-900/75 px-2 py-0.5 font-mono text-[10px] font-bold text-white backdrop-blur-xs">
-						NO.{p.id}
+						NO.{p.board_seq ?? p.id}
 					</span>
 				</div>
 			</div>

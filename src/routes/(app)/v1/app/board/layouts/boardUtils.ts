@@ -15,7 +15,23 @@ export function stripHtml(html?: string | null): string {
 	return html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
-export const POST_CATEGORIES = ['전체', '공지', '긴급', '필독', '안전', '정비', '일반'] as const;
+export const DEFAULT_POST_CATEGORIES = ['공지', '긴급', '필독', '안전', '정비', '일반'] as const;
+export const POST_CATEGORIES = ['전체', ...DEFAULT_POST_CATEGORIES] as const;
+
+export function getBoardCategories(boardOptions?: Record<string, any> | null): string[] {
+	const raw = boardOptions?.categories;
+	if (Array.isArray(raw)) {
+		const list = raw.map((c) => String(c || '').trim()).filter(Boolean);
+		if (list.length > 0) return list;
+	} else if (typeof raw === 'string' && raw.trim()) {
+		const list = raw
+			.split(',')
+			.map((c) => c.trim())
+			.filter(Boolean);
+		if (list.length > 0) return list;
+	}
+	return [...DEFAULT_POST_CATEGORIES];
+}
 
 export const CATEGORY_BADGE_CLASS: Record<string, string> = {
 	공지: 'bg-blue-100 text-blue-700',
@@ -75,7 +91,7 @@ export function getPostMetaPresentation(post: any, boardOptions?: Record<string,
 	const isNew = newMode === 'force' ? true : newMode === 'hide' ? false : isAutoNew;
 
 	const category = String(extra.category || '').trim();
-	const categoryClass = CATEGORY_BADGE_CLASS[category] || 'bg-slate-100 text-slate-700';
+	const categoryClass = CATEGORY_BADGE_CLASS[category] || 'bg-indigo-100 text-indigo-700';
 
 	return {
 		extra,
@@ -132,9 +148,11 @@ export function buildPostMetaMenuItems(
 	extraData: Record<string, any> | undefined,
 	isAdmin: boolean,
 	onChange: (key: string, value: any) => void,
-	allowedKeys?: string[] | null
+	allowedKeys?: string[] | null,
+	categories?: string[] | null
 ) {
 	const extra = extraData && typeof extraData === 'object' ? extraData : {};
+	const catList = Array.isArray(categories) && categories.length > 0 ? categories : [...DEFAULT_POST_CATEGORIES];
 	const items: any[] = [
 		{
 			id: 'meta-category',
@@ -143,15 +161,7 @@ export function buildPostMetaMenuItems(
 			title: '카테고리 / 말머리',
 			icon: 'ph:tag-bold',
 			value: extra.category || '',
-			options: [
-				{ value: '', label: '없음' },
-				{ value: '공지', label: '공지' },
-				{ value: '긴급', label: '긴급' },
-				{ value: '필독', label: '필독' },
-				{ value: '안전', label: '안전' },
-				{ value: '정비', label: '정비' },
-				{ value: '일반', label: '일반' }
-			],
+			options: [{ value: '', label: '없음' }, ...catList.map((c) => ({ value: c, label: c }))],
 			onChange: (v: string) => onChange('category', v)
 		}
 	];

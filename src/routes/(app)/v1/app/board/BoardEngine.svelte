@@ -22,7 +22,7 @@
 	import BoardGalleryLayout from './layouts/BoardGalleryLayout.svelte';
 	import BoardBlogLayout from './layouts/BoardBlogLayout.svelte';
 	import {
-		POST_CATEGORIES,
+		getBoardCategories,
 		buildPostMetaMenuItems,
 		getPostMetaPresentation
 	} from './layouts/boardUtils';
@@ -52,6 +52,7 @@
 	let sort = $state('latest');
 
 	// --- [데이터 상태] ---
+	let appInfo = $state(initialData?.app_info || null);
 	let posts = $state(initialData?.posts || []);
 	let board = $state(initialData?.board || null);
 	let post = $state(initialData?.post || null);
@@ -59,6 +60,8 @@
 	let total = $state(initialData?.total || 0);
 	let isLoading = $state(false);
 	let errorMessage = $state('');
+	let boardCategories = $derived(getBoardCategories(board?.options));
+	let boardAdminRank = $derived(Number(appInfo?.min_write_rank ?? 4));
 
 	// 🛡️ [4단계 권한 기반 쓰기 권한 파생 상태]
 	let canWrite = $derived(
@@ -71,9 +74,32 @@
 		})
 	);
 
+	let isBoardAdmin = $derived.by(() => {
+		const u = auth.user;
+		if (!u) return false;
+		if (Number(u.rank_level ?? 0) >= boardAdminRank) return true;
+		const userGroups = new Set(
+			[u.primary_group, ...(Array.isArray(u.secondary_groups) ? u.secondary_groups : [])]
+				.map((g) => String(g || '').trim())
+				.filter(Boolean)
+		);
+		if (userGroups.size === 0) return false;
+		const rawAdmin = board?.options?.admin_groups;
+		const adminList = Array.isArray(rawAdmin)
+			? rawAdmin
+			: typeof rawAdmin === 'string'
+				? rawAdmin.split(',')
+				: [];
+		const allowAdmin =
+			board?.allow_groups && typeof board.allow_groups === 'object' && !Array.isArray(board.allow_groups)
+				? (Array.isArray(board.allow_groups.admin) ? board.allow_groups.admin : [])
+				: [];
+		return [...adminList, ...allowAdmin].some((g) => userGroups.has(String(g || '').trim()));
+	});
+
 	let canModifyPost = $derived(
 		Boolean(post) &&
-			((auth.user?.rank_level ?? 0) >= 4 ||
+			(isBoardAdmin ||
 				(canWrite &&
 					((post.user_id && post.user_id === auth.user?.id) ||
 						(post.author_id && post.author_id === auth.user?.id))))
@@ -198,12 +224,12 @@
 			return;
 		}
 
-		const isAdmin = (auth.user?.rank_level ?? 0) >= 4;
+		const isAdmin = isBoardAdmin;
 
 		if (currentMode === 'write' || currentMode === 'edit') {
 			const metaSnapshot = editForm.extra_data;
 			const writeKeys = Array.isArray(b.options?.write_meta_keys) ? b.options.write_meta_keys : null;
-			let items = buildPostMetaMenuItems(metaSnapshot, isAdmin, handlePostMetaChange, writeKeys);
+			let items = buildPostMetaMenuItems(metaSnapshot, isAdmin, handlePostMetaChange, writeKeys, boardCategories);
 			if (!pinEnabled) {
 				items = items.filter((item) => item.metaKey !== 'is_pinned' && item.metaKey !== 'pin_until');
 			}
@@ -216,7 +242,8 @@
 					currentPost.extra_data,
 					isAdmin,
 					handleQuickPostMetaToggle,
-					viewKeys
+					viewKeys,
+					boardCategories
 				);
 				if (!pinEnabled) {
 					metaItems = metaItems.filter((item) => item.metaKey !== 'is_pinned' && item.metaKey !== 'pin_until');
@@ -235,6 +262,7 @@
 	// 🔄 initialData 변경(invalidateAll 등) 시 목록/상세 상태 즉시 동기화
 	$effect(() => {
 		if (initialData) {
+			appInfo = initialData.app_info || appInfo;
 			posts = initialData.posts || [];
 			post = initialData.post || null;
 			board = initialData.board || null;
@@ -314,6 +342,9 @@
 				category: selectedCategory === '전체' ? '' : selectedCategory
 			});
 
+			if (data?.app_info) {
+				appInfo = data.app_info;
+			}
 			if (mode === 'list') {
 				const instance = data.instance || {};
 				posts = instance.posts || [];
@@ -554,7 +585,7 @@
 					<div class="flex flex-col gap-4">
 						<!-- 카테고리 필터 바 -->
 						<div class="flex flex-wrap items-center gap-1.5">
-							{#each POST_CATEGORIES as cat}
+							{#each ['전체', ...boardCategories] as cat}
 								<button
 									type="button"
 									onclick={() => {
@@ -644,7 +675,7 @@
 											href="/v1/app/board/{boardSlug}"
 											class="rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-600 hover:bg-slate-200 transition"
 										>
-											{board?.name || boardSlug} · NO.{post.id}
+											{board?.name || boardSlug} · NO.{post.board_seq ?? post.id}
 										</a>
 										{#if post.status && post.status !== 'published'}
 											<span class="rounded-lg bg-amber-100 px-2.5 py-1 text-xs font-bold text-amber-800">

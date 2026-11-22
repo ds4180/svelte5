@@ -47,7 +47,7 @@
 					<span
 						class="rounded-lg bg-slate-100 px-2 py-0.5 font-mono text-[11px] font-bold text-slate-600"
 					>
-						NO.{p.id}
+						NO.{p.board_seq ?? p.id}
 					</span>
 					{#if meta.routeNo || meta.vehicleNo}
 						<span class="rounded-lg bg-sky-50 px-2 py-0.5 text-[11px] font-bold text-sky-700">

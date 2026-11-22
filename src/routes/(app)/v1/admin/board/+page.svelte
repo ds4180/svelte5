@@ -12,7 +12,7 @@
 	import { toast } from '$lib/runes/toast.svelte';
 	import { navState } from '$lib/runes/nav.svelte';
 	import { buildOptionMenuItems } from '$lib/utils/dynamicOptions';
-	import { ALL_POST_META_KEYS, POST_META_CATALOG } from '../../app/board/layouts/boardUtils';
+	import { ALL_POST_META_KEYS, DEFAULT_POST_CATEGORIES, POST_META_CATALOG } from '../../app/board/layouts/boardUtils';
 	import { getSiteTitle } from '$lib/config/site';
 	import { RANK_LEVELS } from '$lib/config/rank';
 	import PushOptionSection from '$lib/components/PushOptionSection.svelte';
@@ -39,6 +39,8 @@
 			value: true
 		},
 		new_hours: 24,
+		categories: [...DEFAULT_POST_CATEGORIES],
+		admin_groups: /** @type {string[]} */ ([]),
 		view_meta_keys: [...ALL_POST_META_KEYS],
 		write_meta_keys: [...ALL_POST_META_KEYS]
 	};
@@ -298,7 +300,7 @@
 	function getOptionEntries() {
 		const opts = editingBoard.options && typeof editingBoard.options === 'object' ? editingBoard.options : {};
 		return Object.entries(opts)
-			.filter(([key]) => key !== 'view_meta_keys' && key !== 'write_meta_keys')
+			.filter(([key]) => key !== 'view_meta_keys' && key !== 'write_meta_keys' && key !== 'admin_groups' && key !== 'categories')
 			.map(([key, raw]) => {
 			const isObj = raw !== null && typeof raw === 'object' && !Array.isArray(raw) && ('value' in raw || 'type' in raw);
 			if (isObj) {
@@ -1236,6 +1238,62 @@
 							</div>
 						{/if}
 					{/if}
+
+					<!-- 게시판 카테고리 목록 설정 -->
+					<div class="rounded-xl border border-slate-200 bg-white p-3.5">
+						<label for="board-categories" class="mb-1 block text-xs font-black text-slate-800">
+							게시판 카테고리 목록 (<code class="font-mono">categories</code>)
+						</label>
+						<p class="mb-2 text-[11px] text-slate-500">
+							목록 필터 탭과 글 작성·상세 Dynamic Form의 카테고리 선택지에 표시할 항목입니다. (쉼표로 구분, 비우면 기본 6종 적용)
+						</p>
+						<input
+							id="board-categories"
+							type="text"
+							value={Array.isArray(editingBoard.options?.categories)
+								? editingBoard.options.categories.join(', ')
+								: editingBoard.options?.categories || DEFAULT_POST_CATEGORIES.join(', ')}
+							onchange={(e) => {
+								const list = e.currentTarget.value
+									.split(',')
+									.map((s) => s.trim())
+									.filter(Boolean);
+								const opts = { ...(editingBoard.options || {}), categories: list };
+								editingBoard.options = opts;
+								optionsJsonText = JSON.stringify(opts, null, 2);
+							}}
+							placeholder="예: 공지, 긴급, 필독, 안전, 정비, 일반"
+							class="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-bold text-slate-800 focus:border-blue-600 focus:bg-white focus:outline-none"
+						/>
+					</div>
+
+					<!-- 게시판 전용 관리자 그룹 (주그룹/부그룹 위임) -->
+					<div class="rounded-xl border border-slate-200 bg-white p-3.5">
+						<label for="board-admin-groups" class="mb-1 block text-xs font-black text-slate-800">
+							게시판 전용 관리자 그룹 (<code class="font-mono">admin_groups</code>)
+						</label>
+						<p class="mb-2 text-[11px] text-slate-500">
+							기본 게시판 관리자 랭크는 상위 앱(<code class="font-mono">board</code>)의 <strong>쓰기 최소 랭크(<code class="font-mono">min_write_rank</code>)</strong> 설정과 같으며, 추가로 여기에 입력한 주그룹/부그룹 소속 사원에게도 이 게시판의 상단고정·메타편집·비밀글 열람·게시물 관리 권한을 위임할 수 있습니다. (쉼표로 구분)
+						</p>
+						<input
+							id="board-admin-groups"
+							type="text"
+							value={Array.isArray(editingBoard.options?.admin_groups)
+								? editingBoard.options.admin_groups.join(', ')
+								: editingBoard.options?.admin_groups || ''}
+							onchange={(e) => {
+								const list = e.currentTarget.value
+									.split(',')
+									.map((s) => s.trim())
+									.filter(Boolean);
+								const opts = { ...(editingBoard.options || {}), admin_groups: list };
+								editingBoard.options = opts;
+								optionsJsonText = JSON.stringify(opts, null, 2);
+							}}
+							placeholder="예: NOTICE_MANAGER, 안전관리팀"
+							class="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-bold text-slate-800 focus:border-blue-600 focus:bg-white focus:outline-none"
+						/>
+					</div>
 
 					<!-- 게시물 메타 Dynamic Form 노출 체크박스 매트릭스 -->
 					<div class="mt-4 rounded-xl border border-slate-200 bg-white p-3.5">
