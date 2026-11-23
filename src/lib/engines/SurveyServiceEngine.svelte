@@ -10,8 +10,13 @@
 	import * as surveyApi from '$lib/api/survey';
 	import type { SurveyCampaign, SurveyVehicleContext } from '$lib/api/survey';
 	import SurveyFormEngine from '$lib/components/survey/SurveyFormEngine.svelte';
+	import ServiceLockNotice from '$lib/components/ServiceLockNotice.svelte';
+	import { resolveServicePermission, type ServicePermission } from '$lib/utils/servicePermission';
+	import { getAuthContext } from '$lib/runes/auth.svelte';
 	import { formatApiError } from '$lib/utils/error';
 	import Icon from '@iconify/svelte';
+
+	const auth = getAuthContext();
 
 	let {
 		post = null,
@@ -21,8 +26,11 @@
 			compact?: boolean;
 		},
 		appId = 'board',
-		instanceId = null
+		instanceId = null,
+		permissions = null as ServicePermission | null
 	} = $props();
+
+	const perm = $derived(resolveServicePermission(permissions, auth.user));
 
 	let loading = $state(true);
 	let errorMsg = $state('');
@@ -85,16 +93,22 @@
 
 <div class="my-4 space-y-3">
 	{#if loading}
-		<div class="rounded-2xl border border-slate-200 bg-slate-50 p-6 text-center text-xs font-bold text-slate-400">
+		<div
+			class="rounded-2xl border border-slate-200 bg-slate-50 p-6 text-center text-xs font-bold text-slate-400"
+		>
 			연동된 현장 조사 양식을 불러오는 중...
 		</div>
 	{:else if errorMsg}
-		<div class="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-xs font-bold text-amber-800">
+		<div
+			class="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-xs font-bold text-amber-800"
+		>
 			{errorMsg}
 		</div>
 	{:else if campaign}
 		{#if openCampaigns.length > 1}
-			<div class="flex flex-wrap items-center gap-2 rounded-2xl border border-indigo-200 bg-indigo-50/60 px-4 py-2.5">
+			<div
+				class="flex flex-wrap items-center gap-2 rounded-2xl border border-indigo-200 bg-indigo-50/60 px-4 py-2.5"
+			>
 				<span class="inline-flex items-center gap-1 text-xs font-black text-indigo-800">
 					<Icon icon="solar:clipboard-list-bold" class="text-sm" />
 					진행 중 조사 선택:
@@ -112,16 +126,22 @@
 				{/each}
 			</div>
 		{/if}
-		<SurveyFormEngine
-			{campaign}
-			{vehicleContext}
-			sourceAppId={appId}
-			sourceRefId={post?.id ? String(post.id) : instanceId ? String(instanceId) : null}
-			compact={config?.compact !== false}
-			onSubmitted={() => loadAttachedSurvey()}
-		/>
+		{#if !perm.can_write}
+			<ServiceLockNotice permission={perm} serviceLabel="설문 참여" />
+		{:else}
+			<SurveyFormEngine
+				{campaign}
+				{vehicleContext}
+				sourceAppId={appId}
+				sourceRefId={post?.id ? String(post.id) : instanceId ? String(instanceId) : null}
+				compact={config?.compact !== false}
+				onSubmitted={() => loadAttachedSurvey()}
+			/>
+		{/if}
 	{:else}
-		<div class="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-center text-xs font-bold text-slate-400">
+		<div
+			class="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-center text-xs font-bold text-slate-400"
+		>
 			현재 진행 중인 현장 조사가 없습니다.
 		</div>
 	{/if}

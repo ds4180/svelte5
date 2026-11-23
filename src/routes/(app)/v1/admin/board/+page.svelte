@@ -12,9 +12,21 @@
 	import { toast } from '$lib/runes/toast.svelte';
 	import { navState } from '$lib/runes/nav.svelte';
 	import { buildOptionMenuItems } from '$lib/utils/dynamicOptions';
-	import { ALL_POST_META_KEYS, DEFAULT_POST_CATEGORIES, POST_META_CATALOG } from '../../app/board/layouts/boardUtils';
+	import {
+		ALL_POST_META_KEYS,
+		DEFAULT_POST_CATEGORIES,
+		POST_META_CATALOG
+	} from '../../app/board/layouts/boardUtils';
 	import { getSiteTitle } from '$lib/config/site';
 	import { RANK_LEVELS } from '$lib/config/rank';
+	import {
+		SERVICE_READ_POLICY_OPTIONS,
+		SERVICE_WRITE_POLICY_OPTIONS
+	} from '$lib/utils/servicePermission';
+	import {
+		updateBoardServicePermissionOption,
+		groupServiceAppsByRegistry
+	} from '$lib/services/serviceAdminHelper';
 	import PushOptionSection from '$lib/components/PushOptionSection.svelte';
 	import Icon from '@iconify/svelte';
 
@@ -66,7 +78,9 @@
 
 	// 📊 4대 관제 지표 요약 (반응형 파생 상태)
 	const countTotal = $derived(boards.length);
-	const countList = $derived(boards.filter((b) => !b.layout_type || b.layout_type === 'list').length);
+	const countList = $derived(
+		boards.filter((b) => !b.layout_type || b.layout_type === 'list').length
+	);
 	const countGallery = $derived(boards.filter((b) => b.layout_type === 'gallery').length);
 	const countBlog = $derived(boards.filter((b) => b.layout_type === 'blog').length);
 
@@ -161,7 +175,8 @@
 	 */
 	function startEdit(b) {
 		const nextFields = Array.isArray(b.fields_def) ? b.fields_def : [];
-		const nextOptions = b.options && typeof b.options === 'object' ? b.options : { use_list: true, use_view: true };
+		const nextOptions =
+			b.options && typeof b.options === 'object' ? b.options : { use_list: true, use_view: true };
 		fieldsJsonMode = false;
 		optionsJsonMode = false;
 		serviceSearchQuery = '';
@@ -213,36 +228,24 @@
 	}
 
 	function getGroupedServiceApps() {
-		const q = serviceSearchQuery.trim().toLowerCase();
-		const engineMap = new Map(serviceEngines.map((e) => [e.id, e]));
-		const regMap = new Map(serviceRegistries.map((r) => [r.id, r]));
-		/** @type {Record<string, { registryId: string, registryName: string, apps: any[] }>} */
-		const groups = {};
-
-		for (const app of serviceApps) {
-			const eng = engineMap.get(app.engine_id);
-			const regId = eng?.registry_id || 'etc';
-			const reg = regMap.get(regId);
-			const regName = reg?.name || regId;
-
-			if (q) {
-				const haystack = `${app.name} ${app.engine_id} ${regName} ${regId}`.toLowerCase();
-				if (!haystack.includes(q)) continue;
-			}
-
-			if (!groups[regId]) {
-				groups[regId] = { registryId: regId, registryName: regName, apps: [] };
-			}
-			groups[regId].apps.push({ ...app, _plugin: eng?.frontend_plugin || '' });
-		}
-
-		return Object.values(groups).sort((a, b) => a.registryName.localeCompare(b.registryName, 'ko'));
+		return groupServiceAppsByRegistry(
+			serviceApps,
+			serviceEngines,
+			serviceRegistries,
+			serviceSearchQuery
+		);
 	}
 
 	function addCustomField() {
 		const next = [
 			...(editingBoard.fields_def || []),
-			{ key: `field_${(editingBoard.fields_def?.length || 0) + 1}`, label: '새 항목', type: 'text', placeholder: '', options_text: '' }
+			{
+				key: `field_${(editingBoard.fields_def?.length || 0) + 1}`,
+				label: '새 항목',
+				type: 'text',
+				placeholder: '',
+				options_text: ''
+			}
 		];
 		editingBoard.fields_def = next;
 		fieldsJsonText = JSON.stringify(next, null, 2);
@@ -268,18 +271,26 @@
 				editingBoard.fields_def = parsed;
 				fieldsJsonMode = false;
 			} catch (/** @type {any} */ err) {
-				toast.error('동적 필드 JSON 형식 오류: ' + (err.message || '올바른 JSON 배열을 입력하세요.'));
+				toast.error(
+					'동적 필드 JSON 형식 오류: ' + (err.message || '올바른 JSON 배열을 입력하세요.')
+				);
 			}
 		}
 	}
 
-	function isMetaKeyEnabled(/** @type {'write_meta_keys'|'view_meta_keys'} */ modeKey, /** @type {string} */ metaKey) {
+	function isMetaKeyEnabled(
+		/** @type {'write_meta_keys'|'view_meta_keys'} */ modeKey,
+		/** @type {string} */ metaKey
+	) {
 		const list = editingBoard.options?.[modeKey];
 		if (!Array.isArray(list)) return true;
 		return list.includes(metaKey);
 	}
 
-	function toggleMetaKey(/** @type {'write_meta_keys'|'view_meta_keys'} */ modeKey, /** @type {string} */ metaKey) {
+	function toggleMetaKey(
+		/** @type {'write_meta_keys'|'view_meta_keys'} */ modeKey,
+		/** @type {string} */ metaKey
+	) {
 		const opts = { ...(editingBoard.options || {}) };
 		const current = Array.isArray(opts[modeKey]) ? [...opts[modeKey]] : [...ALL_POST_META_KEYS];
 		const exists = current.includes(metaKey);
@@ -290,42 +301,78 @@
 		optionsJsonText = JSON.stringify(opts, null, 2);
 	}
 
-	function setAllMetaKeys(/** @type {'write_meta_keys'|'view_meta_keys'} */ modeKey, /** @type {boolean} */ enabled) {
+	function setAllMetaKeys(
+		/** @type {'write_meta_keys'|'view_meta_keys'} */ modeKey,
+		/** @type {boolean} */ enabled
+	) {
 		const opts = { ...(editingBoard.options || {}) };
 		opts[modeKey] = enabled ? [...ALL_POST_META_KEYS] : [];
 		editingBoard.options = opts;
 		optionsJsonText = JSON.stringify(opts, null, 2);
 	}
 
+	/**
+	 * 게시판 인스턴스별 서비스앱 권한 예외 설정 (options.service_permissions) 헬퍼
+	 * @param {string} serviceId
+	 * @param {'read_policy' | 'write_policy'} field
+	 * @param {string} value
+	 */
+	function setBoardServicePermission(serviceId, field, value) {
+		const opts = updateBoardServicePermissionOption(editingBoard.options, serviceId, field, value);
+		editingBoard.options = opts;
+		optionsJsonText = JSON.stringify(opts, null, 2);
+	}
+
 	function getOptionEntries() {
-		const opts = editingBoard.options && typeof editingBoard.options === 'object' ? editingBoard.options : {};
+		const opts =
+			editingBoard.options && typeof editingBoard.options === 'object' ? editingBoard.options : {};
 		return Object.entries(opts)
-			.filter(([key]) => key !== 'view_meta_keys' && key !== 'write_meta_keys' && key !== 'admin_groups' && key !== 'categories')
+			.filter(
+				([key]) =>
+					key !== 'view_meta_keys' &&
+					key !== 'write_meta_keys' &&
+					key !== 'admin_groups' &&
+					key !== 'categories' &&
+					key !== 'service_permissions'
+			)
 			.map(([key, raw]) => {
-			const isObj = raw !== null && typeof raw === 'object' && !Array.isArray(raw) && ('value' in raw || 'type' in raw);
-			if (isObj) {
+				const isObj =
+					raw !== null &&
+					typeof raw === 'object' &&
+					!Array.isArray(raw) &&
+					('value' in raw || 'type' in raw);
+				if (isObj) {
+					const inferredType =
+						raw.type ||
+						(typeof raw.value === 'boolean'
+							? 'toggle'
+							: typeof raw.value === 'number'
+								? 'slider'
+								: 'text');
+					return {
+						key,
+						label: String(raw.label ?? raw.title ?? ''),
+						type: inferredType,
+						value:
+							raw.value ?? (inferredType === 'toggle' ? false : inferredType === 'slider' ? 0 : ''),
+						dynamic_form:
+							raw.dynamic_form !== false &&
+							raw.show_in_dynamic_form !== false &&
+							raw.visible !== false,
+						raw
+					};
+				}
 				const inferredType =
-					raw.type ||
-					(typeof raw.value === 'boolean' ? 'toggle' : typeof raw.value === 'number' ? 'slider' : 'text');
+					typeof raw === 'boolean' ? 'toggle' : typeof raw === 'number' ? 'slider' : 'text';
 				return {
 					key,
-					label: String(raw.label ?? raw.title ?? ''),
+					label: '',
 					type: inferredType,
-					value: raw.value ?? (inferredType === 'toggle' ? false : inferredType === 'slider' ? 0 : ''),
-					dynamic_form: raw.dynamic_form !== false && raw.show_in_dynamic_form !== false && raw.visible !== false,
-					raw
+					value: raw ?? '',
+					dynamic_form: true,
+					raw: null
 				};
-			}
-			const inferredType = typeof raw === 'boolean' ? 'toggle' : typeof raw === 'number' ? 'slider' : 'text';
-			return {
-				key,
-				label: '',
-				type: inferredType,
-				value: raw ?? '',
-				dynamic_form: true,
-				raw: null
-			};
-		});
+			});
 	}
 
 	/** @param {Record<string, any>} nextOpts */
@@ -355,6 +402,11 @@
 			key: 'push_on_comment',
 			title: '새 댓글 작성 시 푸시 발송',
 			desc: '게시글 작성자 본인에게 댓글 알림 전송 (본인 댓글 제외)'
+		},
+		{
+			key: 'push_on_reply',
+			title: '대댓글(답글) 작성 시 푸시 발송',
+			desc: '원댓글 작성자 본인에게 답글 알림 전송 (본인 및 중복 발송 제외)'
 		}
 	];
 
@@ -417,7 +469,9 @@
 				editingBoard.options = parsed;
 				optionsJsonMode = false;
 			} catch (/** @type {any} */ err) {
-				toast.error('세부 옵션 JSON 형식 오류: ' + (err.message || '올바른 JSON 객체를 입력하세요.'));
+				toast.error(
+					'세부 옵션 JSON 형식 오류: ' + (err.message || '올바른 JSON 객체를 입력하세요.')
+				);
 			}
 		}
 	}
@@ -454,7 +508,9 @@
 
 		const payload = {
 			...editingBoard,
-			service_instance_id: editingBoard.service_instance_id ? Number(editingBoard.service_instance_id) : null,
+			service_instance_id: editingBoard.service_instance_id
+				? Number(editingBoard.service_instance_id)
+				: null,
 			// 정수 ID 또는 레이아웃 객체({ app_id, row, display, wrap, align }) 모두 안전하게 보존
 			service_app_ids: (editingBoard.service_app_ids || []).map((entry) =>
 				entry && typeof entry === 'object' ? entry : Number(entry)
@@ -498,32 +554,40 @@
 	<title>{getSiteTitle('게시판 인스턴스 관리')}</title>
 </svelte:head>
 
-<div class="animate-fade-in mx-auto max-w-7xl space-y-8 px-4 py-8 pb-24 font-['Noto_Sans_KR','Outfit'] md:px-8">
+<div
+	class="animate-fade-in mx-auto max-w-7xl space-y-8 px-4 py-8 pb-24 font-['Noto_Sans_KR','Outfit'] md:px-8"
+>
 	<!-- ===================================================================== -->
 	<!-- 1. 페이지 헤더 & 우측 컨트롤 바 -->
 	<!-- ===================================================================== -->
-	<header class="flex flex-col items-start justify-between gap-6 border-b-4 border-slate-900 pb-8 md:flex-row md:items-end">
+	<header
+		class="flex flex-col items-start justify-between gap-6 border-b-4 border-slate-900 pb-8 md:flex-row md:items-end"
+	>
 		<div>
-			<div class="flex items-center gap-2 mb-2">
-				<span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black uppercase tracking-widest bg-blue-50 text-blue-700 border border-blue-200">
+			<div class="mb-2 flex items-center gap-2">
+				<span
+					class="inline-flex items-center gap-1.5 rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-black tracking-widest text-blue-700 uppercase"
+				>
 					<Icon icon="ph:clipboard-text-bold" class="text-sm" />
 					SYSTEM GOVERNANCE • BOARD INSTANCE
 				</span>
-				<span class="text-xs font-bold text-slate-400 font-mono">v1/admin/board</span>
+				<span class="font-mono text-xs font-bold text-slate-400">v1/admin/board</span>
 			</div>
-			<h1 class="text-3xl sm:text-4xl font-black tracking-tighter text-slate-900 uppercase italic md:text-5xl">
-				게시판 <span class="not-italic text-blue-600">인스턴스 관리</span>
+			<h1
+				class="text-3xl font-black tracking-tighter text-slate-900 uppercase italic sm:text-4xl md:text-5xl"
+			>
+				게시판 <span class="text-blue-600 not-italic">인스턴스 관리</span>
 			</h1>
-			<p class="mt-2 text-xs sm:text-sm font-bold text-slate-500">
+			<p class="mt-2 text-xs font-bold text-slate-500 sm:text-sm">
 				공지사항, 자유게시판 등 시스템에서 가동할 실제 게시판 인스턴스를 설계하고 설정합니다.
 			</p>
 		</div>
 
 		<!-- 상단 액션 버튼 그룹 -->
-		<div class="flex flex-wrap items-center gap-2.5 w-full md:w-auto">
+		<div class="flex w-full flex-wrap items-center gap-2.5 md:w-auto">
 			<button
 				onclick={startCreate}
-				class="flex items-center gap-1.5 px-4 py-2.5 rounded-2xl border-2 border-blue-600 bg-blue-600 text-white font-black text-xs uppercase tracking-wider hover:bg-blue-700 transition shadow-sm"
+				class="flex items-center gap-1.5 rounded-2xl border-2 border-blue-600 bg-blue-600 px-4 py-2.5 text-xs font-black tracking-wider text-white uppercase shadow-sm transition hover:bg-blue-700"
 			>
 				<Icon icon="ph:plus-circle-bold" class="text-base" />
 				<span>새 게시판 등록</span>
@@ -532,7 +596,7 @@
 			<button
 				onclick={loadBoards}
 				disabled={loading}
-				class="flex items-center gap-1.5 px-4 py-2.5 rounded-2xl border-2 border-slate-200 bg-white font-black text-xs uppercase tracking-wider text-slate-700 hover:border-slate-400 transition shadow-sm disabled:opacity-50"
+				class="flex items-center gap-1.5 rounded-2xl border-2 border-slate-200 bg-white px-4 py-2.5 text-xs font-black tracking-wider text-slate-700 uppercase shadow-sm transition hover:border-slate-400 disabled:opacity-50"
 			>
 				<Icon icon="ph:arrows-clockwise-bold" class="text-base {loading ? 'animate-spin' : ''}" />
 				<span>새로고침</span>
@@ -540,7 +604,7 @@
 
 			<a
 				href="/v1/admin"
-				class="flex items-center gap-1.5 px-4 py-2.5 rounded-2xl border-2 border-slate-200 bg-white font-black text-xs uppercase tracking-wider text-slate-700 hover:border-slate-400 transition shadow-sm"
+				class="flex items-center gap-1.5 rounded-2xl border-2 border-slate-200 bg-white px-4 py-2.5 text-xs font-black tracking-wider text-slate-700 uppercase shadow-sm transition hover:border-slate-400"
 			>
 				<Icon icon="ph:house-bold" class="text-base text-slate-500" />
 				<span>관리자 홈</span>
@@ -551,88 +615,132 @@
 	<!-- ===================================================================== -->
 	<!-- 2. 알림/요약 지표 카드 (최대 4개, 최소 1개 규격) -->
 	<!-- ===================================================================== -->
-	<section class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 md:gap-5">
+	<section class="grid grid-cols-1 gap-4 sm:grid-cols-2 md:gap-5 xl:grid-cols-4">
 		<!-- 카드 1: 전체 게시판 -->
 		<button
-			onclick={() => { activeTab = 'list'; filterLayout = 'ALL'; }}
-			class="w-full text-left relative overflow-hidden rounded-[1.75rem] border-2 bg-white p-5 shadow-sm transition group {filterLayout === 'ALL' ? 'border-blue-500 bg-blue-50/20 ring-2 ring-blue-500/20' : 'border-slate-100 hover:border-blue-300'}"
+			onclick={() => {
+				activeTab = 'list';
+				filterLayout = 'ALL';
+			}}
+			class="group relative w-full overflow-hidden rounded-[1.75rem] border-2 bg-white p-5 text-left shadow-sm transition {filterLayout ===
+			'ALL'
+				? 'border-blue-500 bg-blue-50/20 ring-2 ring-blue-500/20'
+				: 'border-slate-100 hover:border-blue-300'}"
 		>
-			<div class="flex w-full items-center justify-between gap-2 mb-3">
-				<span class="min-w-0 truncate text-xs font-black tracking-widest uppercase text-slate-400 group-hover:text-blue-600">Total Boards</span>
-				<div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-blue-50 text-blue-600 group-hover:scale-110 transition-transform">
+			<div class="mb-3 flex w-full items-center justify-between gap-2">
+				<span
+					class="min-w-0 truncate text-xs font-black tracking-widest text-slate-400 uppercase group-hover:text-blue-600"
+					>Total Boards</span
+				>
+				<div
+					class="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-blue-50 text-blue-600 transition-transform group-hover:scale-110"
+				>
 					<Icon icon="ph:squares-four-bold" class="text-2xl" />
 				</div>
 			</div>
-			<div class="text-3xl font-black text-slate-900 tracking-tight">
+			<div class="text-3xl font-black tracking-tight text-slate-900">
 				{loading ? '...' : countTotal}
-				<span class="text-sm font-bold text-slate-400 ml-1">개 인스턴스</span>
+				<span class="ml-1 text-sm font-bold text-slate-400">개 인스턴스</span>
 			</div>
 			<div class="mt-2 flex items-center gap-2 text-xs font-bold text-blue-600">
 				<span class="rounded-lg bg-blue-50 px-2 py-0.5 font-mono">가동률 100%</span>
-				<span class="text-slate-400 font-normal">전체 클러스터</span>
+				<span class="font-normal text-slate-400">전체 클러스터</span>
 			</div>
 		</button>
 
 		<!-- 카드 2: 표준 리스트형 -->
 		<button
-			onclick={() => { activeTab = 'list'; filterLayout = 'list'; }}
-			class="w-full text-left relative overflow-hidden rounded-[1.75rem] border-2 bg-white p-5 shadow-sm transition group {filterLayout === 'list' ? 'border-emerald-500 bg-emerald-50/20 ring-2 ring-emerald-500/20' : 'border-slate-100 hover:border-emerald-300'}"
+			onclick={() => {
+				activeTab = 'list';
+				filterLayout = 'list';
+			}}
+			class="group relative w-full overflow-hidden rounded-[1.75rem] border-2 bg-white p-5 text-left shadow-sm transition {filterLayout ===
+			'list'
+				? 'border-emerald-500 bg-emerald-50/20 ring-2 ring-emerald-500/20'
+				: 'border-slate-100 hover:border-emerald-300'}"
 		>
-			<div class="flex w-full items-center justify-between gap-2 mb-3">
-				<span class="min-w-0 truncate text-xs font-black tracking-widest uppercase text-slate-400 group-hover:text-emerald-600">List Layout</span>
-				<div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600 group-hover:scale-110 transition-transform">
+			<div class="mb-3 flex w-full items-center justify-between gap-2">
+				<span
+					class="min-w-0 truncate text-xs font-black tracking-widest text-slate-400 uppercase group-hover:text-emerald-600"
+					>List Layout</span
+				>
+				<div
+					class="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600 transition-transform group-hover:scale-110"
+				>
 					<Icon icon="ph:list-bullets-bold" class="text-2xl" />
 				</div>
 			</div>
-			<div class="text-3xl font-black text-slate-900 tracking-tight">
+			<div class="text-3xl font-black tracking-tight text-slate-900">
 				{loading ? '...' : countList}
-				<span class="text-sm font-bold text-slate-400 ml-1">개 목록형</span>
+				<span class="ml-1 text-sm font-bold text-slate-400">개 목록형</span>
 			</div>
 			<div class="mt-2 flex items-center gap-2 text-xs font-bold text-emerald-600">
 				<span class="rounded-lg bg-emerald-50 px-2 py-0.5 font-mono">공지·사내게시</span>
-				<span class="text-slate-400 font-normal">표준 목록</span>
+				<span class="font-normal text-slate-400">표준 목록</span>
 			</div>
 		</button>
 
 		<!-- 카드 3: 갤러리/사진형 -->
 		<button
-			onclick={() => { activeTab = 'list'; filterLayout = 'gallery'; }}
-			class="w-full text-left relative overflow-hidden rounded-[1.75rem] border-2 bg-white p-5 shadow-sm transition group {filterLayout === 'gallery' ? 'border-amber-500 bg-amber-50/20 ring-2 ring-amber-500/20' : 'border-slate-100 hover:border-amber-300'}"
+			onclick={() => {
+				activeTab = 'list';
+				filterLayout = 'gallery';
+			}}
+			class="group relative w-full overflow-hidden rounded-[1.75rem] border-2 bg-white p-5 text-left shadow-sm transition {filterLayout ===
+			'gallery'
+				? 'border-amber-500 bg-amber-50/20 ring-2 ring-amber-500/20'
+				: 'border-slate-100 hover:border-amber-300'}"
 		>
-			<div class="flex w-full items-center justify-between gap-2 mb-3">
-				<span class="min-w-0 truncate text-xs font-black tracking-widest uppercase text-slate-400 group-hover:text-amber-600">Gallery Layout</span>
-				<div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-amber-50 text-amber-600 group-hover:scale-110 transition-transform">
+			<div class="mb-3 flex w-full items-center justify-between gap-2">
+				<span
+					class="min-w-0 truncate text-xs font-black tracking-widest text-slate-400 uppercase group-hover:text-amber-600"
+					>Gallery Layout</span
+				>
+				<div
+					class="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-amber-50 text-amber-600 transition-transform group-hover:scale-110"
+				>
 					<Icon icon="ph:image-square-bold" class="text-2xl" />
 				</div>
 			</div>
-			<div class="text-3xl font-black text-slate-900 tracking-tight">
+			<div class="text-3xl font-black tracking-tight text-slate-900">
 				{loading ? '...' : countGallery}
-				<span class="text-sm font-bold text-slate-400 ml-1">개 갤러리</span>
+				<span class="ml-1 text-sm font-bold text-slate-400">개 갤러리</span>
 			</div>
 			<div class="mt-2 flex items-center gap-2 text-xs font-bold text-amber-600">
 				<span class="rounded-lg bg-amber-50 px-2 py-0.5 font-mono">현장 사진·미디어</span>
-				<span class="text-slate-400 font-normal">카드 뷰</span>
+				<span class="font-normal text-slate-400">카드 뷰</span>
 			</div>
 		</button>
 
 		<!-- 카드 4: 블로그/피드형 -->
 		<button
-			onclick={() => { activeTab = 'list'; filterLayout = 'blog'; }}
-			class="w-full text-left relative overflow-hidden rounded-[1.75rem] border-2 bg-white p-5 shadow-sm transition group {filterLayout === 'blog' ? 'border-purple-500 bg-purple-50/20 ring-2 ring-purple-500/20' : 'border-slate-100 hover:border-purple-300'}"
+			onclick={() => {
+				activeTab = 'list';
+				filterLayout = 'blog';
+			}}
+			class="group relative w-full overflow-hidden rounded-[1.75rem] border-2 bg-white p-5 text-left shadow-sm transition {filterLayout ===
+			'blog'
+				? 'border-purple-500 bg-purple-50/20 ring-2 ring-purple-500/20'
+				: 'border-slate-100 hover:border-purple-300'}"
 		>
-			<div class="flex w-full items-center justify-between gap-2 mb-3">
-				<span class="min-w-0 truncate text-xs font-black tracking-widest uppercase text-slate-400 group-hover:text-purple-600">Blog Layout</span>
-				<div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-purple-50 text-purple-600 group-hover:scale-110 transition-transform">
+			<div class="mb-3 flex w-full items-center justify-between gap-2">
+				<span
+					class="min-w-0 truncate text-xs font-black tracking-widest text-slate-400 uppercase group-hover:text-purple-600"
+					>Blog Layout</span
+				>
+				<div
+					class="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-purple-50 text-purple-600 transition-transform group-hover:scale-110"
+				>
 					<Icon icon="ph:article-medium-bold" class="text-2xl" />
 				</div>
 			</div>
-			<div class="text-3xl font-black text-slate-900 tracking-tight">
+			<div class="text-3xl font-black tracking-tight text-slate-900">
 				{loading ? '...' : countBlog}
-				<span class="text-sm font-bold text-slate-400 ml-1">개 피드형</span>
+				<span class="ml-1 text-sm font-bold text-slate-400">개 피드형</span>
 			</div>
 			<div class="mt-2 flex items-center gap-2 text-xs font-bold text-purple-600">
 				<span class="rounded-lg bg-purple-50 px-2 py-0.5 font-mono">주간 보고서</span>
-				<span class="text-slate-400 font-normal">본문 요약</span>
+				<span class="font-normal text-slate-400">본문 요약</span>
 			</div>
 		</button>
 	</section>
@@ -640,16 +748,22 @@
 	<!-- ===================================================================== -->
 	<!-- 3. 모드 탭 바 (최소 1개, 일관성 및 확장성) -->
 	<!-- ===================================================================== -->
-	<nav class="flex gap-2 border-b-2 border-slate-200 overflow-x-auto no-scrollbar">
+	<nav class="no-scrollbar flex gap-2 overflow-x-auto border-b-2 border-slate-200">
 		<button
 			onclick={() => (activeTab = 'list')}
-			class="px-6 py-3.5 text-xs font-black uppercase tracking-widest transition-all whitespace-nowrap {activeTab === 'list' ? 'border-b-4 border-blue-600 text-blue-700 bg-blue-50/60 rounded-t-2xl' : 'text-slate-400 hover:text-slate-700'}"
+			class="px-6 py-3.5 text-xs font-black tracking-widest whitespace-nowrap uppercase transition-all {activeTab ===
+			'list'
+				? 'rounded-t-2xl border-b-4 border-blue-600 bg-blue-50/60 text-blue-700'
+				: 'text-slate-400 hover:text-slate-700'}"
 		>
 			게시판 인스턴스 명부 ({filteredBoards.length})
 		</button>
 		<button
 			onclick={startCreate}
-			class="px-6 py-3.5 text-xs font-black uppercase tracking-widest transition-all whitespace-nowrap {activeTab === 'create' ? 'border-b-4 border-blue-600 text-blue-700 bg-blue-50/60 rounded-t-2xl' : 'text-slate-400 hover:text-slate-700'}"
+			class="px-6 py-3.5 text-xs font-black tracking-widest whitespace-nowrap uppercase transition-all {activeTab ===
+			'create'
+				? 'rounded-t-2xl border-b-4 border-blue-600 bg-blue-50/60 text-blue-700'
+				: 'text-slate-400 hover:text-slate-700'}"
 		>
 			{editingBoard.id ? `설정 수정: ${editingBoard.name}` : '새 게시판 인스턴스 등록'}
 		</button>
@@ -661,8 +775,10 @@
 	{#if loading}
 		<div class="flex justify-center py-20">
 			<div class="flex flex-col items-center gap-3">
-				<div class="h-10 w-10 animate-spin rounded-full border-4 border-blue-600 border-t-transparent"></div>
-				<p class="text-xs font-bold text-slate-400 font-mono">게시판 인스턴스 스캔 중...</p>
+				<div
+					class="h-10 w-10 animate-spin rounded-full border-4 border-blue-600 border-t-transparent"
+				></div>
+				<p class="font-mono text-xs font-bold text-slate-400">게시판 인스턴스 스캔 중...</p>
 			</div>
 		</div>
 	{:else if activeTab === 'list'}
@@ -670,42 +786,51 @@
 		<div class="space-y-4">
 			{#if filteredBoards.length === 0}
 				<div class="rounded-3xl border-2 border-dashed border-slate-200 bg-white p-12 text-center">
-					<Icon icon="ph:clipboard-text-light" class="mx-auto text-4xl text-slate-300 mb-3" />
+					<Icon icon="ph:clipboard-text-light" class="mx-auto mb-3 text-4xl text-slate-300" />
 					<p class="text-sm font-bold text-slate-500">선택된 조건의 게시판 인스턴스가 없습니다.</p>
 					<button
 						onclick={startCreate}
-						class="mt-4 px-4 py-2 rounded-xl bg-blue-600 text-white font-bold text-xs hover:bg-blue-700 transition"
+						class="mt-4 rounded-xl bg-blue-600 px-4 py-2 text-xs font-bold text-white transition hover:bg-blue-700"
 					>
 						첫 게시판 등록하기
 					</button>
 				</div>
 			{:else}
 				<!-- 반응형 카드 그리드: 모바일 세로 1열, 태블릿 2열, 데스크탑 3열 -->
-				<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+				<div class="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
 					{#each filteredBoards as b}
 						{@const badge = getLayoutBadge(b.layout_type)}
 						<div
-							class="rounded-2xl border-2 bg-white p-6 shadow-sm hover:border-blue-400 transition-all flex flex-col justify-between {editingBoard.id === b.id ? 'border-blue-600 ring-2 ring-blue-600/20' : 'border-slate-200'}"
+							class="flex flex-col justify-between rounded-2xl border-2 bg-white p-6 shadow-sm transition-all hover:border-blue-400 {editingBoard.id ===
+							b.id
+								? 'border-blue-600 ring-2 ring-blue-600/20'
+								: 'border-slate-200'}"
 						>
 							<div>
-								<div class="flex items-center justify-between mb-2">
-									<span class="px-2.5 py-0.5 rounded-full text-[11px] font-black uppercase bg-slate-100 text-slate-700 font-mono">
+								<div class="mb-2 flex items-center justify-between">
+									<span
+										class="rounded-full bg-slate-100 px-2.5 py-0.5 font-mono text-[11px] font-black text-slate-700 uppercase"
+									>
 										/{b.slug}
 									</span>
-									<span class="px-2.5 py-0.5 rounded-md text-[10px] font-bold border {badge.class}">
+									<span class="rounded-md border px-2.5 py-0.5 text-[10px] font-bold {badge.class}">
 										{badge.label}
 									</span>
 								</div>
-								<h3 class="text-xl font-black text-slate-900 tracking-tight mt-1">{b.name}</h3>
-								<p class="text-xs text-slate-500 mt-2 line-clamp-2 leading-relaxed">
+								<h3 class="mt-1 text-xl font-black tracking-tight text-slate-900">{b.name}</h3>
+								<p class="mt-2 line-clamp-2 text-xs leading-relaxed text-slate-500">
 									{b.description || '별도의 설명이 설정되지 않았습니다.'}
 								</p>
 							</div>
 
-							<div class="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between gap-2">
-								<div class="flex items-center gap-2 text-xs font-bold text-slate-400 font-mono">
+							<div
+								class="mt-6 flex items-center justify-between gap-2 border-t border-slate-100 pt-4"
+							>
+								<div class="flex items-center gap-2 font-mono text-xs font-bold text-slate-400">
 									<span>{b.items_per_page || 10}건</span>
-									<span class="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-black text-slate-600">
+									<span
+										class="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-black text-slate-600"
+									>
 										R{b.min_read_rank ?? 0} / W{b.min_write_rank ?? 2}
 									</span>
 								</div>
@@ -713,13 +838,13 @@
 									<button
 										type="button"
 										onclick={() => startEdit(b)}
-										class="px-3 py-1.5 text-xs font-black text-blue-600 hover:bg-blue-50 rounded-xl transition"
+										class="rounded-xl px-3 py-1.5 text-xs font-black text-blue-600 transition hover:bg-blue-50"
 									>
 										설정 수정
 									</button>
 									<a
 										href="/v1/app/board/{b.slug}"
-										class="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-black bg-slate-900 text-white hover:bg-blue-600 rounded-xl transition shadow-sm"
+										class="inline-flex items-center gap-1 rounded-xl bg-slate-900 px-3 py-1.5 text-xs font-black text-white shadow-sm transition hover:bg-blue-600"
 										title="사용자 화면으로 이동"
 									>
 										<span>열기</span>
@@ -734,20 +859,24 @@
 		</div>
 	{:else}
 		<!-- 탭 2: 생성/수정 폼 카드 -->
-		<div class="rounded-3xl border-2 border-slate-200 bg-white p-6 sm:p-10 shadow-sm max-w-4xl">
-			<div class="mb-8 flex flex-wrap items-baseline justify-between gap-3 border-b-2 border-slate-100 pb-4">
+		<div class="max-w-4xl rounded-3xl border-2 border-slate-200 bg-white p-6 shadow-sm sm:p-10">
+			<div
+				class="mb-8 flex flex-wrap items-baseline justify-between gap-3 border-b-2 border-slate-100 pb-4"
+			>
 				<div>
-					<h3 class="text-2xl font-black text-slate-900 tracking-tight">
-						{editingBoard.id ? `게시판 인스턴스 수정: ${editingBoard.name}` : '새 게시판 인스턴스 설계 및 등록'}
+					<h3 class="text-2xl font-black tracking-tight text-slate-900">
+						{editingBoard.id
+							? `게시판 인스턴스 수정: ${editingBoard.name}`
+							: '새 게시판 인스턴스 설계 및 등록'}
 					</h3>
-					<p class="text-xs font-bold text-slate-400 mt-1">
+					<p class="mt-1 text-xs font-bold text-slate-400">
 						경로(Slug)와 명칭, 레이아웃 규격을 지정하여 새 게시판 서비스를 즉시 활성화합니다.
 					</p>
 				</div>
 				{#if editingBoard.id && editingBoard.slug}
 					<a
 						href="/v1/app/board/{editingBoard.slug}"
-						class="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl border border-blue-200 bg-blue-50 text-xs font-black text-blue-700 hover:bg-blue-600 hover:text-white transition"
+						class="inline-flex items-center gap-1 rounded-xl border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-black text-blue-700 transition hover:bg-blue-600 hover:text-white"
 					>
 						<span>게시판 바로가기</span>
 						<Icon icon="ph:arrow-square-out-bold" class="text-xs" />
@@ -756,30 +885,36 @@
 			</div>
 
 			<div class="space-y-6">
-				<div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+				<div class="grid grid-cols-1 gap-5 sm:grid-cols-2">
 					<div class="space-y-1.5">
-						<label for="board-slug-input" class="block text-xs font-black text-slate-700 tracking-wide">
+						<label
+							for="board-slug-input"
+							class="block text-xs font-black tracking-wide text-slate-700"
+						>
 							게시판 주소 (Slug / ID) <span class="text-rose-500">*</span>
 						</label>
 						<input
 							id="board-slug-input"
 							type="text"
 							bind:value={editingBoard.slug}
-							class="w-full px-4 py-3 rounded-2xl border-2 border-slate-200 text-xs font-bold font-mono text-blue-600 bg-slate-50 focus:bg-white focus:border-blue-600 focus:outline-none transition"
+							class="w-full rounded-2xl border-2 border-slate-200 bg-slate-50 px-4 py-3 font-mono text-xs font-bold text-blue-600 transition focus:border-blue-600 focus:bg-white focus:outline-none"
 							placeholder="예: notice, free, gallery, qna"
 						/>
 						<p class="text-[11px] text-slate-400">URL 경로(/v1/app/board/[slug])로 사용됩니다.</p>
 					</div>
 
 					<div class="space-y-1.5">
-						<label for="board-name-input" class="block text-xs font-black text-slate-700 tracking-wide">
+						<label
+							for="board-name-input"
+							class="block text-xs font-black tracking-wide text-slate-700"
+						>
 							게시판 공식 명칭 <span class="text-rose-500">*</span>
 						</label>
 						<input
 							id="board-name-input"
 							type="text"
 							bind:value={editingBoard.name}
-							class="w-full px-4 py-3 rounded-2xl border-2 border-slate-200 text-xs font-bold text-slate-800 bg-slate-50 focus:bg-white focus:border-blue-600 focus:outline-none transition"
+							class="w-full rounded-2xl border-2 border-slate-200 bg-slate-50 px-4 py-3 text-xs font-bold text-slate-800 transition focus:border-blue-600 focus:bg-white focus:outline-none"
 							placeholder="예: 전사 공지사항"
 						/>
 						<p class="text-[11px] text-slate-400">화면 상단 및 메뉴에 노출되는 한글 명칭입니다.</p>
@@ -787,23 +922,30 @@
 				</div>
 
 				<div class="space-y-1.5">
-					<label for="board-desc-input" class="block text-xs font-black text-slate-700 tracking-wide">게시판 상세 설명</label>
+					<label
+						for="board-desc-input"
+						class="block text-xs font-black tracking-wide text-slate-700">게시판 상세 설명</label
+					>
 					<input
 						id="board-desc-input"
 						type="text"
 						bind:value={editingBoard.description}
-						class="w-full px-4 py-3 rounded-2xl border-2 border-slate-200 text-xs font-bold text-slate-800 bg-white focus:border-blue-600 focus:outline-none transition"
+						class="w-full rounded-2xl border-2 border-slate-200 bg-white px-4 py-3 text-xs font-bold text-slate-800 transition focus:border-blue-600 focus:outline-none"
 						placeholder="사용자 및 임직원에게 안내할 게시판의 역할과 이용 수칙"
 					/>
 				</div>
 
-				<div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+				<div class="grid grid-cols-1 gap-5 sm:grid-cols-2">
 					<div class="space-y-1.5">
-						<label for="board-layout-select" class="block text-xs font-black text-slate-700 tracking-wide">표준 레이아웃 스타일</label>
+						<label
+							for="board-layout-select"
+							class="block text-xs font-black tracking-wide text-slate-700"
+							>표준 레이아웃 스타일</label
+						>
 						<select
 							id="board-layout-select"
 							bind:value={editingBoard.layout_type}
-							class="w-full px-4 py-3 rounded-2xl border-2 border-slate-200 text-xs font-bold text-slate-800 bg-white focus:border-blue-600 focus:outline-none transition"
+							class="w-full rounded-2xl border-2 border-slate-200 bg-white px-4 py-3 text-xs font-bold text-slate-800 transition focus:border-blue-600 focus:outline-none"
 						>
 							<option value="list">리스트형 (일반 텍스트 목록 표준)</option>
 							<option value="gallery">갤러리형 (현장 사진·이미지 썸네일 카드)</option>
@@ -812,23 +954,31 @@
 					</div>
 
 					<div class="space-y-1.5">
-						<label for="board-items-input" class="block text-xs font-black text-slate-700 tracking-wide">페이지당 기본 노출 건수</label>
+						<label
+							for="board-items-input"
+							class="block text-xs font-black tracking-wide text-slate-700"
+							>페이지당 기본 노출 건수</label
+						>
 						<input
 							id="board-items-input"
 							type="number"
 							bind:value={editingBoard.items_per_page}
-							class="w-full px-4 py-3 rounded-2xl border-2 border-slate-200 text-xs font-bold text-slate-800 bg-white focus:border-blue-600 focus:outline-none transition"
+							class="w-full rounded-2xl border-2 border-slate-200 bg-white px-4 py-3 text-xs font-bold text-slate-800 transition focus:border-blue-600 focus:outline-none"
 						/>
 					</div>
 				</div>
 
-				<div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+				<div class="grid grid-cols-1 gap-5 sm:grid-cols-2">
 					<div class="space-y-1.5">
-						<label for="board-read-rank-select" class="block text-xs font-black text-slate-700 tracking-wide">읽기 최소 권한 (min_read_rank)</label>
+						<label
+							for="board-read-rank-select"
+							class="block text-xs font-black tracking-wide text-slate-700"
+							>읽기 최소 권한 (min_read_rank)</label
+						>
 						<select
 							id="board-read-rank-select"
 							bind:value={editingBoard.min_read_rank}
-							class="w-full px-4 py-3 rounded-2xl border-2 border-slate-200 text-xs font-bold text-slate-800 bg-white focus:border-blue-600 focus:outline-none transition"
+							class="w-full rounded-2xl border-2 border-slate-200 bg-white px-4 py-3 text-xs font-bold text-slate-800 transition focus:border-blue-600 focus:outline-none"
 						>
 							{#each RANK_LEVELS as r (r.val)}
 								<option value={r.val}>Lv.{r.val}</option>
@@ -837,11 +987,15 @@
 					</div>
 
 					<div class="space-y-1.5">
-						<label for="board-write-rank-select" class="block text-xs font-black text-slate-700 tracking-wide">쓰기/수정 최소 권한 (min_write_rank)</label>
+						<label
+							for="board-write-rank-select"
+							class="block text-xs font-black tracking-wide text-slate-700"
+							>쓰기/수정 최소 권한 (min_write_rank)</label
+						>
 						<select
 							id="board-write-rank-select"
 							bind:value={editingBoard.min_write_rank}
-							class="w-full px-4 py-3 rounded-2xl border-2 border-slate-200 text-xs font-bold text-slate-800 bg-white focus:border-blue-600 focus:outline-none transition"
+							class="w-full rounded-2xl border-2 border-slate-200 bg-white px-4 py-3 text-xs font-bold text-slate-800 transition focus:border-blue-600 focus:outline-none"
 						>
 							{#each RANK_LEVELS as r (r.val)}
 								<option value={r.val}>Lv.{r.val}</option>
@@ -850,9 +1004,15 @@
 					</div>
 				</div>
 
-				<div class="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-					<label class="flex items-center gap-2 cursor-pointer">
-						<input type="checkbox" bind:checked={editingBoard.is_active} class="checkbox checkbox-sm checkbox-primary" />
+				<div
+					class="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3"
+				>
+					<label class="flex cursor-pointer items-center gap-2">
+						<input
+							type="checkbox"
+							bind:checked={editingBoard.is_active}
+							class="checkbox checkbox-sm checkbox-primary"
+						/>
 						<span class="text-xs font-bold text-slate-700">게시판 활성화 (is_active)</span>
 					</label>
 					<a
@@ -876,17 +1036,24 @@
 				<div class="space-y-4 rounded-2xl border-2 border-slate-200 bg-slate-50/70 p-4 sm:p-5">
 					<div class="flex flex-wrap items-center justify-between gap-2">
 						<div>
-							<h4 class="text-xs font-black text-slate-800">게시판 서비스 연결 (댓글 · 반응 · 열람확인 · 업로드 등)</h4>
+							<h4 class="text-xs font-black text-slate-800">
+								게시판 서비스 연결 (댓글 · 반응 · 열람확인 · 업로드 등)
+							</h4>
 							<p class="text-[11px] text-slate-500">
-								공통 번들을 연결하거나, 이 게시판에 필요한 서비스만 직접 체크해 순서를 지정할 수 있습니다.
+								공통 번들을 연결하거나, 이 게시판에 필요한 서비스만 직접 체크해 순서를 지정할 수
+								있습니다.
 							</p>
 						</div>
 						{#if (editingBoard.service_app_ids || []).length > 0}
-							<span class="rounded-full border border-blue-200 bg-blue-50 px-2.5 py-0.5 text-[11px] font-black text-blue-700">
+							<span
+								class="rounded-full border border-blue-200 bg-blue-50 px-2.5 py-0.5 text-[11px] font-black text-blue-700"
+							>
 								직접 구성 우선 적용 중 ({editingBoard.service_app_ids.length}개)
 							</span>
 						{:else if editingBoard.service_instance_id}
-							<span class="rounded-full border border-rose-200 bg-rose-50 px-2.5 py-0.5 text-[11px] font-black text-rose-700">
+							<span
+								class="rounded-full border border-rose-200 bg-rose-50 px-2.5 py-0.5 text-[11px] font-black text-rose-700"
+							>
 								공통 번들 적용 중
 							</span>
 						{/if}
@@ -894,14 +1061,14 @@
 
 					<!-- 1) 공통 번들 선택 + 프리셋 불러오기 -->
 					<div class="grid grid-cols-1 gap-2 sm:grid-cols-12 sm:items-end">
-						<div class="sm:col-span-8 space-y-1">
+						<div class="space-y-1 sm:col-span-8">
 							<label for="board-service-bundle" class="block text-[11px] font-bold text-slate-600">
 								공통 조립 번들 (여러 게시판에 동일 세트 일괄 적용 시)
 							</label>
 							<select
 								id="board-service-bundle"
 								bind:value={editingBoard.service_instance_id}
-								class="w-full px-4 py-2.5 rounded-xl border-2 border-slate-200 text-xs font-bold text-slate-800 bg-white focus:border-blue-600 focus:outline-none transition"
+								class="w-full rounded-xl border-2 border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-800 transition focus:border-blue-600 focus:outline-none"
 							>
 								<option value={null}>연결 안 함</option>
 								{#each serviceInstances as inst}
@@ -909,7 +1076,7 @@
 								{/each}
 							</select>
 						</div>
-						<div class="sm:col-span-4 flex gap-2">
+						<div class="flex gap-2 sm:col-span-4">
 							<button
 								type="button"
 								disabled={!editingBoard.service_instance_id}
@@ -924,7 +1091,9 @@
 					<!-- 2) 이 게시판 전용 직접 조립 (선택 순서 + 카테고리별 그룹 체크) -->
 					<div class="space-y-3 rounded-xl border border-slate-200 bg-white p-3.5">
 						<div class="flex flex-wrap items-center justify-between gap-2">
-							<span class="text-xs font-black text-slate-800">이 게시판 전용 서비스 직접 선택 (선택 시 번들보다 우선 적용)</span>
+							<span class="text-xs font-black text-slate-800"
+								>이 게시판 전용 서비스 직접 선택 (선택 시 번들보다 우선 적용)</span
+							>
 							{#if (editingBoard.service_app_ids || []).length > 0}
 								<button
 									type="button"
@@ -937,10 +1106,14 @@
 						</div>
 
 						{#if (editingBoard.service_app_ids || []).length > 0}
-							<div class="flex flex-wrap gap-1.5 rounded-xl border border-blue-100 bg-blue-50/50 p-2.5">
+							<div
+								class="flex flex-wrap gap-1.5 rounded-xl border border-blue-100 bg-blue-50/50 p-2.5"
+							>
 								{#each editingBoard.service_app_ids as appId, idx (appId + '-' + idx)}
 									{@const appObj = serviceApps.find((a) => a.id === appId)}
-									<div class="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-white px-2.5 py-1 text-xs shadow-xs">
+									<div
+										class="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-white px-2.5 py-1 text-xs shadow-xs"
+									>
 										<span class="font-black text-blue-600">{idx + 1}.</span>
 										<span class="font-bold text-slate-800">{appObj?.name || `모듈 #${appId}`}</span>
 										<button
@@ -990,7 +1163,9 @@
 								{#each getGroupedServiceApps() as group (group.registryId)}
 									<div class="space-y-1.5">
 										<div class="flex items-center gap-2 text-[11px] font-black text-slate-500">
-											<span class="rounded bg-slate-100 px-2 py-0.5 text-slate-700">{group.registryName}</span>
+											<span class="rounded bg-slate-100 px-2 py-0.5 text-slate-700"
+												>{group.registryName}</span
+											>
 											<span class="font-mono text-[10px] text-slate-400">({group.registryId})</span>
 										</div>
 										<div class="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
@@ -1009,7 +1184,9 @@
 													/>
 													<div class="min-w-0 flex-1">
 														<div class="truncate font-black text-slate-800">{app.name}</div>
-														<div class="truncate font-mono text-[10px] text-slate-400">{app.engine_id}</div>
+														<div class="truncate font-mono text-[10px] text-slate-400">
+															{app.engine_id}
+														</div>
 													</div>
 												</label>
 											{/each}
@@ -1021,18 +1198,73 @@
 					</div>
 				</div>
 
+				<!-- 인스턴스별 서비스앱 권한 예외 설정 (options.service_permissions) -->
+				{#if serviceRegistries.length > 0}
+					<div class="space-y-3 rounded-2xl border-2 border-slate-200 bg-slate-50/70 p-4 sm:p-5">
+						<div>
+							<h4 class="text-xs font-black text-slate-800">
+								인스턴스별 서비스앱 권한 예외 (options.service_permissions)
+							</h4>
+							<p class="text-[11px] text-slate-500">
+								공용 번들을 공유하더라도 이 게시판에서만 특정 서비스의 조회·쓰기 정책을 다르게
+								덮어쓸 수 있습니다.
+							</p>
+						</div>
+						<div class="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+							{#each serviceRegistries as reg (reg.id)}
+								{@const curPerm = editingBoard.options?.service_permissions?.[reg.id] || {}}
+								<div class="space-y-2 rounded-xl border border-slate-200 bg-white p-3">
+									<div class="flex items-center justify-between gap-2">
+										<span class="text-xs font-black text-slate-800">{reg.name}</span>
+										<span
+											class="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] text-slate-500"
+											>{reg.id}</span
+										>
+									</div>
+									<div class="grid grid-cols-2 gap-2">
+										<select
+											aria-label="{reg.name} 조회 정책"
+											value={curPerm.read_policy || 'inherit'}
+											onchange={(e) =>
+												setBoardServicePermission(reg.id, 'read_policy', e.currentTarget.value)}
+											class="w-full rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-[11px] font-bold text-slate-700"
+										>
+											{#each SERVICE_READ_POLICY_OPTIONS as opt (opt.value)}
+												<option value={opt.value}>{opt.label}</option>
+											{/each}
+										</select>
+										<select
+											aria-label="{reg.name} 쓰기 정책"
+											value={curPerm.write_policy || 'inherit_read'}
+											onchange={(e) =>
+												setBoardServicePermission(reg.id, 'write_policy', e.currentTarget.value)}
+											class="w-full rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-[11px] font-bold text-slate-700"
+										>
+											{#each SERVICE_WRITE_POLICY_OPTIONS as opt (opt.value)}
+												<option value={opt.value}>{opt.label}</option>
+											{/each}
+										</select>
+									</div>
+								</div>
+							{/each}
+						</div>
+					</div>
+				{/if}
+
 				<!-- 동적 커스텀 폼 필드 정의 (fields_def) -->
 				<div class="space-y-3 rounded-2xl border-2 border-slate-200 bg-slate-50/70 p-4 sm:p-5">
 					<div class="flex flex-wrap items-center justify-between gap-2">
 						<div>
 							<h4 class="text-xs font-black text-slate-800">동적 커스텀 필드 (fields_def)</h4>
-							<p class="text-[11px] text-slate-500">글 작성 폼에 추가 입력 필드(텍스트·숫자·날짜·선택)를 동적으로 구성합니다.</p>
+							<p class="text-[11px] text-slate-500">
+								글 작성 폼에 추가 입력 필드(텍스트·숫자·날짜·선택)를 동적으로 구성합니다.
+							</p>
 						</div>
 						<div class="flex items-center gap-2">
 							<button
 								type="button"
 								onclick={toggleFieldsJsonMode}
-								class="rounded-xl border border-slate-300 bg-white px-3 py-1.5 text-[11px] font-bold text-slate-700 hover:bg-slate-100 transition"
+								class="rounded-xl border border-slate-300 bg-white px-3 py-1.5 text-[11px] font-bold text-slate-700 transition hover:bg-slate-100"
 							>
 								{fieldsJsonMode ? '시각적 편집기로 보기' : 'JSON 직접 편집'}
 							</button>
@@ -1040,7 +1272,7 @@
 								<button
 									type="button"
 									onclick={addCustomField}
-									class="rounded-xl bg-slate-900 px-3 py-1.5 text-[11px] font-black text-white hover:bg-blue-600 transition"
+									class="rounded-xl bg-slate-900 px-3 py-1.5 text-[11px] font-black text-white transition hover:bg-blue-600"
 								>
 									+ 필드 추가
 								</button>
@@ -1056,28 +1288,32 @@
 							placeholder={`[{"key": "department", "label": "부서", "type": "text", "placeholder": "예: 운수팀"}]`}
 						></textarea>
 					{:else if !editingBoard.fields_def || editingBoard.fields_def.length === 0}
-						<p class="rounded-xl border border-dashed border-slate-300 bg-white/80 py-4 text-center text-xs font-medium text-slate-400">
+						<p
+							class="rounded-xl border border-dashed border-slate-300 bg-white/80 py-4 text-center text-xs font-medium text-slate-400"
+						>
 							추가된 커스텀 필드가 없습니다. (+ 필드 추가 또는 JSON 직접 편집)
 						</p>
 					{:else}
 						<div class="space-y-2.5">
 							{#each editingBoard.fields_def as field, idx}
-								<div class="grid grid-cols-1 gap-2 rounded-xl border border-slate-200 bg-white p-3 sm:grid-cols-12 sm:items-center">
+								<div
+									class="grid grid-cols-1 gap-2 rounded-xl border border-slate-200 bg-white p-3 sm:grid-cols-12 sm:items-center"
+								>
 									<input
 										type="text"
 										bind:value={field.key}
 										placeholder="키 (영문)"
-										class="sm:col-span-2 rounded-lg border border-slate-200 px-2.5 py-1.5 font-mono text-xs font-bold"
+										class="rounded-lg border border-slate-200 px-2.5 py-1.5 font-mono text-xs font-bold sm:col-span-2"
 									/>
 									<input
 										type="text"
 										bind:value={field.label}
 										placeholder="라벨명"
-										class="sm:col-span-3 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-bold"
+										class="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-bold sm:col-span-3"
 									/>
 									<select
 										bind:value={field.type}
-										class="sm:col-span-2 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs font-bold"
+										class="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs font-bold sm:col-span-2"
 									>
 										<option value="text">텍스트</option>
 										<option value="number">숫자</option>
@@ -1089,20 +1325,20 @@
 											type="text"
 											bind:value={field.options_text}
 											placeholder="옵션 (쉼표 구분)"
-											class="sm:col-span-4 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs"
+											class="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs sm:col-span-4"
 										/>
 									{:else}
 										<input
 											type="text"
 											bind:value={field.placeholder}
 											placeholder="안내 문구(placeholder)"
-											class="sm:col-span-4 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs"
+											class="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs sm:col-span-4"
 										/>
 									{/if}
 									<button
 										type="button"
 										onclick={() => removeCustomField(idx)}
-										class="sm:col-span-1 rounded-lg px-2 py-1.5 text-xs font-bold text-rose-500 hover:bg-rose-50"
+										class="rounded-lg px-2 py-1.5 text-xs font-bold text-rose-500 hover:bg-rose-50 sm:col-span-1"
 										title="필드 삭제"
 									>
 										삭제
@@ -1117,8 +1353,14 @@
 				<div class="space-y-3 rounded-2xl border-2 border-slate-200 bg-slate-50/70 p-4 sm:p-5">
 					<div class="flex flex-wrap items-center justify-between gap-2">
 						<div>
-							<h4 class="text-xs font-black text-slate-800">게시판 리스트 전역 옵션 (options JSON)</h4>
-							<p class="text-[11px] text-slate-500">목록·상세 전역 동작과 우측 다이나믹 폼 표시 여부(<code class="font-mono">dynamic_form</code>)를 설정합니다.</p>
+							<h4 class="text-xs font-black text-slate-800">
+								게시판 리스트 전역 옵션 (options JSON)
+							</h4>
+							<p class="text-[11px] text-slate-500">
+								목록·상세 전역 동작과 우측 다이나믹 폼 표시 여부(<code class="font-mono"
+									>dynamic_form</code
+								>)를 설정합니다.
+							</p>
 						</div>
 						<div class="flex items-center gap-2">
 							<button
@@ -1149,26 +1391,34 @@
 					{:else}
 						{@const optionEntries = getOptionEntries()}
 						{#if optionEntries.length === 0}
-							<p class="rounded-xl border border-dashed border-slate-300 bg-white py-4 text-center text-xs text-slate-400">
+							<p
+								class="rounded-xl border border-dashed border-slate-300 bg-white py-4 text-center text-xs text-slate-400"
+							>
 								정의된 세부 옵션이 없습니다. `+ 옵션 추가`로 항목을 추가하세요.
 							</p>
 						{:else}
 							<div class="space-y-2">
 								{#each optionEntries as entry (entry.key)}
-									<div class="grid grid-cols-1 gap-2 rounded-xl border border-slate-200 bg-white p-2.5 sm:grid-cols-12 sm:items-center">
+									<div
+										class="grid grid-cols-1 gap-2 rounded-xl border border-slate-200 bg-white p-2.5 sm:grid-cols-12 sm:items-center"
+									>
 										<input
 											type="text"
 											value={entry.key}
 											onchange={(e) => updateOptionEntry(entry.key, e.currentTarget.value, entry)}
 											placeholder="키 (예: use_comment)"
-											class="sm:col-span-3 rounded-lg border border-slate-200 px-2.5 py-1.5 font-mono text-xs"
+											class="rounded-lg border border-slate-200 px-2.5 py-1.5 font-mono text-xs sm:col-span-3"
 										/>
 										<input
 											type="text"
 											value={entry.label}
-											onchange={(e) => updateOptionEntry(entry.key, entry.key, { ...entry, label: e.currentTarget.value })}
+											onchange={(e) =>
+												updateOptionEntry(entry.key, entry.key, {
+													...entry,
+													label: e.currentTarget.value
+												})}
 											placeholder="한글 라벨 (예: 댓글 허용)"
-											class="sm:col-span-3 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs"
+											class="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs sm:col-span-3"
 										/>
 										<select
 											value={entry.type}
@@ -1180,21 +1430,31 @@
 														: nextType === 'slider'
 															? Number(entry.value || 0)
 															: String(entry.value ?? '');
-												updateOptionEntry(entry.key, entry.key, { ...entry, type: nextType, value: nextVal });
+												updateOptionEntry(entry.key, entry.key, {
+													...entry,
+													type: nextType,
+													value: nextVal
+												});
 											}}
-											class="sm:col-span-2 rounded-lg border border-slate-200 px-2 py-1.5 text-xs font-bold"
+											class="rounded-lg border border-slate-200 px-2 py-1.5 text-xs font-bold sm:col-span-2"
 										>
 											<option value="toggle">토글</option>
 											<option value="slider">슬라이더</option>
 											<option value="text">텍스트</option>
 										</select>
-										<div class="sm:col-span-2 flex items-center">
+										<div class="flex items-center sm:col-span-2">
 											{#if entry.type === 'toggle'}
-												<label class="inline-flex cursor-pointer items-center gap-1.5 text-xs font-bold text-slate-700">
+												<label
+													class="inline-flex cursor-pointer items-center gap-1.5 text-xs font-bold text-slate-700"
+												>
 													<input
 														type="checkbox"
 														checked={Boolean(entry.value)}
-														onchange={(e) => updateOptionEntry(entry.key, entry.key, { ...entry, value: e.currentTarget.checked })}
+														onchange={(e) =>
+															updateOptionEntry(entry.key, entry.key, {
+																...entry,
+																value: e.currentTarget.checked
+															})}
 														class="h-4 w-4 rounded border-slate-300 text-blue-600"
 													/>
 													<span>{entry.value ? '활성' : '비활성'}</span>
@@ -1203,24 +1463,39 @@
 												<input
 													type="number"
 													value={Number(entry.value || 0)}
-													onchange={(e) => updateOptionEntry(entry.key, entry.key, { ...entry, value: Number(e.currentTarget.value) })}
+													onchange={(e) =>
+														updateOptionEntry(entry.key, entry.key, {
+															...entry,
+															value: Number(e.currentTarget.value)
+														})}
 													class="w-full rounded-lg border border-slate-200 px-2 py-1.5 text-xs"
 												/>
 											{:else}
 												<input
 													type="text"
 													value={String(entry.value ?? '')}
-													onchange={(e) => updateOptionEntry(entry.key, entry.key, { ...entry, value: e.currentTarget.value })}
+													onchange={(e) =>
+														updateOptionEntry(entry.key, entry.key, {
+															...entry,
+															value: e.currentTarget.value
+														})}
 													placeholder="기본값"
 													class="w-full rounded-lg border border-slate-200 px-2 py-1.5 text-xs"
 												/>
 											{/if}
 										</div>
-										<label class="sm:col-span-1 inline-flex cursor-pointer items-center justify-center gap-1 text-[11px] font-bold text-slate-600" title="우측 다이나믹 폼에 표시">
+										<label
+											class="inline-flex cursor-pointer items-center justify-center gap-1 text-[11px] font-bold text-slate-600 sm:col-span-1"
+											title="우측 다이나믹 폼에 표시"
+										>
 											<input
 												type="checkbox"
 												checked={entry.dynamic_form}
-												onchange={(e) => updateOptionEntry(entry.key, entry.key, { ...entry, dynamic_form: e.currentTarget.checked })}
+												onchange={(e) =>
+													updateOptionEntry(entry.key, entry.key, {
+														...entry,
+														dynamic_form: e.currentTarget.checked
+													})}
 												class="h-3.5 w-3.5 rounded border-slate-300 text-emerald-600"
 											/>
 											<span class="sm:hidden">동적폼</span>
@@ -1228,7 +1503,7 @@
 										<button
 											type="button"
 											onclick={() => removeOptionEntry(entry.key)}
-											class="sm:col-span-1 rounded-lg px-2 py-1.5 text-xs font-bold text-rose-500 hover:bg-rose-50"
+											class="rounded-lg px-2 py-1.5 text-xs font-bold text-rose-500 hover:bg-rose-50 sm:col-span-1"
 											title="옵션 삭제"
 										>
 											삭제
@@ -1245,7 +1520,8 @@
 							게시판 카테고리 목록 (<code class="font-mono">categories</code>)
 						</label>
 						<p class="mb-2 text-[11px] text-slate-500">
-							목록 필터 탭과 글 작성·상세 Dynamic Form의 카테고리 선택지에 표시할 항목입니다. (쉼표로 구분, 비우면 기본 6종 적용)
+							목록 필터 탭과 글 작성·상세 Dynamic Form의 카테고리 선택지에 표시할 항목입니다.
+							(쉼표로 구분, 비우면 기본 6종 적용)
 						</p>
 						<input
 							id="board-categories"
@@ -1273,7 +1549,10 @@
 							게시판 전용 관리자 그룹 (<code class="font-mono">admin_groups</code>)
 						</label>
 						<p class="mb-2 text-[11px] text-slate-500">
-							기본 게시판 관리자 랭크는 상위 앱(<code class="font-mono">board</code>)의 <strong>쓰기 최소 랭크(<code class="font-mono">min_write_rank</code>)</strong> 설정과 같으며, 추가로 여기에 입력한 주그룹/부그룹 소속 사원에게도 이 게시판의 상단고정·메타편집·비밀글 열람·게시물 관리 권한을 위임할 수 있습니다. (쉼표로 구분)
+							기본 게시판 관리자 랭크는 상위 앱(<code class="font-mono">board</code>)의
+							<strong>쓰기 최소 랭크(<code class="font-mono">min_write_rank</code>)</strong> 설정과 같으며,
+							추가로 여기에 입력한 주그룹/부그룹 소속 사원에게도 이 게시판의 상단고정·메타편집·비밀글
+							열람·게시물 관리 권한을 위임할 수 있습니다. (쉼표로 구분)
 						</p>
 						<input
 							id="board-admin-groups"
@@ -1299,26 +1578,59 @@
 					<div class="mt-4 rounded-xl border border-slate-200 bg-white p-3.5">
 						<div class="mb-3 flex flex-wrap items-center justify-between gap-2">
 							<div>
-								<h5 class="text-xs font-black text-slate-800">게시물 메타 Dynamic Form 노출 설정</h5>
-								<p class="text-[11px] text-slate-500">체크박스를 클릭하면 위 options JSON의 <code class="font-mono">write_meta_keys</code> / <code class="font-mono">view_meta_keys</code>에 자동 반영됩니다.</p>
+								<h5 class="text-xs font-black text-slate-800">
+									게시물 메타 Dynamic Form 노출 설정
+								</h5>
+								<p class="text-[11px] text-slate-500">
+									체크박스를 클릭하면 위 options JSON의 <code class="font-mono"
+										>write_meta_keys</code
+									>
+									/ <code class="font-mono">view_meta_keys</code>에 자동 반영됩니다.
+								</p>
 							</div>
 							<div class="flex flex-wrap items-center gap-1.5 text-[11px]">
-								<button type="button" onclick={() => setAllMetaKeys('write_meta_keys', true)} class="rounded-lg bg-slate-100 px-2 py-1 font-bold text-slate-700 hover:bg-slate-200">작성 전체</button>
-								<button type="button" onclick={() => setAllMetaKeys('write_meta_keys', false)} class="rounded-lg bg-slate-100 px-2 py-1 font-bold text-slate-500 hover:bg-slate-200">작성 해제</button>
-								<button type="button" onclick={() => setAllMetaKeys('view_meta_keys', true)} class="rounded-lg bg-blue-50 px-2 py-1 font-bold text-blue-700 hover:bg-blue-100">상세 전체</button>
-								<button type="button" onclick={() => setAllMetaKeys('view_meta_keys', false)} class="rounded-lg bg-blue-50 px-2 py-1 font-bold text-blue-500 hover:bg-blue-100">상세 해제</button>
+								<button
+									type="button"
+									onclick={() => setAllMetaKeys('write_meta_keys', true)}
+									class="rounded-lg bg-slate-100 px-2 py-1 font-bold text-slate-700 hover:bg-slate-200"
+									>작성 전체</button
+								>
+								<button
+									type="button"
+									onclick={() => setAllMetaKeys('write_meta_keys', false)}
+									class="rounded-lg bg-slate-100 px-2 py-1 font-bold text-slate-500 hover:bg-slate-200"
+									>작성 해제</button
+								>
+								<button
+									type="button"
+									onclick={() => setAllMetaKeys('view_meta_keys', true)}
+									class="rounded-lg bg-blue-50 px-2 py-1 font-bold text-blue-700 hover:bg-blue-100"
+									>상세 전체</button
+								>
+								<button
+									type="button"
+									onclick={() => setAllMetaKeys('view_meta_keys', false)}
+									class="rounded-lg bg-blue-50 px-2 py-1 font-bold text-blue-500 hover:bg-blue-100"
+									>상세 해제</button
+								>
 							</div>
 						</div>
 
 						<div class="grid grid-cols-1 gap-1.5 sm:grid-cols-2 lg:grid-cols-3">
 							{#each POST_META_CATALOG as item (item.key)}
-								<div class="flex items-center justify-between gap-2 rounded-lg border border-slate-100 bg-slate-50/60 px-2.5 py-1.5 text-xs">
+								<div
+									class="flex items-center justify-between gap-2 rounded-lg border border-slate-100 bg-slate-50/60 px-2.5 py-1.5 text-xs"
+								>
 									<div class="min-w-0">
 										<div class="truncate font-bold text-slate-800">{item.label}</div>
-										<div class="truncate font-mono text-[10px] text-slate-400">{item.key}{item.adminOnly ? ' · 관리자' : ''}</div>
+										<div class="truncate font-mono text-[10px] text-slate-400">
+											{item.key}{item.adminOnly ? ' · 관리자' : ''}
+										</div>
 									</div>
 									<div class="flex shrink-0 items-center gap-2">
-										<label class="inline-flex cursor-pointer items-center gap-1 text-[11px] font-bold text-slate-600">
+										<label
+											class="inline-flex cursor-pointer items-center gap-1 text-[11px] font-bold text-slate-600"
+										>
 											<input
 												type="checkbox"
 												checked={isMetaKeyEnabled('write_meta_keys', item.key)}
@@ -1327,7 +1639,9 @@
 											/>
 											<span>작성</span>
 										</label>
-										<label class="inline-flex cursor-pointer items-center gap-1 text-[11px] font-bold text-blue-700">
+										<label
+											class="inline-flex cursor-pointer items-center gap-1 text-[11px] font-bold text-blue-700"
+										>
 											<input
 												type="checkbox"
 												checked={isMetaKeyEnabled('view_meta_keys', item.key)}
@@ -1343,17 +1657,20 @@
 					</div>
 				</div>
 
-				<div class="pt-6 border-t border-slate-100 flex flex-wrap items-center gap-3">
+				<div class="flex flex-wrap items-center gap-3 border-t border-slate-100 pt-6">
 					<button
 						onclick={handleSave}
-						class="px-6 py-3 rounded-2xl bg-blue-600 text-white font-black text-xs uppercase tracking-wider hover:bg-blue-700 transition shadow-md"
+						class="rounded-2xl bg-blue-600 px-6 py-3 text-xs font-black tracking-wider text-white uppercase shadow-md transition hover:bg-blue-700"
 					>
 						{editingBoard.id ? '게시판 설정 저장하기' : '새 게시판 인스턴스 활성화'}
 					</button>
 
 					<button
-						onclick={() => { resetForm(); activeTab = 'list'; }}
-						class="px-5 py-3 rounded-2xl border-2 border-slate-200 text-slate-600 font-black text-xs uppercase hover:bg-slate-50 transition"
+						onclick={() => {
+							resetForm();
+							activeTab = 'list';
+						}}
+						class="rounded-2xl border-2 border-slate-200 px-5 py-3 text-xs font-black text-slate-600 uppercase transition hover:bg-slate-50"
 					>
 						목록으로 돌아가기
 					</button>

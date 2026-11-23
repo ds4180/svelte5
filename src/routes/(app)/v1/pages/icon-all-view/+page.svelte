@@ -25,8 +25,71 @@
 
 	const prefixes = ['all', ...(collections as any[]).map((c) => String(c.prefix || ''))];
 
+	const COLOR_PRESETS = [
+		{ label: '기본', class: '', dot: 'bg-slate-800' },
+		{ label: 'Blue', class: 'text-blue-600', dot: 'bg-blue-600' },
+		{ label: 'Emerald', class: 'text-emerald-600', dot: 'bg-emerald-600' },
+		{ label: 'Amber', class: 'text-amber-500', dot: 'bg-amber-500' },
+		{ label: 'Rose', class: 'text-rose-600', dot: 'bg-rose-600' },
+		{ label: 'Violet', class: 'text-violet-600', dot: 'bg-violet-600' },
+		{ label: 'Slate', class: 'text-slate-400', dot: 'bg-slate-400' }
+	] as const;
+
+	const SIZE_PRESETS = [
+		{ label: '16px', class: 'text-base' },
+		{ label: '20px', class: 'text-xl' },
+		{ label: '24px', class: 'text-2xl' },
+		{ label: '30px', class: 'text-3xl' },
+		{ label: '36px', class: 'text-4xl' }
+	] as const;
+
+	const ROTATE_OPTIONS = [
+		{ label: '0°', value: 0 },
+		{ label: '90°', value: 1 },
+		{ label: '180°', value: 2 },
+		{ label: '270°', value: 3 }
+	] as const;
+
+	const FLIP_OPTIONS = [
+		{ label: '없음', value: '' },
+		{ label: '좌우', value: 'horizontal' },
+		{ label: '상하', value: 'vertical' }
+	] as const;
+
 	let selectedPrefix = $state('all');
 	let search = $state('');
+	let selectedColorClass = $state('');
+	let useCustomColor = $state(false);
+	let customColor = $state('#2563eb');
+	let selectedSizeClass = $state('text-xl');
+	let rotate = $state(0);
+	let flip = $state('');
+
+	let previewClass = $derived(
+		[selectedSizeClass, !useCustomColor ? selectedColorClass : ''].filter(Boolean).join(' ')
+	);
+
+	function buildIconTag(id: string): string {
+		const attrs = [`icon="${id}"`];
+		const classParts = [
+			selectedSizeClass !== 'text-xl' ? selectedSizeClass : '',
+			!useCustomColor ? selectedColorClass : ''
+		].filter(Boolean);
+		if (classParts.length > 0) attrs.push(`class="${classParts.join(' ')}"`);
+		if (useCustomColor && customColor) attrs.push(`color="${customColor}"`);
+		if (rotate > 0) attrs.push(`rotate={${rotate}}`);
+		if (flip) attrs.push(`flip="${flip}"`);
+		return `<Icon ${attrs.join(' ')} />`;
+	}
+
+	function resetOptions() {
+		selectedColorClass = '';
+		useCustomColor = false;
+		customColor = '#2563eb';
+		selectedSizeClass = 'text-xl';
+		rotate = 0;
+		flip = '';
+	}
 
 	let filteredIcons = $derived.by(() => {
 		const q = search.trim().toLowerCase();
@@ -87,6 +150,96 @@
 				</button>
 			{/each}
 		</div>
+
+		<div class="mt-4 grid grid-cols-1 gap-3 border-t border-slate-100 pt-4 lg:grid-cols-12 lg:items-center">
+			<div class="flex flex-wrap items-center gap-1.5 lg:col-span-5">
+				<span class="mr-1 text-[11px] font-black text-slate-500">색상</span>
+				{#each COLOR_PRESETS as c}
+					<button
+						type="button"
+						onclick={() => {
+							useCustomColor = false;
+							selectedColorClass = c.class;
+						}}
+						class="inline-flex items-center gap-1.5 rounded-lg border px-2 py-1 text-[11px] font-bold transition {!useCustomColor &&
+						selectedColorClass === c.class
+							? 'border-slate-900 bg-slate-900 text-white'
+							: 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'}"
+					>
+						<span class="h-2.5 w-2.5 rounded-full {c.dot}"></span>
+						<span>{c.label}</span>
+					</button>
+				{/each}
+				<label
+					class="inline-flex cursor-pointer items-center gap-1 rounded-lg border px-2 py-0.5 text-[11px] font-bold transition {useCustomColor
+						? 'border-blue-600 bg-blue-50 text-blue-700'
+						: 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'}"
+				>
+					<input
+						type="color"
+						bind:value={customColor}
+						oninput={() => (useCustomColor = true)}
+						class="h-4 w-4 cursor-pointer border-0 bg-transparent p-0"
+					/>
+					<span class="font-mono">{customColor}</span>
+				</label>
+			</div>
+
+			<div class="flex flex-wrap items-center gap-1 lg:col-span-3">
+				<span class="mr-1 text-[11px] font-black text-slate-500">크기</span>
+				{#each SIZE_PRESETS as s}
+					<button
+						type="button"
+						onclick={() => (selectedSizeClass = s.class)}
+						class="rounded-lg border px-2 py-1 text-[11px] font-bold transition {selectedSizeClass === s.class
+							? 'border-slate-900 bg-slate-900 text-white'
+							: 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'}"
+					>
+						{s.label}
+					</button>
+				{/each}
+			</div>
+
+			<div class="flex flex-wrap items-center gap-2 lg:col-span-4 lg:justify-end">
+				<div class="flex items-center gap-1">
+					<span class="text-[11px] font-black text-slate-500">회전</span>
+					{#each ROTATE_OPTIONS as r}
+						<button
+							type="button"
+							onclick={() => (rotate = r.value)}
+							class="rounded-lg border px-2 py-1 text-[11px] font-bold transition {rotate === r.value
+								? 'border-slate-900 bg-slate-900 text-white'
+								: 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'}"
+						>
+							{r.label}
+						</button>
+					{/each}
+				</div>
+
+				<div class="flex items-center gap-1">
+					<span class="text-[11px] font-black text-slate-500">반전</span>
+					{#each FLIP_OPTIONS as f}
+						<button
+							type="button"
+							onclick={() => (flip = f.value)}
+							class="rounded-lg border px-2 py-1 text-[11px] font-bold transition {flip === f.value
+								? 'border-slate-900 bg-slate-900 text-white'
+								: 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'}"
+						>
+							{f.label}
+						</button>
+					{/each}
+				</div>
+
+				<button
+					type="button"
+					onclick={resetOptions}
+					class="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] font-bold text-slate-600 hover:bg-slate-100"
+				>
+					초기화
+				</button>
+			</div>
+		</div>
 	</header>
 
 	<div class="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-2xs">
@@ -108,10 +261,17 @@
 					</tr>
 				{:else}
 					{#each filteredIcons as item (item.id)}
+						{@const iconTag = buildIconTag(item.id)}
 						<tr class="hover:bg-slate-50/80">
 							<td class="text-center">
-								<div class="mx-auto flex h-9 w-9 items-center justify-center rounded-xl bg-slate-100 text-slate-800">
-									<Icon icon={item.id} class="text-xl" />
+								<div class="mx-auto flex min-h-11 min-w-11 items-center justify-center rounded-xl bg-slate-100 p-1.5 text-slate-800">
+									<Icon
+										icon={item.id}
+										class={previewClass}
+										color={useCustomColor ? customColor : undefined}
+										rotate={rotate || undefined}
+										flip={flip || undefined}
+									/>
 								</div>
 							</td>
 							<td>
@@ -133,11 +293,11 @@
 							<td>
 								<button
 									type="button"
-									onclick={() => copyText(`<Icon icon="${item.id}" />`, 'Svelte 태그')}
+									onclick={() => copyText(iconTag, 'Svelte 태그')}
 									class="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 font-mono text-[11px] text-slate-600 hover:border-blue-400 hover:bg-white hover:text-blue-700"
 									title="Svelte 태그 복사"
 								>
-									<span>&lt;Icon icon="{item.id}" /&gt;</span>
+									<span>{iconTag}</span>
 									<Icon icon="ph:copy-bold" class="text-slate-400" />
 								</button>
 							</td>

@@ -37,12 +37,16 @@
 
 	const openCount = $derived(campaigns.filter((c) => c.status === 'OPEN').length);
 	const unsubmittedOpenCount = $derived(
-		campaigns.filter((c) => c.status === 'OPEN' && !(c.my_responses && c.my_responses.length > 0)).length
+		campaigns.filter((c) => c.status === 'OPEN' && !(c.my_responses && c.my_responses.length > 0))
+			.length
 	);
 
 	function stripHtml(html?: string | null): string {
 		if (!html) return '';
-		return html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+		return html
+			.replace(/<[^>]+>/g, ' ')
+			.replace(/\s+/g, ' ')
+			.trim();
 	}
 
 	onMount(loadSurveys);
@@ -54,10 +58,14 @@
 
 <div class="mx-auto max-w-6xl space-y-6 px-4 py-8 pb-24 sm:px-6 lg:px-8">
 	<!-- 헤더 -->
-	<div class="flex flex-col gap-4 border-b-2 border-slate-900 pb-6 sm:flex-row sm:items-end sm:justify-between">
+	<div
+		class="flex flex-col gap-4 border-b-2 border-slate-900 pb-6 sm:flex-row sm:items-end sm:justify-between"
+	>
 		<div>
 			<div class="flex items-center gap-2">
-				<span class="inline-flex items-center gap-1.5 rounded-full bg-indigo-600 px-3 py-1 text-[11px] font-black tracking-wider text-white uppercase">
+				<span
+					class="inline-flex items-center gap-1.5 rounded-full bg-indigo-600 px-3 py-1 text-[11px] font-black tracking-wider text-white uppercase"
+				>
 					<Icon icon="solar:clipboard-check-bold" class="text-xs" />
 					Field Survey
 				</span>
@@ -92,14 +100,20 @@
 
 	<!-- 요약 배너 -->
 	{#if unsubmittedOpenCount > 0}
-		<div class="flex items-center justify-between rounded-2xl border-2 border-amber-300 bg-amber-50 px-5 py-3.5">
+		<div
+			class="flex items-center justify-between rounded-2xl border-2 border-amber-300 bg-amber-50 px-5 py-3.5"
+		>
 			<div class="flex items-center gap-3">
 				<div class="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-500 text-white">
 					<Icon icon="solar:bell-bing-bold" class="text-lg" />
 				</div>
 				<div>
-					<div class="text-sm font-black text-amber-900">미제출 현장 조사가 {unsubmittedOpenCount}건 있습니다.</div>
-					<div class="text-xs font-medium text-amber-700">카드를 눌러 양식을 작성하고 제출해 주세요.</div>
+					<div class="text-sm font-black text-amber-900">
+						미제출 현장 조사가 {unsubmittedOpenCount}건 있습니다.
+					</div>
+					<div class="text-xs font-medium text-amber-700">
+						카드를 눌러 양식을 작성하고 제출해 주세요.
+					</div>
 				</div>
 			</div>
 		</div>
@@ -158,10 +172,14 @@
 					<div>
 						<div class="flex flex-wrap items-center justify-between gap-2">
 							<div class="flex items-center gap-1.5">
-								<span class="rounded-full bg-slate-100 px-2.5 py-0.5 text-[11px] font-black text-slate-700">
+								<span
+									class="rounded-full bg-slate-100 px-2.5 py-0.5 text-[11px] font-black text-slate-700"
+								>
 									{c.submit_scope === 'VEHICLE' ? '차량별' : '사원별'}
 								</span>
-								<span class="rounded-full bg-indigo-50 px-2.5 py-0.5 text-[11px] font-black text-indigo-700">
+								<span
+									class="rounded-full bg-indigo-50 px-2.5 py-0.5 text-[11px] font-black text-indigo-700"
+								>
 									{c.category}
 								</span>
 							</div>
@@ -175,24 +193,41 @@
 									{c.submit_scope === 'VEHICLE' ? `${respList.length}대 제출됨` : '제출 완료'}
 								</span>
 							{:else if c.status === 'OPEN'}
-								<span class="rounded-full bg-amber-100 px-2.5 py-0.5 text-[11px] font-black text-amber-800">미제출</span>
+								<span
+									class="rounded-full bg-amber-100 px-2.5 py-0.5 text-[11px] font-black text-amber-800"
+									>미제출</span
+								>
 							{:else}
-								<span class="rounded-full bg-slate-200 px-2.5 py-0.5 text-[11px] font-black text-slate-600">마감</span>
+								<span
+									class="rounded-full bg-slate-200 px-2.5 py-0.5 text-[11px] font-black text-slate-600"
+									>마감</span
+								>
 							{/if}
 						</div>
 
-						<h2 class="mt-3 text-lg font-black text-slate-900 group-hover:text-indigo-700">{c.title}</h2>
+						<h2 class="mt-3 text-lg font-black text-slate-900 group-hover:text-indigo-700">
+							{c.title}
+						</h2>
 						{#if stripHtml(c.description)}
-							<p class="mt-1 line-clamp-2 text-xs font-medium text-slate-500">{stripHtml(c.description)}</p>
+							<p class="mt-1 line-clamp-2 text-xs font-medium text-slate-500">
+								{stripHtml(c.description)}
+							</p>
 						{/if}
 					</div>
 
-					<div class="mt-4 flex items-center justify-between border-t border-slate-100 pt-3 text-xs font-bold text-slate-500">
+					<div
+						class="mt-4 flex items-center justify-between border-t border-slate-100 pt-3 text-xs font-bold text-slate-500"
+					>
 						<span>
 							{#if c.due_at}
 								마감: {c.due_at.replace('T', ' ').slice(0, 16)}
 							{:else}
 								상시 접수
+							{/if}
+							{#if c.target_count !== undefined}
+								· 전체 진행 {c.response_count ?? 0}/{c.target_count}{c.submit_scope === 'VEHICLE'
+									? '대'
+									: '명'}
 							{/if}
 						</span>
 						<span class="inline-flex items-center gap-1 font-black text-indigo-600">

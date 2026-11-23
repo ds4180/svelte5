@@ -11,20 +11,25 @@
 	import { toast } from '$lib/runes/toast.svelte';
 	import { formatDateTime } from '$lib/utils';
 	import { formatApiError } from '$lib/utils/error';
+	import ServiceLockNotice from '$lib/components/ServiceLockNotice.svelte';
+	import { resolveServicePermission } from '$lib/utils/servicePermission';
 	import Icon from '@iconify/svelte';
 
 	const auth = getAuthContext();
 
-	let { post, config = {} } = $props();
+	let { post, config = {}, permissions = null } = $props();
+	const perm = $derived(resolveServicePermission(permissions, auth.user));
 
-	let summary = $state(/** @type {readApi.ReadReceiptSummary} */ ({
-		post_id: 0,
-		read_count: 0,
-		unread_count: 0,
-		readers: [],
-		unread_users: [],
-		my_read: null
-	}));
+	let summary = $state(
+		/** @type {readApi.ReadReceiptSummary} */ ({
+			post_id: 0,
+			read_count: 0,
+			unread_count: 0,
+			readers: [],
+			unread_users: [],
+			my_read: null
+		})
+	);
 	let loading = $state(true);
 	let marking = $state(false);
 	let activeTab = $state(/** @type {'readers' | 'unread'} */ ('readers'));
@@ -34,7 +39,7 @@
 		if (!post?.id) return;
 		loading = true;
 		try {
-			if (auth.user && config?.auto_mark !== false && lastMarkedPostId !== post.id) {
+			if (perm.can_write && config?.auto_mark !== false && lastMarkedPostId !== post.id) {
 				lastMarkedPostId = post.id;
 				summary = await readApi.markPostRead(post.id);
 			} else {
@@ -48,8 +53,8 @@
 	}
 
 	async function handleManualMark() {
-		if (!auth.user) {
-			toast.warning('로그인 후 이용할 수 있습니다.');
+		if (!perm.can_write) {
+			toast.warning(perm.message || '사용 권한이 없습니다.');
 			return;
 		}
 		if (!post?.id || marking) return;
@@ -79,11 +84,15 @@
 		<div class="flex items-center gap-2">
 			<Icon icon="ph:eye-bold" class="h-5 w-5 text-emerald-600" />
 			<span class="text-sm font-black text-slate-800">열람 확인 (읽음 / 안읽음)</span>
-			<span class="rounded-full bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 text-[11px] font-black text-emerald-700">
+			<span
+				class="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-[11px] font-black text-emerald-700"
+			>
 				읽음 {summary.read_count}명
 			</span>
 			{#if config?.show_unread !== false}
-				<span class="rounded-full bg-slate-100 border border-slate-200 px-2.5 py-0.5 text-[11px] font-black text-slate-600">
+				<span
+					class="rounded-full border border-slate-200 bg-slate-100 px-2.5 py-0.5 text-[11px] font-black text-slate-600"
+				>
 					미열람 {summary.unread_count}명
 				</span>
 			{/if}
@@ -91,11 +100,13 @@
 
 		<div class="flex items-center gap-2">
 			{#if summary.my_read}
-				<span class="inline-flex items-center gap-1 rounded-xl bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700">
+				<span
+					class="inline-flex items-center gap-1 rounded-xl bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700"
+				>
 					<Icon icon="ph:check-circle-fill" class="h-4 w-4" />
 					확인 완료 ({formatDateTime(summary.my_read.first_read_at)})
 				</span>
-			{:else if auth.user}
+			{:else if perm.can_write}
 				<button
 					type="button"
 					disabled={marking}
@@ -105,6 +116,8 @@
 					<Icon icon="ph:check-bold" class="h-3.5 w-3.5" />
 					{marking ? '처리 중...' : '읽음 확인'}
 				</button>
+			{:else}
+				<ServiceLockNotice permission={perm} serviceLabel="열람 확인" compact={true} />
 			{/if}
 		</div>
 	</div>
@@ -140,24 +153,26 @@
 		{:else}
 			<div class="flex flex-wrap gap-2">
 				{#each summary.readers as r (r.user_id)}
-					<div class="inline-flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50/50 px-3 py-1.5 text-xs">
+					<div
+						class="inline-flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50/50 px-3 py-1.5 text-xs"
+					>
 						<span class="font-black text-slate-800">{r.display_name}</span>
 						<span class="text-[11px] text-slate-500">{formatDateTime(r.first_read_at)}</span>
 					</div>
 				{/each}
 			</div>
 		{/if}
+	{:else if summary.unread_users.length === 0}
+		<p class="py-3 text-xs font-bold text-emerald-600">모든 활성 사용자가 열람했습니다.</p>
 	{:else}
-		{#if summary.unread_users.length === 0}
-			<p class="py-3 text-xs font-bold text-emerald-600">모든 활성 사용자가 열람했습니다.</p>
-		{:else}
-			<div class="flex flex-wrap gap-2">
-				{#each summary.unread_users as u (u.user_id)}
-					<span class="inline-flex items-center rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-bold text-slate-600">
-						{u.display_name}
-					</span>
-				{/each}
-			</div>
-		{/if}
+		<div class="flex flex-wrap gap-2">
+			{#each summary.unread_users as u (u.user_id)}
+				<span
+					class="inline-flex items-center rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-bold text-slate-600"
+				>
+					{u.display_name}
+				</span>
+			{/each}
+		</div>
 	{/if}
 </div>

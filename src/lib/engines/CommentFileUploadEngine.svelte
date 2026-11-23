@@ -5,7 +5,17 @@
 	 * @prop {{ id: number }} post - 부모 게시물 객체 (id 필수)
 	 */
 	import * as commentApi from '$lib/api/comment';
-	import { uploadFiles, publishAssets, deleteAsset } from '$lib/services/mediaService';
+	import {
+		uploadCommentTempFiles,
+		mergePickedPersonalAssets,
+		cleanupTempAssets,
+		submitNewComment,
+		submitEditedComment,
+		countTotalComments,
+		getCommentDisplayName,
+		buildReplyTarget,
+		submitReplyComment
+	} from '$lib/services/commentService';
 	import { getSecureMediaUrl } from '$lib/config/media';
 	import { env } from '$env/dynamic/public';
 	import { getAuthContext } from '$lib/runes/auth.svelte';
@@ -13,16 +23,24 @@
 	import { formatDateTime } from '$lib/utils';
 	import { formatApiError } from '$lib/utils/error';
 	import PersonalMediaPickerModal from '$lib/components/PersonalMediaPickerModal.svelte';
+	import ImageZoomLightbox from '$lib/components/ImageZoomLightbox.svelte';
+	import ServiceLockNotice from '$lib/components/ServiceLockNotice.svelte';
+	import { resolveServicePermission } from '$lib/utils/servicePermission';
 	import Icon from '@iconify/svelte';
 
 	const PUBLIC_SERVER_URL = env.PUBLIC_SERVER_URL || '';
 	const auth = getAuthContext();
 
 	// --- [Svelte 5 Props] ---
-	let { post, config = {}, accessLevel = 'PUBLIC', boardSlug = '' } = $props();
+	let { post, config = {}, accessLevel = 'PUBLIC', boardSlug = '', permissions = null } = $props();
+	const perm = $derived(resolveServicePermission(permissions, auth.user));
 
-	const targetTier = $derived((accessLevel || 'PUBLIC').toUpperCase() === 'PROTECTED' ? 'PROTECTED' : 'PUBLIC');
-	const commentSubPath = $derived(boardSlug ? `BOARDS/${boardSlug}/COMMENTS/${post?.id}` : `COMMENTS/${post?.id}`);
+	const targetTier = $derived(
+		(accessLevel || 'PUBLIC').toUpperCase() === 'PROTECTED' ? 'PROTECTED' : 'PUBLIC'
+	);
+	const commentSubPath = $derived(
+		boardSlug ? `BOARDS/${boardSlug}/COMMENTS/${post?.id}` : `COMMENTS/${post?.id}`
+	);
 
 	// --- [상태 관리] ---
 	let comments = $state(/** @type {any[]} */ ([]));
@@ -44,12 +62,25 @@
 	let editFileInputEl = $state(/** @type {HTMLInputElement | null} */ (null));
 	let showPersonalPicker = $state(false);
 	let pickerMode = $state(/** @type {'create' | 'edit'} */ ('create'));
+	let replyTo = $state(/** @type {{ rootId: number; targetName: string } | null} */ (null));
+	let replyContent = $state('');
+	let replySubmitting = $state(false);
+	const totalCommentCount = $derived(countTotalComments(comments));
 
 	// --- [이미지 미리보기 모달 상태 (PWA 친화적)] ---
 	let previewImages = $state(/** @type {any[]} */ ([]));
 	let previewIndex = $state(-1);
-	const activePreview = $derived(
-		previewIndex >= 0 && previewIndex < previewImages.length ? previewImages[previewIndex] : null
+	const lightboxImages = $derived(
+		previewImages.map((a) => {
+			const original = getSecureMediaUrl(PUBLIC_SERVER_URL, a);
+			const lg = getSecureMediaUrl(PUBLIC_SERVER_URL, a, 'lg');
+			return {
+				src: a.meta_info?.has_original === false ? lg || original : original || lg,
+				alt: a.original_name || '이미지',
+				downloadUrl: original || lg,
+				downloadName: a.original_name || 'image'
+			};
+		})
 	);
 
 	/**
@@ -62,36 +93,6 @@
 		const idx = imgs.findIndex((a) => a.id === targetAsset?.id);
 		previewImages = imgs;
 		previewIndex = idx >= 0 ? idx : 0;
-	}
-
-	function closeImagePreview() {
-		previewIndex = -1;
-		previewImages = [];
-	}
-
-	function prevPreviewImage() {
-		if (previewImages.length <= 1) return;
-		previewIndex = (previewIndex - 1 + previewImages.length) % previewImages.length;
-	}
-
-	function nextPreviewImage() {
-		if (previewImages.length <= 1) return;
-		previewIndex = (previewIndex + 1) % previewImages.length;
-	}
-
-	/** @param {KeyboardEvent} e */
-	function handlePreviewKeydown(e) {
-		if (!activePreview) return;
-		if (e.key === 'Escape') {
-			e.preventDefault();
-			closeImagePreview();
-		} else if (e.key === 'ArrowLeft') {
-			e.preventDefault();
-			prevPreviewImage();
-		} else if (e.key === 'ArrowRight') {
-			e.preventDefault();
-			nextPreviewImage();
-		}
 	}
 
 	// --- [데이터 로드] ---
@@ -108,59 +109,52 @@
 	}
 
 	/**
-	 * 1단계: 댓글 작성 전 본인 계정(PRIVATE) 보관함으로 파일 임시 업로드
+	 * 1단계: 댓글 작성/수정 전 본인 계정(PRIVATE) 보관함으로 파일 임시 업로드
 	 * @param {Event} event
+	 * @param {'create' | 'edit'} [targetMode='create']
 	 */
-	async function handleFileSelect(event) {
+	async function handleFileUpload(event, targetMode = 'create') {
 		const input = /** @type {HTMLInputElement} */ (event.currentTarget);
 		const files = input?.files ? Array.from(input.files) : [];
 		if (files.length === 0) return;
 
-		uploading = true;
+		if (targetMode === 'edit') uploadingEdit = true;
+		else uploading = true;
 		try {
-			const userSubPath = auth.user?.id ? `USERS/${auth.user.id}/COMMENT_TEMP` : '';
-			const res = await uploadFiles(files, {
-				app_id: 'personal_vault',
-				access_level: 'PRIVATE',
-				sub_path: userSubPath
-			});
-			const uploaded = Array.isArray(res?.assets) ? res.assets : Array.isArray(res) ? res : [];
-			pendingAssets = [...pendingAssets, ...uploaded];
+			const uploaded = await uploadCommentTempFiles(files, auth.user?.id);
+			if (targetMode === 'edit') editPendingAssets = [...editPendingAssets, ...uploaded];
+			else pendingAssets = [...pendingAssets, ...uploaded];
 			toast.success(`${uploaded.length}개 파일이 개인 보관함에 임시 업로드되었습니다.`);
 		} catch (e) {
 			toast.error('파일 업로드 실패: ' + formatApiError(e, '업로드 오류'));
 		} finally {
-			uploading = false;
+			if (targetMode === 'edit') uploadingEdit = false;
+			else uploading = false;
 			if (input) input.value = '';
 		}
 	}
+
+	/** @param {Event} event */
+	const handleFileSelect = (event) => handleFileUpload(event, 'create');
+
+	/** @param {Event} event */
+	const handleEditFileSelect = (event) => handleFileUpload(event, 'edit');
 
 	/** @param {number} assetId */
 	async function removePendingAsset(assetId) {
 		const target = pendingAssets.find((a) => a.id === assetId);
 		pendingAssets = pendingAssets.filter((a) => a.id !== assetId);
-		if (target?._fromPersonalVault) return;
-		try {
-			await deleteAsset(assetId);
-		} catch (e) {
-			console.error('[CommentFileUploadEngine] 임시 파일 삭제 실패:', e);
-		}
+		if (target) await cleanupTempAssets([target]);
 	}
 
 	/** @param {any[]} pickedAssets */
 	function handlePersonalPicked(pickedAssets) {
-		if (!Array.isArray(pickedAssets) || pickedAssets.length === 0) return;
-		const tagged = pickedAssets.map((a) => ({ ...a, _fromPersonalVault: true }));
-		if (pickerMode === 'edit') {
-			const existingIds = new Set(editPendingAssets.map((a) => a.id));
-			const uniqueNew = tagged.filter((a) => !existingIds.has(a.id));
-			editPendingAssets = [...editPendingAssets, ...uniqueNew];
-		} else {
-			const existingIds = new Set(pendingAssets.map((a) => a.id));
-			const uniqueNew = tagged.filter((a) => !existingIds.has(a.id));
-			pendingAssets = [...pendingAssets, ...uniqueNew];
-		}
-		toast.success(`내 파일함에서 ${tagged.length}개 파일을 선택했습니다.`);
+		const current = pickerMode === 'edit' ? editPendingAssets : pendingAssets;
+		const { nextAssets, addedCount } = mergePickedPersonalAssets(current, pickedAssets);
+		if (addedCount === 0) return;
+		if (pickerMode === 'edit') editPendingAssets = nextAssets;
+		else pendingAssets = nextAssets;
+		toast.success(`내 파일함에서 ${addedCount}개 파일을 선택했습니다.`);
 	}
 
 	// --- [댓글 등록 핸들러: 2단계 물리 복사 배포 및 댓글 연결] ---
@@ -172,23 +166,12 @@
 
 		submitting = true;
 		try {
-			/** @type {number[]} */
-			let publishedIds = [];
-			if (pendingAssets.length > 0) {
-				const publishedList = await publishAssets({
-					asset_ids: pendingAssets.map((a) => a.id),
-					access_level: targetTier,
-					app_id: 'comment',
-					sub_path: commentSubPath
-				});
-				publishedIds = (Array.isArray(publishedList) ? publishedList : [])
-					.map((a) => Number(a?.id))
-					.filter((id) => Number.isFinite(id) && id > 0);
-			}
-
-			await commentApi.createComment(post.id, {
-				content: newComment.trim() || '(첨부파일)',
-				media_ids: publishedIds
+			await submitNewComment({
+				postId: post.id,
+				content: newComment,
+				pendingAssets,
+				targetTier,
+				commentSubPath
 			});
 			newComment = '';
 			pendingAssets = [];
@@ -202,7 +185,7 @@
 
 	/** @param {any} comment */
 	function canModify(comment) {
-		if (!auth.user) return false;
+		if (!auth.user || !perm.can_write) return false;
 		return comment.user_id === auth.user.id || (auth.user.rank_level ?? 0) >= 4;
 	}
 
@@ -224,10 +207,7 @@
 		editPendingAssets = [];
 		removeMediaIds = [];
 		if (assetsToClean.length > 0) {
-			const tempOnly = assetsToClean.filter((a) => !a._fromPersonalVault);
-			if (tempOnly.length > 0) {
-				await Promise.allSettled(tempOnly.map((a) => deleteAsset(a.id)));
-			}
+			await cleanupTempAssets(assetsToClean);
 		}
 	}
 
@@ -243,64 +223,24 @@
 	async function removeEditPendingAsset(assetId) {
 		const target = editPendingAssets.find((a) => a.id === assetId);
 		editPendingAssets = editPendingAssets.filter((a) => a.id !== assetId);
-		if (target?._fromPersonalVault) return;
-		try {
-			await deleteAsset(assetId);
-		} catch (e) {
-			console.error('[CommentFileUploadEngine] 수정 임시 파일 삭제 실패:', e);
-		}
-	}
-
-	/** @param {Event} event */
-	async function handleEditFileSelect(event) {
-		const input = /** @type {HTMLInputElement} */ (event.currentTarget);
-		const files = input?.files ? Array.from(input.files) : [];
-		if (files.length === 0) return;
-
-		uploadingEdit = true;
-		try {
-			const userSubPath = auth.user?.id ? `USERS/${auth.user.id}/COMMENT_TEMP` : '';
-			const res = await uploadFiles(files, {
-				app_id: 'personal_vault',
-				access_level: 'PRIVATE',
-				sub_path: userSubPath
-			});
-			const uploaded = Array.isArray(res?.assets) ? res.assets : Array.isArray(res) ? res : [];
-			editPendingAssets = [...editPendingAssets, ...uploaded];
-			toast.success(`${uploaded.length}개 파일이 개인 보관함에 임시 업로드되었습니다.`);
-		} catch (e) {
-			toast.error('파일 업로드 실패: ' + formatApiError(e, '업로드 오류'));
-		} finally {
-			uploadingEdit = false;
-			if (input) input.value = '';
-		}
+		if (target) await cleanupTempAssets([target]);
 	}
 
 	/** @param {number} commentId */
 	async function saveEdit(commentId) {
 		if (savingEdit || uploadingEdit) return;
-		if (!editContent.trim() && editAttachments.length === 0 && editPendingAssets.length === 0) return;
+		if (!editContent.trim() && editAttachments.length === 0 && editPendingAssets.length === 0)
+			return;
 
 		savingEdit = true;
 		try {
-			/** @type {number[]} */
-			let publishedIds = [];
-			if (editPendingAssets.length > 0) {
-				const publishedList = await publishAssets({
-					asset_ids: editPendingAssets.map((a) => a.id),
-					access_level: targetTier,
-					app_id: 'comment',
-					sub_path: commentSubPath
-				});
-				publishedIds = (Array.isArray(publishedList) ? publishedList : [])
-					.map((a) => Number(a?.id))
-					.filter((id) => Number.isFinite(id) && id > 0);
-			}
-
-			await commentApi.updateComment(commentId, {
-				content: editContent.trim() || '(첨부파일)',
-				media_ids: publishedIds,
-				remove_media_ids: removeMediaIds
+			await submitEditedComment({
+				commentId,
+				content: editContent,
+				editPendingAssets,
+				removeMediaIds,
+				targetTier,
+				commentSubPath
 			});
 			toast.success('댓글이 수정되었습니다.');
 			await cancelEdit(false);
@@ -324,6 +264,52 @@
 		}
 	}
 
+	/**
+	 * @param {any} rootComment
+	 * @param {any} [targetComment=null]
+	 */
+	function startReply(rootComment, targetComment = null) {
+		const info = buildReplyTarget(rootComment, targetComment);
+		replyTo = { rootId: info.rootId, targetName: info.targetName };
+		replyContent = info.initialContent;
+	}
+
+	function cancelReply() {
+		replyTo = null;
+		replyContent = '';
+	}
+
+	/** @param {Event} [event] */
+	async function handleReplySubmit(event) {
+		if (event) event.preventDefault();
+		if (!replyTo || replySubmitting || !replyContent.trim()) return;
+		replySubmitting = true;
+		try {
+			await submitReplyComment({
+				postId: post.id,
+				parentId: replyTo.rootId,
+				content: replyContent
+			});
+			cancelReply();
+			await loadComments();
+		} catch (e) {
+			toast.error('답글 작성 실패: ' + formatApiError(e, '오류'));
+		} finally {
+			replySubmitting = false;
+		}
+	}
+
+	/**
+	 * @param {KeyboardEvent} e
+	 * @param {() => void} onSubmit
+	 */
+	function handleCtrlEnter(e, onSubmit) {
+		if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+			e.preventDefault();
+			onSubmit();
+		}
+	}
+
 	// 🔄 게시물(post.id) 변경 시마다 댓글 목록 자동 재조회
 	$effect(() => {
 		if (post?.id) {
@@ -339,103 +325,116 @@
 	<h4 class="mb-4 flex items-center gap-2 text-lg font-bold">
 		<Icon icon="lucide:message-circle" class="text-primary" />
 		댓글
-		<span class="badge badge-sm badge-neutral">{comments.length}</span>
+		<span class="badge badge-sm badge-neutral">{totalCommentCount}</span>
 	</h4>
 
-	<!-- 댓글 작성 폼 -->
-	<div class="card mb-5 border border-base-300 bg-base-200">
-		<div class="card-body p-4">
-			<form onsubmit={handleCommentSubmit}>
-				<textarea
-					class="textarea-bordered textarea w-full resize-none"
-					rows="3"
-					bind:value={newComment}
-					placeholder="댓글을 입력하세요..."
-				></textarea>
+	<!-- 댓글 작성 폼 (권한 부족 시 잠금 안내 표시) -->
+	{#if perm.can_write}
+		<div class="card mb-5 border border-base-300 bg-base-200">
+			<div class="card-body p-4">
+				<form onsubmit={handleCommentSubmit}>
+					<textarea
+						class="textarea-bordered textarea w-full resize-none"
+						rows="3"
+						bind:value={newComment}
+						onkeydown={(e) => handleCtrlEnter(e, () => handleCommentSubmit(e))}
+						placeholder="댓글을 입력하세요... (Ctrl+Enter 등록)"
+					></textarea>
 
-				{#if pendingAssets.length > 0}
-					<div class="mt-2.5 flex flex-wrap gap-2">
-						{#each pendingAssets as asset (asset.id)}
-							<div class="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 text-xs shadow-xs">
-								{#if asset.mime_type?.startsWith('image/')}
+					{#if pendingAssets.length > 0}
+						<div class="mt-2.5 flex flex-wrap gap-2">
+							{#each pendingAssets as asset (asset.id)}
+								<div
+									class="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 text-xs shadow-xs"
+								>
+									{#if asset.mime_type?.startsWith('image/')}
+										<button
+											type="button"
+											onclick={() => openImagePreview(pendingAssets, asset)}
+											class="shrink-0 overflow-hidden rounded-md"
+											aria-label="이미지 미리보기"
+										>
+											<img
+												src={getSecureMediaUrl(PUBLIC_SERVER_URL, asset, 'sm')}
+												alt={asset.original_name}
+												class="h-7 w-7 object-cover"
+											/>
+										</button>
+									{:else}
+										<Icon icon="ph:file-bold" class="h-4 w-4 text-slate-500" />
+									{/if}
+									<span class="max-w-[160px] truncate font-medium text-slate-700"
+										>{asset.original_name}</span
+									>
 									<button
 										type="button"
-										onclick={() => openImagePreview(pendingAssets, asset)}
-										class="shrink-0 overflow-hidden rounded-md"
-										aria-label="이미지 미리보기"
+										onclick={() => removePendingAsset(asset.id)}
+										class="rounded-full p-0.5 text-slate-400 hover:bg-rose-50 hover:text-rose-500"
+										aria-label="첨부 삭제"
 									>
-										<img
-											src={getSecureMediaUrl(PUBLIC_SERVER_URL, asset, 'sm')}
-											alt={asset.original_name}
-											class="h-7 w-7 object-cover"
-										/>
+										<Icon icon="ph:x-bold" class="h-3.5 w-3.5" />
 									</button>
-								{:else}
-									<Icon icon="ph:file-bold" class="h-4 w-4 text-slate-500" />
-								{/if}
-								<span class="max-w-[160px] truncate font-medium text-slate-700">{asset.original_name}</span>
-								<button
-									type="button"
-									onclick={() => removePendingAsset(asset.id)}
-									class="rounded-full p-0.5 text-slate-400 hover:bg-rose-50 hover:text-rose-500"
-									aria-label="첨부 삭제"
-								>
-									<Icon icon="ph:x-bold" class="h-3.5 w-3.5" />
-								</button>
-							</div>
-						{/each}
-					</div>
-				{/if}
+								</div>
+							{/each}
+						</div>
+					{/if}
 
-				<div class="mt-2.5 flex items-center justify-between gap-2">
-					{#if config?.allow_upload !== false}
-						<div class="flex flex-wrap items-center gap-1.5">
-							<input
-								bind:this={fileInputEl}
-								type="file"
-								multiple
-								onchange={handleFileSelect}
-								class="hidden"
-							/>
-							<button
-								type="button"
-								disabled={uploading}
-								onclick={() => fileInputEl?.click()}
-								class="btn btn-sm btn-ghost border border-slate-300 text-xs font-bold"
-							>
-								<Icon icon={uploading ? 'ph:spinner-gap-bold' : 'ph:paperclip-bold'} class="mr-1 {uploading ? 'animate-spin' : ''}" />
-								{uploading ? '업로드 중...' : '파일 첨부'}
-							</button>
-							{#if auth.user?.id}
+					<div class="mt-2.5 flex items-center justify-between gap-2">
+						{#if config?.allow_upload !== false}
+							<div class="flex flex-wrap items-center gap-1.5">
+								<input
+									bind:this={fileInputEl}
+									type="file"
+									multiple
+									onchange={handleFileSelect}
+									class="hidden"
+								/>
 								<button
 									type="button"
 									disabled={uploading}
-									onclick={() => {
-										pickerMode = 'create';
-										showPersonalPicker = true;
-									}}
-									class="btn btn-sm btn-ghost border border-indigo-200 bg-indigo-50/70 text-xs font-bold text-indigo-700 hover:bg-indigo-100"
+									onclick={() => fileInputEl?.click()}
+									class="btn border border-slate-300 btn-ghost text-xs font-bold btn-sm"
 								>
-									<Icon icon="ph:folder-user-bold" class="mr-1" />
-									내 파일함(/USERS)
+									<Icon
+										icon={uploading ? 'ph:spinner-gap-bold' : 'ph:paperclip-bold'}
+										class="mr-1 {uploading ? 'animate-spin' : ''}"
+									/>
+									{uploading ? '업로드 중...' : '파일 첨부'}
 								</button>
-							{/if}
-						</div>
-					{:else}
-						<div></div>
-					{/if}
-					<button
-						type="submit"
-						disabled={submitting || uploading}
-						class="btn btn-sm btn-primary"
-					>
-						<Icon icon={submitting ? 'ph:spinner-gap-bold' : 'lucide:send'} class="mr-1 {submitting ? 'animate-spin' : ''}" />
-						{submitting ? '등록 중...' : '댓글 등록'}
-					</button>
-				</div>
-			</form>
+								{#if auth.user?.id}
+									<button
+										type="button"
+										disabled={uploading}
+										onclick={() => {
+											pickerMode = 'create';
+											showPersonalPicker = true;
+										}}
+										class="btn border border-indigo-200 bg-indigo-50/70 btn-ghost text-xs font-bold text-indigo-700 btn-sm hover:bg-indigo-100"
+									>
+										<Icon icon="ph:folder-user-bold" class="mr-1" />
+										내 파일함(/USERS)
+									</button>
+								{/if}
+							</div>
+						{:else}
+							<div></div>
+						{/if}
+						<button type="submit" disabled={submitting || uploading} class="btn btn-primary btn-sm">
+							<Icon
+								icon={submitting ? 'ph:spinner-gap-bold' : 'lucide:send'}
+								class="mr-1 {submitting ? 'animate-spin' : ''}"
+							/>
+							{submitting ? '등록 중...' : '댓글 등록'}
+						</button>
+					</div>
+				</form>
+			</div>
 		</div>
-	</div>
+	{:else}
+		<div class="mb-5">
+			<ServiceLockNotice permission={perm} serviceLabel="댓글" />
+		</div>
+	{/if}
 
 	<!-- 댓글 목록 -->
 	<div class="comment-list space-y-4">
@@ -464,13 +463,22 @@
 					<div class="flex-1">
 						<div class="mb-1 flex items-center justify-between gap-2">
 							<div class="flex items-center gap-2">
-								<span class="text-sm font-bold">{comment.user?.username || '익명'}</span>
+								<span class="text-sm font-bold">{getCommentDisplayName(comment)}</span>
 								<span class="text-xs text-base-content/40">
 									{formatDateTime(comment.create_date)}
 								</span>
 							</div>
-							{#if canModify(comment) && editingId !== comment.id}
-								<div class="flex items-center gap-1.5 text-xs">
+							<div class="flex items-center gap-2 text-xs">
+								{#if perm.can_write && editingId !== comment.id}
+									<button
+										type="button"
+										onclick={() => startReply(comment)}
+										class="font-bold text-slate-500 hover:text-blue-600 hover:underline"
+									>
+										답글
+									</button>
+								{/if}
+								{#if canModify(comment) && editingId !== comment.id}
 									<button
 										type="button"
 										onclick={() => startEdit(comment)}
@@ -485,8 +493,8 @@
 									>
 										삭제
 									</button>
-								</div>
-							{/if}
+								{/if}
+							</div>
 						</div>
 
 						{#if editingId === comment.id}
@@ -500,7 +508,9 @@
 								{#if editAttachments.length > 0 || editPendingAssets.length > 0}
 									<div class="flex flex-wrap gap-2">
 										{#each editAttachments as att (att.id)}
-											<div class="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 text-xs shadow-xs">
+											<div
+												class="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 text-xs shadow-xs"
+											>
 												{#if att.mime_type?.startsWith('image/')}
 													<img
 														src={getSecureMediaUrl(PUBLIC_SERVER_URL, att, 'sm')}
@@ -510,7 +520,9 @@
 												{:else}
 													<Icon icon="ph:file-bold" class="h-4 w-4 text-slate-500" />
 												{/if}
-												<span class="max-w-[140px] truncate font-medium text-slate-700">{att.original_name}</span>
+												<span class="max-w-[140px] truncate font-medium text-slate-700"
+													>{att.original_name}</span
+												>
 												<button
 													type="button"
 													onclick={() => removeExistingAttachment(att.id)}
@@ -522,7 +534,9 @@
 											</div>
 										{/each}
 										{#each editPendingAssets as asset (asset.id)}
-											<div class="flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-2.5 py-1.5 text-xs shadow-xs">
+											<div
+												class="flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-2.5 py-1.5 text-xs shadow-xs"
+											>
 												{#if asset.mime_type?.startsWith('image/')}
 													<img
 														src={getSecureMediaUrl(PUBLIC_SERVER_URL, asset, 'sm')}
@@ -532,7 +546,9 @@
 												{:else}
 													<Icon icon="ph:file-bold" class="h-4 w-4 text-blue-500" />
 												{/if}
-												<span class="max-w-[140px] truncate font-medium text-blue-700">{asset.original_name}</span>
+												<span class="max-w-[140px] truncate font-medium text-blue-700"
+													>{asset.original_name}</span
+												>
 												<button
 													type="button"
 													onclick={() => removeEditPendingAsset(asset.id)}
@@ -560,9 +576,12 @@
 												type="button"
 												disabled={uploadingEdit}
 												onclick={() => editFileInputEl?.click()}
-												class="btn btn-xs btn-ghost border border-slate-300 font-bold"
+												class="btn border border-slate-300 btn-ghost font-bold btn-xs"
 											>
-												<Icon icon={uploadingEdit ? 'ph:spinner-gap-bold' : 'ph:paperclip-bold'} class="mr-1 {uploadingEdit ? 'animate-spin' : ''}" />
+												<Icon
+													icon={uploadingEdit ? 'ph:spinner-gap-bold' : 'ph:paperclip-bold'}
+													class="mr-1 {uploadingEdit ? 'animate-spin' : ''}"
+												/>
 												{uploadingEdit ? '업로드 중...' : '파일 추가'}
 											</button>
 											{#if auth.user?.id}
@@ -573,7 +592,7 @@
 														pickerMode = 'edit';
 														showPersonalPicker = true;
 													}}
-													class="btn btn-xs btn-ghost border border-indigo-200 bg-indigo-50/70 font-bold text-indigo-700 hover:bg-indigo-100"
+													class="btn border border-indigo-200 bg-indigo-50/70 btn-ghost font-bold text-indigo-700 btn-xs hover:bg-indigo-100"
 												>
 													<Icon icon="ph:folder-user-bold" class="mr-1" />
 													내 파일함
@@ -584,12 +603,14 @@
 										<div></div>
 									{/if}
 									<div class="flex gap-1.5">
-										<button type="button" onclick={() => cancelEdit()} class="btn btn-xs btn-ghost">취소</button>
+										<button type="button" onclick={() => cancelEdit()} class="btn btn-ghost btn-xs"
+											>취소</button
+										>
 										<button
 											type="button"
 											disabled={savingEdit || uploadingEdit}
 											onclick={() => saveEdit(comment.id)}
-											class="btn btn-xs btn-primary"
+											class="btn btn-primary btn-xs"
 										>
 											{savingEdit ? '저장 중...' : '저장'}
 										</button>
@@ -632,14 +653,132 @@
 								</div>
 							{/if}
 						{/if}
+
+						<!-- 2단 대댓글 목록 (파일 첨부 없음) -->
+						{#if comment.sub_comments && comment.sub_comments.length > 0}
+							<div class="mt-3 space-y-2.5 border-l-2 border-slate-200 pl-3 sm:pl-4">
+								{#each comment.sub_comments as reply (reply.id)}
+									<div class="flex gap-2.5">
+										<div class="placeholder avatar shrink-0">
+											<div class="h-8 w-8 rounded-full bg-slate-200 text-slate-700">
+												<span class="text-xs font-bold"
+													>{getCommentDisplayName(reply)[0].toUpperCase()}</span
+												>
+											</div>
+										</div>
+										<div class="min-w-0 flex-1">
+											<div class="mb-1 flex items-center justify-between gap-2">
+												<div class="flex items-center gap-2">
+													<span class="text-xs font-bold">{getCommentDisplayName(reply)}</span>
+													<span class="text-[11px] text-base-content/40">
+														{formatDateTime(reply.create_date)}
+													</span>
+												</div>
+												<div class="flex items-center gap-2 text-[11px]">
+													{#if perm.can_write && editingId !== reply.id}
+														<button
+															type="button"
+															onclick={() => startReply(comment, reply)}
+															class="font-bold text-slate-500 hover:text-blue-600 hover:underline"
+														>
+															답글
+														</button>
+													{/if}
+													{#if canModify(reply) && editingId !== reply.id}
+														<button
+															type="button"
+															onclick={() => startEdit(reply)}
+															class="font-bold text-blue-600 hover:underline"
+														>
+															수정
+														</button>
+														<button
+															type="button"
+															onclick={() => handleDelete(reply.id)}
+															class="font-bold text-rose-500 hover:underline"
+														>
+															삭제
+														</button>
+													{/if}
+												</div>
+											</div>
+											{#if editingId === reply.id}
+												<div class="space-y-2 rounded-lg border border-slate-200 bg-base-200 p-2.5">
+													<textarea
+														rows="2"
+														bind:value={editContent}
+														class="textarea-bordered textarea w-full resize-none text-xs"
+													></textarea>
+													<div class="flex justify-end gap-1.5">
+														<button
+															type="button"
+															onclick={() => cancelEdit()}
+															class="btn btn-ghost btn-xs">취소</button
+														>
+														<button
+															type="button"
+															disabled={savingEdit}
+															onclick={() => saveEdit(reply.id)}
+															class="btn btn-primary btn-xs"
+														>
+															{savingEdit ? '저장 중...' : '저장'}
+														</button>
+													</div>
+												</div>
+											{:else}
+												<p
+													class="rounded-lg bg-slate-100 p-2.5 text-xs whitespace-pre-wrap text-slate-700"
+												>
+													{reply.content}
+												</p>
+											{/if}
+										</div>
+									</div>
+								{/each}
+							</div>
+						{/if}
+
+						<!-- 2단 인라인 답글 입력 폼 -->
+						{#if perm.can_write && replyTo?.rootId === comment.id}
+							<form
+								onsubmit={handleReplySubmit}
+								class="mt-3 space-y-2 rounded-xl border border-blue-200 bg-blue-50/40 p-3"
+							>
+								<div class="flex items-center justify-between text-[11px] font-bold text-blue-700">
+									<span>↳ {replyTo?.targetName}님에게 답글 작성</span>
+									<button
+										type="button"
+										onclick={cancelReply}
+										class="text-slate-400 hover:text-slate-700">취소</button
+									>
+								</div>
+								<textarea
+									rows="2"
+									bind:value={replyContent}
+									onkeydown={(e) => handleCtrlEnter(e, () => handleReplySubmit())}
+									placeholder="답글을 입력하세요... (Ctrl+Enter 등록)"
+									class="textarea-bordered textarea w-full resize-none bg-white text-xs"
+								></textarea>
+								<div class="flex justify-end gap-1.5">
+									<button type="button" onclick={cancelReply} class="btn btn-ghost btn-xs"
+										>취소</button
+									>
+									<button
+										type="submit"
+										disabled={replySubmitting || !replyContent.trim()}
+										class="btn btn-primary btn-xs"
+									>
+										{replySubmitting ? '등록 중...' : '답글 등록'}
+									</button>
+								</div>
+							</form>
+						{/if}
 					</div>
 				</div>
 			{/each}
 		{/if}
 	</div>
 </div>
-
-<svelte:window onkeydown={handlePreviewKeydown} />
 
 <PersonalMediaPickerModal
 	bind:open={showPersonalPicker}
@@ -648,79 +787,8 @@
 	onSelect={handlePersonalPicked}
 />
 
-{#if activePreview}
-	<!-- svelte-ignore a11y_click_events_have_key_events -->
-	<!-- svelte-ignore a11y_no_static_element_interactions -->
-	<div
-		class="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-black/85 p-3 backdrop-blur-xs sm:p-6"
-		onclick={(e) => {
-			if (e.target === e.currentTarget) closeImagePreview();
-		}}
-		role="dialog"
-		aria-modal="true"
-		aria-label="이미지 미리보기"
-	>
-		<!-- 상단 바 -->
-		<div class="mb-3 flex w-full max-w-4xl items-center justify-between gap-3 text-white">
-			<div class="flex min-w-0 items-center gap-2">
-				<span class="truncate text-sm font-bold">{activePreview.original_name || '이미지 미리보기'}</span>
-				{#if previewImages.length > 1}
-					<span class="shrink-0 rounded-full bg-white/15 px-2.5 py-0.5 text-xs font-bold">
-						{previewIndex + 1} / {previewImages.length}
-					</span>
-				{/if}
-			</div>
-			<div class="flex shrink-0 items-center gap-2">
-				<a
-					href={getSecureMediaUrl(PUBLIC_SERVER_URL, activePreview)}
-					download={activePreview.original_name || 'image'}
-					class="flex h-9 w-9 items-center justify-center rounded-full bg-white/15 text-white transition hover:bg-white/25"
-					title="다운로드"
-					aria-label="이미지 다운로드"
-				>
-					<Icon icon="ph:download-simple-bold" class="h-4 w-4" />
-				</a>
-				<button
-					type="button"
-					onclick={closeImagePreview}
-					class="flex h-9 w-9 items-center justify-center rounded-full bg-white/15 text-white transition hover:bg-white/25"
-					title="닫기 (ESC)"
-					aria-label="미리보기 닫기"
-				>
-					<Icon icon="ph:x-bold" class="h-5 w-5" />
-				</button>
-			</div>
-		</div>
-
-		<!-- 이미지 본문 영역 -->
-		<div class="relative flex w-full max-w-4xl flex-1 items-center justify-center overflow-hidden">
-			{#if previewImages.length > 1}
-				<button
-					type="button"
-					onclick={prevPreviewImage}
-					class="absolute left-2 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-black/50 text-white transition hover:bg-black/75"
-					aria-label="이전 이미지"
-				>
-					<Icon icon="ph:caret-left-bold" class="h-5 w-5" />
-				</button>
-			{/if}
-
-			<img
-				src={getSecureMediaUrl(PUBLIC_SERVER_URL, activePreview, 'lg') || getSecureMediaUrl(PUBLIC_SERVER_URL, activePreview)}
-				alt={activePreview.original_name || '이미지'}
-				class="max-h-[82dvh] max-w-full rounded-xl object-contain shadow-2xl"
-			/>
-
-			{#if previewImages.length > 1}
-				<button
-					type="button"
-					onclick={nextPreviewImage}
-					class="absolute right-2 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-black/50 text-white transition hover:bg-black/75"
-					aria-label="다음 이미지"
-				>
-					<Icon icon="ph:caret-right-bold" class="h-5 w-5" />
-				</button>
-			{/if}
-		</div>
-	</div>
-{/if}
+<ImageZoomLightbox
+	images={lightboxImages}
+	bind:index={previewIndex}
+	ariaLabel="댓글 이미지 상세 보기"
+/>

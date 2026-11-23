@@ -11,6 +11,7 @@
 	 */
 	import { fly } from 'svelte/transition';
 	import * as engines from '$lib/index';
+	import type { ServicePermission } from '$lib/utils/servicePermission';
 
 	interface BindingLayout {
 		row?: number;
@@ -26,6 +27,7 @@
 		service_component: string;
 		config?: Record<string, any>;
 		layout?: BindingLayout | null;
+		permissions?: ServicePermission | null;
 	}
 
 	interface Props {
@@ -62,7 +64,11 @@
 	 */
 	let groupedRows = $derived.by<RenderedRow[]>(() => {
 		const validBindings = (bindings || []).filter(
-			(b) => b && b.service_component && engineMap[b.service_component]
+			(b) =>
+				b &&
+				b.service_component &&
+				engineMap[b.service_component] &&
+				b.permissions?.can_read !== false
 		);
 		const rows: RenderedRow[] = [];
 		const rowIndexMap = new Map<number, number>();
@@ -73,8 +79,7 @@
 			const display =
 				layout.display === 'inline' || layout.display === 'grid-2' ? layout.display : 'block';
 			const wrap = layout.wrap !== false;
-			const align =
-				layout.align === 'between' || layout.align === 'end' ? layout.align : 'start';
+			const align = layout.align === 'between' || layout.align === 'end' ? layout.align : 'start';
 
 			// 같은 rowNum을 가진 모듈들은 display 방식과 무관하게 항상 하나의 행(div)으로 그룹화
 			if (rowIndexMap.has(rowNum)) {
@@ -110,7 +115,9 @@
 				<!-- 🟢 인라인(가로 나란히) div 컨테이너 (데스크톱에서 한 줄 나란히 배치, 모바일은 자연스럽게 줄바꿈) -->
 				{#if row.wrap}
 					<div
-						class="board-fullbleed-card flex flex-wrap md:flex-nowrap items-start gap-4 rounded-3xl border-2 border-slate-200 bg-white p-5 shadow-sm sm:p-6 {getInlineAlignClass(row.align)}"
+						class="board-fullbleed-card flex flex-wrap items-start gap-4 rounded-3xl border-2 border-slate-200 bg-white p-5 shadow-sm sm:p-6 md:flex-nowrap {getInlineAlignClass(
+							row.align
+						)}"
 						in:fly={{ y: 16, duration: 300 }}
 					>
 						{#each row.items as binding, idx (`${binding.engine_id}-${binding.app_id ?? idx}`)}
@@ -123,18 +130,25 @@
 									config={binding.config}
 									{accessLevel}
 									{boardSlug}
+									permissions={binding.permissions ?? null}
 								/>
 							</div>
 						{/each}
 					</div>
 				{:else}
 					<div
-						class="flex flex-wrap md:flex-nowrap items-stretch gap-4 {getInlineAlignClass(row.align)}"
+						class="flex flex-wrap items-stretch gap-4 md:flex-nowrap {getInlineAlignClass(
+							row.align
+						)}"
 						in:fly={{ y: 16, duration: 300 }}
 					>
 						{#each row.items as binding, idx (`${binding.engine_id}-${binding.app_id ?? idx}`)}
 							{@const DynComp = engineMap[binding.service_component]}
-							<div class="min-w-0 {row.items.length > 1 ? 'w-full md:w-auto md:flex-1' : 'w-full'} rounded-3xl border-2 border-slate-200 bg-white p-5 shadow-sm">
+							<div
+								class="min-w-0 {row.items.length > 1
+									? 'w-full md:w-auto md:flex-1'
+									: 'w-full'} rounded-3xl border-2 border-slate-200 bg-white p-5 shadow-sm"
+							>
 								<DynComp
 									{post}
 									{appId}
@@ -142,6 +156,7 @@
 									config={binding.config}
 									{accessLevel}
 									{boardSlug}
+									permissions={binding.permissions ?? null}
 								/>
 							</div>
 						{/each}
@@ -151,7 +166,7 @@
 				<!-- 🟣 2단 분할(Grid) div 컨테이너 -->
 				{#if row.wrap}
 					<div
-						class="board-fullbleed-card grid grid-cols-1 gap-6 rounded-3xl border-2 border-slate-200 bg-white p-5 shadow-sm md:grid-cols-2 sm:p-6"
+						class="board-fullbleed-card grid grid-cols-1 gap-6 rounded-3xl border-2 border-slate-200 bg-white p-5 shadow-sm sm:p-6 md:grid-cols-2"
 						in:fly={{ y: 16, duration: 300 }}
 					>
 						{#each row.items as binding, idx (`${binding.engine_id}-${binding.app_id ?? idx}`)}
@@ -164,15 +179,13 @@
 									config={binding.config}
 									{accessLevel}
 									{boardSlug}
+									permissions={binding.permissions ?? null}
 								/>
 							</div>
 						{/each}
 					</div>
 				{:else}
-					<div
-						class="grid grid-cols-1 gap-5 md:grid-cols-2"
-						in:fly={{ y: 16, duration: 300 }}
-					>
+					<div class="grid grid-cols-1 gap-5 md:grid-cols-2" in:fly={{ y: 16, duration: 300 }}>
 						{#each row.items as binding, idx (`${binding.engine_id}-${binding.app_id ?? idx}`)}
 							{@const DynComp = engineMap[binding.service_component]}
 							<div class="rounded-3xl border-2 border-slate-200 bg-white p-5 shadow-sm sm:p-6">
@@ -183,6 +196,7 @@
 									config={binding.config}
 									{accessLevel}
 									{boardSlug}
+									permissions={binding.permissions ?? null}
 								/>
 							</div>
 						{/each}
@@ -197,7 +211,7 @@
 					>
 						{#each row.items as binding, idx (`${binding.engine_id}-${binding.app_id ?? idx}`)}
 							{@const DynComp = engineMap[binding.service_component]}
-							<div class="min-w-0 {idx > 0 ? 'pt-5 mt-5' : ''}">
+							<div class="min-w-0 {idx > 0 ? 'mt-5 pt-5' : ''}">
 								<DynComp
 									{post}
 									{appId}
@@ -205,6 +219,7 @@
 									config={binding.config}
 									{accessLevel}
 									{boardSlug}
+									permissions={binding.permissions ?? null}
 								/>
 							</div>
 						{/each}
@@ -221,6 +236,7 @@
 									config={binding.config}
 									{accessLevel}
 									{boardSlug}
+									permissions={binding.permissions ?? null}
 								/>
 							</div>
 						{/each}

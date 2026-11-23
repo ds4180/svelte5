@@ -16,6 +16,7 @@
 	import { goto, invalidateAll } from '$app/navigation';
 	import TiptapEditor from '$lib/components/TiptapEditor.svelte';
 	import SafeHtml from '$lib/components/SafeHtml.svelte';
+	import ServiceLockNotice from '$lib/components/ServiceLockNotice.svelte';
 	import SearchFilterBar from '$lib/components/SearchFilterBar.svelte';
 	import Pagination from '$lib/components/Pagination.svelte';
 	import BoardListLayout from './layouts/BoardListLayout.svelte';
@@ -32,7 +33,13 @@
 	import { formatDate } from '$lib/utils';
 	import { formatApiError } from '$lib/utils/error';
 	import { env } from '$env/dynamic/public';
-	import { publishEditorContentAssets } from '$lib/services/mediaService';
+	import {
+		parseBoardRoute,
+		isUserBoardAdmin,
+		computeEditorLockPermission,
+		validateBoardPostForm,
+		saveBoardPost
+	} from '$lib/services/boardService';
 
 	const PUBLIC_SERVER_URL = env.PUBLIC_SERVER_URL || '';
 
@@ -44,7 +51,7 @@
 	// --- [라우팅 및 모드 분석] ---
 	let mode = $state('list'); // list, view, write, edit
 	let boardSlug = $state('');
-	let postId = $state(null);
+	let postId = $state(/** @type {string | null} */ (null));
 	let currentPage = $state(1);
 	let pageSize = $state(10);
 	let keyword = $state('');
@@ -74,28 +81,7 @@
 		})
 	);
 
-	let isBoardAdmin = $derived.by(() => {
-		const u = auth.user;
-		if (!u) return false;
-		if (Number(u.rank_level ?? 0) >= boardAdminRank) return true;
-		const userGroups = new Set(
-			[u.primary_group, ...(Array.isArray(u.secondary_groups) ? u.secondary_groups : [])]
-				.map((g) => String(g || '').trim())
-				.filter(Boolean)
-		);
-		if (userGroups.size === 0) return false;
-		const rawAdmin = board?.options?.admin_groups;
-		const adminList = Array.isArray(rawAdmin)
-			? rawAdmin
-			: typeof rawAdmin === 'string'
-				? rawAdmin.split(',')
-				: [];
-		const allowAdmin =
-			board?.allow_groups && typeof board.allow_groups === 'object' && !Array.isArray(board.allow_groups)
-				? (Array.isArray(board.allow_groups.admin) ? board.allow_groups.admin : [])
-				: [];
-		return [...adminList, ...allowAdmin].some((g) => userGroups.has(String(g || '').trim()));
-	});
+	let isBoardAdmin = $derived(isUserBoardAdmin(auth.user, board, boardAdminRank));
 
 	let canModifyPost = $derived(
 		Boolean(post) &&
@@ -103,6 +89,11 @@
 				(canWrite &&
 					((post.user_id && post.user_id === auth.user?.id) ||
 						(post.author_id && post.author_id === auth.user?.id))))
+	);
+
+	// 🛡️ 글쓰기/수정 URL 직접 진입 시 사전 잠금 판별 객체
+	let editorLockPermission = $derived(
+		computeEditorLockPermission(auth.user, /** @type {any} */ (mode), canWrite, canModifyPost, post)
 	);
 
 	let ActiveListLayout = $derived(
@@ -134,23 +125,12 @@
 
 	/** 경로 파싱 함수 */
 	function parsePath() {
-		const parts = (slug || '').split('/').filter((p) => p !== '');
-		boardSlug = parts[0] || '';
-
-		if (parts.length <= 1) {
-			mode = 'list';
-			postId = null;
-		} else if (parts[1] === 'write') {
-			mode = 'write';
-			postId = null;
+		const parsed = parseBoardRoute(slug);
+		boardSlug = parsed.boardSlug;
+		mode = parsed.mode;
+		postId = parsed.postId;
+		if (mode === 'write') {
 			resetEditForm();
-		} else if (parts.length >= 2) {
-			postId = parts[1];
-			if (parts[2] === 'edit') {
-				mode = 'edit';
-			} else {
-				mode = 'view';
-			}
 		}
 	}
 
@@ -188,7 +168,10 @@
 		return Boolean(raw);
 	});
 
-	async function handleQuickPostMetaToggle(/** @type {string} */ key, /** @type {any} */ nextValue) {
+	async function handleQuickPostMetaToggle(
+		/** @type {string} */ key,
+		/** @type {any} */ nextValue
+	) {
 		if (!post?.id) return;
 		const prevExtra = post.extra_data && typeof post.extra_data === 'object' ? post.extra_data : {};
 		const nextExtra = { ...prevExtra, [key]: nextValue };
@@ -196,7 +179,9 @@
 		try {
 			await api.updatePost(post.id, { extra_data: nextExtra });
 			if (key === 'is_pinned') {
-				toast.success(nextValue ? '📌 이 글이 상단 고정되었습니다.' : '상단 고정이 해제되었습니다.');
+				toast.success(
+					nextValue ? '📌 이 글이 상단 고정되었습니다.' : '상단 고정이 해제되었습니다.'
+				);
 			} else {
 				toast.success('게시물 설정이 저장되었습니다.');
 			}
@@ -207,7 +192,8 @@
 	}
 
 	function handlePostMetaChange(/** @type {string} */ key, /** @type {any} */ nextValue) {
-		const prev = editForm.extra_data && typeof editForm.extra_data === 'object' ? editForm.extra_data : {};
+		const prev =
+			editForm.extra_data && typeof editForm.extra_data === 'object' ? editForm.extra_data : {};
 		editForm.extra_data = /** @type {Record<string, any>} */ ({ ...prev, [key]: nextValue });
 	}
 
@@ -228,10 +214,20 @@
 
 		if (currentMode === 'write' || currentMode === 'edit') {
 			const metaSnapshot = editForm.extra_data;
-			const writeKeys = Array.isArray(b.options?.write_meta_keys) ? b.options.write_meta_keys : null;
-			let items = buildPostMetaMenuItems(metaSnapshot, isAdmin, handlePostMetaChange, writeKeys, boardCategories);
+			const writeKeys = Array.isArray(b.options?.write_meta_keys)
+				? b.options.write_meta_keys
+				: null;
+			let items = buildPostMetaMenuItems(
+				metaSnapshot,
+				isAdmin,
+				handlePostMetaChange,
+				writeKeys,
+				boardCategories
+			);
 			if (!pinEnabled) {
-				items = items.filter((item) => item.metaKey !== 'is_pinned' && item.metaKey !== 'pin_until');
+				items = items.filter(
+					(item) => item.metaKey !== 'is_pinned' && item.metaKey !== 'pin_until'
+				);
 			}
 			navState.setPageMenus(items);
 		} else {
@@ -246,7 +242,9 @@
 					boardCategories
 				);
 				if (!pinEnabled) {
-					metaItems = metaItems.filter((item) => item.metaKey !== 'is_pinned' && item.metaKey !== 'pin_until');
+					metaItems = metaItems.filter(
+						(item) => item.metaKey !== 'is_pinned' && item.metaKey !== 'pin_until'
+					);
 				}
 				items.push(...metaItems);
 			}
@@ -312,9 +310,7 @@
 		}
 
 		const hasSSRData =
-			!forceRefresh &&
-			Boolean(initialData) &&
-			(mode === 'list' ? board !== null : post !== null);
+			!forceRefresh && Boolean(initialData) && (mode === 'list' ? board !== null : post !== null);
 
 		if (hasSSRData) {
 			console.log('🚀 [BoardEngine] SSR data hydrated — skipping API fetch');
@@ -334,9 +330,9 @@
 		errorMessage = '';
 		try {
 			// ✅ [Hardcoding Zero] 게시판 전용 API 대신 범용 데이터 API 호출
-			const data = await adminGetAppData('board', slug, { 
-				page: currentPage - 1, 
-				size: pageSize, 
+			const data = await adminGetAppData('board', slug, {
+				page: currentPage - 1,
+				size: pageSize,
 				keyword: keyword,
 				sort: sort,
 				category: selectedCategory === '전체' ? '' : selectedCategory
@@ -378,54 +374,26 @@
 	async function handleSave() {
 		if (isLoading) return;
 
-		if (!editForm.title || !editForm.title.trim()) {
-			toast.warning('제목을 입력해주세요.');
-			return;
-		}
-		
-		const tempDiv = document.createElement('div');
-		tempDiv.innerHTML = editForm.content;
-		const textContent = tempDiv.textContent || tempDiv.innerText || '';
-		
-		const hasRichBlock =
-			editForm.content.includes('<img') ||
-			editForm.content.includes('data-tiptap-') ||
-			editForm.content.includes('<table') ||
-			editForm.content.includes('<iframe');
-
-		if (!textContent.trim() && !hasRichBlock) {
-			toast.warning('내용을 입력해주세요.');
+		const validation = validateBoardPostForm(editForm);
+		if (!validation.ok) {
+			toast.warning(validation.message);
 			return;
 		}
 
 		try {
 			isLoading = true;
-			const publishedMedia = await publishEditorContentAssets({
-				content: editForm.content,
-				content_json: editForm.content_json,
-				app_id: 'board',
-				target_id: postId ? String(postId) : null,
-				access_level: Number(board?.min_read_rank ?? 0) === 0 ? 'PUBLIC' : 'PROTECTED',
-				sub_path: boardSlug ? `BOARDS/${boardSlug}` : 'BOARDS',
+			const result = await saveBoardPost({
+				mode: mode === 'edit' ? 'edit' : 'write',
+				boardSlug,
+				postId,
+				board,
+				editForm,
 				serverUrl: PUBLIC_SERVER_URL
 			});
-			editForm.content = publishedMedia.content;
-			editForm.content_json = publishedMedia.content_json;
+			editForm.content = result.content;
+			editForm.content_json = result.content_json;
+			toast.success(mode === 'write' ? '게시글이 등록되었습니다.' : '게시글이 수정되었습니다.');
 
-			const payload = {
-				...editForm,
-				media_ids: publishedMedia.publishedAssetIds || []
-			};
-
-			let savedId = postId;
-			if (mode === 'write') {
-				const created = await api.createPost(boardSlug, payload);
-				savedId = created?.id ?? created?.post?.id ?? null;
-				toast.success('게시글이 등록되었습니다.');
-			} else if (mode === 'edit') {
-				await api.updatePost(postId, payload);
-				toast.success('게시글이 수정되었습니다.');
-			}
 			if (mode === 'write') {
 				currentPage = 1;
 				keyword = '';
@@ -433,8 +401,8 @@
 			}
 			resetEditForm();
 			isLoading = false;
-			const targetUrl = savedId
-				? `/v1/app/board/${boardSlug}/${savedId}`
+			const targetUrl = result.savedId
+				? `/v1/app/board/${boardSlug}/${result.savedId}`
 				: `/v1/app/board/${boardSlug}`;
 			await goto(targetUrl, { invalidateAll: true });
 			await invalidateAll();
@@ -485,9 +453,7 @@
 			<div
 				class="h-10 w-10 animate-spin rounded-full border-4 border-slate-200 border-t-blue-600"
 			></div>
-			<p class="text-xs font-bold text-slate-500">
-				데이터 불러오는 중...
-			</p>
+			<p class="text-xs font-bold text-slate-500">데이터 불러오는 중...</p>
 		</div>
 	{/if}
 
@@ -510,9 +476,7 @@
 			>
 				<Icon icon="ph:map-pin-line-bold" class="h-16 w-16 text-rose-500" />
 				<div class="space-y-2">
-					<h2 class="text-2xl font-black tracking-tight text-slate-900">
-						잘못된 게시판 경로
-					</h2>
+					<h2 class="text-2xl font-black tracking-tight text-slate-900">잘못된 게시판 경로</h2>
 					<p class="max-w-md text-sm font-medium text-slate-500">
 						요청하신 경로가 불완전합니다. 전체 게시판 목록에서 게시판을 선택해 주세요.
 					</p>
@@ -531,13 +495,17 @@
 			>
 				<div class="space-y-2">
 					<div class="flex items-center gap-2">
-						<span
-							class="rounded-lg bg-blue-50 px-2.5 py-1 text-[11px] font-black text-blue-700"
-						>
+						<span class="rounded-lg bg-blue-50 px-2.5 py-1 text-[11px] font-black text-blue-700">
 							{boardSlug}
 						</span>
 						<span class="text-xs font-bold text-slate-400">
-							{mode === 'list' ? '목록' : mode === 'view' ? '상세' : mode === 'write' ? '글쓰기' : '수정'}
+							{mode === 'list'
+								? '목록'
+								: mode === 'view'
+									? '상세'
+									: mode === 'write'
+										? '글쓰기'
+										: '수정'}
 						</span>
 					</div>
 					<h1 class="text-2xl font-black tracking-tight text-slate-900 sm:text-3xl">
@@ -593,7 +561,8 @@
 										currentPage = 1;
 										loadData(true);
 									}}
-									class="rounded-xl px-3 py-1.5 text-xs font-black transition {selectedCategory === cat
+									class="rounded-xl px-3 py-1.5 text-xs font-black transition {selectedCategory ===
+									cat
 										? 'bg-slate-900 text-white shadow-xs'
 										: 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-100'}"
 								>
@@ -602,13 +571,7 @@
 							{/each}
 						</div>
 
-						<SearchFilterBar
-							bind:keyword
-							bind:sort
-							bind:pageSize
-							{total}
-							onSearch={handleSearch}
-						/>
+						<SearchFilterBar bind:keyword bind:sort bind:pageSize {total} onSearch={handleSearch} />
 
 						{#if posts.length === 0 && !isLoading}
 							<div
@@ -647,51 +610,87 @@
 						{@const viewMeta = getPostMetaPresentation(post, board?.options)}
 						{@const viewBindings = viewMeta.allowComment
 							? bindings
-							: (bindings || []).filter((/** @type {any} */ b) => !String(b?.engine_key || b?.registry_code || b?.app_id || '').includes('comment'))}
+							: (bindings || []).filter(
+									(/** @type {any} */ b) =>
+										!String(b?.engine_key || b?.registry_code || b?.app_id || '').includes(
+											'comment'
+										)
+								)}
 						<article class="mx-auto max-w-4xl" in:fade={{ duration: 250 }}>
-							<div class="board-fullbleed-card rounded-3xl border-2 p-6 shadow-sm sm:p-10 {viewMeta.cardToneClass}">
+							<div
+								class="board-fullbleed-card rounded-3xl border-2 p-6 shadow-sm sm:p-10 {viewMeta.cardToneClass}"
+							>
 								<!-- 📋 게시물 헤더 블록 -->
 								<header class="border-b border-slate-200 pb-6">
 									<div class="flex flex-wrap items-center gap-2">
 										{#if viewMeta.isPinned}
-											<span class="rounded-lg bg-amber-500 px-2.5 py-1 text-xs font-black text-white">📌 상단고정</span>
+											<span
+												class="rounded-lg bg-amber-500 px-2.5 py-1 text-xs font-black text-white"
+												>📌 상단고정</span
+											>
 										{/if}
 										{#if viewMeta.category}
-											<span class="rounded-lg px-2.5 py-1 text-xs font-black {viewMeta.categoryClass}">{viewMeta.category}</span>
+											<span
+												class="rounded-lg px-2.5 py-1 text-xs font-black {viewMeta.categoryClass}"
+												>{viewMeta.category}</span
+											>
 										{/if}
 										{#if viewMeta.isNew}
-											<span class="rounded-lg bg-rose-500 px-2 py-0.5 text-[11px] font-black text-white">NEW</span>
+											<span
+												class="rounded-lg bg-rose-500 px-2 py-0.5 text-[11px] font-black text-white"
+												>NEW</span
+											>
 										{/if}
 										{#if viewMeta.isSecret}
-											<span class="rounded-lg bg-slate-800 px-2.5 py-1 text-xs font-black text-white">🔒 비밀글</span>
+											<span
+												class="rounded-lg bg-slate-800 px-2.5 py-1 text-xs font-black text-white"
+												>🔒 비밀글</span
+											>
 										{/if}
 										{#if viewMeta.effectiveDate}
-											<span class="rounded-lg bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700">시행일 {viewMeta.effectiveDate}</span>
+											<span
+												class="rounded-lg bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700"
+												>시행일 {viewMeta.effectiveDate}</span
+											>
 										{/if}
 										{#if viewMeta.routeNo || viewMeta.vehicleNo}
-											<span class="rounded-lg bg-sky-50 px-2.5 py-1 text-xs font-bold text-sky-700">{[viewMeta.routeNo, viewMeta.vehicleNo].filter(Boolean).join(' · ')}</span>
+											<span class="rounded-lg bg-sky-50 px-2.5 py-1 text-xs font-bold text-sky-700"
+												>{[viewMeta.routeNo, viewMeta.vehicleNo].filter(Boolean).join(' · ')}</span
+											>
 										{/if}
 										<a
 											href="/v1/app/board/{boardSlug}"
-											class="rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-600 hover:bg-slate-200 transition"
+											class="rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-600 transition hover:bg-slate-200"
 										>
 											{board?.name || boardSlug} · NO.{post.board_seq ?? post.id}
 										</a>
 										{#if post.status && post.status !== 'published'}
-											<span class="rounded-lg bg-amber-100 px-2.5 py-1 text-xs font-bold text-amber-800">
+											<span
+												class="rounded-lg bg-amber-100 px-2.5 py-1 text-xs font-bold text-amber-800"
+											>
 												{post.status}
 											</span>
 										{/if}
 									</div>
 
-									<h1 class="mt-3 text-2xl tracking-tight sm:text-3xl {viewMeta.titleWeightClass} {viewMeta.titleColorClass}">
+									<h1
+										class="mt-3 text-2xl tracking-tight sm:text-3xl {viewMeta.titleWeightClass} {viewMeta.titleColorClass}"
+									>
 										{#if viewMeta.icon}<span class="mr-2">{viewMeta.icon}</span>{/if}{post.title}
 									</h1>
 
-									<div class="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs font-bold text-slate-500">
+									<div
+										class="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs font-bold text-slate-500"
+									>
 										<span class="inline-flex items-center gap-1.5 text-slate-700">
 											<Icon icon="ph:user-bold" class="h-3.5 w-3.5 text-slate-400" />
-											<span>{post.user_name || post.author_name || post.user?.real_name || post.user?.username || '작성자'}</span>
+											<span
+												>{post.user_name ||
+													post.author_name ||
+													post.user?.real_name ||
+													post.user?.username ||
+													'작성자'}</span
+											>
 										</span>
 										<span class="inline-flex items-center gap-1.5 text-slate-400">
 											<Icon icon="ph:calendar-blank-bold" class="h-3.5 w-3.5" />
@@ -713,7 +712,7 @@
 								<!-- 📄 본문 콘텐츠 -->
 								<SafeHtml
 									html={post.content}
-									class="prose prose-slate max-w-none pt-8 text-base leading-relaxed text-slate-800"
+									class="prose max-w-none pt-8 text-base leading-relaxed text-slate-800 prose-slate"
 								/>
 
 								{#if viewMeta.ctaUrl}
@@ -747,7 +746,9 @@
 								{/if}
 
 								<!-- 🔧 액션 푸터 -->
-								<footer class="mt-10 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-6">
+								<footer
+									class="mt-10 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-6"
+								>
 									<div class="flex flex-wrap gap-2">
 										{#if canModifyPost}
 											<button
@@ -785,124 +786,188 @@
 						</article>
 					{/if}
 				{:else if mode === 'write' || mode === 'edit'}
-					<div class="mx-auto max-w-5xl">
-						<div class="board-fullbleed-card rounded-3xl border-2 border-slate-200 bg-white p-6 shadow-sm sm:p-8">
-							<div class="mb-6 flex items-center justify-between border-b border-slate-100 pb-4">
-								<div class="flex items-center gap-3">
-									<div class="flex h-10 w-10 items-center justify-center rounded-2xl bg-blue-50 text-blue-600">
-										<Icon icon="ph:pencil-simple-line-bold" class="text-xl" />
-									</div>
-									<div>
-										<h2 class="text-lg font-black text-slate-900">
-											{mode === 'write' ? '새 게시글 작성' : '게시글 수정'}
-										</h2>
-										<p class="text-xs font-bold text-slate-500">
-											{board?.name || boardSlug}
-										</p>
-									</div>
-								</div>
+					{#if editorLockPermission}
+						<div
+							class="mx-auto max-w-3xl space-y-4 rounded-3xl border-2 border-slate-200 bg-white p-6 shadow-sm sm:p-8"
+						>
+							<ServiceLockNotice
+								permission={editorLockPermission}
+								serviceLabel={mode === 'edit' ? '게시글 수정' : '게시글 작성'}
+							/>
+							<div class="flex justify-end">
 								<a
 									href="/v1/app/board/{boardSlug}"
-									class="rounded-xl px-3.5 py-2 text-xs font-bold text-slate-500 hover:bg-slate-100 hover:text-slate-800 transition"
+									class="inline-flex items-center gap-1.5 rounded-xl bg-slate-900 px-5 py-2.5 text-xs font-bold text-white transition hover:bg-blue-600"
 								>
-									취소
+									<Icon icon="ph:list-bold" class="h-4 w-4" /> 목록으로
 								</a>
 							</div>
-
-							<div class="space-y-6">
-								<!-- 우측 다이나믹 폼 메타 안내 배너 -->
-								<div class="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-indigo-200 bg-indigo-50/70 px-4 py-3 text-xs">
-									<div class="flex items-center gap-2 font-bold text-indigo-800">
-										<Icon icon="ph:magic-wand-bold" class="h-4 w-4 shrink-0 text-indigo-600" />
-										<span>우측 <strong>Dynamic Form</strong> 패널에서 카테고리·상단고정·배경색·NEW·비밀글·예약게시 등 메타 정보를 설정할 수 있습니다.</span>
+						</div>
+					{:else}
+						<div class="mx-auto max-w-5xl">
+							<div
+								class="board-fullbleed-card rounded-3xl border-2 border-slate-200 bg-white p-6 shadow-sm sm:p-8"
+							>
+								<div class="mb-6 flex items-center justify-between border-b border-slate-100 pb-4">
+									<div class="flex items-center gap-3">
+										<div
+											class="flex h-10 w-10 items-center justify-center rounded-2xl bg-blue-50 text-blue-600"
+										>
+											<Icon icon="ph:pencil-simple-line-bold" class="text-xl" />
+										</div>
+										<div>
+											<h2 class="text-lg font-black text-slate-900">
+												{mode === 'write' ? '새 게시글 작성' : '게시글 수정'}
+											</h2>
+											<p class="text-xs font-bold text-slate-500">
+												{board?.name || boardSlug}
+											</p>
+										</div>
 									</div>
-									<div class="flex flex-wrap items-center gap-1.5">
-										{#if activeExtra.category}
-											<span class="rounded-md bg-white px-2 py-0.5 text-[11px] font-black text-indigo-700">{activeExtra.category}</span>
-										{/if}
-										{#if activeExtra.is_pinned}
-											<span class="rounded-md bg-amber-500 px-2 py-0.5 text-[11px] font-black text-white">📌 상단고정</span>
-										{/if}
-										{#if activeExtra.is_secret}
-											<span class="rounded-md bg-slate-800 px-2 py-0.5 text-[11px] font-black text-white">🔒 비밀글</span>
-										{/if}
-									</div>
-								</div>
-
-								<div>
-									<label for="board-title-input" class="mb-2 block text-xs font-bold text-slate-700">
-										제목 <span class="text-rose-500">*</span>
-									</label>
-									<input
-										id="board-title-input"
-										type="text"
-										bind:value={editForm.title}
-										class="w-full rounded-2xl border-2 border-slate-200 bg-white px-4 py-3 text-sm font-bold focus:border-blue-600 focus:outline-none transition"
-										placeholder="게시글 제목을 입력하세요"
-									/>
-								</div>
-
-								<!-- 동적 커스텀 필드 -->
-								{#if board?.fields_def && board.fields_def.length > 0}
-									<div class="grid grid-cols-1 gap-5 rounded-2xl border border-slate-200 bg-slate-50/60 p-4 md:grid-cols-2">
-										{#each board.fields_def as field}
-											<div>
-												<label class="mb-1.5 block text-xs font-bold text-slate-700">
-													{field.label}
-												</label>
-												{#if field.type === 'number'}
-													<input type="number" bind:value={editForm.extra_data[field.key]} class="w-full rounded-2xl border-2 border-slate-200 bg-white px-4 py-2.5 text-sm font-bold focus:border-blue-600 focus:outline-none transition" />
-												{:else if field.type === 'date'}
-													<input type="date" bind:value={editForm.extra_data[field.key]} class="w-full rounded-2xl border-2 border-slate-200 bg-white px-4 py-2.5 text-sm font-bold focus:border-blue-600 focus:outline-none transition" />
-												{:else if field.type === 'select'}
-													<select bind:value={editForm.extra_data[field.key]} class="w-full rounded-2xl border-2 border-slate-200 bg-white px-4 py-2.5 text-sm font-bold focus:border-blue-600 focus:outline-none transition">
-														<option value="">-- 선택하세요 --</option>
-														{#each (field.options_text || '').split(',').map(s => s.trim()) as opt}
-															{#if opt}
-																<option value={opt}>{opt}</option>
-															{/if}
-														{/each}
-													</select>
-												{:else}
-													<input type="text" bind:value={editForm.extra_data[field.key]} placeholder={field.placeholder || ''} class="w-full rounded-2xl border-2 border-slate-200 bg-white px-4 py-2.5 text-sm font-bold focus:border-blue-600 focus:outline-none transition" />
-												{/if}
-											</div>
-										{/each}
-									</div>
-								{/if}
-
-								<div>
-									<span class="mb-2 block text-xs font-bold text-slate-700">
-										본문 콘텐츠 (표준 에디터)
-									</span>
-									<TiptapEditor bind:content={editForm.content} bind:content_json={editForm.content_json} slug={boardSlug} />
-								</div>
-
-								<div class="flex items-center justify-end gap-3 border-t border-slate-100 pt-6">
 									<a
 										href="/v1/app/board/{boardSlug}"
-										class="rounded-2xl border-2 border-slate-200 bg-white px-6 py-3 text-xs font-bold text-slate-600 transition hover:bg-slate-50"
+										class="rounded-xl px-3.5 py-2 text-xs font-bold text-slate-500 transition hover:bg-slate-100 hover:text-slate-800"
 									>
 										취소
 									</a>
-									<button
-										type="button"
-										class="inline-flex items-center gap-2 rounded-2xl bg-blue-600 px-8 py-3 text-sm font-black text-white shadow-sm transition hover:bg-blue-700 disabled:opacity-50"
-										onclick={handleSave}
-										disabled={isLoading}
+								</div>
+
+								<div class="space-y-6">
+									<!-- 우측 다이나믹 폼 메타 안내 배너 -->
+									<div
+										class="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-indigo-200 bg-indigo-50/70 px-4 py-3 text-xs"
 									>
-										{#if isLoading}
-											<span class="loading loading-spinner loading-xs"></span>
-											<span>저장 중...</span>
-										{:else}
-											<Icon icon="ph:floppy-disk-back-bold" class="h-4 w-4" />
-											<span>{mode === 'write' ? '게시글 등록' : '수정사항 저장'}</span>
-										{/if}
-									</button>
+										<div class="flex items-center gap-2 font-bold text-indigo-800">
+											<Icon icon="ph:magic-wand-bold" class="h-4 w-4 shrink-0 text-indigo-600" />
+											<span
+												>우측 <strong>Dynamic Form</strong> 패널에서 카테고리·상단고정·배경색·NEW·비밀글·예약게시
+												등 메타 정보를 설정할 수 있습니다.</span
+											>
+										</div>
+										<div class="flex flex-wrap items-center gap-1.5">
+											{#if activeExtra.category}
+												<span
+													class="rounded-md bg-white px-2 py-0.5 text-[11px] font-black text-indigo-700"
+													>{activeExtra.category}</span
+												>
+											{/if}
+											{#if activeExtra.is_pinned}
+												<span
+													class="rounded-md bg-amber-500 px-2 py-0.5 text-[11px] font-black text-white"
+													>📌 상단고정</span
+												>
+											{/if}
+											{#if activeExtra.is_secret}
+												<span
+													class="rounded-md bg-slate-800 px-2 py-0.5 text-[11px] font-black text-white"
+													>🔒 비밀글</span
+												>
+											{/if}
+										</div>
+									</div>
+
+									<div>
+										<label
+											for="board-title-input"
+											class="mb-2 block text-xs font-bold text-slate-700"
+										>
+											제목 <span class="text-rose-500">*</span>
+										</label>
+										<input
+											id="board-title-input"
+											type="text"
+											bind:value={editForm.title}
+											class="w-full rounded-2xl border-2 border-slate-200 bg-white px-4 py-3 text-sm font-bold transition focus:border-blue-600 focus:outline-none"
+											placeholder="게시글 제목을 입력하세요"
+										/>
+									</div>
+
+									<!-- 동적 커스텀 필드 -->
+									{#if board?.fields_def && board.fields_def.length > 0}
+										<div
+											class="grid grid-cols-1 gap-5 rounded-2xl border border-slate-200 bg-slate-50/60 p-4 md:grid-cols-2"
+										>
+											{#each board.fields_def as field}
+												<div>
+													<label class="mb-1.5 block text-xs font-bold text-slate-700">
+														{field.label}
+													</label>
+													{#if field.type === 'number'}
+														<input
+															type="number"
+															bind:value={editForm.extra_data[field.key]}
+															class="w-full rounded-2xl border-2 border-slate-200 bg-white px-4 py-2.5 text-sm font-bold transition focus:border-blue-600 focus:outline-none"
+														/>
+													{:else if field.type === 'date'}
+														<input
+															type="date"
+															bind:value={editForm.extra_data[field.key]}
+															class="w-full rounded-2xl border-2 border-slate-200 bg-white px-4 py-2.5 text-sm font-bold transition focus:border-blue-600 focus:outline-none"
+														/>
+													{:else if field.type === 'select'}
+														<select
+															bind:value={editForm.extra_data[field.key]}
+															class="w-full rounded-2xl border-2 border-slate-200 bg-white px-4 py-2.5 text-sm font-bold transition focus:border-blue-600 focus:outline-none"
+														>
+															<option value="">-- 선택하세요 --</option>
+															{#each (field.options_text || '')
+																.split(',')
+																.map((s) => s.trim()) as opt}
+																{#if opt}
+																	<option value={opt}>{opt}</option>
+																{/if}
+															{/each}
+														</select>
+													{:else}
+														<input
+															type="text"
+															bind:value={editForm.extra_data[field.key]}
+															placeholder={field.placeholder || ''}
+															class="w-full rounded-2xl border-2 border-slate-200 bg-white px-4 py-2.5 text-sm font-bold transition focus:border-blue-600 focus:outline-none"
+														/>
+													{/if}
+												</div>
+											{/each}
+										</div>
+									{/if}
+
+									<div>
+										<span class="mb-2 block text-xs font-bold text-slate-700">
+											본문 콘텐츠 (표준 에디터)
+										</span>
+										<TiptapEditor
+											bind:content={editForm.content}
+											bind:content_json={editForm.content_json}
+											slug={boardSlug}
+										/>
+									</div>
+
+									<div class="flex items-center justify-end gap-3 border-t border-slate-100 pt-6">
+										<a
+											href="/v1/app/board/{boardSlug}"
+											class="rounded-2xl border-2 border-slate-200 bg-white px-6 py-3 text-xs font-bold text-slate-600 transition hover:bg-slate-50"
+										>
+											취소
+										</a>
+										<button
+											type="button"
+											class="inline-flex items-center gap-2 rounded-2xl bg-blue-600 px-8 py-3 text-sm font-black text-white shadow-sm transition hover:bg-blue-700 disabled:opacity-50"
+											onclick={handleSave}
+											disabled={isLoading}
+										>
+											{#if isLoading}
+												<span class="loading loading-xs loading-spinner"></span>
+												<span>저장 중...</span>
+											{:else}
+												<Icon icon="ph:floppy-disk-back-bold" class="h-4 w-4" />
+												<span>{mode === 'write' ? '게시글 등록' : '수정사항 저장'}</span>
+											{/if}
+										</button>
+									</div>
 								</div>
 							</div>
 						</div>
-					</div>
+					{/if}
 				{/if}
 			</main>
 		{/if}

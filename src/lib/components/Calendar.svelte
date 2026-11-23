@@ -890,7 +890,7 @@
 							>
 								{#if bg.isStart || cell.dayOfWeek === 0}
 									<div
-										class="absolute {bg.splitHalf ? (bg.slot === 1 ? 'bottom-1 left-1 right-1' : 'top-1 right-1 left-8 sm:left-10') : 'bottom-1.5 left-1.5 right-1.5'} inline-flex items-center gap-1 sm:gap-1.5 bg-transparent px-1 py-0.5"
+										class="absolute {bg.splitHalf ? (bg.slot === 1 ? (dayFooter ? 'bottom-5 sm:bottom-6 left-1 right-1' : 'bottom-1 left-1 right-1') : 'top-1 right-1 left-8 sm:left-10') : dayFooter ? 'bottom-5 sm:bottom-6 left-1.5 right-1.5' : 'bottom-1.5 left-1.5 right-1.5'} inline-flex items-center gap-1 sm:gap-1.5 bg-transparent px-1 py-0.5"
 										style={bg.event.color ? `color: ${bg.event.color};` : ''}
 									>
 										<span class="relative flex h-4 w-4 sm:h-5 sm:w-5 shrink-0 items-center justify-center">

@@ -15,6 +15,7 @@
 		SurveyVehicleContext
 	} from '$lib/api/survey';
 	import { publishAssets, uploadFiles } from '$lib/services/mediaService';
+	import { filterTargetVehicles } from '$lib/services/surveyAdminService';
 	import { getSecureMediaUrl } from '$lib/config/media';
 	import PersonalMediaPickerModal from '$lib/components/PersonalMediaPickerModal.svelte';
 	import SafeHtml from '$lib/components/SafeHtml.svelte';
@@ -27,22 +28,25 @@
 	interface Props {
 		campaign: SurveyCampaign;
 		vehicleContext?: SurveyVehicleContext | null;
+		selectedVehicle?: string;
 		sourceAppId?: string;
 		sourceRefId?: string | null;
 		compact?: boolean;
+		previewMode?: boolean;
 		onSubmitted?: (resp: SurveyResponseItem) => void;
 	}
 
 	let {
 		campaign,
 		vehicleContext = null,
+		selectedVehicle = $bindable(''),
 		sourceAppId = 'survey',
 		sourceRefId = null,
 		compact = false,
+		previewMode = false,
 		onSubmitted
 	}: Props = $props();
 
-	let selectedVehicle = $state('');
 	let answers = $state<Record<string, any>>({});
 	let saving = $state(false);
 	let uploadingKey = $state<string | null>(null);
@@ -50,8 +54,14 @@
 	let showPersonalPicker = $state(false);
 	let lastSubmitted = $state<SurveyResponseItem | null>(null);
 
-	const myResponses = $derived(campaign.my_responses || (campaign.my_response ? [campaign.my_response] : []));
-	const isEditable = $derived(campaign.status === 'OPEN');
+	const availableVehicles = $derived(
+		filterTargetVehicles(vehicleContext?.vehicles || [], campaign?.options?.vehicle_target)
+	);
+
+	const myResponses = $derived(
+		campaign.my_responses || (campaign.my_response ? [campaign.my_response] : [])
+	);
+	const isEditable = $derived(previewMode || campaign.status === 'OPEN');
 
 	/** 초기값 및 기존 제출 데이터 바인딩 */
 	function hydrateAnswers(existingResp: SurveyResponseItem | null) {
@@ -62,7 +72,8 @@
 			if (!field.key) continue;
 			if (field.type === 'number_group') {
 				const subObj: Record<string, any> = {};
-				const prevSub = existing[field.key] && typeof existing[field.key] === 'object' ? existing[field.key] : {};
+				const prevSub =
+					existing[field.key] && typeof existing[field.key] === 'object' ? existing[field.key] : {};
 				for (const sub of field.fields || []) {
 					subObj[sub.key] = prevSub[sub.key] ?? sub.default ?? 0;
 				}
@@ -71,7 +82,8 @@
 				const prev = existing[field.key];
 				next[field.key] = Array.isArray(prev) ? [...prev] : [];
 			} else if (field.type === 'vehicle') {
-				next[field.key] = existing[field.key] ?? selectedVehicle ?? vehicleContext?.my_default_vehicle ?? '';
+				next[field.key] =
+					existing[field.key] ?? selectedVehicle ?? vehicleContext?.my_default_vehicle ?? '';
 			} else {
 				next[field.key] = existing[field.key] ?? field.default ?? '';
 			}
@@ -85,11 +97,20 @@
 		if (!campaign) return;
 		if (campaign.submit_scope === 'VEHICLE') {
 			const firstResp = myResponses[0] || null;
+			const allowedSet = new Set(availableVehicles.map((v) => v.vehicle_no));
+			const defaultVeh =
+				vehicleContext?.my_default_vehicle && allowedSet.has(vehicleContext.my_default_vehicle)
+					? vehicleContext.my_default_vehicle
+					: '';
 			const initVehicle =
-				selectedVehicle ||
-				firstResp?.vehicle_no ||
-				vehicleContext?.my_default_vehicle ||
-				vehicleContext?.vehicles?.[0]?.vehicle_no ||
+				(selectedVehicle && (allowedSet.size === 0 || allowedSet.has(selectedVehicle))
+					? selectedVehicle
+					: '') ||
+				(firstResp?.vehicle_no && (allowedSet.size === 0 || allowedSet.has(firstResp.vehicle_no))
+					? firstResp.vehicle_no
+					: '') ||
+				defaultVeh ||
+				availableVehicles[0]?.vehicle_no ||
 				'';
 			selectedVehicle = initVehicle;
 			const matched = myResponses.find((r) => r.vehicle_no === initVehicle) || null;
@@ -163,7 +184,9 @@
 		}
 		uploadingKey = field.key;
 		try {
-			const assetIds = pickedAssets.map((a) => Number(a.id)).filter((id) => Number.isFinite(id) && id > 0);
+			const assetIds = pickedAssets
+				.map((a) => Number(a.id))
+				.filter((id) => Number.isFinite(id) && id > 0);
 			const published = await publishAssets<any[]>({
 				asset_ids: assetIds,
 				app_id: 'survey',
@@ -184,6 +207,10 @@
 	}
 
 	async function handleSubmit() {
+		if (previewMode) {
+			toast.info('미리보기 모드입니다. 실제 응답은 저장되지 않습니다.');
+			return;
+		}
 		if (saving || !isEditable) return;
 		if (campaign.submit_scope === 'VEHICLE' && !selectedVehicle.trim()) {
 			toast.warning('조사 대상 차량번호를 선택하거나 입력해 주세요.');
@@ -212,13 +239,19 @@
 	}
 </script>
 
-<div class="space-y-5 {compact ? 'rounded-2xl border border-slate-200 bg-slate-50/70 p-4 sm:p-5' : 'rounded-3xl border-2 border-slate-200 bg-white p-6 shadow-sm sm:p-8'}">
+<div
+	class="space-y-5 {compact
+		? 'rounded-2xl border border-slate-200 bg-slate-50/70 p-4 sm:p-5'
+		: 'rounded-3xl border-2 border-slate-200 bg-white p-6 shadow-sm sm:p-8'}"
+>
 	<!-- 상단 헤더 -->
 	<div class="border-b border-slate-200 pb-4">
 		<div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
 			<div>
 				<div class="flex flex-wrap items-center gap-2">
-					<span class="rounded-full bg-indigo-50 px-2.5 py-0.5 text-[11px] font-black text-indigo-700">
+					<span
+						class="rounded-full bg-indigo-50 px-2.5 py-0.5 text-[11px] font-black text-indigo-700"
+					>
 						{campaign.submit_scope === 'VEHICLE' ? '차량별 조사' : '사원별 조사'}
 					</span>
 					<span
@@ -226,10 +259,16 @@
 							? 'bg-emerald-50 text-emerald-700'
 							: 'bg-slate-200 text-slate-600'}"
 					>
-						{campaign.status === 'OPEN' ? '진행중' : campaign.status === 'CLOSED' ? '마감' : campaign.status}
+						{campaign.status === 'OPEN'
+							? '진행중'
+							: campaign.status === 'CLOSED'
+								? '마감'
+								: campaign.status}
 					</span>
 					{#if lastSubmitted}
-						<span class="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2.5 py-0.5 text-[11px] font-black text-blue-700">
+						<span
+							class="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2.5 py-0.5 text-[11px] font-black text-blue-700"
+						>
 							<Icon icon="solar:check-circle-bold" class="text-xs" />
 							제출됨 ({lastSubmitted.updated_at})
 						</span>
@@ -240,8 +279,12 @@
 
 			{#if campaign.due_at}
 				<div class="shrink-0 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-right">
-					<div class="text-[10px] font-black tracking-wider text-amber-600 uppercase">마감 일시</div>
-					<div class="text-xs font-black text-amber-900">{campaign.due_at.replace('T', ' ').slice(0, 16)}</div>
+					<div class="text-[10px] font-black tracking-wider text-amber-600 uppercase">
+						마감 일시
+					</div>
+					<div class="text-xs font-black text-amber-900">
+						{campaign.due_at.replace('T', ' ').slice(0, 16)}
+					</div>
 				</div>
 			{/if}
 		</div>
@@ -250,7 +293,7 @@
 			<div class="mt-3 rounded-2xl border border-slate-100 bg-slate-50/70 p-4">
 				<SafeHtml
 					html={campaign.description}
-					class="prose prose-slate prose-sm max-w-none text-slate-700"
+					class="prose prose-sm max-w-none text-slate-700 prose-slate"
 				/>
 			</div>
 		{/if}
@@ -262,11 +305,13 @@
 			<label for="survey-vehicle-select" class="mb-2 block text-xs font-black text-slate-800">
 				대상 차량 선택 <span class="text-rose-500">*</span>
 				{#if myResponses.length > 0}
-					<span class="ml-2 text-[11px] font-bold text-indigo-600">(내 제출 차량: {myResponses.map((r) => r.vehicle_no).join(', ')})</span>
+					<span class="ml-2 text-[11px] font-bold text-indigo-600"
+						>(내 제출 차량: {myResponses.map((r) => r.vehicle_no).join(', ')})</span
+					>
 				{/if}
 			</label>
 			<div class="flex flex-wrap items-center gap-2">
-				{#if vehicleContext?.vehicles?.length}
+				{#if availableVehicles.length}
 					<select
 						id="survey-vehicle-select"
 						value={selectedVehicle}
@@ -274,9 +319,11 @@
 						class="rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-sm font-bold text-slate-800 focus:border-indigo-500 focus:outline-none"
 					>
 						<option value="">-- 차량을 선택하세요 --</option>
-						{#each vehicleContext.vehicles as v}
+						{#each availableVehicles as v}
 							<option value={v.vehicle_no}>
-								{v.vehicle_no}호 ({v.route}) {myResponses.some((r) => r.vehicle_no === v.vehicle_no) ? '✅' : ''}
+								{v.vehicle_no}호 ({v.route}) {myResponses.some((r) => r.vehicle_no === v.vehicle_no)
+									? '✅'
+									: ''}
 							</option>
 						{/each}
 					</select>
@@ -297,7 +344,9 @@
 	<!-- 동적 질문 렌더링 -->
 	<div class="space-y-4">
 		{#each campaign.form_schema || [] as field, idx}
-			<div class="rounded-2xl border border-slate-200 bg-white p-4 transition hover:border-slate-300">
+			<div
+				class="rounded-2xl border border-slate-200 bg-white p-4 transition hover:border-slate-300"
+			>
 				<div class="mb-2.5 flex items-center justify-between gap-2">
 					<span class="text-sm font-black text-slate-900">
 						{idx + 1}. {field.label}
@@ -306,7 +355,9 @@
 						{/if}
 					</span>
 					{#if field.issue_values?.length}
-						<span class="rounded-md bg-rose-50 px-2 py-0.5 text-[10px] font-bold text-rose-600">이상 체크 항목 포함</span>
+						<span class="rounded-md bg-rose-50 px-2 py-0.5 text-[10px] font-bold text-rose-600"
+							>이상 체크 항목 포함</span
+						>
 					{/if}
 				</div>
 
@@ -341,7 +392,9 @@
 				{:else if field.type === 'number_group'}
 					<div class="flex flex-wrap gap-3">
 						{#each field.fields || [] as sub}
-							<div class="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+							<div
+								class="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2"
+							>
 								<span class="text-xs font-black text-slate-700">{sub.label}</span>
 								<input
 									type="number"
@@ -382,7 +435,8 @@
 				{:else if field.type === 'checkbox'}
 					<div class="flex flex-wrap gap-2">
 						{#each field.options || [] as opt}
-							{@const checked = Array.isArray(answers[field.key]) && answers[field.key].includes(opt)}
+							{@const checked =
+								Array.isArray(answers[field.key]) && answers[field.key].includes(opt)}
 							<button
 								type="button"
 								disabled={!isEditable}
@@ -391,7 +445,10 @@
 									? 'border-indigo-600 bg-indigo-50 text-indigo-700'
 									: 'border-slate-200 bg-white text-slate-700 hover:border-slate-300'}"
 							>
-								<Icon icon={checked ? 'solar:check-square-bold' : 'solar:stop-outline'} class="text-sm" />
+								<Icon
+									icon={checked ? 'solar:check-square-bold' : 'solar:stop-outline'}
+									class="text-sm"
+								/>
 								{opt}
 							</button>
 						{/each}
@@ -439,9 +496,13 @@
 					<div class="space-y-3">
 						{#if isEditable}
 							<div class="flex flex-wrap items-center gap-2">
-								<label class="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-dashed border-indigo-300 bg-indigo-50/60 px-4 py-2.5 text-xs font-black text-indigo-700 transition hover:bg-indigo-100">
+								<label
+									class="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-dashed border-indigo-300 bg-indigo-50/60 px-4 py-2.5 text-xs font-black text-indigo-700 transition hover:bg-indigo-100"
+								>
 									<Icon icon="solar:camera-add-bold-duotone" class="text-base" />
-									<span>{uploadingKey === field.key ? '업로드 중...' : '사진 선택 / 촬영 첨부'}</span>
+									<span
+										>{uploadingKey === field.key ? '업로드 중...' : '사진 선택 / 촬영 첨부'}</span
+									>
 									<input
 										type="file"
 										accept="image/*"
@@ -468,7 +529,9 @@
 						{#if Array.isArray(answers[field.key]) && answers[field.key].length > 0}
 							<div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
 								{#each answers[field.key] as imgUrl, imgIdx}
-									<div class="group relative overflow-hidden rounded-xl border border-slate-200 bg-slate-100">
+									<div
+										class="group relative overflow-hidden rounded-xl border border-slate-200 bg-slate-100"
+									>
 										<img
 											src={getSecureMediaUrl(PUBLIC_SERVER_URL, imgUrl)}
 											alt="첨부사진 {imgIdx + 1}"
@@ -495,8 +558,20 @@
 	</div>
 
 	<!-- 하단 제출 버튼 -->
-	<div class="flex items-center justify-end gap-3 border-t border-slate-200 pt-4">
-		{#if !isEditable}
+	<div class="flex flex-wrap items-center justify-end gap-3 border-t border-slate-200 pt-4">
+		{#if previewMode}
+			<span class="mr-auto text-xs font-bold text-indigo-600">
+				미리보기 모드입니다. 실제 사용자 화면과 동일하게 동작을 테스트할 수 있습니다.
+			</span>
+			<button
+				type="button"
+				onclick={handleSubmit}
+				class="inline-flex items-center gap-2 rounded-xl border border-indigo-300 bg-indigo-50 px-5 py-2.5 text-xs font-black text-indigo-700 transition hover:bg-indigo-100"
+			>
+				<Icon icon="solar:eye-bold" class="text-base" />
+				<span>제출 테스트 (저장 안 됨)</span>
+			</button>
+		{:else if !isEditable}
 			<span class="text-xs font-bold text-slate-500">마감된 조사는 열람만 가능합니다.</span>
 		{:else}
 			<button

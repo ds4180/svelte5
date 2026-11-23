@@ -52,6 +52,43 @@ export interface SurveyResponseItem {
 	updated_at: string;
 }
 
+export type VehicleTargetMode = 'ALL' | 'ROUTE' | 'VEHICLE' | 'RANGE';
+
+export interface VehicleTargetConfig {
+	mode: VehicleTargetMode;
+	routes: string[];
+	vehicle_nos: string[];
+	range_start?: string;
+	range_end?: string;
+}
+
+export interface SurveyTargetSubmitter {
+	response_id: number;
+	user_id: number | null;
+	name: string;
+	group: string;
+	submitted_at: string | null;
+	has_issue: boolean;
+}
+
+export interface SurveyTargetStatusItem {
+	target_key: string;
+	label: string;
+	sub_label?: string;
+	is_submitted: boolean;
+	has_issue: boolean;
+	submitters: SurveyTargetSubmitter[];
+}
+
+export interface SurveyTargetStatus {
+	target_scope: 'USER' | 'VEHICLE';
+	target_count: number;
+	completed_count: number;
+	missing_count: number;
+	response_rate: number;
+	items: SurveyTargetStatusItem[];
+}
+
 export interface SurveyCampaign {
 	id: number;
 	code: string;
@@ -76,16 +113,20 @@ export interface SurveyCampaign {
 	issue_count?: number;
 	my_response?: SurveyResponseItem | null;
 	my_responses?: SurveyResponseItem[];
+	target_status?: SurveyTargetStatus;
 }
 
 export interface SurveyVehicleContext {
 	vehicles: Array<{ vehicle_no: string; route: string }>;
+	routes?: string[];
 	my_default_vehicle: string | null;
 }
 
 // ============================================================================
 // 1. 사용자 / 서비스앱 API (/api/v1/survey)
 // ============================================================================
+export const getSurveyVehicles = () =>
+	fastApi<SurveyVehicleContext>('GET', '/api/v1/survey/vehicles');
 export const getMySurveys = (includeClosed = true) =>
 	fastApi<{ campaigns: SurveyCampaign[]; vehicle_context: SurveyVehicleContext }>(
 		'GET',
@@ -227,4 +268,42 @@ export const adminDeleteSurveyTemplate = (templateId: string) =>
 	fastApi<{ message: string }>(
 		'DELETE',
 		`/api/v1/admin/survey/templates/${encodeURIComponent(templateId)}`
+	);
+
+export type TargetConflictMode =
+	'FIRST_COME_OWNER' | 'FIRST_COME_SHARED' | 'MULTI_ADMIN_PICK' | 'MULTI_UNION_RESOLVE';
+
+export interface SurveySettings {
+	default_category: 'VEHICLE' | 'SAFETY' | 'HR' | 'GENERAL' | string;
+	default_submit_scope: 'USER' | 'VEHICLE';
+	default_allow_edit: boolean;
+	default_push_on_open: boolean;
+	default_max_photos: number;
+	allow_untargeted_admin_submit: boolean;
+	target_conflict_mode: TargetConflictMode;
+}
+
+export const adminGetSurveySettings = () =>
+	fastApi<{ settings: SurveySettings }>('GET', '/api/v1/admin/survey/settings');
+
+export const adminUpdateSurveySettings = (payload: SurveySettings) =>
+	fastApi<{ message: string; settings: SurveySettings }>(
+		'PUT',
+		'/api/v1/admin/survey/settings',
+		payload
+	);
+
+export const adminResolveSurveyVehicle = (
+	campaignId: number | string,
+	payload: {
+		vehicle_no: string;
+		mode: 'PICK' | 'UNION' | 'RESET';
+		selected_response_id?: number;
+		resolved_answers?: Record<string, any>;
+	}
+) =>
+	fastApi<{ message: string; resolution: any }>(
+		'POST',
+		`/api/v1/admin/survey/campaigns/${campaignId}/resolve-vehicle`,
+		payload
 	);
