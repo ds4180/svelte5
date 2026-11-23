@@ -282,8 +282,8 @@
 					dispatchRows = [];
 					showLockScreen = true;
 					errorMessage = confirmDDayAlwaysOpen
-						? '오늘 등록된 배차 정보가 없습니다.'
-						: '오늘 배차가 아직 확정되지 않았습니다.';
+						? `${formatFullDate(selectedDate)} 등록된 배차 정보가 없습니다.`
+						: `${formatFullDate(selectedDate)} 배차는 아직 공개 전입니다.`;
 				} else {
 					dispatchRows = visibleRows;
 				}
@@ -294,9 +294,7 @@
 				if (visibleRows.length === 0) {
 					dispatchRows = [];
 					showLockScreen = true;
-					errorMessage = confirmD1RequireAnnounced
-						? '명일 배차가 아직 배포되지 않았습니다.'
-						: '명일 배차가 아직 확정되지 않았습니다.';
+					errorMessage = `${formatFullDate(selectedDate)} 명일 배차는 아직 공개 전입니다.`;
 				} else {
 					dispatchRows = visibleRows;
 				}
@@ -307,7 +305,7 @@
 				if (visibleRows.length === 0) {
 					dispatchRows = [];
 					showLockScreen = true;
-					errorMessage = '해당 날짜에 등록된 배차 예고가 없습니다.';
+					errorMessage = `${formatFullDate(selectedDate)} 배차 예고는 아직 공개 전입니다.`;
 				} else {
 					dispatchRows = visibleRows;
 				}
@@ -598,20 +596,32 @@
 				>
 					<Icon icon="lucide:lock" class="h-8 w-8 animate-bounce" />
 				</div>
+				<div
+					class="mb-3 inline-flex items-center gap-1.5 rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-[11px] font-black text-indigo-700"
+				>
+					<Icon icon="lucide:calendar" class="h-3.5 w-3.5" />
+					<span>{formatFullDate(selectedDate)}</span>
+				</div>
 				<h2 class="mb-1 text-base font-black text-slate-800">
 					{#if activeTab === 'confirm'}
-						{currentDiffDays === 1 ? '명일 배차 배포 대기 중' : '오늘 배차 정보 없음'}
+						{currentDiffDays === 1
+							? '명일 배차 공개 전'
+							: confirmDDayAlwaysOpen
+								? '배차 정보 없음'
+								: '오늘 배차 공개 전'}
 					{:else}
-						{previewWindow.is_paused ? '배차 예고 일시 정지' : '배차표 비공개 대상일'}
+						{previewWindow.is_paused ? '배차 예고 일시 정지' : '배차 예고 공개 전'}
 					{/if}
 				</h2>
-				<p class="mx-auto mb-4 max-w-sm text-xs leading-relaxed text-slate-500">{errorMessage}</p>
+				<p class="mx-auto mb-4 max-w-sm text-xs leading-relaxed font-bold text-slate-600">
+					{errorMessage}
+				</p>
 				{#if activeTab === 'confirm'}
 					{#if currentDiffDays === 1}
 						<div
 							class="inline-block rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-[11px] font-bold text-emerald-700"
 						>
-							관리자 확정 및 배포 완료 시 이곳에서 바로 확인할 수 있습니다.
+							{formatFullDate(selectedDate)} 배차는 관리자 확정·배포 완료 후 공개됩니다.
 						</div>
 					{/if}
 				{:else if previewWindow.reason}

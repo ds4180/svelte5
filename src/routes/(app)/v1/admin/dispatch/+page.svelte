@@ -92,9 +92,25 @@
 		dispatchRows.some((row) => row.status === 'CONFIRMED' || row.status === 'ANNOUNCED')
 	);
 	const isDMinus1 = $derived(selectedDateKey === tomorrowDateKey);
-	const isD1Announced = $derived(dispatchRows.some((row) => row.status === 'ANNOUNCED'));
+	const statusCounts = $derived.by(() => {
+		let announced = 0;
+		let confirmed = 0;
+		let draft = 0;
+		for (const row of dispatchRows) {
+			if (row.status === 'ANNOUNCED') announced += 1;
+			else if (row.status === 'CONFIRMED') confirmed += 1;
+			else draft += 1;
+		}
+		return { announced, confirmed, draft, total: dispatchRows.length };
+	});
+	const isD1Announced = $derived(
+		statusCounts.total > 0 && statusCounts.announced === statusCounts.total
+	);
+	const isD1PartialAnnounced = $derived(
+		statusCounts.announced > 0 && statusCounts.announced < statusCounts.total
+	);
 	const isD1Confirmed = $derived(
-		!isD1Announced && dispatchRows.some((row) => row.status === 'CONFIRMED')
+		!isD1Announced && !isD1PartialAnnounced && statusCounts.confirmed > 0
 	);
 
 	function setDate(date: Date) {
@@ -422,11 +438,14 @@
 									: 'bg-slate-400'}"
 						></span>
 						{#if isD1Announced}
-							명일 배차 배포 완료
+							명일 배차 배포 완료 ({statusCounts.announced}/{statusCounts.total})
+						{:else if isD1PartialAnnounced}
+							일부 배포 ({statusCounts.announced}/{statusCounts.total})
 						{:else if isD1Confirmed}
-							명일 배차 확정 ({dispatchSettings.auto_announce_time || '17:00'} 자동 배포)
+							명일 배차 확정 ({statusCounts.confirmed}/{statusCounts.total} · {dispatchSettings.auto_announce_time ||
+								'17:00'} 자동 배포)
 						{:else}
-							명일 배차 미확정
+							명일 배차 미확정 ({statusCounts.draft}/{statusCounts.total})
 						{/if}
 					</span>
 
