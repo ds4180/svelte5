@@ -447,16 +447,22 @@
 	}
 
 	async function handleUnpublishD1() {
-		if (announcingNow || !selectedRoute) return;
+		if (announcingNow) return;
 		if (!confirm('명일(D-1) 배차 공개를 취소하고 비공개(공개 전) 상태로 되돌릴까요?')) {
 			return;
 		}
 		announcingNow = true;
 		try {
-			const res = await dispatchApi.adminSetDispatchPublishStatus(selectedDateKey, false);
-			selectedDatePublished = false;
+			const res = await dispatchApi.adminSetDispatchPublishStatus(tomorrowDateKey, false);
+			if (isDMinus1) selectedDatePublished = false;
+			tomorrowSummary = {
+				...tomorrowSummary,
+				published: false,
+				confirmed: false,
+				confirmedCount: 0
+			};
 			toast.success(res.message || '명일 배차가 비공개 처리되었습니다.');
-			await syncData(selectedDateKey, selectedRoute.id);
+			await syncData(selectedDateKey, selectedRoute?.id ?? null);
 		} catch (err) {
 			toast.error('공개 취소 실패: ' + formatApiError(err, '오류'));
 		} finally {
