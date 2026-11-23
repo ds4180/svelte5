@@ -529,7 +529,7 @@
 						class="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-4 py-1.5 text-sm font-black text-emerald-700"
 					>
 						<span class="h-2.5 w-2.5 rounded-full bg-emerald-500"></span>
-						{selectedFullDate} · 예고 구간 설정에 따라 자동 공개
+						{selectedFullDate} · 자동 공개 중
 					</span>
 				{:else}
 					<span
