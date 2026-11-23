@@ -812,27 +812,31 @@
 				<button
 					type="button"
 					class="btn ml-1 rounded-xl border-2 border-slate-200 bg-white px-3.5 font-black text-slate-800 btn-sm hover:bg-slate-50"
-					onclick={() => saveDispatch('DRAFT')}
+					onclick={() =>
+						saveDispatch(
+							isDMinus1 && selectedDatePublished
+								? 'ANNOUNCED'
+								: isDMinus1 && isD1Confirmed
+									? 'CONFIRMED'
+									: 'DRAFT'
+						)}
 				>
 					<Icon icon="solar:diskette-bold" class="h-3.5 w-3.5" />
 					<span>저장하기</span>
 				</button>
-				{#if isDMinus1}
+				{#if isDMinus1 && !selectedDatePublished}
 					<button
 						type="button"
-						class="btn rounded-xl border-none px-3.5 font-black text-white btn-sm {isD1Confirmed ||
-						isD1Announced
+						class="btn rounded-xl border-none px-3.5 font-black text-white btn-sm {isD1Confirmed
 							? 'bg-rose-600 hover:bg-rose-700'
 							: 'bg-blue-600 hover:bg-blue-700'}"
-						onclick={() => saveDispatch(isD1Confirmed || isD1Announced ? 'DRAFT' : 'CONFIRMED')}
+						onclick={() => saveDispatch(isD1Confirmed ? 'DRAFT' : 'CONFIRMED')}
 					>
 						<Icon
-							icon={isD1Confirmed || isD1Announced
-								? 'solar:close-circle-bold'
-								: 'solar:check-circle-bold'}
+							icon={isD1Confirmed ? 'solar:close-circle-bold' : 'solar:check-circle-bold'}
 							class="h-3.5 w-3.5"
 						/>
-						<span>{isD1Confirmed || isD1Announced ? '확정 취소' : '배차 확정'}</span>
+						<span>{isD1Confirmed ? '확정 취소' : '배차 확정'}</span>
 					</button>
 				{/if}
 			</div>
@@ -944,21 +948,29 @@
 					<button
 						type="button"
 						class="btn w-full justify-center rounded-xl border-2 border-slate-200 bg-white px-5 font-black text-slate-800 hover:bg-slate-50 sm:w-auto"
-						onclick={() => saveDispatch('DRAFT')}
+						onclick={() =>
+							saveDispatch(
+								isDMinus1 && selectedDatePublished
+									? 'ANNOUNCED'
+									: isDMinus1 && isD1Confirmed
+										? 'CONFIRMED'
+										: 'DRAFT'
+							)}
 					>
 						저장하기
 					</button>
 					{#if isDMinus1}
-						<button
-							type="button"
-							class="btn w-full justify-center rounded-xl border-none px-5 font-black text-white shadow-sm sm:w-auto {isD1Confirmed ||
-							isD1Announced
-								? 'bg-rose-600 hover:bg-rose-700'
-								: 'bg-blue-600 hover:bg-blue-700'}"
-							onclick={() => saveDispatch(isD1Confirmed || isD1Announced ? 'DRAFT' : 'CONFIRMED')}
-						>
-							{isD1Confirmed || isD1Announced ? '확정 취소' : '배차 확정'}
-						</button>
+						{#if !selectedDatePublished}
+							<button
+								type="button"
+								class="btn w-full justify-center rounded-xl border-none px-5 font-black text-white shadow-sm sm:w-auto {isD1Confirmed
+									? 'bg-rose-600 hover:bg-rose-700'
+									: 'bg-blue-600 hover:bg-blue-700'}"
+								onclick={() => saveDispatch(isD1Confirmed ? 'DRAFT' : 'CONFIRMED')}
+							>
+								{isD1Confirmed ? '확정 취소' : '배차 확정'}
+							</button>
+						{/if}
 						{#if selectedDatePublished}
 							<button
 								type="button"
