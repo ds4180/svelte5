@@ -198,6 +198,21 @@ export const adminAnnounceDispatchNow = () =>
 		push_sent: boolean;
 	}>('POST', '/api/v1/admin/dispatch/announce-now');
 
+export const adminGetDispatchPublishStatus = (targetDate: string) =>
+	fastApi<{
+		target_date: string;
+		published: boolean;
+		meta?: { published_at?: string; mode?: string } | null;
+	}>('GET', `/api/v1/admin/dispatch/publish-status?target_date=${encodeURIComponent(targetDate)}`);
+
+export const adminSetDispatchPublishStatus = (targetDate: string, published: boolean) =>
+	fastApi<{
+		message: string;
+		target_date: string;
+		published: boolean;
+		meta?: { published_at?: string; mode?: string } | null;
+	}>('POST', '/api/v1/admin/dispatch/publish-status', { target_date: targetDate, published });
+
 export const customGetDispatchSettings = () =>
 	fastApi<{
 		preview_window: DispatchPreviewWindow;

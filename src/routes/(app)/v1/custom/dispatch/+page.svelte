@@ -274,41 +274,20 @@
 				customFetchFn: (d, id) => customGetDailyDispatch(d, id)
 			});
 			if (token !== fetchToken) return;
-			if (activeTab === 'confirm' && currentDiffDays === 0) {
-				const visibleRows = confirmDDayAlwaysOpen
-					? combined
-					: combined.filter((r) => r.status === 'CONFIRMED' || r.status === 'ANNOUNCED');
-				if (visibleRows.length === 0) {
-					dispatchRows = [];
-					showLockScreen = true;
+			if (combined.length === 0) {
+				dispatchRows = [];
+				showLockScreen = true;
+				if (activeTab === 'confirm' && currentDiffDays === 0) {
 					errorMessage = confirmDDayAlwaysOpen
 						? `${formatFullDate(selectedDate)} 등록된 배차 정보가 없습니다.`
 						: `${formatFullDate(selectedDate)} 배차는 아직 공개 전입니다.`;
-				} else {
-					dispatchRows = visibleRows;
-				}
-			} else if (activeTab === 'confirm' && currentDiffDays === 1) {
-				const visibleRows = confirmD1RequireAnnounced
-					? combined.filter((r) => r.status === 'ANNOUNCED')
-					: combined.filter((r) => r.status === 'CONFIRMED' || r.status === 'ANNOUNCED');
-				if (visibleRows.length === 0) {
-					dispatchRows = [];
-					showLockScreen = true;
+				} else if (activeTab === 'confirm' && currentDiffDays === 1) {
 					errorMessage = `${formatFullDate(selectedDate)} 명일 배차는 아직 공개 전입니다.`;
 				} else {
-					dispatchRows = visibleRows;
+					errorMessage = `${formatFullDate(selectedDate)} 배차 예고는 아직 공개 전입니다.`;
 				}
 			} else {
-				const visibleRows = previewAllowDraft
-					? combined
-					: combined.filter((r) => r.status === 'CONFIRMED' || r.status === 'ANNOUNCED');
-				if (visibleRows.length === 0) {
-					dispatchRows = [];
-					showLockScreen = true;
-					errorMessage = `${formatFullDate(selectedDate)} 배차 예고는 아직 공개 전입니다.`;
-				} else {
-					dispatchRows = visibleRows;
-				}
+				dispatchRows = combined;
 			}
 		} catch (err) {
 			if (token !== fetchToken) return;
