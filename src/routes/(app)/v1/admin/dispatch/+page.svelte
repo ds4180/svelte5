@@ -88,8 +88,13 @@
 	const assignRate = $derived(
 		dispatchRows.length > 0 ? Math.round((assignedDriversCount / dispatchRows.length) * 100) : 0
 	);
-	const isPreviewPublished = $derived(
-		dispatchRows.some((row) => row.status === 'CONFIRMED' || row.status === 'ANNOUNCED')
+	const isPreviewDatePublic = $derived(
+		Boolean(
+			dispatchSettings.preview_enabled &&
+			previewWindow &&
+			!previewWindow.is_paused &&
+			previewWindow.allowed_dates?.includes(selectedDateKey)
+		)
 	);
 	const isDMinus1 = $derived(selectedDateKey === tomorrowDateKey);
 	const statusCounts = $derived.by(() => {
@@ -370,6 +375,30 @@
 		}
 	}
 
+	let togglingPreview = $state(false);
+	async function toggleGlobalPreviewEnabled() {
+		if (togglingPreview) return;
+		togglingPreview = true;
+		try {
+			const nextEnabled = !dispatchSettings.preview_enabled;
+			const res = await dispatchApi.adminUpdateDispatchSettings({
+				...dispatchSettings,
+				preview_enabled: nextEnabled
+			});
+			dispatchSettings = res.settings;
+			previewWindow = res.preview_window;
+			toast.success(
+				nextEnabled
+					? '배차 예고가 전역 공개(표시) 상태로 전환되었습니다.'
+					: '배차 예고가 전역 숨김(일시정지) 상태로 전환되었습니다.'
+			);
+		} catch (err) {
+			toast.error('배차 예고 표시 설정 변경 실패: ' + formatApiError(err, '오류'));
+		} finally {
+			togglingPreview = false;
+		}
+	}
+
 	async function handleUnpublishD1() {
 		if (announcingNow || !selectedRoute) return;
 		if (!confirm('명일(D-1) 배차 공개를 취소하고 비공개(공개 전) 상태로 되돌릴까요?')) {
@@ -443,15 +472,6 @@
 
 		<div class="flex max-w-full min-w-0 flex-wrap items-center gap-2.5">
 			{#if selectedRoute && activeTab === 'canvas'}
-				<button
-					type="button"
-					class="inline-flex items-center gap-1.5 rounded-xl bg-slate-900 px-4 py-2 text-xs font-black text-white shadow-sm transition hover:bg-slate-800 active:scale-95"
-					onclick={() => saveDispatch('DRAFT')}
-				>
-					<Icon icon="solar:diskette-bold" class="text-base" />
-					<span>배차 저장</span>
-				</button>
-
 				{#if isDMinus1}
 					<span
 						class="inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-black {selectedDatePublished
@@ -491,17 +511,45 @@
 							<span>{announcingNow ? '공개 중...' : '지금 공개(배포)'}</span>
 						</button>
 					{/if}
-				{:else}
+				{:else if selectedDateKey === formatDateISO(today)}
 					<span
 						class="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-100 px-3 py-1 text-[11px] font-black text-slate-600"
 					>
 						<span class="h-2 w-2 rounded-full bg-indigo-500"></span>
-						{selectedDateKey === formatDateISO(today)
-							? '금일 배차 (저장 즉시 반영)'
-							: '예고 구간 설정에 따라 자동 공개'}
+						{selectedFullDate} · 금일 배차 (저장 즉시 반영)
+					</span>
+				{:else if isPreviewDatePublic}
+					<span
+						class="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[11px] font-black text-emerald-700"
+					>
+						<span class="h-2 w-2 rounded-full bg-emerald-500"></span>
+						{selectedFullDate} · 예고 구간 설정에 따라 자동 공개
+					</span>
+				{:else}
+					<span
+						class="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-100 px-3 py-1 text-[11px] font-black text-slate-500"
+					>
+						<span class="h-2 w-2 rounded-full bg-slate-400"></span>
+						{selectedFullDate} · 비공개 ({!dispatchSettings.preview_enabled
+							? '배차 예고 숨김 중'
+							: '예고 구간 외'})
 					</span>
 				{/if}
 			{/if}
+			<button
+				type="button"
+				disabled={togglingPreview}
+				onclick={toggleGlobalPreviewEnabled}
+				class="inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-xs font-black text-white shadow-sm transition active:scale-95 disabled:opacity-50 {dispatchSettings.preview_enabled
+					? 'bg-amber-600 hover:bg-amber-700'
+					: 'bg-indigo-600 hover:bg-indigo-700'}"
+			>
+				<Icon
+					icon={dispatchSettings.preview_enabled ? 'solar:eye-closed-bold' : 'solar:eye-bold'}
+					class="text-base"
+				/>
+				<span>{dispatchSettings.preview_enabled ? '배차 예고 숨기기' : '배차 예고 표시하기'}</span>
+			</button>
 			<button
 				type="button"
 				onclick={() => syncData(selectedDateKey, selectedRoute?.id ?? null)}
@@ -678,6 +726,14 @@
 				<span class="rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-black text-indigo-700">
 					{getRelativeLabel(selectedDate)}
 				</span>
+				<button
+					type="button"
+					class="btn ml-1 rounded-xl border-2 border-slate-200 bg-white px-3.5 font-black text-slate-800 btn-sm hover:bg-slate-50"
+					onclick={() => saveDispatch('DRAFT')}
+				>
+					<Icon icon="solar:diskette-bold" class="h-3.5 w-3.5" />
+					<span>저장하기</span>
+				</button>
 			</div>
 
 			<div class="flex items-center gap-2">
@@ -792,41 +848,25 @@
 						저장하기
 					</button>
 					{#if isDMinus1}
-						{#if isD1Confirmed || isD1Announced}
+						{#if selectedDatePublished}
 							<button
 								type="button"
-								class="btn w-full justify-center rounded-xl border-2 border-rose-200 bg-rose-50 px-5 font-black text-rose-700 hover:bg-rose-100 sm:w-auto"
-								onclick={() => saveDispatch('DRAFT')}
+								disabled={announcingNow}
+								class="btn w-full justify-center rounded-xl border-2 border-rose-200 bg-rose-50 px-5 font-black text-rose-700 hover:bg-rose-100 disabled:opacity-50 sm:w-auto"
+								onclick={handleUnpublishD1}
 							>
-								확정 취소
+								공개 취소
 							</button>
 						{:else}
 							<button
 								type="button"
-								class="btn w-full justify-center rounded-xl border-none bg-blue-600 px-6 font-black text-white shadow-lg hover:bg-blue-700 sm:w-auto"
-								onclick={() => saveDispatch('CONFIRMED')}
+								disabled={announcingNow}
+								class="btn w-full justify-center rounded-xl border-none bg-emerald-600 px-6 font-black text-white shadow-lg hover:bg-emerald-700 disabled:opacity-50 sm:w-auto"
+								onclick={handleDeployNowD1}
 							>
-								명일 배차 확정하기
+								{announcingNow ? '공개 중...' : '지금 공개(배포)'}
 							</button>
 						{/if}
-						<button
-							type="button"
-							disabled={announcingNow}
-							class="btn w-full justify-center rounded-xl border-none bg-emerald-600 px-6 font-black text-white shadow-lg hover:bg-emerald-700 disabled:opacity-50 sm:w-auto"
-							onclick={handleDeployNowD1}
-						>
-							{announcingNow ? '배포 중...' : '지금 배포'}
-						</button>
-					{:else}
-						<button
-							type="button"
-							class="btn w-full justify-center rounded-xl border-none px-6 font-black text-white shadow-lg sm:w-auto {isPreviewPublished
-								? 'bg-amber-600 hover:bg-amber-700'
-								: 'bg-slate-900 hover:bg-black'}"
-							onclick={() => saveDispatch(isPreviewPublished ? 'DRAFT' : 'CONFIRMED')}
-						>
-							{isPreviewPublished ? '배차 예고 숨기기' : '배차 예고 표시하기'}
-						</button>
 					{/if}
 				</div>
 			</main>
