@@ -292,6 +292,8 @@
 			if (tmrSource) {
 				tomorrowSummary = {
 					published: Boolean(tmrSource.published),
+					confirmed: Boolean(tmrSource.confirmed),
+					confirmedCount: Number(tmrSource.confirmed_count ?? 0),
 					savedCount: Number(tmrSource.saved_count ?? 0),
 					totalCount: Number(tmrSource.total_count ?? 0)
 				};
@@ -366,26 +368,55 @@
 	}
 
 	let selectedDatePublished = $state(false);
-	let tomorrowSummary = $state<{ published: boolean; savedCount: number; totalCount: number }>({
+	let tomorrowSummary = $state<{
+		published: boolean;
+		confirmed: boolean;
+		confirmedCount: number;
+		savedCount: number;
+		totalCount: number;
+	}>({
 		published: false,
+		confirmed: false,
+		confirmedCount: 0,
 		savedCount: 0,
 		totalCount: 0
 	});
 	let announcingNow = $state(false);
 	async function handleDeployNowD1() {
 		if (announcingNow || !selectedRoute) return;
-		if (!confirm('명일(D-1) 배차를 지금 즉시 공개(배포)하고 기사들에게 알림·푸시를 발송할까요?')) {
+		if (
+			!confirm('명일(D-1) 배차를 저장·확정 후 지금 즉시 공개(배포)하고 알림·푸시를 발송할까요?')
+		) {
 			return;
 		}
 		announcingNow = true;
 		try {
-			await saveDispatch('DRAFT', { silent: true });
+			// 저장하기 -> 배차 확정 -> 배포(공개) 순서 실행
+			await saveDispatch('CONFIRMED', { silent: true });
 			const res = await dispatchApi.adminAnnounceDispatchNow();
 			selectedDatePublished = true;
-			toast.success(res.message || '명일 배차가 즉시 공개(배포)되었습니다.');
+			toast.success(res.message || '명일 배차가 저장·확정 및 공개(배포)되었습니다.');
 			await syncData(selectedDateKey, selectedRoute.id);
 		} catch (err) {
 			toast.error('지금 공개 실패: ' + formatApiError(err, '오류'));
+		} finally {
+			announcingNow = false;
+		}
+	}
+
+	async function handlePublishTomorrowFromCard() {
+		if (announcingNow || !tomorrowSummary.confirmed) return;
+		if (!confirm('확정된 명일(D-1) 배차를 공개(배포)하고 알림·푸시를 발송할까요?')) {
+			return;
+		}
+		announcingNow = true;
+		try {
+			const res = await dispatchApi.adminAnnounceDispatchNow();
+			selectedDatePublished = true;
+			toast.success(res.message || '명일 배차가 공개(배포)되었습니다.');
+			await syncData(selectedDateKey, selectedRoute?.id ?? null);
+		} catch (err) {
+			toast.error('명일 배차 공개 실패: ' + formatApiError(err, '오류'));
 		} finally {
 			announcingNow = false;
 		}
@@ -560,20 +591,6 @@
 			{/if}
 			<button
 				type="button"
-				disabled={togglingPreview}
-				onclick={toggleGlobalPreviewEnabled}
-				class="inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-xs font-black text-white shadow-sm transition active:scale-95 disabled:opacity-50 {dispatchSettings.preview_enabled
-					? 'bg-amber-600 hover:bg-amber-700'
-					: 'bg-indigo-600 hover:bg-indigo-700'}"
-			>
-				<Icon
-					icon={dispatchSettings.preview_enabled ? 'solar:eye-closed-bold' : 'solar:eye-bold'}
-					class="text-base"
-				/>
-				<span>{dispatchSettings.preview_enabled ? '배차 예고 숨기기' : '배차 예고 표시하기'}</span>
-			</button>
-			<button
-				type="button"
 				onclick={() => syncData(selectedDateKey, selectedRoute?.id ?? null)}
 				class="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 active:scale-95"
 			>
@@ -667,42 +684,54 @@
 			</div>
 			<div class="mt-3 flex items-end justify-between gap-2">
 				<div class="space-y-1">
-					<div class="text-lg font-black text-slate-900 sm:text-xl">
-						{#if tomorrowSummary.totalCount > 0 && tomorrowSummary.savedCount >= tomorrowSummary.totalCount}
-							저장 완료
-						{:else if tomorrowSummary.savedCount > 0}
-							일부 저장
-						{:else}
-							미저장
-						{/if}
-						<span class="text-xs font-bold text-slate-500">
-							({tomorrowSummary.savedCount}/{tomorrowSummary.totalCount}회차)
+					<div class="flex flex-wrap items-center gap-1.5 text-sm font-black text-slate-900">
+						<span>
+							{#if tomorrowSummary.totalCount > 0 && tomorrowSummary.savedCount >= tomorrowSummary.totalCount}
+								저장 완료
+							{:else if tomorrowSummary.savedCount > 0}
+								일부 저장
+							{:else}
+								미저장
+							{/if}
+							({tomorrowSummary.savedCount}/{tomorrowSummary.totalCount})
+						</span>
+						<span class="text-slate-300">·</span>
+						<span class={tomorrowSummary.confirmed ? 'text-blue-700' : 'text-slate-500'}>
+							{tomorrowSummary.confirmed
+								? `확정 완료 (${tomorrowSummary.confirmedCount}/${tomorrowSummary.totalCount})`
+								: `미확정 (${tomorrowSummary.confirmedCount}/${tomorrowSummary.totalCount})`}
 						</span>
 					</div>
 					<div class="text-xs font-bold text-slate-500">
 						{tomorrowSummary.published
-							? '확정·배포됨 (기사 열람 가능)'
-							: `미공개 (${dispatchSettings.auto_announce_enabled ? `${dispatchSettings.auto_announce_time || '17:00'} 자동 배포` : '수동 배포'})`}
+							? '공개됨 (기사 열람 가능)'
+							: tomorrowSummary.confirmed
+								? `공개 대기 (${dispatchSettings.auto_announce_enabled ? `${dispatchSettings.auto_announce_time || '17:00'} 자동 배포` : '지금 공개 가능'})`
+								: '명일 배차 확정 후 공개 가능'}
 					</div>
 				</div>
-				{#if isDMinus1}
+				{#if tomorrowSummary.published}
 					<button
 						type="button"
 						disabled={announcingNow}
-						onclick={() => (selectedDatePublished ? handleUnpublishD1() : handleDeployNowD1())}
-						class="shrink-0 rounded-xl px-3.5 py-2 text-xs font-black text-white shadow-sm transition active:scale-95 disabled:opacity-50 {selectedDatePublished
-							? 'bg-rose-600 hover:bg-rose-700'
-							: 'bg-emerald-600 hover:bg-emerald-700'}"
+						onclick={handleUnpublishD1}
+						class="shrink-0 rounded-xl bg-rose-600 px-3.5 py-2 text-xs font-black text-white shadow-sm transition hover:bg-rose-700 active:scale-95 disabled:opacity-50"
 					>
-						{selectedDatePublished ? '공개 취소' : '지금 공개'}
+						공개 취소
 					</button>
 				{:else}
 					<button
 						type="button"
-						onclick={() => setDate(tomorrowObj)}
-						class="shrink-0 rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-black text-slate-700 transition hover:bg-slate-50"
+						disabled={announcingNow || !tomorrowSummary.confirmed}
+						title={tomorrowSummary.confirmed
+							? '확정된 명일 배차를 공개합니다'
+							: '명일 배차를 먼저 확정해야 공개할 수 있습니다'}
+						onclick={handlePublishTomorrowFromCard}
+						class="shrink-0 rounded-xl px-3.5 py-2 text-xs font-black text-white shadow-sm transition active:scale-95 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-500 {tomorrowSummary.confirmed
+							? 'bg-emerald-600 hover:bg-emerald-700'
+							: ''}"
 					>
-						명일 이동
+						{tomorrowSummary.confirmed ? '지금 공개' : '확정 필요'}
 					</button>
 				{/if}
 			</div>
@@ -834,6 +863,24 @@
 					<Icon icon="solar:diskette-bold" class="h-3.5 w-3.5" />
 					<span>저장하기</span>
 				</button>
+				{#if isDMinus1}
+					<button
+						type="button"
+						class="btn rounded-xl border-none px-3.5 font-black text-white btn-sm {isD1Confirmed ||
+						isD1Announced
+							? 'bg-rose-600 hover:bg-rose-700'
+							: 'bg-blue-600 hover:bg-blue-700'}"
+						onclick={() => saveDispatch(isD1Confirmed || isD1Announced ? 'DRAFT' : 'CONFIRMED')}
+					>
+						<Icon
+							icon={isD1Confirmed || isD1Announced
+								? 'solar:close-circle-bold'
+								: 'solar:check-circle-bold'}
+							class="h-3.5 w-3.5"
+						/>
+						<span>{isD1Confirmed || isD1Announced ? '확정 취소' : '배차 확정'}</span>
+					</button>
+				{/if}
 			</div>
 
 			<div class="flex items-center gap-2">
@@ -948,6 +995,16 @@
 						저장하기
 					</button>
 					{#if isDMinus1}
+						<button
+							type="button"
+							class="btn w-full justify-center rounded-xl border-none px-5 font-black text-white shadow-sm sm:w-auto {isD1Confirmed ||
+							isD1Announced
+								? 'bg-rose-600 hover:bg-rose-700'
+								: 'bg-blue-600 hover:bg-blue-700'}"
+							onclick={() => saveDispatch(isD1Confirmed || isD1Announced ? 'DRAFT' : 'CONFIRMED')}
+						>
+							{isD1Confirmed || isD1Announced ? '확정 취소' : '배차 확정'}
+						</button>
 						{#if selectedDatePublished}
 							<button
 								type="button"

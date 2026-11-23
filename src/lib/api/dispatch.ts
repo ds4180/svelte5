@@ -202,6 +202,8 @@ export const adminGetDispatchPublishStatus = (targetDate: string) =>
 	fastApi<{
 		target_date: string;
 		published: boolean;
+		confirmed?: boolean;
+		confirmed_count?: number;
 		meta?: { published_at?: string; mode?: string } | null;
 		saved_count?: number;
 		total_count?: number;
