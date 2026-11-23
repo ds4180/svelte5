@@ -39,6 +39,7 @@
 		route_type: 'REGULAR',
 		start_date: new Date().toISOString().slice(0, 10),
 		vehicle_count: 2,
+		start_turn_seq: 1,
 		is_regular_duty: false
 	});
 
@@ -52,6 +53,7 @@
 		start_date: new Date().toISOString().slice(0, 10),
 		end_date: '',
 		vehicle_count: 2,
+		start_turn_seq: 1,
 		version: '',
 		is_regular_duty: false
 	});
@@ -73,7 +75,9 @@
 		const today = new Date().toISOString().slice(0, 10);
 		return Object.entries(grouped)
 			.map(([name, versions]) => {
-				const sorted = [...versions].sort((a, b) => (a.start_date || '').localeCompare(b.start_date || ''));
+				const sorted = [...versions].sort((a, b) =>
+					(a.start_date || '').localeCompare(b.start_date || '')
+				);
 				const active =
 					sorted.find((v) => v.start_date <= today && (!v.end_date || v.end_date >= today)) ||
 					sorted[sorted.length - 1];
@@ -94,7 +98,10 @@
 	const filteredRoutes = $derived(
 		uniqueRoutes.filter((r) => {
 			if (filterType !== 'ALL' && r.route_type !== filterType) return false;
-			if (routeSearch.trim() && !r.route_name.toLowerCase().includes(routeSearch.trim().toLowerCase())) {
+			if (
+				routeSearch.trim() &&
+				!r.route_name.toLowerCase().includes(routeSearch.trim().toLowerCase())
+			) {
 				return false;
 			}
 			return true;
@@ -115,7 +122,8 @@
 			}
 			if (rosterScopeFilter === 'PAST') return Boolean(v.end_date && v.end_date < today);
 			if (rosterScopeFilter === 'FUTURE') return Boolean(v.start_date > today);
-			if (rosterScopeFilter === 'ACTIVE') return v.start_date <= today && (!v.end_date || v.end_date >= today);
+			if (rosterScopeFilter === 'ACTIVE')
+				return v.start_date <= today && (!v.end_date || v.end_date >= today);
 			return true;
 		});
 	});
@@ -169,7 +177,10 @@
 			]);
 			routeMasters = Array.isArray(masters) ? masters : [];
 			allSegments = Array.isArray(segs) ? segs : [];
-			if (routeMasters.length > 0 && (!selectedRouteName || !routeMasters.some((m) => m.route_name === selectedRouteName))) {
+			if (
+				routeMasters.length > 0 &&
+				(!selectedRouteName || !routeMasters.some((m) => m.route_name === selectedRouteName))
+			) {
 				selectedRouteName = routeMasters[0].route_name;
 			}
 		} catch (e) {
@@ -183,7 +194,9 @@
 
 	/** @param {string} val */
 	function format24hTime(val) {
-		const digits = String(val || '').replace(/\D/g, '').slice(0, 4);
+		const digits = String(val || '')
+			.replace(/\D/g, '')
+			.slice(0, 4);
 		if (digits.length <= 2) return digits;
 		return `${digits.slice(0, 2)}:${digits.slice(2)}`;
 	}
@@ -198,6 +211,7 @@
 				route_type: routeObj.route_type || 'REGULAR',
 				start_date: routeObj.active_version?.start_date || new Date().toISOString().slice(0, 10),
 				vehicle_count: routeObj.active_version?.vehicle_count || 2,
+				start_turn_seq: routeObj.active_version?.start_turn_seq || 1,
 				is_regular_duty: Boolean(routeObj.is_regular_duty)
 			};
 		} else {
@@ -207,6 +221,7 @@
 				route_type: 'REGULAR',
 				start_date: new Date().toISOString().slice(0, 10),
 				vehicle_count: 2,
+				start_turn_seq: 1,
 				is_regular_duty: false
 			};
 		}
@@ -218,11 +233,13 @@
 			toast.warning('노선명을 입력하세요.');
 			return;
 		}
+		const startTurnSeq = Math.max(1, Number(routeForm.start_turn_seq) || 1);
 		try {
 			if (editingRouteMasterId) {
 				await adminUpdateRouteMaster(editingRouteMasterId, {
 					route_name: routeForm.route_name.trim(),
 					route_type: routeForm.route_type,
+					start_turn_seq: startTurnSeq,
 					is_regular_duty: routeForm.is_regular_duty
 				});
 				toast.success('노선 정의가 수정되었습니다.');
@@ -244,6 +261,7 @@
 					start_date: routeForm.start_date,
 					end_date: null,
 					vehicle_count: count,
+					start_turn_seq: startTurnSeq,
 					version: 'v1',
 					is_regular_duty: routeForm.is_regular_duty,
 					timetables: initialTimetables
@@ -271,6 +289,7 @@
 			start_date: new Date().toISOString().slice(0, 10),
 			end_date: '',
 			vehicle_count: count,
+			start_turn_seq: base?.start_turn_seq || 1,
 			version: '',
 			is_regular_duty: Boolean(base?.is_regular_duty)
 		};
@@ -308,6 +327,7 @@
 				start_date: appendForm.start_date,
 				end_date: appendForm.end_date || null,
 				vehicle_count: Number(appendForm.vehicle_count || appendTimetables.length),
+				start_turn_seq: Math.max(1, Number(appendForm.start_turn_seq) || 1),
 				version: appendForm.version.trim() || null,
 				is_regular_duty: appendForm.is_regular_duty,
 				timetables: appendTimetables.map((t, idx) => ({
@@ -333,7 +353,12 @@
 
 	/** @param {number} masterId */
 	async function handleDeleteRosterVersion(masterId) {
-		if (!confirm('이 로번 버전을 삭제하시겠습니까? (연결된 배차 스냅샷이 있으면 함께 삭제될 수 있습니다)')) return;
+		if (
+			!confirm(
+				'이 로번 버전을 삭제하시겠습니까? (연결된 배차 스냅샷이 있으면 함께 삭제될 수 있습니다)'
+			)
+		)
+			return;
 		try {
 			await adminDeleteRouteMaster(masterId);
 			toast.success('로번 버전이 삭제되었습니다.');
@@ -392,7 +417,8 @@
 				route_master_id: activeMasterId,
 				segments: segmentRows.map((s, i) => ({
 					seq: i + 1,
-					segment_name: (s.segment_name || '').trim() || `${s.start_stop || '출발'} → ${s.end_stop || '도착'}`,
+					segment_name:
+						(s.segment_name || '').trim() || `${s.start_stop || '출발'} → ${s.end_stop || '도착'}`,
 					start_stop: s.start_stop || null,
 					end_stop: s.end_stop || null,
 					duration_min: Math.max(0, Number(s.duration_min) || 0),
@@ -412,8 +438,10 @@
 	/** @param {any} v */
 	function getVersionBadge(v) {
 		const today = new Date().toISOString().slice(0, 10);
-		if (v.end_date && v.end_date < today) return { label: '과거 이력', cls: 'bg-slate-100 text-slate-500 border-slate-200' };
-		if (v.start_date > today) return { label: '미래 예정', cls: 'bg-amber-50 text-amber-700 border-amber-200' };
+		if (v.end_date && v.end_date < today)
+			return { label: '과거 이력', cls: 'bg-slate-100 text-slate-500 border-slate-200' };
+		if (v.start_date > today)
+			return { label: '미래 예정', cls: 'bg-amber-50 text-amber-700 border-amber-200' };
 		return { label: '현재 적용중', cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' };
 	}
 </script>
@@ -424,15 +452,22 @@
 
 <div class="mx-auto max-w-7xl space-y-6 p-4 sm:p-6 lg:p-8">
 	<!-- 1. 헤더 -->
-	<header class="flex flex-col gap-4 rounded-3xl border-2 border-slate-200 bg-white p-6 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+	<header
+		class="flex flex-col gap-4 rounded-3xl border-2 border-slate-200 bg-white p-6 shadow-sm sm:flex-row sm:items-center sm:justify-between"
+	>
 		<div class="space-y-1">
-			<div class="inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-[10px] font-black tracking-widest text-blue-700 uppercase">
+			<div
+				class="inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-[10px] font-black tracking-widest text-blue-700 uppercase"
+			>
 				<Icon icon="ph:bus-bold" class="text-sm" />
 				<span>Route Master Architecture</span>
 			</div>
-			<h1 class="text-2xl font-black tracking-tight text-slate-900 sm:text-3xl">노선 마스터 통합 관리</h1>
+			<h1 class="text-2xl font-black tracking-tight text-slate-900 sm:text-3xl">
+				노선 마스터 통합 관리
+			</h1>
 			<p class="text-xs font-medium text-slate-500">
-				1단계 노선 정의 → 2단계 날짜별 로번(Append-Only 이력) → 3단계 구간 시간 입력 순서로 관리합니다.
+				1단계 노선 정의 → 2단계 날짜별 로번(Append-Only 이력) → 3단계 구간 시간 입력 순서로
+				관리합니다.
 			</p>
 		</div>
 		<div class="flex flex-wrap items-center gap-2">
@@ -460,13 +495,19 @@
 		<button
 			type="button"
 			onclick={() => (activeTab = 'routes')}
-			class="group rounded-[1.75rem] border-2 bg-white p-5 text-left shadow-sm transition {activeTab === 'routes'
+			class="group rounded-[1.75rem] border-2 bg-white p-5 text-left shadow-sm transition {activeTab ===
+			'routes'
 				? 'border-blue-500 bg-blue-50/20 ring-2 ring-blue-500/20'
 				: 'border-slate-100 hover:border-blue-300'}"
 		>
 			<div class="mb-3 flex w-full items-center justify-between gap-2">
-				<span class="min-w-0 truncate rounded-lg bg-blue-50 px-2 py-0.5 text-[11px] font-black text-blue-700">1단계 · 노선 정의</span>
-				<div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-blue-50 text-blue-600">
+				<span
+					class="min-w-0 truncate rounded-lg bg-blue-50 px-2 py-0.5 text-[11px] font-black text-blue-700"
+					>1단계 · 노선 정의</span
+				>
+				<div
+					class="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-blue-50 text-blue-600"
+				>
 					<Icon icon="ph:map-trifold-bold" class="text-2xl" />
 				</div>
 			</div>
@@ -480,13 +521,19 @@
 		<button
 			type="button"
 			onclick={() => (activeTab = 'rosters')}
-			class="group w-full rounded-[1.75rem] border-2 bg-white p-5 text-left shadow-sm transition {activeTab === 'rosters'
+			class="group w-full rounded-[1.75rem] border-2 bg-white p-5 text-left shadow-sm transition {activeTab ===
+			'rosters'
 				? 'border-emerald-500 bg-emerald-50/20 ring-2 ring-emerald-500/20'
 				: 'border-slate-100 hover:border-emerald-300'}"
 		>
 			<div class="mb-3 flex w-full items-center justify-between gap-2">
-				<span class="min-w-0 truncate rounded-lg bg-emerald-50 px-2 py-0.5 text-[11px] font-black text-emerald-700">2단계 · 로번 생성</span>
-				<div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600">
+				<span
+					class="min-w-0 truncate rounded-lg bg-emerald-50 px-2 py-0.5 text-[11px] font-black text-emerald-700"
+					>2단계 · 로번 생성</span
+				>
+				<div
+					class="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600"
+				>
 					<Icon icon="ph:calendar-check-bold" class="text-2xl" />
 				</div>
 			</div>
@@ -500,13 +547,18 @@
 		<button
 			type="button"
 			onclick={() => (activeTab = 'segments')}
-			class="group rounded-[1.75rem] border-2 bg-white p-5 text-left shadow-sm transition {activeTab === 'segments'
+			class="group rounded-[1.75rem] border-2 bg-white p-5 text-left shadow-sm transition {activeTab ===
+			'segments'
 				? 'border-amber-500 bg-amber-50/20 ring-2 ring-amber-500/20'
 				: 'border-slate-100 hover:border-amber-300'}"
 		>
 			<div class="mb-3 flex items-center justify-between">
-				<span class="rounded-lg bg-amber-50 px-2 py-0.5 text-[11px] font-black text-amber-700">3단계 · 구간 시간</span>
-				<div class="flex h-10 w-10 items-center justify-center rounded-2xl bg-amber-50 text-amber-600">
+				<span class="rounded-lg bg-amber-50 px-2 py-0.5 text-[11px] font-black text-amber-700"
+					>3단계 · 구간 시간</span
+				>
+				<div
+					class="flex h-10 w-10 items-center justify-center rounded-2xl bg-amber-50 text-amber-600"
+				>
 					<Icon icon="ph:timer-bold" class="text-2xl" />
 				</div>
 			</div>
@@ -519,11 +571,12 @@
 	</section>
 
 	<!-- 3. 3단계 탭 네비게이션 -->
-	<nav class="flex gap-2 overflow-x-auto border-b-2 border-slate-200 no-scrollbar">
+	<nav class="no-scrollbar flex gap-2 overflow-x-auto border-b-2 border-slate-200">
 		<button
 			type="button"
 			onclick={() => (activeTab = 'routes')}
-			class="whitespace-nowrap px-6 py-3.5 text-xs font-black tracking-wide transition-all {activeTab === 'routes'
+			class="px-6 py-3.5 text-xs font-black tracking-wide whitespace-nowrap transition-all {activeTab ===
+			'routes'
 				? 'rounded-t-2xl border-b-4 border-blue-600 bg-blue-50/60 text-blue-700'
 				: 'text-slate-400 hover:text-slate-700'}"
 		>
@@ -532,7 +585,8 @@
 		<button
 			type="button"
 			onclick={() => (activeTab = 'rosters')}
-			class="whitespace-nowrap px-6 py-3.5 text-xs font-black tracking-wide transition-all {activeTab === 'rosters'
+			class="px-6 py-3.5 text-xs font-black tracking-wide whitespace-nowrap transition-all {activeTab ===
+			'rosters'
 				? 'rounded-t-2xl border-b-4 border-emerald-600 bg-emerald-50/60 text-emerald-700'
 				: 'text-slate-400 hover:text-slate-700'}"
 		>
@@ -541,7 +595,8 @@
 		<button
 			type="button"
 			onclick={() => (activeTab = 'segments')}
-			class="whitespace-nowrap px-6 py-3.5 text-xs font-black tracking-wide transition-all {activeTab === 'segments'
+			class="px-6 py-3.5 text-xs font-black tracking-wide whitespace-nowrap transition-all {activeTab ===
+			'segments'
 				? 'rounded-t-2xl border-b-4 border-amber-600 bg-amber-50/60 text-amber-800'
 				: 'text-slate-400 hover:text-slate-700'}"
 		>
@@ -552,12 +607,16 @@
 	<!-- 4. 탭 본문 -->
 	{#if loading}
 		<div class="flex justify-center py-20">
-			<div class="h-10 w-10 animate-spin rounded-full border-4 border-blue-600 border-t-transparent"></div>
+			<div
+				class="h-10 w-10 animate-spin rounded-full border-4 border-blue-600 border-t-transparent"
+			></div>
 		</div>
 	{:else if activeTab === 'routes'}
 		<!-- [탭 1] 노선 정의 -->
 		<div class="space-y-4">
-			<div class="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-4">
+			<div
+				class="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-4"
+			>
 				<div class="flex flex-wrap items-center gap-2">
 					<input
 						type="text"
@@ -586,12 +645,17 @@
 
 			<div class="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
 				{#each filteredRoutes as r (r.route_name)}
-					<div class="flex flex-col justify-between rounded-2xl border-2 border-slate-200 bg-white p-6 shadow-sm transition hover:border-blue-400">
+					<div
+						class="flex flex-col justify-between rounded-2xl border-2 border-slate-200 bg-white p-6 shadow-sm transition hover:border-blue-400"
+					>
 						<div>
 							<div class="mb-3 flex items-start justify-between">
-								<span class="rounded-lg border px-2.5 py-0.5 text-[10px] font-black {r.route_type === 'REGULAR'
-									? 'border-blue-200 bg-blue-50 text-blue-700'
-									: 'border-amber-200 bg-amber-50 text-amber-700'}">
+								<span
+									class="rounded-lg border px-2.5 py-0.5 text-[10px] font-black {r.route_type ===
+									'REGULAR'
+										? 'border-blue-200 bg-blue-50 text-blue-700'
+										: 'border-amber-200 bg-amber-50 text-amber-700'}"
+								>
 									{r.route_type === 'REGULAR' ? '정규노선' : '임시노선'}
 								</span>
 								<button
@@ -604,12 +668,20 @@
 							</div>
 							<h3 class="text-2xl font-black tracking-tight text-slate-900">{r.route_name}</h3>
 							<div class="mt-3 flex flex-wrap gap-2 text-xs font-bold text-slate-500">
-								<span class="rounded-lg bg-slate-100 px-2.5 py-1">현재 차량 {r.active_version?.vehicle_count || 0}대</span>
-								<span class="rounded-lg bg-emerald-50 px-2.5 py-1 text-emerald-700">로번 이력 {r.version_count}건</span>
-								<span class="rounded-lg bg-amber-50 px-2.5 py-1 text-amber-700">구간 {r.segment_count}개</span>
+								<span class="rounded-lg bg-slate-100 px-2.5 py-1"
+									>현재 차량 {r.active_version?.vehicle_count || 0}대</span
+								>
+								<span class="rounded-lg bg-emerald-50 px-2.5 py-1 text-emerald-700"
+									>로번 이력 {r.version_count}건</span
+								>
+								<span class="rounded-lg bg-amber-50 px-2.5 py-1 text-amber-700"
+									>구간 {r.segment_count}개</span
+								>
 							</div>
 						</div>
-						<div class="mt-5 flex items-center justify-between border-t border-slate-100 pt-4 text-xs font-black">
+						<div
+							class="mt-5 flex items-center justify-between border-t border-slate-100 pt-4 text-xs font-black"
+						>
 							<button
 								type="button"
 								onclick={() => {
@@ -638,9 +710,13 @@
 	{:else if activeTab === 'rosters'}
 		<!-- [탭 2] 로번 생성 (Append-Only 날짜별 과거·현재·미래 이력) -->
 		<div class="space-y-5">
-			<div class="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-4">
+			<div
+				class="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-4"
+			>
 				<div class="flex flex-wrap items-center gap-2.5">
-					<label for="roster-route-select" class="text-xs font-black text-slate-700">대상 노선:</label>
+					<label for="roster-route-select" class="text-xs font-black text-slate-700"
+						>대상 노선:</label
+					>
 					<select
 						id="roster-route-select"
 						bind:value={selectedRouteName}
@@ -656,7 +732,8 @@
 							<button
 								type="button"
 								onclick={() => (rosterScopeFilter = /** @type {any} */ (val))}
-								class="rounded-lg px-2.5 py-1 text-[11px] font-black transition {rosterScopeFilter === val
+								class="rounded-lg px-2.5 py-1 text-[11px] font-black transition {rosterScopeFilter ===
+								val
 									? 'bg-emerald-600 text-white'
 									: 'text-slate-600 hover:bg-white'}"
 							>
@@ -672,7 +749,11 @@
 						class="rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-bold text-slate-700"
 					/>
 					{#if rosterDateFilter}
-						<button type="button" onclick={() => (rosterDateFilter = '')} class="text-xs font-bold text-rose-500 hover:underline">
+						<button
+							type="button"
+							onclick={() => (rosterDateFilter = '')}
+							class="text-xs font-bold text-rose-500 hover:underline"
+						>
 							날짜 초기화
 						</button>
 					{/if}
@@ -692,34 +773,94 @@
 				<div class="space-y-4 rounded-3xl border-2 border-emerald-300 bg-white p-6 shadow-md">
 					<div class="flex items-center justify-between border-b border-slate-100 pb-3">
 						<div>
-							<h3 class="text-base font-black text-slate-900">[{selectedRouteName}] 새 로번 버전 추가 (Append-Only)</h3>
-							<p class="text-[11px] text-slate-500">기존 과거·미래 버전은 삭제되지 않으며, 겹치는 직전 버전의 종료일이 시작일 전날로 자동 마감됩니다.</p>
+							<h3 class="text-base font-black text-slate-900">
+								[{selectedRouteName}] 새 로번 버전 추가 (Append-Only)
+							</h3>
+							<p class="text-[11px] text-slate-500">
+								기존 과거·미래 버전은 삭제되지 않으며, 겹치는 직전 버전의 종료일이 시작일 전날로
+								자동 마감됩니다.
+							</p>
 						</div>
-						<button type="button" onclick={() => (showAppendForm = false)} class="text-xs font-bold text-slate-400 hover:text-slate-700">
+						<button
+							type="button"
+							onclick={() => (showAppendForm = false)}
+							class="text-xs font-bold text-slate-400 hover:text-slate-700"
+						>
 							닫기
 						</button>
 					</div>
 
-					<div class="grid grid-cols-1 gap-4 sm:grid-cols-5">
+					<div class="grid grid-cols-1 gap-4 sm:grid-cols-3 lg:grid-cols-6">
 						<div>
-							<label for="app-start-date" class="mb-1 block text-[11px] font-black text-slate-700">적용 시작일 *</label>
-							<input id="app-start-date" type="date" bind:value={appendForm.start_date} class="w-full rounded-xl border-2 border-slate-200 px-3 py-2 text-xs font-bold" />
+							<label for="app-start-date" class="mb-1 block text-[11px] font-black text-slate-700"
+								>적용 시작일 *</label
+							>
+							<input
+								id="app-start-date"
+								type="date"
+								bind:value={appendForm.start_date}
+								class="w-full rounded-xl border-2 border-slate-200 px-3 py-2 text-xs font-bold"
+							/>
 						</div>
 						<div>
-							<label for="app-end-date" class="mb-1 block text-[11px] font-black text-slate-700">적용 종료일 (선택)</label>
-							<input id="app-end-date" type="date" bind:value={appendForm.end_date} class="w-full rounded-xl border-2 border-slate-200 px-3 py-2 text-xs font-bold" />
+							<label for="app-end-date" class="mb-1 block text-[11px] font-black text-slate-700"
+								>적용 종료일 (선택)</label
+							>
+							<input
+								id="app-end-date"
+								type="date"
+								bind:value={appendForm.end_date}
+								class="w-full rounded-xl border-2 border-slate-200 px-3 py-2 text-xs font-bold"
+							/>
 						</div>
 						<div>
-							<label for="app-vehicle-count" class="mb-1 block text-[11px] font-black text-slate-700">배차 로번 수</label>
-							<input id="app-vehicle-count" type="number" min="1" max="50" bind:value={appendForm.vehicle_count} class="w-full rounded-xl border-2 border-slate-200 px-3 py-2 text-xs font-bold" />
+							<label
+								for="app-vehicle-count"
+								class="mb-1 block text-[11px] font-black text-slate-700">배차 로번 수</label
+							>
+							<input
+								id="app-vehicle-count"
+								type="number"
+								min="1"
+								max="50"
+								bind:value={appendForm.vehicle_count}
+								class="w-full rounded-xl border-2 border-slate-200 px-3 py-2 text-xs font-bold"
+							/>
 						</div>
 						<div>
-							<label for="app-version" class="mb-1 block text-[11px] font-black text-slate-700">버전명 (비우면 자동)</label>
-							<input id="app-version" type="text" bind:value={appendForm.version} placeholder="예: v2, 2026-하계" class="w-full rounded-xl border-2 border-slate-200 px-3 py-2 text-xs font-bold" />
+							<label for="app-start-turn" class="mb-1 block text-[11px] font-black text-slate-700"
+								>시작 로번 (표 맨 위)</label
+							>
+							<input
+								id="app-start-turn"
+								type="number"
+								min="1"
+								max={Math.max(1, Number(appendForm.vehicle_count) || 50)}
+								bind:value={appendForm.start_turn_seq}
+								class="w-full rounded-xl border-2 border-slate-200 px-3 py-2 text-xs font-bold"
+							/>
+						</div>
+						<div>
+							<label for="app-version" class="mb-1 block text-[11px] font-black text-slate-700"
+								>버전명 (비우면 자동)</label
+							>
+							<input
+								id="app-version"
+								type="text"
+								bind:value={appendForm.version}
+								placeholder="예: v2, 2026-하계"
+								class="w-full rounded-xl border-2 border-slate-200 px-3 py-2 text-xs font-bold"
+							/>
 						</div>
 						<div class="flex items-end pb-2">
-							<label class="inline-flex cursor-pointer items-center gap-2 text-xs font-bold text-slate-700">
-								<input type="checkbox" bind:checked={appendForm.is_regular_duty} class="h-4 w-4 rounded border-slate-300 text-emerald-600" />
+							<label
+								class="inline-flex cursor-pointer items-center gap-2 text-xs font-bold text-slate-700"
+							>
+								<input
+									type="checkbox"
+									bind:checked={appendForm.is_regular_duty}
+									class="h-4 w-4 rounded border-slate-300 text-emerald-600"
+								/>
 								<span>당연 근무</span>
 							</label>
 						</div>
@@ -727,7 +868,9 @@
 
 					<div class="overflow-x-auto rounded-2xl border border-slate-200">
 						<table class="w-full text-left text-xs">
-							<thead class="border-b border-slate-200 bg-slate-50 text-[11px] font-black text-slate-500">
+							<thead
+								class="border-b border-slate-200 bg-slate-50 text-[11px] font-black text-slate-500"
+							>
 								<tr>
 									<th class="px-3 py-2.5">로번</th>
 									<th class="px-3 py-2.5">시작(24H)</th>
@@ -759,14 +902,32 @@
 											/>
 										</td>
 										<td class="px-3 py-2">
-											<input type="text" bind:value={row.start_location} class="w-28 rounded-lg border border-slate-200 px-2 py-1 text-xs" />
+											<input
+												type="text"
+												bind:value={row.start_location}
+												class="w-28 rounded-lg border border-slate-200 px-2 py-1 text-xs"
+											/>
 										</td>
 										<td class="px-3 py-2">
-											<input type="text" bind:value={row.end_location} class="w-28 rounded-lg border border-slate-200 px-2 py-1 text-xs" />
+											<input
+												type="text"
+												bind:value={row.end_location}
+												class="w-28 rounded-lg border border-slate-200 px-2 py-1 text-xs"
+											/>
 										</td>
-										<td class="px-3 py-2 flex gap-1">
-											<input type="text" bind:value={row.start_garage} placeholder="출고" class="w-16 rounded-lg border border-slate-200 px-2 py-1 text-xs" />
-											<input type="text" bind:value={row.end_garage} placeholder="입고" class="w-16 rounded-lg border border-slate-200 px-2 py-1 text-xs" />
+										<td class="flex gap-1 px-3 py-2">
+											<input
+												type="text"
+												bind:value={row.start_garage}
+												placeholder="출고"
+												class="w-16 rounded-lg border border-slate-200 px-2 py-1 text-xs"
+											/>
+											<input
+												type="text"
+												bind:value={row.end_garage}
+												placeholder="입고"
+												class="w-16 rounded-lg border border-slate-200 px-2 py-1 text-xs"
+											/>
 										</td>
 										<td class="px-3 py-2 text-center">
 											<input
@@ -783,7 +944,11 @@
 					</div>
 
 					<div class="flex justify-end gap-2">
-						<button type="button" onclick={() => (showAppendForm = false)} class="rounded-xl border border-slate-200 px-4 py-2 text-xs font-bold text-slate-600">
+						<button
+							type="button"
+							onclick={() => (showAppendForm = false)}
+							class="rounded-xl border border-slate-200 px-4 py-2 text-xs font-bold text-slate-600"
+						>
 							취소
 						</button>
 						<button
@@ -801,7 +966,9 @@
 			<!-- 날짜별 이력 타임라인 -->
 			<div class="space-y-3">
 				{#if selectedRouteVersions.length === 0}
-					<div class="rounded-2xl border-2 border-dashed border-slate-200 bg-white py-12 text-center text-xs font-bold text-slate-400">
+					<div
+						class="rounded-2xl border-2 border-dashed border-slate-200 bg-white py-12 text-center text-xs font-bold text-slate-400"
+					>
 						조건에 해당하는 로번 이력이 없습니다.
 					</div>
 				{:else}
@@ -810,19 +977,24 @@
 						<div class="rounded-2xl border-2 border-slate-200 bg-white p-5 shadow-xs">
 							<div class="flex flex-wrap items-center justify-between gap-3">
 								<div class="flex flex-wrap items-center gap-2.5">
-									<span class="rounded-lg border px-2.5 py-0.5 text-[11px] font-black {badge.cls}">{badge.label}</span>
+									<span class="rounded-lg border px-2.5 py-0.5 text-[11px] font-black {badge.cls}"
+										>{badge.label}</span
+									>
 									<span class="font-mono text-sm font-black text-slate-900">{v.version}</span>
 									<span class="text-xs font-bold text-slate-600">
 										{v.start_date} ~ {v.end_date || '진행중 (종료일 없음)'}
 									</span>
-									<span class="rounded-lg bg-slate-100 px-2 py-0.5 text-[11px] font-bold text-slate-600">
+									<span
+										class="rounded-lg bg-slate-100 px-2 py-0.5 text-[11px] font-bold text-slate-600"
+									>
 										로번 {v.vehicle_count}대 ({v.timetables?.length || 0}행)
 									</span>
 								</div>
 								<div class="flex items-center gap-2">
 									<button
 										type="button"
-										onclick={() => (inspectingVersionId = inspectingVersionId === v.id ? null : v.id)}
+										onclick={() =>
+											(inspectingVersionId = inspectingVersionId === v.id ? null : v.id)}
 										class="rounded-lg border border-slate-200 px-3 py-1 text-xs font-bold text-slate-700 hover:bg-slate-50"
 									>
 										{inspectingVersionId === v.id ? '시간표 접기' : '시간표 보기'}
@@ -847,7 +1019,9 @@
 							{#if inspectingVersionId === v.id}
 								<div class="mt-4 overflow-x-auto rounded-xl border border-slate-200">
 									<table class="w-full text-left text-xs">
-										<thead class="border-b border-slate-200 bg-slate-50 text-[11px] font-black text-slate-500">
+										<thead
+											class="border-b border-slate-200 bg-slate-50 text-[11px] font-black text-slate-500"
+										>
 											<tr>
 												<th class="px-3 py-2">순번</th>
 												<th class="px-3 py-2">운행 시간</th>
@@ -860,12 +1034,19 @@
 											{#each v.timetables || [] as tt}
 												<tr>
 													<td class="px-3 py-2 font-black">{tt.seq}로번</td>
-													<td class="px-3 py-2 font-mono font-bold text-blue-700">{tt.start_time} ~ {tt.end_time}</td>
+													<td class="px-3 py-2 font-mono font-bold text-blue-700"
+														>{tt.start_time} ~ {tt.end_time}</td
+													>
 													<td class="px-3 py-2">{tt.start_location} → {tt.end_location}</td>
-													<td class="px-3 py-2 text-slate-500">{tt.start_garage || '-'} / {tt.end_garage || '-'}</td>
+													<td class="px-3 py-2 text-slate-500"
+														>{tt.start_garage || '-'} / {tt.end_garage || '-'}</td
+													>
 													<td class="px-3 py-2 text-center">
 														{#if tt.is_regular_duty}
-															<span class="rounded-md bg-emerald-50 border border-emerald-200 px-2 py-0.5 text-[10px] font-black text-emerald-700">당연 근무</span>
+															<span
+																class="rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-black text-emerald-700"
+																>당연 근무</span
+															>
 														{:else}
 															<span class="text-[10px] font-bold text-slate-400">일반</span>
 														{/if}
@@ -884,7 +1065,9 @@
 	{:else}
 		<!-- [탭 3] 구간 시간 입력 -->
 		<div class="space-y-4">
-			<div class="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-4">
+			<div
+				class="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-4"
+			>
 				<div class="flex flex-wrap items-center gap-3">
 					<label for="seg-route-select" class="text-xs font-black text-slate-700">대상 노선:</label>
 					<select
@@ -896,8 +1079,11 @@
 							<option value={r.route_name}>{r.route_name}</option>
 						{/each}
 					</select>
-					<span class="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-black text-amber-800">
-						총 소요시간: {totalSegmentMinutes}분 ({Math.floor(totalSegmentMinutes / 60)}시간 {totalSegmentMinutes % 60}분)
+					<span
+						class="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-black text-amber-800"
+					>
+						총 소요시간: {totalSegmentMinutes}분 ({Math.floor(totalSegmentMinutes / 60)}시간 {totalSegmentMinutes %
+							60}분)
 					</span>
 				</div>
 				<div class="flex items-center gap-2">
@@ -928,7 +1114,9 @@
 					</div>
 				{:else}
 					<table class="w-full text-left text-xs">
-						<thead class="border-b border-slate-200 bg-slate-50 text-[11px] font-black text-slate-500">
+						<thead
+							class="border-b border-slate-200 bg-slate-50 text-[11px] font-black text-slate-500"
+						>
 							<tr>
 								<th class="px-4 py-3">순번</th>
 								<th class="px-4 py-3">구간명</th>
@@ -945,27 +1133,73 @@
 								<tr>
 									<td class="px-4 py-2.5 font-black text-slate-800">{idx + 1}</td>
 									<td class="px-4 py-2.5">
-										<input type="text" bind:value={seg.segment_name} placeholder="예: 터미널 → 연동" class="w-40 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-bold" />
+										<input
+											type="text"
+											bind:value={seg.segment_name}
+											placeholder="예: 터미널 → 연동"
+											class="w-40 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-bold"
+										/>
 									</td>
 									<td class="px-4 py-2.5">
-										<input type="text" bind:value={seg.start_stop} placeholder="출발지" class="w-28 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs" />
+										<input
+											type="text"
+											bind:value={seg.start_stop}
+											placeholder="출발지"
+											class="w-28 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs"
+										/>
 									</td>
 									<td class="px-4 py-2.5">
-										<input type="text" bind:value={seg.end_stop} placeholder="도착지" class="w-28 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs" />
+										<input
+											type="text"
+											bind:value={seg.end_stop}
+											placeholder="도착지"
+											class="w-28 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs"
+										/>
 									</td>
 									<td class="px-4 py-2.5">
-										<input type="number" min="0" bind:value={seg.duration_min} class="w-20 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-black text-amber-700" />
+										<input
+											type="number"
+											min="0"
+											bind:value={seg.duration_min}
+											class="w-20 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-black text-amber-700"
+										/>
 									</td>
 									<td class="px-4 py-2.5">
-										<input type="text" bind:value={seg.distance_km} placeholder="예: 4.5" class="w-20 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs" />
+										<input
+											type="text"
+											bind:value={seg.distance_km}
+											placeholder="예: 4.5"
+											class="w-20 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs"
+										/>
 									</td>
 									<td class="px-4 py-2.5">
-										<input type="text" bind:value={seg.memo} placeholder="메모" class="w-32 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs" />
+										<input
+											type="text"
+											bind:value={seg.memo}
+											placeholder="메모"
+											class="w-32 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs"
+										/>
 									</td>
-									<td class="px-4 py-2.5 text-right space-x-1">
-										<button type="button" disabled={idx === 0} onclick={() => moveSegmentRow(idx, -1)} class="rounded border border-slate-200 px-1.5 py-1 text-[10px] font-black disabled:opacity-30">▲</button>
-										<button type="button" disabled={idx === segmentRows.length - 1} onclick={() => moveSegmentRow(idx, 1)} class="rounded border border-slate-200 px-1.5 py-1 text-[10px] font-black disabled:opacity-30">▼</button>
-										<button type="button" onclick={() => removeSegmentRow(idx)} class="px-2 py-1 font-bold text-rose-500 hover:underline">삭제</button>
+									<td class="space-x-1 px-4 py-2.5 text-right">
+										<button
+											type="button"
+											disabled={idx === 0}
+											onclick={() => moveSegmentRow(idx, -1)}
+											class="rounded border border-slate-200 px-1.5 py-1 text-[10px] font-black disabled:opacity-30"
+											>▲</button
+										>
+										<button
+											type="button"
+											disabled={idx === segmentRows.length - 1}
+											onclick={() => moveSegmentRow(idx, 1)}
+											class="rounded border border-slate-200 px-1.5 py-1 text-[10px] font-black disabled:opacity-30"
+											>▼</button
+										>
+										<button
+											type="button"
+											onclick={() => removeSegmentRow(idx)}
+											class="px-2 py-1 font-bold text-rose-500 hover:underline">삭제</button
+										>
 									</td>
 								</tr>
 							{/each}
@@ -981,41 +1215,117 @@
 {#if showRouteModal}
 	<!-- svelte-ignore a11y_click_events_have_key_events -->
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
-	<div onclick={() => (showRouteModal = false)} class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-		<div onclick={(e) => e.stopPropagation()} class="w-full max-w-md rounded-3xl border-2 border-slate-200 bg-white p-6 shadow-2xl space-y-4">
-			<h3 class="text-lg font-black text-slate-900">1단계 · 노선 정의 {editingRouteMasterId ? '수정' : '등록'}</h3>
+	<div
+		onclick={() => (showRouteModal = false)}
+		class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+	>
+		<div
+			onclick={(e) => e.stopPropagation()}
+			class="w-full max-w-md space-y-4 rounded-3xl border-2 border-slate-200 bg-white p-6 shadow-2xl"
+		>
+			<h3 class="text-lg font-black text-slate-900">
+				1단계 · 노선 정의 {editingRouteMasterId ? '수정' : '등록'}
+			</h3>
 			<div class="space-y-3">
 				<div>
 					<label for="rm-name" class="mb-1 block text-xs font-black text-slate-700">노선명 *</label>
-					<input id="rm-name" type="text" bind:value={routeForm.route_name} placeholder="예: 121/122" class="w-full rounded-xl border-2 border-slate-200 px-3.5 py-2.5 text-xs font-bold" />
+					<input
+						id="rm-name"
+						type="text"
+						bind:value={routeForm.route_name}
+						placeholder="예: 121/122"
+						class="w-full rounded-xl border-2 border-slate-200 px-3.5 py-2.5 text-xs font-bold"
+					/>
 				</div>
 				<div>
-					<label for="rm-type" class="mb-1 block text-xs font-black text-slate-700">노선 유형</label>
-					<select id="rm-type" bind:value={routeForm.route_type} class="w-full rounded-xl border-2 border-slate-200 px-3.5 py-2.5 text-xs font-bold">
+					<label for="rm-type" class="mb-1 block text-xs font-black text-slate-700">노선 유형</label
+					>
+					<select
+						id="rm-type"
+						bind:value={routeForm.route_type}
+						class="w-full rounded-xl border-2 border-slate-200 px-3.5 py-2.5 text-xs font-bold"
+					>
 						<option value="REGULAR">정규 노선 (REGULAR)</option>
 						<option value="TEMPORARY">임시 노선 (TEMPORARY)</option>
 					</select>
 				</div>
 				{#if !editingRouteMasterId}
-					<div class="grid grid-cols-2 gap-3">
+					<div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
 						<div>
-							<label for="rm-start" class="mb-1 block text-xs font-black text-slate-700">초기 적용 시작일</label>
-							<input id="rm-start" type="date" bind:value={routeForm.start_date} class="w-full rounded-xl border-2 border-slate-200 px-3 py-2 text-xs font-bold" />
+							<label for="rm-start" class="mb-1 block text-xs font-black text-slate-700"
+								>초기 적용 시작일</label
+							>
+							<input
+								id="rm-start"
+								type="date"
+								bind:value={routeForm.start_date}
+								class="w-full rounded-xl border-2 border-slate-200 px-3 py-2 text-xs font-bold"
+							/>
 						</div>
 						<div>
-							<label for="rm-veh" class="mb-1 block text-xs font-black text-slate-700">초기 로번 수</label>
-							<input id="rm-veh" type="number" min="1" bind:value={routeForm.vehicle_count} class="w-full rounded-xl border-2 border-slate-200 px-3 py-2 text-xs font-bold" />
+							<label for="rm-veh" class="mb-1 block text-xs font-black text-slate-700"
+								>초기 로번 수</label
+							>
+							<input
+								id="rm-veh"
+								type="number"
+								min="1"
+								bind:value={routeForm.vehicle_count}
+								class="w-full rounded-xl border-2 border-slate-200 px-3 py-2 text-xs font-bold"
+							/>
+						</div>
+						<div>
+							<label for="rm-start-turn" class="mb-1 block text-xs font-black text-slate-700"
+								>시작 로번 (표 맨 위)</label
+							>
+							<input
+								id="rm-start-turn"
+								type="number"
+								min="1"
+								max={Math.max(1, Number(routeForm.vehicle_count) || 50)}
+								bind:value={routeForm.start_turn_seq}
+								class="w-full rounded-xl border-2 border-slate-200 px-3 py-2 text-xs font-bold"
+							/>
 						</div>
 					</div>
+				{:else}
+					<div>
+						<label for="rm-start-turn-edit" class="mb-1 block text-xs font-black text-slate-700"
+							>시작 로번 (표 제일 위 로번 번호)</label
+						>
+						<input
+							id="rm-start-turn-edit"
+							type="number"
+							min="1"
+							bind:value={routeForm.start_turn_seq}
+							class="w-full rounded-xl border-2 border-slate-200 px-3 py-2 text-xs font-bold"
+						/>
+					</div>
 				{/if}
-				<label class="inline-flex cursor-pointer items-center gap-2 text-xs font-bold text-slate-700">
-					<input type="checkbox" bind:checked={routeForm.is_regular_duty} class="h-4 w-4 rounded border-slate-300 text-blue-600" />
+				<label
+					class="inline-flex cursor-pointer items-center gap-2 text-xs font-bold text-slate-700"
+				>
+					<input
+						type="checkbox"
+						bind:checked={routeForm.is_regular_duty}
+						class="h-4 w-4 rounded border-slate-300 text-blue-600"
+					/>
 					<span>당연 근무 노선</span>
 				</label>
 			</div>
 			<div class="flex justify-end gap-2 pt-2">
-				<button type="button" onclick={() => (showRouteModal = false)} class="rounded-xl border border-slate-200 px-4 py-2 text-xs font-bold text-slate-600">취소</button>
-				<button type="button" onclick={saveRouteDefinition} class="rounded-xl bg-blue-600 px-5 py-2 text-xs font-black text-white hover:bg-blue-700">저장</button>
+				<button
+					type="button"
+					onclick={() => (showRouteModal = false)}
+					class="rounded-xl border border-slate-200 px-4 py-2 text-xs font-bold text-slate-600"
+					>취소</button
+				>
+				<button
+					type="button"
+					onclick={saveRouteDefinition}
+					class="rounded-xl bg-blue-600 px-5 py-2 text-xs font-black text-white hover:bg-blue-700"
+					>저장</button
+				>
 			</div>
 		</div>
 	</div>
