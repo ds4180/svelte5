@@ -524,25 +524,6 @@
 		</div>
 
 		<div class="flex max-w-full min-w-0 flex-wrap items-center gap-2.5">
-			{#if selectedRoute && activeTab === 'canvas' && !isDMinus1 && selectedDateKey !== formatDateISO(today)}
-				{#if isPreviewDatePublic}
-					<span
-						class="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-4 py-1.5 text-sm font-black text-emerald-700"
-					>
-						<span class="h-2.5 w-2.5 rounded-full bg-emerald-500"></span>
-						{selectedFullDate} · 자동 공개 중
-					</span>
-				{:else}
-					<span
-						class="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-100 px-4 py-1.5 text-sm font-black text-slate-600"
-					>
-						<span class="h-2.5 w-2.5 rounded-full bg-slate-400"></span>
-						{selectedFullDate} · 비공개 ({!dispatchSettings.preview_enabled
-							? '배차 예고 중지 중'
-							: '예고 구간 외'})
-					</span>
-				{/if}
-			{/if}
 			<button
 				type="button"
 				onclick={() => syncData(selectedDateKey, selectedRoute?.id ?? null)}
