@@ -258,24 +258,18 @@
 			originalDispatchRows = JSON.parse(JSON.stringify(combined));
 			if (statsRes) {
 				driverStats = statsRes.stats || {};
-			}
-			otherRouteAssignedDrivers = [];
-			if (selectedRoute.id !== 'ALL' && routes.length > 1) {
-				const otherRoutes = routes.filter((r) => r.id !== selectedRoute?.id);
-				fetchDispatchForRoutes({
-					dateKey,
-					targetRoutes: otherRoutes,
-					vehiclesByGroup,
-					routeFleetRules: dispatchSettings.route_fleet_rules,
-					isAdmin: true
-				})
-					.then((otherRows) => {
-						if (token !== fetchToken) return;
-						otherRouteAssignedDrivers = otherRows
-							.map((r) => String(r.driver_name || '').trim())
-							.filter(Boolean);
-					})
-					.catch(() => {});
+				if (selectedRoute.id !== 'ALL') {
+					const currentRouteSaved = new Set(
+						combined.map((r) => String(r.driver_name || '').trim()).filter(Boolean)
+					);
+					otherRouteAssignedDrivers = (statsRes.assigned_today_drivers || []).filter(
+						(name) => !currentRouteSaved.has(name)
+					);
+				} else {
+					otherRouteAssignedDrivers = [];
+				}
+			} else {
+				otherRouteAssignedDrivers = [];
 			}
 			isAutoFilled = false;
 		} catch (err) {
@@ -637,6 +631,7 @@
 						{driverStats}
 						settings={dispatchSettings}
 						{vehiclesByGroup}
+						targetDate={selectedDateKey}
 						{selectedDriver}
 						onSelectDriver={selectDriver}
 					/>

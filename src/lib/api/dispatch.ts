@@ -66,11 +66,42 @@ export interface DriverWorkStat {
 	month_night_minutes: number;
 	prev_end_time: string | null;
 	worked_yesterday?: boolean;
+	consecutive_off_days?: number;
 	earliest_today_min: number | null;
 	earliest_available_time: string | null;
 	dayoff_type: string | null;
 	dayoff_status: string | null;
 	is_disciplined: boolean;
+}
+
+export interface DriverDispatchAssignmentItem {
+	target_date: string;
+	route_name: string;
+	seq: number;
+	vehicle_no: string;
+	start_time: string;
+	end_time: string;
+	status: string;
+	memo: string;
+}
+
+export interface DriverDayOffHistoryItem {
+	id: number;
+	date: string;
+	type: string;
+	status: string;
+	memo: string;
+	create_date: string;
+}
+
+export interface DriverDispatchDetail {
+	driver_name: string;
+	target_date: string;
+	today_assignments: DriverDispatchAssignmentItem[];
+	tomorrow_assignments: DriverDispatchAssignmentItem[];
+	recent_dispatches: DriverDispatchAssignmentItem[];
+	route_breakdown: { route_name: string; count: number }[];
+	dayoff_history: DriverDayOffHistoryItem[];
 }
 
 export interface DispatchPreviewWindow {
@@ -137,9 +168,16 @@ export const adminGetDispatchResources = () =>
 	}>('GET', '/api/v1/admin/dispatch/resources');
 
 export const adminGetDriverWorkStats = (targetDate: string) =>
-	fastApi<{ target_date: string; stats: Record<string, DriverWorkStat> }>(
+	fastApi<{
+		target_date: string;
+		stats: Record<string, DriverWorkStat>;
+		assigned_today_drivers?: string[];
+	}>('GET', `/api/v1/admin/dispatch/driver-stats?target_date=${encodeURIComponent(targetDate)}`);
+
+export const adminGetDriverDispatchDetail = (driverName: string, targetDate: string) =>
+	fastApi<DriverDispatchDetail>(
 		'GET',
-		`/api/v1/admin/dispatch/driver-stats?target_date=${encodeURIComponent(targetDate)}`
+		`/api/v1/admin/dispatch/driver-detail?driver_name=${encodeURIComponent(driverName)}&target_date=${encodeURIComponent(targetDate)}`
 	);
 
 export const adminAnnounceDispatchNow = () =>
