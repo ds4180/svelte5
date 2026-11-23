@@ -49,7 +49,14 @@ export const DEFAULT_DISPATCH_SETTINGS: DispatchSettings = {
 	night_evening_start: '21:00',
 	stats_include_draft: true,
 	enable_validation_blink: true,
-	warn_prev_day_work: true
+	warn_prev_day_work: true,
+	auto_announce_title_template: '[명일 배차 고지] {target_date}',
+	auto_announce_body_template:
+		'{target_date} 배차가 확정 고지되었습니다. 배차표에서 차량과 로번을 확인해 주세요.',
+	announce_sender_min_rank: 4,
+	confirm_d_day_always_open: true,
+	confirm_d1_require_announced: true,
+	preview_allow_draft: true
 };
 
 export function parseHhmmToMinutes(hhmm?: string | null): number | null {

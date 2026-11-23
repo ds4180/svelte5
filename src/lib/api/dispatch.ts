@@ -58,6 +58,12 @@ export interface DispatchSettings {
 	stats_include_draft?: boolean;
 	enable_validation_blink?: boolean;
 	warn_prev_day_work?: boolean;
+	auto_announce_title_template?: string;
+	auto_announce_body_template?: string;
+	announce_sender_min_rank?: number;
+	confirm_d_day_always_open?: boolean;
+	confirm_d1_require_announced?: boolean;
+	preview_allow_draft?: boolean;
 }
 
 export interface DriverWorkStat {
@@ -198,4 +204,7 @@ export const customGetDispatchSettings = () =>
 		show_substitute_columns: boolean;
 		route_fleet_rules: RouteFleetRule[];
 		vehicles_by_group: Record<string, string[]>;
+		confirm_d_day_always_open?: boolean;
+		confirm_d1_require_announced?: boolean;
+		preview_allow_draft?: boolean;
 	}>('GET', '/api/v1/custom/dispatch/settings');

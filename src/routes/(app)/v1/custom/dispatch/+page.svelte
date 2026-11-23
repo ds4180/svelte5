@@ -51,6 +51,9 @@
 	let showSubstituteColumns = $state(true);
 	let routeFleetRules = $state<RouteFleetRule[]>(DEFAULT_DISPATCH_SETTINGS.route_fleet_rules);
 	let vehiclesByGroup = $state<Record<string, string[]>>({});
+	let confirmDDayAlwaysOpen = $state(true);
+	let confirmD1RequireAnnounced = $state(true);
+	let previewAllowDraft = $state(true);
 	let settingsLoaded = $state(false);
 
 	let activeTab = $state<'confirm' | 'preview'>('confirm');
@@ -186,6 +189,9 @@
 			showSubstituteColumns = res.show_substitute_columns ?? true;
 			if (Array.isArray(res.route_fleet_rules)) routeFleetRules = res.route_fleet_rules;
 			vehiclesByGroup = res.vehicles_by_group || {};
+			confirmDDayAlwaysOpen = res.confirm_d_day_always_open ?? true;
+			confirmD1RequireAnnounced = res.confirm_d1_require_announced ?? true;
+			previewAllowDraft = res.preview_allow_draft ?? true;
 			if (
 				activeTab === 'preview' &&
 				previewWindow.offsets?.length &&
@@ -269,32 +275,41 @@
 			});
 			if (token !== fetchToken) return;
 			if (activeTab === 'confirm' && currentDiffDays === 0) {
-				// 오늘(D-day) 배차는 비공개 대상이 아니므로 저장 상태와 무관하게 항상 표시
-				if (combined.length === 0) {
+				const visibleRows = confirmDDayAlwaysOpen
+					? combined
+					: combined.filter((r) => r.status === 'CONFIRMED' || r.status === 'ANNOUNCED');
+				if (visibleRows.length === 0) {
 					dispatchRows = [];
 					showLockScreen = true;
-					errorMessage = '오늘 등록된 배차 정보가 없습니다.';
+					errorMessage = confirmDDayAlwaysOpen
+						? '오늘 등록된 배차 정보가 없습니다.'
+						: '오늘 배차가 아직 확정되지 않았습니다.';
 				} else {
-					dispatchRows = combined;
+					dispatchRows = visibleRows;
 				}
 			} else if (activeTab === 'confirm' && currentDiffDays === 1) {
-				// 명일(D-1) 배차는 설정된 고시 시각 자동 배포 또는 지금 배포(ANNOUNCED) 시에만 공개
-				const announcedRows = combined.filter((r) => r.status === 'ANNOUNCED');
-				if (announcedRows.length === 0) {
+				const visibleRows = confirmD1RequireAnnounced
+					? combined.filter((r) => r.status === 'ANNOUNCED')
+					: combined.filter((r) => r.status === 'CONFIRMED' || r.status === 'ANNOUNCED');
+				if (visibleRows.length === 0) {
 					dispatchRows = [];
 					showLockScreen = true;
-					errorMessage = '명일 배차가 아직 배포되지 않았습니다.';
+					errorMessage = confirmD1RequireAnnounced
+						? '명일 배차가 아직 배포되지 않았습니다.'
+						: '명일 배차가 아직 확정되지 않았습니다.';
 				} else {
-					dispatchRows = announcedRows;
+					dispatchRows = visibleRows;
 				}
 			} else {
-				// 배차 예고(D+2 이상): previewWindow 정책(공개 시각/범위/예고 정지)을 통과한 날짜면 저장된 예고 배차 표시
-				if (combined.length === 0) {
+				const visibleRows = previewAllowDraft
+					? combined
+					: combined.filter((r) => r.status === 'CONFIRMED' || r.status === 'ANNOUNCED');
+				if (visibleRows.length === 0) {
 					dispatchRows = [];
 					showLockScreen = true;
 					errorMessage = '해당 날짜에 등록된 배차 예고가 없습니다.';
 				} else {
-					dispatchRows = combined;
+					dispatchRows = visibleRows;
 				}
 			}
 		} catch (err) {

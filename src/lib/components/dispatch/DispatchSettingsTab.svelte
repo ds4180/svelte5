@@ -406,6 +406,65 @@
 					<span>사용자 배차표(`custom/dispatch`)에 대인·대차 빈 셀 표시</span>
 				</label>
 			</div>
+
+			<div class="space-y-3 rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+				<div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
+					<label class="block space-y-1 text-xs font-bold text-slate-700 sm:col-span-2">
+						<span>고지 알림 제목 템플릿 (`&#123;target_date&#125;` 치환)</span>
+						<input
+							type="text"
+							bind:value={draft.auto_announce_title_template}
+							placeholder="[명일 배차 고지] &#123;target_date&#125;"
+							class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-900"
+						/>
+					</label>
+					<label class="block space-y-1 text-xs font-bold text-slate-700">
+						<span>발송자 최소 등급 (rank)</span>
+						<input
+							type="number"
+							min="1"
+							max="10"
+							bind:value={draft.announce_sender_min_rank}
+							class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-black text-slate-900"
+						/>
+					</label>
+				</div>
+				<label class="block space-y-1 text-xs font-bold text-slate-700">
+					<span>고지 알림 본문 템플릿 (`&#123;target_date&#125;` 치환)</span>
+					<input
+						type="text"
+						bind:value={draft.auto_announce_body_template}
+						placeholder="&#123;target_date&#125; 배차가 확정 고지되었습니다. 배차표에서 차량과 로번을 확인해 주세요."
+						class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-900"
+					/>
+				</label>
+				<div class="space-y-2 border-t border-slate-200 pt-3 text-xs font-bold text-slate-700">
+					<label class="flex cursor-pointer items-center gap-2">
+						<input
+							type="checkbox"
+							bind:checked={draft.confirm_d_day_always_open}
+							class="rounded text-blue-600"
+						/>
+						<span>오늘(D-day) 확정 배차 탭은 저장 상태와 무관하게 항상 공개</span>
+					</label>
+					<label class="flex cursor-pointer items-center gap-2">
+						<input
+							type="checkbox"
+							bind:checked={draft.confirm_d1_require_announced}
+							class="rounded text-blue-600"
+						/>
+						<span>명일(D-1) 확정 배차 탭은 배포(ANNOUNCED) 상태일 때만 공개</span>
+					</label>
+					<label class="flex cursor-pointer items-center gap-2">
+						<input
+							type="checkbox"
+							bind:checked={draft.preview_allow_draft}
+							class="rounded text-blue-600"
+						/>
+						<span>배차 예고(D+2 이상) 탭에서 저장(DRAFT) 상태 배차도 미리보기 허용</span>
+					</label>
+				</div>
+			</div>
 		</div>
 
 		<!-- 노선-차량 그룹 매핑 규칙 -->
@@ -535,7 +594,7 @@
 						bind:checked={draft.stats_include_draft}
 						class="rounded text-blue-600"
 					/>
-					<span>임시저장(DRAFT) 배차도 실적에 포함</span>
+					<span>저장(DRAFT) 상태 배차도 실적에 포함</span>
 				</label>
 				<label class="flex cursor-pointer items-center gap-2 text-xs font-bold text-rose-700">
 					<input
