@@ -524,54 +524,15 @@
 		</div>
 
 		<div class="flex max-w-full min-w-0 flex-wrap items-center gap-2.5">
-			{#if selectedRoute && activeTab === 'canvas'}
-				{#if isDMinus1}
-					<span
-						class="inline-flex items-center gap-2 rounded-full border px-4 py-1.5 text-sm font-black {selectedDatePublished
-							? 'border-emerald-200 bg-emerald-50 text-emerald-700'
-							: 'border-amber-200 bg-amber-50 text-amber-700'}"
-					>
-						<span
-							class="h-2.5 w-2.5 rounded-full {selectedDatePublished
-								? 'bg-emerald-500'
-								: 'bg-amber-500'}"
-						></span>
-						{#if selectedDatePublished}
-							명일 배차 공개됨
-						{:else}
-							명일 배차 공개 전 ({dispatchSettings.auto_announce_time || '17:00'} 자동 배포)
-						{/if}
-					</span>
-
-					{#if selectedDatePublished}
-						<button
-							type="button"
-							disabled={announcingNow}
-							class="inline-flex items-center gap-1.5 rounded-xl border border-rose-200 bg-rose-50 px-4 py-2 text-xs font-black text-rose-700 shadow-xs transition hover:bg-rose-100 active:scale-95 disabled:opacity-50"
-							onclick={handleUnpublishD1}
-						>
-							<Icon icon="solar:eye-closed-bold" class="text-base" />
-							<span>공개 취소</span>
-						</button>
-					{:else}
-						<button
-							type="button"
-							disabled={announcingNow}
-							class="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2 text-xs font-black text-white shadow-md transition hover:bg-emerald-700 active:scale-95 disabled:opacity-50"
-							onclick={handleDeployNowD1}
-						>
-							<Icon icon="solar:bell-bing-bold" class="text-base" />
-							<span>{announcingNow ? '공개 중...' : '지금 공개(배포)'}</span>
-						</button>
-					{/if}
-				{:else if isPreviewDatePublic}
+			{#if selectedRoute && activeTab === 'canvas' && !isDMinus1 && selectedDateKey !== formatDateISO(today)}
+				{#if isPreviewDatePublic}
 					<span
 						class="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-4 py-1.5 text-sm font-black text-emerald-700"
 					>
 						<span class="h-2.5 w-2.5 rounded-full bg-emerald-500"></span>
 						{selectedFullDate} · 자동 공개 중
 					</span>
-				{:else if selectedDateKey !== formatDateISO(today)}
+				{:else}
 					<span
 						class="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-100 px-4 py-1.5 text-sm font-black text-slate-600"
 					>
