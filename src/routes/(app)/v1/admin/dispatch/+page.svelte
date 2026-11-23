@@ -562,17 +562,17 @@
 	</div>
 
 	<!-- 2. 상단 4대 관제 지표 요약 카드 -->
-	<div class="grid grid-cols-1 gap-3 sm:grid-cols-2 md:gap-5 xl:grid-cols-4">
+	<div class="grid grid-cols-2 gap-3 md:gap-4 lg:grid-cols-12">
 		<!-- 카드 1: 배차 예고 상태 & 전역 토글 -->
 		<div
-			class="flex flex-col justify-between rounded-[1.75rem] border-2 p-4 shadow-sm sm:p-5 {dispatchSettings.preview_enabled
+			class="col-span-2 flex min-w-0 flex-col justify-between rounded-[1.75rem] border-2 p-4 shadow-sm sm:col-span-1 sm:p-5 lg:col-span-4 {dispatchSettings.preview_enabled
 				? 'border-emerald-200 bg-emerald-50/40'
 				: 'border-rose-200 bg-rose-50/40'}"
 		>
 			<div class="flex items-center justify-between gap-2">
 				<span class="truncate text-xs font-black text-slate-500 uppercase">배차 예고 상태</span>
 				<span
-					class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-black {dispatchSettings.preview_enabled
+					class="inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-black {dispatchSettings.preview_enabled
 						? 'bg-emerald-100 text-emerald-700'
 						: 'bg-rose-100 text-rose-700'}"
 				>
@@ -584,16 +584,16 @@
 					{dispatchSettings.preview_enabled ? '공개 중' : '중지 중'}
 				</span>
 			</div>
-			<div class="mt-3 flex items-end justify-between gap-2">
-				<div>
+			<div class="mt-3 flex flex-wrap items-end justify-between gap-3">
+				<div class="min-w-0 flex-1">
 					<div
-						class="text-xl font-black sm:text-2xl {dispatchSettings.preview_enabled
+						class="truncate text-xl font-black sm:text-2xl {dispatchSettings.preview_enabled
 							? 'text-emerald-700'
 							: 'text-rose-700'}"
 					>
 						{dispatchSettings.preview_enabled ? '배차 예고 중' : '배차 예고 중지 중'}
 					</div>
-					<div class="mt-1 text-xs font-bold text-slate-500">
+					<div class="mt-1 truncate text-xs font-bold text-slate-500">
 						노출 구간: +{dispatchSettings.preview_start_offset ??
 							3}~+{(dispatchSettings.preview_start_offset ?? 3) +
 							(dispatchSettings.preview_days ?? 5) -
@@ -604,7 +604,7 @@
 					type="button"
 					disabled={togglingPreview}
 					onclick={toggleGlobalPreviewEnabled}
-					class="shrink-0 rounded-xl px-3.5 py-2 text-xs font-black text-white shadow-sm transition active:scale-95 disabled:opacity-50 {dispatchSettings.preview_enabled
+					class="w-full shrink-0 rounded-xl px-3.5 py-2 text-xs font-black text-white shadow-sm transition active:scale-95 disabled:opacity-50 sm:w-auto {dispatchSettings.preview_enabled
 						? 'bg-amber-600 hover:bg-amber-700'
 						: 'bg-indigo-600 hover:bg-indigo-700'}"
 				>
@@ -615,7 +615,7 @@
 
 		<!-- 카드 2: 명일 배차(D+1) 저장 상태 · 확정/공개 여부 -->
 		<div
-			class="flex flex-col justify-between rounded-[1.75rem] border-2 p-4 shadow-sm sm:p-5 {tomorrowSummary.published
+			class="col-span-2 flex min-w-0 flex-col justify-between rounded-[1.75rem] border-2 p-4 shadow-sm sm:col-span-1 sm:p-5 lg:col-span-4 {tomorrowSummary.published
 				? 'border-emerald-200 bg-white'
 				: 'border-amber-200 bg-amber-50/30'}"
 		>
@@ -624,7 +624,7 @@
 					명일 배차 ({tomorrowDateKey})
 				</span>
 				<span
-					class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-black {tomorrowSummary.published
+					class="inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-black {tomorrowSummary.published
 						? 'bg-emerald-100 text-emerald-700'
 						: 'bg-amber-100 text-amber-700'}"
 				>
@@ -636,8 +636,8 @@
 					{tomorrowSummary.published ? '공개 완료' : '공개 전'}
 				</span>
 			</div>
-			<div class="mt-3 flex items-end justify-between gap-2">
-				<div class="space-y-1">
+			<div class="mt-3 flex flex-wrap items-end justify-between gap-3">
+				<div class="min-w-0 flex-1 space-y-1">
 					<div class="flex flex-wrap items-center gap-1.5 text-sm font-black text-slate-900">
 						<span>
 							{#if tomorrowSummary.totalCount > 0 && tomorrowSummary.savedCount >= tomorrowSummary.totalCount}
@@ -656,7 +656,7 @@
 								: `미확정 (${tomorrowSummary.confirmedCount}/${tomorrowSummary.totalCount})`}
 						</span>
 					</div>
-					<div class="text-xs font-bold text-slate-500">
+					<div class="truncate text-xs font-bold text-slate-500">
 						{tomorrowSummary.published
 							? '공개됨 (기사 열람 가능)'
 							: tomorrowSummary.confirmed
@@ -669,7 +669,7 @@
 						type="button"
 						disabled={announcingNow}
 						onclick={handleUnpublishD1}
-						class="shrink-0 rounded-xl bg-rose-600 px-3.5 py-2 text-xs font-black text-white shadow-sm transition hover:bg-rose-700 active:scale-95 disabled:opacity-50"
+						class="w-full shrink-0 rounded-xl bg-rose-600 px-3.5 py-2 text-xs font-black text-white shadow-sm transition hover:bg-rose-700 active:scale-95 disabled:opacity-50 sm:w-auto"
 					>
 						공개 취소
 					</button>
@@ -681,7 +681,7 @@
 							? '확정된 명일 배차를 공개합니다'
 							: '명일 배차를 먼저 확정해야 공개할 수 있습니다'}
 						onclick={handlePublishTomorrowFromCard}
-						class="shrink-0 rounded-xl px-3.5 py-2 text-xs font-black text-white shadow-sm transition active:scale-95 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-500 {tomorrowSummary.confirmed
+						class="w-full shrink-0 rounded-xl px-3.5 py-2 text-xs font-black text-white shadow-sm transition active:scale-95 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-500 sm:w-auto {tomorrowSummary.confirmed
 							? 'bg-emerald-600 hover:bg-emerald-700'
 							: ''}"
 					>
@@ -692,7 +692,7 @@
 		</div>
 
 		<div
-			class="flex flex-col justify-between rounded-[1.75rem] border-2 border-slate-200 bg-white p-4 shadow-sm sm:p-5"
+			class="col-span-1 flex min-w-0 flex-col justify-between rounded-[1.75rem] border-2 border-slate-200 bg-white p-4 shadow-sm sm:p-5 lg:col-span-2"
 		>
 			<div class="flex items-center justify-between gap-2">
 				<span class="truncate text-xs font-black text-slate-400 uppercase">Assign Rate</span>
@@ -713,7 +713,7 @@
 		</div>
 
 		<div
-			class="flex flex-col justify-between rounded-[1.75rem] border-2 border-slate-200 bg-white p-4 shadow-sm sm:p-5"
+			class="col-span-1 flex min-w-0 flex-col justify-between rounded-[1.75rem] border-2 border-slate-200 bg-white p-4 shadow-sm sm:p-5 lg:col-span-2"
 		>
 			<div class="flex items-center justify-between gap-2">
 				<span class="truncate text-xs font-black text-slate-400 uppercase">Standby Drivers</span>
