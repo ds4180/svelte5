@@ -18,6 +18,11 @@ export interface RouteFleetRule {
 	fleet_key: string;
 }
 
+export interface NightRouteTurnRule {
+	route_keyword: string;
+	turn_seqs: number[];
+}
+
 export interface DriverAssignColorStyle {
 	enabled: boolean;
 	bg_color: string;
@@ -47,14 +52,12 @@ export interface DispatchSettings {
 	weekly_basis?: 'calendar_week' | 'rolling_7d';
 	min_rest_hours?: number;
 	night_metric_mode?: 'turn_count' | 'time_range';
-	night_turn_seqs?: number[];
-	night_include_last_turn?: boolean;
+	night_route_turn_rules?: NightRouteTurnRule[];
 	night_morning_end?: string;
 	night_evening_start?: string;
 	stats_include_draft?: boolean;
 	enable_validation_blink?: boolean;
 	warn_prev_day_work?: boolean;
-	disciplined_drivers?: string[];
 }
 
 export interface DriverWorkStat {

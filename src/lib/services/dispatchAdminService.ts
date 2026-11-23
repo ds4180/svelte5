@@ -44,14 +44,12 @@ export const DEFAULT_DISPATCH_SETTINGS: DispatchSettings = {
 	weekly_basis: 'calendar_week',
 	min_rest_hours: 8,
 	night_metric_mode: 'turn_count',
-	night_turn_seqs: [1],
-	night_include_last_turn: true,
+	night_route_turn_rules: [],
 	night_morning_end: '06:00',
 	night_evening_start: '21:00',
 	stats_include_draft: true,
 	enable_validation_blink: true,
-	warn_prev_day_work: true,
-	disciplined_drivers: []
+	warn_prev_day_work: true
 };
 
 export function parseHhmmToMinutes(hhmm?: string | null): number | null {
@@ -75,6 +73,8 @@ const EMPTY_STAT: DriverWorkStat = {
 	month_night_count: 0,
 	month_night_minutes: 0,
 	prev_end_time: null,
+	worked_yesterday: false,
+	consecutive_off_days: 3,
 	earliest_today_min: null,
 	earliest_available_time: null,
 	dayoff_type: null,

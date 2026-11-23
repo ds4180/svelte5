@@ -36,28 +36,48 @@
 		if (!copy.driver_assign_colors) {
 			copy.driver_assign_colors = JSON.parse(JSON.stringify(DEFAULT_DRIVER_ASSIGN_COLORS));
 		}
-		if (!Array.isArray(copy.night_turn_seqs)) {
-			copy.night_turn_seqs = [...(DEFAULT_DISPATCH_SETTINGS.night_turn_seqs ?? [1])];
-		}
-		if (!Array.isArray(copy.disciplined_drivers)) {
-			copy.disciplined_drivers = [];
+		if (!Array.isArray(copy.night_route_turn_rules)) {
+			copy.night_route_turn_rules = [];
 		}
 		return copy;
 	}
 
 	let draft = $state<DispatchSettings>(untrack(() => cloneWithDefaults(settings)));
-	let nightTurnSeqsText = $state(untrack(() => (draft.night_turn_seqs ?? [1]).join(', ')));
-	let disciplinedDriversText = $state(untrack(() => (draft.disciplined_drivers ?? []).join(', ')));
 	let saving = $state(false);
 	let announcing = $state(false);
 	let newRuleKeywords = $state('');
 	let newRuleFleetKey = $state('');
+	let newNightRouteKw = $state('');
+	let newNightRouteSeqs = $state('');
+
+	function addNightRouteRule() {
+		const kw = newNightRouteKw.trim();
+		const seqs = Array.from(
+			new Set(
+				newNightRouteSeqs
+					.split(',')
+					.map((s) => Number(s.trim()))
+					.filter((n) => Number.isInteger(n) && n > 0)
+			)
+		).sort((a, b) => a - b);
+		if (!kw || seqs.length === 0) {
+			toast.warning('노선 키워드와 야간 로번 번호를 모두 입력해 주세요.');
+			return;
+		}
+		draft.night_route_turn_rules = [
+			...(draft.night_route_turn_rules || []),
+			{ route_keyword: kw, turn_seqs: seqs }
+		];
+		newNightRouteKw = '';
+		newNightRouteSeqs = '';
+	}
+
+	function removeNightRouteRule(idx: number) {
+		draft.night_route_turn_rules = (draft.night_route_turn_rules || []).filter((_, i) => i !== idx);
+	}
 
 	$effect(() => {
-		const next = cloneWithDefaults(settings);
-		draft = next;
-		nightTurnSeqsText = (next.night_turn_seqs ?? [1]).join(', ');
-		disciplinedDriversText = (next.disciplined_drivers ?? []).join(', ');
+		draft = cloneWithDefaults(settings);
 	});
 
 	const availableFleetKeys = $derived(Object.keys(vehiclesByGroup || {}));
@@ -66,14 +86,6 @@
 		if (saving) return;
 		saving = true;
 		try {
-			draft.night_turn_seqs = nightTurnSeqsText
-				.split(',')
-				.map((s) => Number(s.trim()))
-				.filter((n) => Number.isInteger(n) && n > 0);
-			draft.disciplined_drivers = disciplinedDriversText
-				.split(',')
-				.map((s) => s.trim())
-				.filter(Boolean);
 			const res = await dispatchApi.adminUpdateDispatchSettings(draft);
 			toast.success(res.message || '배차 설정이 저장되었습니다.');
 			onSaved(res.settings, res.preview_window);
@@ -481,7 +493,7 @@
 			</label>
 		</div>
 
-		<div class="grid grid-cols-1 gap-4 lg:grid-cols-3">
+		<div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
 			<!-- 1. 근무 정책 기준 -->
 			<div class="min-w-0 space-y-3 rounded-2xl border border-slate-200 bg-slate-50/60 p-4">
 				<h5 class="text-xs font-black text-slate-800">근무 정책 기준</h5>
@@ -570,38 +582,49 @@
 						</label>
 					</div>
 				{:else}
-					<label class="block space-y-1 text-xs font-bold text-slate-600">
-						<span>야간 로번 번호 (쉼표 구분)</span>
-						<input
-							type="text"
-							bind:value={nightTurnSeqsText}
-							placeholder="1"
-							class="w-full rounded-xl border border-slate-300 bg-white px-2.5 py-1.5 font-black text-slate-900"
-						/>
-					</label>
-					<label class="flex cursor-pointer items-center gap-2 text-xs font-bold text-slate-700">
-						<input
-							type="checkbox"
-							bind:checked={draft.night_include_last_turn}
-							class="rounded text-blue-600"
-						/>
-						<span>각 노선 마지막 로번(막차) 포함</span>
-					</label>
+					<div class="space-y-1.5 pt-1">
+						<div class="text-[11px] font-black text-slate-700">노선별 야간 로번 지정</div>
+						{#each draft.night_route_turn_rules || [] as nr, idx (`${nr.route_keyword}-${idx}`)}
+							<div
+								class="flex items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[11px]"
+							>
+								<span class="font-bold text-slate-800">
+									<span class="font-black text-indigo-700">{nr.route_keyword}</span> → {nr.turn_seqs.join(
+										', '
+									)}로번
+								</span>
+								<button
+									type="button"
+									onclick={() => removeNightRouteRule(idx)}
+									class="font-black text-rose-500 hover:text-rose-700"
+								>
+									삭제
+								</button>
+							</div>
+						{/each}
+						<div class="flex flex-wrap items-center gap-1.5">
+							<input
+								type="text"
+								bind:value={newNightRouteKw}
+								placeholder="노선 (예: 121)"
+								class="w-24 min-w-0 rounded-lg border border-slate-300 bg-white px-2 py-1 text-[11px] font-bold"
+							/>
+							<input
+								type="text"
+								bind:value={newNightRouteSeqs}
+								placeholder="로번 (예: 1, 4)"
+								class="min-w-[90px] flex-1 rounded-lg border border-slate-300 bg-white px-2 py-1 text-[11px] font-bold"
+							/>
+							<button
+								type="button"
+								onclick={addNightRouteRule}
+								class="rounded-lg bg-slate-800 px-2.5 py-1 text-[11px] font-black text-white hover:bg-slate-700"
+							>
+								추가
+							</button>
+						</div>
+					</div>
 				{/if}
-			</div>
-
-			<!-- 3. 징계 대상 기사 관리 -->
-			<div class="min-w-0 space-y-3 rounded-2xl border border-slate-200 bg-slate-50/60 p-4">
-				<h5 class="text-xs font-black text-slate-800">징계 기사 임시 지정</h5>
-				<p class="text-[11px] font-medium text-slate-500">
-					별도 징계 테이블 도입 전까지 4그룹(병가·징계)으로 분류할 기사 성명을 쉼표로 입력합니다.
-				</p>
-				<textarea
-					rows={3}
-					bind:value={disciplinedDriversText}
-					placeholder="예: 홍길동, 김철수"
-					class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-900"
-				></textarea>
 			</div>
 		</div>
 	</div>
