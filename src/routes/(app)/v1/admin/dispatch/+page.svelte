@@ -558,19 +558,6 @@
 							<span>{announcingNow ? '공개 중...' : '지금 공개(배포)'}</span>
 						</button>
 					{/if}
-				{:else if selectedDateKey === formatDateISO(today)}
-					<span
-						class="inline-flex items-center gap-2 rounded-full border px-4 py-1.5 text-sm font-black {dispatchSettings.preview_enabled
-							? 'border-emerald-200 bg-emerald-50 text-emerald-700'
-							: 'border-rose-200 bg-rose-50 text-rose-700'}"
-					>
-						<span
-							class="h-2.5 w-2.5 rounded-full {dispatchSettings.preview_enabled
-								? 'bg-emerald-500'
-								: 'bg-rose-500'}"
-						></span>
-						{dispatchSettings.preview_enabled ? '배차 예고 중' : '배차 예고 중지 중'}
-					</span>
 				{:else if isPreviewDatePublic}
 					<span
 						class="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-4 py-1.5 text-sm font-black text-emerald-700"
@@ -578,7 +565,7 @@
 						<span class="h-2.5 w-2.5 rounded-full bg-emerald-500"></span>
 						{selectedFullDate} · 자동 공개 중
 					</span>
-				{:else}
+				{:else if selectedDateKey !== formatDateISO(today)}
 					<span
 						class="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-100 px-4 py-1.5 text-sm font-black text-slate-600"
 					>
