@@ -474,12 +474,12 @@
 			{#if selectedRoute && activeTab === 'canvas'}
 				{#if isDMinus1}
 					<span
-						class="inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-black {selectedDatePublished
+						class="inline-flex items-center gap-2 rounded-full border px-4 py-1.5 text-sm font-black {selectedDatePublished
 							? 'border-emerald-200 bg-emerald-50 text-emerald-700'
 							: 'border-amber-200 bg-amber-50 text-amber-700'}"
 					>
 						<span
-							class="h-2 w-2 rounded-full {selectedDatePublished
+							class="h-2.5 w-2.5 rounded-full {selectedDatePublished
 								? 'bg-emerald-500'
 								: 'bg-amber-500'}"
 						></span>
@@ -513,25 +513,31 @@
 					{/if}
 				{:else if selectedDateKey === formatDateISO(today)}
 					<span
-						class="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-100 px-3 py-1 text-[11px] font-black text-slate-600"
+						class="inline-flex items-center gap-2 rounded-full border px-4 py-1.5 text-sm font-black {dispatchSettings.preview_enabled
+							? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+							: 'border-rose-200 bg-rose-50 text-rose-700'}"
 					>
-						<span class="h-2 w-2 rounded-full bg-indigo-500"></span>
-						{selectedFullDate} · 금일 배차 (저장 즉시 반영)
+						<span
+							class="h-2.5 w-2.5 rounded-full {dispatchSettings.preview_enabled
+								? 'bg-emerald-500'
+								: 'bg-rose-500'}"
+						></span>
+						{dispatchSettings.preview_enabled ? '배차 예고 중' : '배차 예고 중지 중'}
 					</span>
 				{:else if isPreviewDatePublic}
 					<span
-						class="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[11px] font-black text-emerald-700"
+						class="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-4 py-1.5 text-sm font-black text-emerald-700"
 					>
-						<span class="h-2 w-2 rounded-full bg-emerald-500"></span>
+						<span class="h-2.5 w-2.5 rounded-full bg-emerald-500"></span>
 						{selectedFullDate} · 예고 구간 설정에 따라 자동 공개
 					</span>
 				{:else}
 					<span
-						class="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-100 px-3 py-1 text-[11px] font-black text-slate-500"
+						class="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-100 px-4 py-1.5 text-sm font-black text-slate-600"
 					>
-						<span class="h-2 w-2 rounded-full bg-slate-400"></span>
+						<span class="h-2.5 w-2.5 rounded-full bg-slate-400"></span>
 						{selectedFullDate} · 비공개 ({!dispatchSettings.preview_enabled
-							? '배차 예고 숨김 중'
+							? '배차 예고 중지 중'
 							: '예고 구간 외'})
 					</span>
 				{/if}
