@@ -32,5 +32,6 @@
   { "name": "유상종", "role": "RESERVE", "vehicle_no": null },
   { "name": "부동수", "role": "RESERVE", "vehicle_no": null },
   { "name": "지현우", "role": "RESERVE", "vehicle_no": null },
-  { "name": "박진영", "role": "RESERVE", "vehicle_no": null }
+  { "name": "박진영", "role": "RESERVE", "vehicle_no": null },
+  { "name": "고성국", "role": "RESERVE", "vehicle_no": null }
 ]
