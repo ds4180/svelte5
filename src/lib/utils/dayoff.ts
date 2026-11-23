@@ -39,7 +39,22 @@ export const DAYOFF_TYPE_LABELS: Record<string, string> = {
 	OFFICIAL: '공가'
 };
 
+export const DAYOFF_STATUS_LABELS: Record<string, string> = {
+	REQUESTED: '승인 대기',
+	APPROVED: '승인 확정',
+	REJECTED: '반려',
+	CANCELLED: '취소'
+};
+
+export const DAYOFF_WORK_TYPE_LABELS: Record<string, string> = {
+	FCFS: '🚌 운전직(선착순)',
+	APPROVAL: '🏢 사무직(승인제)'
+};
+
 export const getDayoffTypeLabel = (t: string): string => DAYOFF_TYPE_LABELS[t] || t;
+export const getDayoffStatusLabel = (s: string): string => DAYOFF_STATUS_LABELS[s] || s || '-';
+export const getDayoffWorkTypeLabel = (w?: string): string =>
+	w === 'FCFS' ? DAYOFF_WORK_TYPE_LABELS.FCFS : DAYOFF_WORK_TYPE_LABELS.APPROVAL;
 
 /** 'YYYY-MM-DD' 다음 날짜 문자열 */
 export function nextDayStr(dateStr: string): string {
