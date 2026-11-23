@@ -269,7 +269,7 @@
 
 			lastSyncedDateKey = dateKey;
 			const targetRoutes = selectedRoute.id === 'ALL' ? routes : [selectedRoute];
-			const [combined, statsRes, pubRes] = await Promise.all([
+			const [combined, statsRes, pubRes, tomorrowPubRes] = await Promise.all([
 				fetchDispatchForRoutes({
 					dateKey,
 					targetRoutes,
@@ -281,10 +281,21 @@
 					console.warn('⚠️ Failed to fetch driver work stats:', err);
 					return null;
 				}),
-				dispatchApi.adminGetDispatchPublishStatus(dateKey).catch(() => null)
+				dispatchApi.adminGetDispatchPublishStatus(dateKey).catch(() => null),
+				dateKey === tomorrowDateKey
+					? Promise.resolve(null)
+					: dispatchApi.adminGetDispatchPublishStatus(tomorrowDateKey).catch(() => null)
 			]);
 			if (token !== fetchToken) return;
 			selectedDatePublished = Boolean(pubRes?.published);
+			const tmrSource = dateKey === tomorrowDateKey ? pubRes : tomorrowPubRes;
+			if (tmrSource) {
+				tomorrowSummary = {
+					published: Boolean(tmrSource.published),
+					savedCount: Number(tmrSource.saved_count ?? 0),
+					totalCount: Number(tmrSource.total_count ?? 0)
+				};
+			}
 			dispatchRows = combined;
 			originalDispatchRows = JSON.parse(JSON.stringify(combined));
 			if (statsRes) {
@@ -355,6 +366,11 @@
 	}
 
 	let selectedDatePublished = $state(false);
+	let tomorrowSummary = $state<{ published: boolean; savedCount: number; totalCount: number }>({
+		published: false,
+		savedCount: 0,
+		totalCount: 0
+	});
 	let announcingNow = $state(false);
 	async function handleDeployNowD1() {
 		if (announcingNow || !selectedRoute) return;
@@ -575,42 +591,120 @@
 	</div>
 
 	<!-- 2. 상단 4대 관제 지표 요약 카드 -->
-	<div class="grid grid-cols-2 gap-3 md:gap-5 xl:grid-cols-4">
+	<div class="grid grid-cols-1 gap-3 sm:grid-cols-2 md:gap-5 xl:grid-cols-4">
+		<!-- 카드 1: 배차 예고 상태 & 전역 토글 -->
 		<div
-			class="flex flex-col justify-between rounded-[1.75rem] border-2 border-slate-200 bg-white p-4 shadow-sm sm:p-5"
+			class="flex flex-col justify-between rounded-[1.75rem] border-2 p-4 shadow-sm sm:p-5 {dispatchSettings.preview_enabled
+				? 'border-emerald-200 bg-emerald-50/40'
+				: 'border-rose-200 bg-rose-50/40'}"
 		>
 			<div class="flex items-center justify-between gap-2">
-				<span class="truncate text-xs font-black text-slate-400 uppercase">Target Routes</span>
-				<div
-					class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600"
+				<span class="truncate text-xs font-black text-slate-500 uppercase">배차 예고 상태</span>
+				<span
+					class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-black {dispatchSettings.preview_enabled
+						? 'bg-emerald-100 text-emerald-700'
+						: 'bg-rose-100 text-rose-700'}"
 				>
-					<Icon icon="solar:bus-bold-duotone" class="text-xl" />
-				</div>
+					<span
+						class="h-2 w-2 rounded-full {dispatchSettings.preview_enabled
+							? 'bg-emerald-500'
+							: 'bg-rose-500'}"
+					></span>
+					{dispatchSettings.preview_enabled ? '공개 중' : '중지 중'}
+				</span>
 			</div>
-			<div class="mt-3">
-				<div class="text-2xl font-black text-slate-900 sm:text-3xl">
-					{routes.length} <span class="text-xs font-normal text-slate-500">노선</span>
+			<div class="mt-3 flex items-end justify-between gap-2">
+				<div>
+					<div
+						class="text-xl font-black sm:text-2xl {dispatchSettings.preview_enabled
+							? 'text-emerald-700'
+							: 'text-rose-700'}"
+					>
+						{dispatchSettings.preview_enabled ? '배차 예고 중' : '배차 예고 중지 중'}
+					</div>
+					<div class="mt-1 text-xs font-bold text-slate-500">
+						노출 구간: +{dispatchSettings.preview_start_offset ??
+							3}~+{(dispatchSettings.preview_start_offset ?? 3) +
+							(dispatchSettings.preview_days ?? 5) -
+							1}일
+					</div>
 				</div>
-				<div class="mt-1 text-xs font-bold text-indigo-600">가동 중인 전체 노선</div>
+				<button
+					type="button"
+					disabled={togglingPreview}
+					onclick={toggleGlobalPreviewEnabled}
+					class="shrink-0 rounded-xl px-3.5 py-2 text-xs font-black text-white shadow-sm transition active:scale-95 disabled:opacity-50 {dispatchSettings.preview_enabled
+						? 'bg-amber-600 hover:bg-amber-700'
+						: 'bg-indigo-600 hover:bg-indigo-700'}"
+				>
+					{dispatchSettings.preview_enabled ? '숨기기' : '표시하기'}
+				</button>
 			</div>
 		</div>
 
+		<!-- 카드 2: 명일 배차(D+1) 저장 상태 · 확정/공개 여부 -->
 		<div
-			class="flex flex-col justify-between rounded-[1.75rem] border-2 border-slate-200 bg-white p-4 shadow-sm sm:p-5"
+			class="flex flex-col justify-between rounded-[1.75rem] border-2 p-4 shadow-sm sm:p-5 {tomorrowSummary.published
+				? 'border-emerald-200 bg-white'
+				: 'border-amber-200 bg-amber-50/30'}"
 		>
 			<div class="flex items-center justify-between gap-2">
-				<span class="truncate text-xs font-black text-slate-400 uppercase">Total Turns</span>
-				<div
-					class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600"
+				<span class="truncate text-xs font-black text-slate-500">
+					명일 배차 ({tomorrowDateKey})
+				</span>
+				<span
+					class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-black {tomorrowSummary.published
+						? 'bg-emerald-100 text-emerald-700'
+						: 'bg-amber-100 text-amber-700'}"
 				>
-					<Icon icon="solar:list-check-bold-duotone" class="text-xl" />
-				</div>
+					<span
+						class="h-2 w-2 rounded-full {tomorrowSummary.published
+							? 'bg-emerald-500'
+							: 'bg-amber-500'}"
+					></span>
+					{tomorrowSummary.published ? '공개 완료' : '공개 전'}
+				</span>
 			</div>
-			<div class="mt-3">
-				<div class="text-2xl font-black text-blue-600 sm:text-3xl">
-					{dispatchRows.length} <span class="text-xs font-normal text-slate-500">개</span>
+			<div class="mt-3 flex items-end justify-between gap-2">
+				<div class="space-y-1">
+					<div class="text-lg font-black text-slate-900 sm:text-xl">
+						{#if tomorrowSummary.totalCount > 0 && tomorrowSummary.savedCount >= tomorrowSummary.totalCount}
+							저장 완료
+						{:else if tomorrowSummary.savedCount > 0}
+							일부 저장
+						{:else}
+							미저장
+						{/if}
+						<span class="text-xs font-bold text-slate-500">
+							({tomorrowSummary.savedCount}/{tomorrowSummary.totalCount}회차)
+						</span>
+					</div>
+					<div class="text-xs font-bold text-slate-500">
+						{tomorrowSummary.published
+							? '확정·배포됨 (기사 열람 가능)'
+							: `미공개 (${dispatchSettings.auto_announce_enabled ? `${dispatchSettings.auto_announce_time || '17:00'} 자동 배포` : '수동 배포'})`}
+					</div>
 				</div>
-				<div class="mt-1 text-xs font-bold text-slate-400">선택 노선 로번 수</div>
+				{#if isDMinus1}
+					<button
+						type="button"
+						disabled={announcingNow}
+						onclick={() => (selectedDatePublished ? handleUnpublishD1() : handleDeployNowD1())}
+						class="shrink-0 rounded-xl px-3.5 py-2 text-xs font-black text-white shadow-sm transition active:scale-95 disabled:opacity-50 {selectedDatePublished
+							? 'bg-rose-600 hover:bg-rose-700'
+							: 'bg-emerald-600 hover:bg-emerald-700'}"
+					>
+						{selectedDatePublished ? '공개 취소' : '지금 공개'}
+					</button>
+				{:else}
+					<button
+						type="button"
+						onclick={() => setDate(tomorrowObj)}
+						class="shrink-0 rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-black text-slate-700 transition hover:bg-slate-50"
+					>
+						명일 이동
+					</button>
+				{/if}
 			</div>
 		</div>
 

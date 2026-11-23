@@ -203,6 +203,8 @@ export const adminGetDispatchPublishStatus = (targetDate: string) =>
 		target_date: string;
 		published: boolean;
 		meta?: { published_at?: string; mode?: string } | null;
+		saved_count?: number;
+		total_count?: number;
 	}>('GET', `/api/v1/admin/dispatch/publish-status?target_date=${encodeURIComponent(targetDate)}`);
 
 export const adminSetDispatchPublishStatus = (targetDate: string, published: boolean) =>
