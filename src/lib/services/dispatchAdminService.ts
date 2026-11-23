@@ -434,7 +434,7 @@ export function buildDispatchSavePayloads(params: {
 	routes: RouteMasterItem[];
 	dispatchRows: DispatchRow[];
 	dateKey: string;
-	status: 'DRAFT' | 'CONFIRMED';
+	status: 'DRAFT' | 'CONFIRMED' | 'ANNOUNCED';
 }) {
 	const { selectedRoute, routes, dispatchRows, dateKey, status } = params;
 	const targets =

@@ -53,10 +53,12 @@
 	let vehiclesByGroup = $state<Record<string, string[]>>({});
 	let settingsLoaded = $state(false);
 
+	let activeTab = $state<'confirm' | 'preview'>('confirm');
 	const initialDateStr = untrack(() => data?.serverTime?.dateStr ?? getKstTimeSnapshot().dateStr);
 	let todayStr = $state(initialDateStr);
 	const today = $derived(parseDateStrAsLocalDate(todayStr));
-	let selectedDate = $state(parseDateStrAsLocalDate(shiftCalendarDateStr(initialDateStr, 3)));
+	const tomorrowStr = $derived(shiftCalendarDateStr(todayStr, 1));
+	let selectedDate = $state(parseDateStrAsLocalDate(initialDateStr));
 
 	const formatDateISO = (date: Date) => formatDate(date);
 	const formatDateDisplay = (date: Date) =>
@@ -113,6 +115,70 @@
 		return diff > 0 ? `${diff}일 뒤` : `${Math.abs(diff)}일 전`;
 	}
 
+	function syncUrlState(tab: 'confirm' | 'preview', dateKey: string) {
+		if (typeof window === 'undefined') return;
+		const url = new URL(window.location.href);
+		url.searchParams.set('tab', tab);
+		if (tab === 'confirm') {
+			url.searchParams.delete('date');
+			url.searchParams.set('day', dateKey === tomorrowStr ? 'tomorrow' : 'today');
+		} else {
+			url.searchParams.delete('day');
+			url.searchParams.set('date', dateKey);
+		}
+		url.hash = '';
+		window.history.replaceState(null, '', `${url.pathname}${url.search}`);
+	}
+
+	function applyUrlTarget(): boolean {
+		if (typeof window === 'undefined') return false;
+		const params = new URLSearchParams(window.location.search);
+		const hash = window.location.hash.replace(/^#/, '').trim().toLowerCase();
+		const tabParam = (params.get('tab') || '').trim().toLowerCase();
+		const dayParam = (params.get('day') || '').trim().toLowerCase();
+		const dateParam = (params.get('date') || '').trim();
+
+		if (/^\d{4}-\d{2}-\d{2}$/.test(dateParam)) {
+			selectedDate = parseDateStrAsLocalDate(dateParam);
+			activeTab = dateParam === todayStr || dateParam === tomorrowStr ? 'confirm' : 'preview';
+			return true;
+		}
+		if (hash === 'tomorrow' || hash === 'd-1' || dayParam === 'tomorrow') {
+			activeTab = 'confirm';
+			selectedDate = parseDateStrAsLocalDate(tomorrowStr);
+			return true;
+		}
+		if (hash === 'today' || hash === 'd-day' || dayParam === 'today') {
+			activeTab = 'confirm';
+			selectedDate = parseDateStrAsLocalDate(todayStr);
+			return true;
+		}
+		if (hash === 'preview' || tabParam === 'preview') {
+			activeTab = 'preview';
+			const firstOffset = previewWindow.offsets?.[0] ?? 3;
+			selectedDate = parseDateStrAsLocalDate(shiftCalendarDateStr(todayStr, firstOffset));
+			return true;
+		}
+		if (hash === 'confirm' || tabParam === 'confirm') {
+			activeTab = 'confirm';
+			selectedDate = parseDateStrAsLocalDate(todayStr);
+			return true;
+		}
+		return false;
+	}
+
+	function switchTab(nextTab: 'confirm' | 'preview') {
+		activeTab = nextTab;
+		if (nextTab === 'confirm') {
+			selectedDate = parseDateStrAsLocalDate(todayStr);
+		} else if (previewWindow.offsets?.length) {
+			selectedDate = parseDateStrAsLocalDate(
+				shiftCalendarDateStr(todayStr, previewWindow.offsets[0])
+			);
+		}
+		syncUrlState(activeTab, formatDateISO(selectedDate));
+	}
+
 	async function loadCustomSettings() {
 		try {
 			const res = await dispatchApi.customGetDispatchSettings();
@@ -120,7 +186,11 @@
 			showSubstituteColumns = res.show_substitute_columns ?? true;
 			if (Array.isArray(res.route_fleet_rules)) routeFleetRules = res.route_fleet_rules;
 			vehiclesByGroup = res.vehicles_by_group || {};
-			if (previewWindow.offsets?.length && !previewWindow.offsets.includes(currentDiffDays)) {
+			if (
+				activeTab === 'preview' &&
+				previewWindow.offsets?.length &&
+				!previewWindow.offsets.includes(currentDiffDays)
+			) {
 				selectedDate = parseDateStrAsLocalDate(
 					shiftCalendarDateStr(todayStr, previewWindow.offsets[0])
 				);
@@ -142,9 +212,10 @@
 		showLockScreen = false;
 
 		if (
-			previewWindow.is_paused ||
-			previewWindow.offsets.length === 0 ||
-			!previewWindow.offsets.includes(currentDiffDays)
+			activeTab === 'preview' &&
+			(previewWindow.is_paused ||
+				previewWindow.offsets.length === 0 ||
+				!previewWindow.offsets.includes(currentDiffDays))
 		) {
 			isLoading = false;
 			showLockScreen = true;
@@ -197,7 +268,35 @@
 				customFetchFn: (d, id) => customGetDailyDispatch(d, id)
 			});
 			if (token !== fetchToken) return;
-			dispatchRows = combined;
+			if (activeTab === 'confirm' && currentDiffDays === 0) {
+				// 오늘(D-day) 배차는 비공개 대상이 아니므로 저장 상태와 무관하게 항상 표시
+				if (combined.length === 0) {
+					dispatchRows = [];
+					showLockScreen = true;
+					errorMessage = '오늘 등록된 배차 정보가 없습니다.';
+				} else {
+					dispatchRows = combined;
+				}
+			} else if (activeTab === 'confirm' && currentDiffDays === 1) {
+				// 명일(D-1) 배차는 설정된 고시 시각 자동 배포 또는 지금 배포(ANNOUNCED) 시에만 공개
+				const announcedRows = combined.filter((r) => r.status === 'ANNOUNCED');
+				if (announcedRows.length === 0) {
+					dispatchRows = [];
+					showLockScreen = true;
+					errorMessage = '명일 배차가 아직 배포되지 않았습니다.';
+				} else {
+					dispatchRows = announcedRows;
+				}
+			} else {
+				// 배차 예고(D+2 이상): previewWindow 정책(공개 시각/범위/예고 정지)을 통과한 날짜면 저장된 예고 배차 표시
+				if (combined.length === 0) {
+					dispatchRows = [];
+					showLockScreen = true;
+					errorMessage = '해당 날짜에 등록된 배차 예고가 없습니다.';
+				} else {
+					dispatchRows = combined;
+				}
+			}
 		} catch (err) {
 			if (token !== fetchToken) return;
 			dispatchRows = [];
@@ -211,74 +310,220 @@
 	$effect(() => {
 		if (settingsLoaded) {
 			void selectedDateKey;
+			syncUrlState(activeTab, selectedDateKey);
 			syncData(selectedDateKey);
 		}
 	});
 
-	onMount(async () => {
+	onMount(() => {
 		const liveTodayStr = getKstTimeSnapshot().dateStr;
 		if (liveTodayStr !== todayStr) todayStr = liveTodayStr;
-		await loadCustomSettings();
-		await syncData(selectedDateKey);
+		const hasUrlTarget = applyUrlTarget();
+
+		const handleHashChange = () => {
+			if (applyUrlTarget() && settingsLoaded) {
+				syncData(selectedDateKey);
+			}
+		};
+		window.addEventListener('hashchange', handleHashChange);
+
+		(async () => {
+			await loadCustomSettings();
+			if (hasUrlTarget) applyUrlTarget();
+			await syncData(selectedDateKey);
+		})();
+
+		return () => {
+			window.removeEventListener('hashchange', handleHashChange);
+		};
 	});
 </script>
 
 <div class="min-h-screen bg-slate-100 pb-6 text-slate-900">
 	<header
-		class="sticky top-0 z-40 border-b border-slate-200 bg-white/95 px-2 py-1.5 shadow-sm sm:px-4"
+		class="sticky top-0 z-40 border-b-2 border-slate-200 bg-white/95 px-2.5 py-2 shadow-xs backdrop-blur-sm sm:px-4"
 	>
-		<div class="mx-auto flex max-w-7xl items-center justify-between gap-2">
+		<div class="mx-auto flex max-w-[740px] items-center justify-between gap-2">
 			<div class="min-w-0">
-				<div class="flex items-center gap-1.5">
-					<span class="rounded-md bg-slate-900 p-1 text-white">
-						<Icon icon="lucide:calendar-range" class="h-3.5 w-3.5" />
+				<div class="flex items-center gap-2">
+					<span
+						class="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg {activeTab ===
+						'confirm'
+							? 'bg-slate-900 text-white'
+							: 'bg-indigo-600 text-white'}"
+					>
+						<Icon
+							icon={activeTab === 'confirm' ? 'lucide:calendar-check' : 'lucide:calendar-range'}
+							class="h-4 w-4"
+						/>
 					</span>
-					<h1 class="truncate text-sm font-extrabold tracking-tight text-slate-800 sm:text-base">
-						배차표 뷰어
-					</h1>
+					<div class="min-w-0">
+						<div class="flex items-center gap-1.5">
+							<h1 class="truncate text-sm font-black tracking-tight text-slate-900 sm:text-base">
+								{activeTab === 'confirm' ? '배차 확인' : '배차 예고'}
+							</h1>
+							<span
+								class="rounded-full px-2 py-0.5 text-[10px] font-black {activeTab === 'confirm'
+									? currentDiffDays === 1
+										? 'bg-emerald-100 text-emerald-700'
+										: 'bg-slate-100 text-slate-700'
+									: 'bg-indigo-100 text-indigo-700'}"
+							>
+								{activeTab === 'confirm'
+									? currentDiffDays === 1
+										? '명일(D-1)'
+										: '오늘(D-day)'
+									: '사전 예고'}
+							</span>
+						</div>
+					</div>
 				</div>
 			</div>
 
-			<div class="flex shrink-0 items-center gap-0.5 rounded-lg bg-slate-200/70 p-0.5">
-				<button
-					type="button"
-					class="rounded-md bg-white p-1 text-slate-700 shadow-sm transition-all hover:bg-slate-50 active:scale-95 disabled:pointer-events-none disabled:opacity-40"
-					onclick={() => moveDate(-1)}
-					disabled={isPrevDisabled}
-					aria-label="이전 날짜"
-				>
-					<Icon icon="lucide:chevron-left" class="h-3.5 w-3.5" />
-				</button>
-				<div class="min-w-[96px] px-2 py-0 text-center">
-					<div class="text-[11px] leading-tight font-black text-slate-800">{selectedFullDate}</div>
-					<div class="text-[9px] leading-none font-black text-indigo-600 uppercase">
+			<div
+				class="flex shrink-0 items-center gap-1 rounded-xl border border-slate-200 bg-slate-50 p-1"
+			>
+				{#if activeTab === 'preview'}
+					<button
+						type="button"
+						class="rounded-lg bg-white p-1 text-slate-700 shadow-xs transition-all hover:bg-slate-100 active:scale-95 disabled:pointer-events-none disabled:opacity-40"
+						onclick={() => moveDate(-1)}
+						disabled={isPrevDisabled}
+						aria-label="이전 날짜"
+					>
+						<Icon icon="lucide:chevron-left" class="h-3.5 w-3.5" />
+					</button>
+				{/if}
+				<div class="min-w-[96px] px-2 py-0.5 text-center">
+					<div class="text-[11px] leading-tight font-black text-slate-900">{selectedFullDate}</div>
+					<div
+						class="text-[9px] leading-none font-black uppercase {activeTab === 'confirm'
+							? currentDiffDays === 1
+								? 'text-emerald-600'
+								: 'text-slate-600'
+							: 'text-indigo-600'}"
+					>
 						{getRelativeLabel(selectedDate)}
 					</div>
 				</div>
-				<button
-					type="button"
-					class="rounded-md bg-white p-1 text-slate-700 shadow-sm transition-all hover:bg-slate-50 active:scale-95 disabled:pointer-events-none disabled:opacity-40"
-					onclick={() => moveDate(1)}
-					disabled={isNextDisabled}
-					aria-label="다음 날짜"
-				>
-					<Icon icon="lucide:chevron-right" class="h-3.5 w-3.5" />
-				</button>
+				{#if activeTab === 'preview'}
+					<button
+						type="button"
+						class="rounded-lg bg-white p-1 text-slate-700 shadow-xs transition-all hover:bg-slate-100 active:scale-95 disabled:pointer-events-none disabled:opacity-40"
+						onclick={() => moveDate(1)}
+						disabled={isNextDisabled}
+						aria-label="다음 날짜"
+					>
+						<Icon icon="lucide:chevron-right" class="h-3.5 w-3.5" />
+					</button>
+				{/if}
 			</div>
 		</div>
 	</header>
 
-	<main class="mx-auto mt-1.5 max-w-7xl px-1 sm:px-3">
-		{#if !previewWindow.is_paused && allowedOffsets.length > 0}
-			<div class="flex scrollbar-none items-center gap-1 overflow-x-auto pb-1">
+	<main class="mx-auto mt-2.5 max-w-7xl px-1.5 sm:px-3">
+		<!-- 상단 2단 세그먼트 탭 바 (배차 확인 | 배차 예고) -->
+		<div class="mb-2.5 w-full max-w-[740px]">
+			<div
+				class="grid grid-cols-2 gap-1.5 rounded-2xl border-2 border-slate-200 bg-white p-1.5 shadow-sm"
+			>
+				<button
+					type="button"
+					onclick={() => switchTab('confirm')}
+					class="flex items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-xs font-black transition-all sm:text-sm {activeTab ===
+					'confirm'
+						? 'bg-slate-900 text-white shadow-sm'
+						: 'text-slate-600 hover:bg-slate-100'}"
+				>
+					<Icon icon="lucide:calendar-check" class="h-4 w-4 shrink-0" />
+					<span>오늘 · 명일 배차</span>
+				</button>
+				<button
+					type="button"
+					onclick={() => switchTab('preview')}
+					class="flex items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-xs font-black transition-all sm:text-sm {activeTab ===
+					'preview'
+						? 'bg-indigo-600 text-white shadow-sm'
+						: 'text-slate-600 hover:bg-slate-100'}"
+				>
+					<Icon icon="lucide:calendar-clock" class="h-4 w-4 shrink-0" />
+					<span>배차 예고</span>
+					{#if previewWindow.is_paused}
+						<span
+							class="rounded-full px-1.5 py-0.5 text-[9px] font-black {activeTab === 'preview'
+								? 'bg-white/20 text-white'
+								: 'bg-rose-100 text-rose-700'}"
+						>
+							정지
+						</span>
+					{:else if allowedOffsets.length > 0}
+						<span
+							class="hidden rounded-full px-1.5 py-0.5 text-[9px] font-black sm:inline-block {activeTab ===
+							'preview'
+								? 'bg-white/20 text-white'
+								: 'bg-indigo-50 text-indigo-700'}"
+						>
+							+{allowedOffsets[0]}~+{allowedOffsets[allowedOffsets.length - 1]}일
+						</span>
+					{/if}
+				</button>
+			</div>
+		</div>
+
+		{#if activeTab === 'confirm'}
+			<div class="mb-2 flex w-full max-w-[740px] flex-wrap items-center justify-between gap-2">
+				<div class="flex items-center gap-1.5">
+					<button
+						type="button"
+						class="inline-flex items-center gap-1.5 rounded-xl border-2 px-3.5 py-1.5 text-xs font-black transition-all active:scale-95 {selectedDateKey ===
+						todayStr
+							? 'border-slate-900 bg-slate-900 text-white shadow-xs'
+							: 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'}"
+						onclick={() => setDate(parseDateStrAsLocalDate(todayStr))}
+					>
+						<span>오늘 배차</span>
+						<span class="opacity-80">({formatDateDisplay(parseDateStrAsLocalDate(todayStr))})</span>
+					</button>
+					<button
+						type="button"
+						class="inline-flex items-center gap-1.5 rounded-xl border-2 px-3.5 py-1.5 text-xs font-black transition-all active:scale-95 {selectedDateKey ===
+						tomorrowStr
+							? 'border-emerald-600 bg-emerald-600 text-white shadow-xs'
+							: 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'}"
+						onclick={() => setDate(parseDateStrAsLocalDate(tomorrowStr))}
+					>
+						<span>명일 배차</span>
+						<span class="opacity-80"
+							>({formatDateDisplay(parseDateStrAsLocalDate(tomorrowStr))})</span
+						>
+					</button>
+				</div>
+				<span
+					class="rounded-full border px-2.5 py-1 text-[10.5px] font-black {currentDiffDays === 1
+						? showLockScreen
+							? 'border-amber-200 bg-amber-50 text-amber-700'
+							: 'border-emerald-200 bg-emerald-50 text-emerald-700'
+						: 'border-slate-200 bg-white text-slate-600'}"
+				>
+					{currentDiffDays === 1
+						? showLockScreen
+							? '명일 배차 배포 대기'
+							: '명일 배차 배포 완료'
+						: '오늘 운행 배차표'}
+				</span>
+			</div>
+		{:else if !previewWindow.is_paused && allowedOffsets.length > 0}
+			<div
+				class="mb-2 flex w-full max-w-[740px] scrollbar-none items-center gap-1.5 overflow-x-auto pb-1"
+			>
 				{#each allowedOffsets as offset (offset)}
 					{@const targetDate = parseDateStrAsLocalDate(shiftCalendarDateStr(todayStr, offset))}
 					{@const active = formatDateISO(selectedDate) === formatDateISO(targetDate)}
 					<button
 						type="button"
-						class="shrink-0 rounded-md border px-2.5 py-1 text-[10.5px] font-extrabold transition-all active:scale-95
+						class="shrink-0 rounded-xl border-2 px-3 py-1 text-[11px] font-black transition-all active:scale-95
 						{active
-							? 'border-indigo-600 bg-indigo-600 text-white'
+							? 'border-indigo-600 bg-indigo-600 text-white shadow-xs'
 							: 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'}"
 						onclick={() => setDate(targetDate)}
 					>
@@ -339,10 +584,22 @@
 					<Icon icon="lucide:lock" class="h-8 w-8 animate-bounce" />
 				</div>
 				<h2 class="mb-1 text-base font-black text-slate-800">
-					{previewWindow.is_paused ? '배차 예고 일시 정지' : '배차표 비공개 대상일'}
+					{#if activeTab === 'confirm'}
+						{currentDiffDays === 1 ? '명일 배차 배포 대기 중' : '오늘 배차 정보 없음'}
+					{:else}
+						{previewWindow.is_paused ? '배차 예고 일시 정지' : '배차표 비공개 대상일'}
+					{/if}
 				</h2>
 				<p class="mx-auto mb-4 max-w-sm text-xs leading-relaxed text-slate-500">{errorMessage}</p>
-				{#if previewWindow.reason}
+				{#if activeTab === 'confirm'}
+					{#if currentDiffDays === 1}
+						<div
+							class="inline-block rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-[11px] font-bold text-emerald-700"
+						>
+							관리자 확정 및 배포 완료 시 이곳에서 바로 확인할 수 있습니다.
+						</div>
+					{/if}
+				{:else if previewWindow.reason}
 					<div
 						class="inline-block rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-[11px] font-bold text-slate-600"
 					>
@@ -362,10 +619,10 @@
 				</p>
 			</div>
 		{:else}
-			<div class="mt-0.5" in:fade>
+			<div class="mt-0.5 space-y-3" in:fade>
 				{#each routesWithDispatches as item (item.route.id)}
 					{#if item.rows.length > 0}
-						<div class="mb-2.5">
+						<div class="w-full max-w-[740px]">
 							<div class="mb-1 flex items-center justify-between px-0.5">
 								<h2
 									class="flex items-center gap-1 text-xs font-extrabold text-slate-800 sm:text-sm"
@@ -381,38 +638,24 @@
 							</div>
 
 							<div class="w-full overflow-x-auto rounded-lg border border-slate-900 bg-white">
-								<table class="excel-table w-full border-collapse text-center">
+								<table class="excel-table w-full min-w-[340px] border-collapse text-center">
 									<thead>
 										<tr
 											class="border-b border-slate-200 bg-slate-100 font-extrabold text-slate-600 uppercase"
 										>
+											<th class={showSubstituteColumns ? 'w-[12%]' : 'w-[13%]'}>차량</th>
+											<th class={showSubstituteColumns ? 'w-[8%]' : 'w-[9%]'}>로번</th>
+											<th class={showSubstituteColumns ? 'w-[14%]' : 'w-[15%]'}>출발/종료</th>
+											<th class={showSubstituteColumns ? 'w-[22%]' : 'w-[25%]'}>시작/종료 위치</th>
 											<th
-												class={showSubstituteColumns ? 'w-[13%] md:w-[10%]' : 'w-[15%] md:w-[11%]'}
-												>차량</th
-											>
-											<th class={showSubstituteColumns ? 'w-[9%] md:w-[7%]' : 'w-[10%] md:w-[8%]'}
-												>로번</th
-											>
-											<th
-												class={showSubstituteColumns ? 'w-[14%] md:w-[12%]' : 'w-[16%] md:w-[14%]'}
-												>출발/종료</th
-											>
-											<th
-												class={showSubstituteColumns ? 'w-[21%] md:w-[23%]' : 'w-[25%] md:w-[27%]'}
-												>시작/종료 위치</th
-											>
-											<th
-												class={showSubstituteColumns ? 'w-[15%] md:w-[14%]' : 'w-[18%] md:w-[17%]'}
+												class={showSubstituteColumns ? 'w-[15%]' : 'w-[18%]'}
 												style="background-color: #ecfdf5; color: #047857;">기사</th
 											>
 											{#if showSubstituteColumns}
-												<th class="w-[8%] md:w-[9%]">대인</th>
-												<th class="w-[8%] md:w-[9%]">대차</th>
+												<th class="w-[8%]">대인</th>
+												<th class="w-[8%]">대차</th>
 											{/if}
-											<th
-												class={showSubstituteColumns ? 'w-[12%] md:w-[16%]' : 'w-[16%] md:w-[23%]'}
-												>상태/비고</th
-											>
+											<th class={showSubstituteColumns ? 'w-[13%]' : 'w-[20%]'}>상태/비고</th>
 										</tr>
 									</thead>
 									<tbody class="divide-y divide-slate-200">
@@ -524,10 +767,11 @@
 	.excel-table td {
 		box-sizing: border-box;
 		border: 1px solid #cbd5e1;
-		padding: 0 1px !important;
+		padding: 1px 2px !important;
 		text-align: center;
 		overflow: hidden;
 		text-overflow: ellipsis;
+		white-space: nowrap;
 		vertical-align: middle;
 	}
 	.excel-table th {
@@ -535,7 +779,7 @@
 		font-weight: 800;
 		color: #64748b;
 		text-transform: uppercase;
-		padding: 2px 1px !important;
+		padding: 3px 2px !important;
 		font-size: 11px;
 		line-height: 1.05;
 		letter-spacing: -0.03em;
@@ -557,10 +801,10 @@
 	@media (min-width: 768px) {
 		.excel-table th {
 			font-size: 13px;
-			padding: 3px 3px !important;
+			padding: 3px 2px !important;
 		}
 		.excel-table td {
-			padding: 1px 3px !important;
+			padding: 1px 2px !important;
 		}
 		.excel-table td.important-cell {
 			font-size: 16px;
