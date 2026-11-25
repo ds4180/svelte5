@@ -71,7 +71,7 @@
 
 	// 요청 처리 모달
 	let processingRequest = $state<any | null>(null);
-	let processStatus = $state<'COMPLETED' | 'REJECTED'>('COMPLETED');
+	let processStatus = $state<'PREPARING' | 'COMPLETED' | 'REJECTED'>('COMPLETED');
 	let replacementVideoId = $state<string>('');
 	let processAdminNote = $state('');
 
@@ -330,7 +330,21 @@
 		processingRequest = r;
 		processStatus = 'COMPLETED';
 		replacementVideoId = officeVideos[0] ? String(officeVideos[0].id) : '';
-		processAdminNote = '';
+		processAdminNote = r.admin_note || '';
+	}
+
+	async function markRequestPreparing(r: any) {
+		try {
+			await api.adminProcessBlackboxRequest(r.id, {
+				status: 'PREPARING',
+				replacement_video_id: null,
+				admin_note: r.admin_note || '사무실 확인 완료 (교체 준비 중)'
+			});
+			toast.success('준비 중 상태로 변경되었습니다.');
+			await loadAll();
+		} catch (err) {
+			toast.error(formatApiError(err, '상태 변경 실패'));
+		}
 	}
 
 	async function confirmProcessRequest(e: Event) {
@@ -736,6 +750,7 @@
 				<select bind:value={requestStatusFilter} onchange={loadAll} class="select select-bordered select-sm rounded-xl font-bold">
 					<option value="">전체 상태</option>
 					<option value="PENDING">대기 중 (PENDING)</option>
+					<option value="PREPARING">준비 중 (PREPARING)</option>
 					<option value="COMPLETED">교체 완료 (COMPLETED)</option>
 					<option value="REJECTED">반려 (REJECTED)</option>
 				</select>
@@ -763,8 +778,8 @@
 							{#each requests as r (r.id)}
 								<tr class="hover:bg-slate-50">
 									<td class="px-3 py-2.5">
-										<span class="badge badge-sm font-black {r.status === 'COMPLETED' ? 'badge-success text-white' : r.status === 'REJECTED' ? 'badge-error text-white' : 'badge-warning'}">
-											{r.status === 'COMPLETED' ? '교체완료' : r.status === 'REJECTED' ? '반려' : '대기'}
+										<span class="badge badge-sm font-black {r.status === 'COMPLETED' ? 'badge-success text-white' : r.status === 'REJECTED' ? 'badge-error text-white' : r.status === 'PREPARING' ? 'badge-info text-white' : 'badge-warning'}">
+											{r.status === 'COMPLETED' ? '교체완료' : r.status === 'REJECTED' ? '반려' : r.status === 'PREPARING' ? '준비중' : '대기'}
 										</span>
 									</td>
 									<td class="px-3 py-2.5">
@@ -795,14 +810,25 @@
 										{/if}
 									</td>
 									<td class="px-3 py-2.5 text-right">
-										{#if r.status === 'PENDING'}
-											<button
-												type="button"
-												onclick={() => openProcessModal(r)}
-												class="btn btn-xs rounded-lg border-none bg-blue-600 font-black text-white hover:bg-blue-700"
-											>
-												교체 처리
-											</button>
+										{#if r.status === 'PENDING' || r.status === 'PREPARING'}
+											<div class="inline-flex items-center justify-end gap-1.5">
+												{#if r.status === 'PENDING'}
+													<button
+														type="button"
+														onclick={() => markRequestPreparing(r)}
+														class="btn btn-xs rounded-lg border border-sky-200 bg-sky-50 font-black text-sky-700 hover:bg-sky-100"
+													>
+														준비중
+													</button>
+												{/if}
+												<button
+													type="button"
+													onclick={() => openProcessModal(r)}
+													class="btn btn-xs rounded-lg border-none bg-blue-600 font-black text-white hover:bg-blue-700"
+												>
+													교체 처리
+												</button>
+											</div>
 										{:else}
 											<span class="text-[11px] text-slate-400">완료</span>
 										{/if}
@@ -1090,6 +1116,7 @@
 			<div>
 				<label for="pr-status" class="mb-1 block text-xs font-black text-slate-600">처리 결과</label>
 				<select id="pr-status" bind:value={processStatus} class="select select-bordered select-sm w-full rounded-xl font-bold">
+					<option value="PREPARING">준비 중 · 사무실 확인 (PREPARING)</option>
 					<option value="COMPLETED">교체 완료 (COMPLETED)</option>
 					<option value="REJECTED">반려 (REJECTED)</option>
 				</select>

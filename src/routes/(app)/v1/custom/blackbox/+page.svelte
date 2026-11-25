@@ -268,8 +268,8 @@
 					<div class="flex flex-col justify-between gap-2 rounded-2xl border border-slate-200 p-3.5 sm:flex-row sm:items-center">
 						<div class="space-y-1">
 							<div class="flex flex-wrap items-center gap-2">
-								<span class="badge badge-sm font-black {r.status === 'COMPLETED' ? 'badge-success text-white' : r.status === 'REJECTED' ? 'badge-error text-white' : 'badge-warning'}">
-									{r.status === 'COMPLETED' ? '교체 완료' : r.status === 'REJECTED' ? '반려' : '대기 중'}
+								<span class="badge badge-sm font-black {r.status === 'COMPLETED' ? 'badge-success text-white' : r.status === 'REJECTED' ? 'badge-error text-white' : r.status === 'PREPARING' ? 'badge-info text-white' : 'badge-warning'}">
+									{r.status === 'COMPLETED' ? '교체 완료' : r.status === 'REJECTED' ? '반려' : r.status === 'PREPARING' ? '준비 중 (사무실 확인)' : '대기 중'}
 								</span>
 								<span class="text-xs font-black text-slate-900">{r.vehicle_no}호</span>
 								<span class="text-xs font-bold text-slate-500">{REASON_LABELS[r.reason_type] || r.reason_type}</span>
