@@ -69,6 +69,7 @@
 	let selectedDate = $state(getToday());
 
 	const formatDateISO = (date: Date) => formatDate(date);
+	const todayDateKey = formatDateISO(today);
 	const tomorrowObj = new Date(today);
 	tomorrowObj.setDate(tomorrowObj.getDate() + 1);
 	const tomorrowDateKey = formatDateISO(tomorrowObj);
@@ -101,6 +102,7 @@
 			previewWindow.allowed_dates?.includes(selectedDateKey)
 		)
 	);
+	const isPastDate = $derived(selectedDateKey < todayDateKey);
 	const isDMinus1 = $derived(selectedDateKey === tomorrowDateKey);
 	const statusCounts = $derived.by(() => {
 		let announced = 0;
@@ -171,10 +173,15 @@
 	);
 
 	function selectDriver(driver: DriverResource) {
+		if (isPastDate) {
+			toast.warning('과거 날짜(어제 이전)의 배차는 수정할 수 없습니다.');
+			return;
+		}
 		selectedDriver = selectedDriver?.name === driver.name ? null : driver;
 	}
 
 	function assignTodayDriver(row: DispatchRow) {
+		if (isPastDate) return;
 		if (selectedDriver) {
 			row.driver_name = selectedDriver.name;
 			if (!String(row.vehicle_no || '').trim() && selectedDriver.vehicle_no) {
@@ -189,6 +196,7 @@
 	}
 
 	function assignTomorrowDriver(row: DispatchRow) {
+		if (isPastDate) return;
 		if (selectedDriver) {
 			row.tomorrow_driver_name = selectedDriver.name;
 			row.is_tomorrow_inherited = false;
@@ -201,6 +209,10 @@
 	}
 
 	function autoFillDrivers() {
+		if (isPastDate) {
+			toast.warning('과거 날짜(어제 이전)의 배차는 수정할 수 없습니다.');
+			return;
+		}
 		const res = toggleAutoFillDispatch({
 			rows: dispatchRows,
 			originalRows: originalDispatchRows,
@@ -338,6 +350,10 @@
 		status: 'DRAFT' | 'CONFIRMED' | 'ANNOUNCED',
 		opts?: { silent?: boolean; toastMessage?: string }
 	) {
+		if (isPastDate) {
+			toast.warning('과거 날짜(어제 이전)의 배차 데이터는 수정·저장할 수 없습니다.');
+			return;
+		}
 		if (!selectedRoute) {
 			toast.warning('선택된 노선이 없습니다.');
 			return;
@@ -913,14 +929,24 @@
 
 			<div class="flex flex-wrap items-center gap-2 sm:gap-3">
 				<div class="flex flex-wrap items-center gap-2">
-					<button
-						type="button"
-						class="btn shrink-0 whitespace-nowrap rounded-xl border-2 border-slate-200 bg-white px-3.5 font-black text-slate-800 btn-sm hover:bg-slate-50"
-						onclick={handleSaveDispatch}
-					>
-						<Icon icon="solar:diskette-bold" class="h-3.5 w-3.5 shrink-0" />
-						<span>저장하기</span>
-					</button>
+					{#if isPastDate}
+						<span
+							class="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-black text-amber-800"
+							title="어제 이전의 과거 배차 이력은 수정할 수 없습니다"
+						>
+							<Icon icon="solar:lock-bold" class="h-3.5 w-3.5 shrink-0" />
+							<span>과거 이력 · 수정 불가</span>
+						</span>
+					{:else}
+						<button
+							type="button"
+							class="btn shrink-0 whitespace-nowrap rounded-xl border-2 border-slate-200 bg-white px-3.5 font-black text-slate-800 btn-sm hover:bg-slate-50"
+							onclick={handleSaveDispatch}
+						>
+							<Icon icon="solar:diskette-bold" class="h-3.5 w-3.5 shrink-0" />
+							<span>저장하기</span>
+						</button>
+					{/if}
 					{#if isDMinus1}
 						{@render d1ConfirmToggle(true)}
 					{/if}
@@ -996,6 +1022,7 @@
 						driverAssignColors={dispatchSettings.driver_assign_colors}
 						{selectedDriver}
 						{isHideRecommendations}
+						readOnly={isPastDate}
 						onAssignToday={assignTodayDriver}
 						onAssignTomorrow={assignTomorrowDriver}
 					/>
@@ -1014,29 +1041,38 @@
 					<div
 						class="flex flex-col-reverse gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end sm:gap-3"
 					>
-						<button
-							type="button"
-							class="btn h-11 min-h-11 w-full shrink-0 justify-center gap-1.5 whitespace-nowrap rounded-xl border-2 px-5 text-sm font-black shadow-sm transition-all sm:w-auto {isAutoFilled
-								? 'border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100'
-								: 'border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100'}"
-							onclick={autoFillDrivers}
-						>
-							{#if isAutoFilled}
-								<Icon icon="ph:x-circle-fill" class="h-4 w-4 shrink-0" />
-								<span>채우기 취소</span>
-							{:else}
-								<Icon icon="ph:magic-wand-fill" class="h-4 w-4 shrink-0" />
-								<span>자동 채우기</span>
-							{/if}
-						</button>
-						<button
-							type="button"
-							class="btn h-11 min-h-11 w-full shrink-0 justify-center gap-1.5 whitespace-nowrap rounded-xl border-2 border-slate-200 bg-white px-5 text-sm font-black text-slate-800 shadow-sm transition-all hover:bg-slate-50 sm:w-auto"
-							onclick={handleSaveDispatch}
-						>
-							<Icon icon="solar:diskette-bold" class="h-4 w-4 shrink-0" />
-							<span>저장하기</span>
-						</button>
+						{#if isPastDate}
+							<span
+								class="inline-flex h-11 min-h-11 items-center justify-center gap-1.5 rounded-xl border-2 border-amber-200 bg-amber-50 px-5 text-sm font-black text-amber-800"
+							>
+								<Icon icon="solar:lock-bold" class="h-4 w-4 shrink-0" />
+								<span>과거 배차 이력 (읽기 전용 · 수정 불가)</span>
+							</span>
+						{:else}
+							<button
+								type="button"
+								class="btn h-11 min-h-11 w-full shrink-0 justify-center gap-1.5 whitespace-nowrap rounded-xl border-2 px-5 text-sm font-black shadow-sm transition-all sm:w-auto {isAutoFilled
+									? 'border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100'
+									: 'border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100'}"
+								onclick={autoFillDrivers}
+							>
+								{#if isAutoFilled}
+									<Icon icon="ph:x-circle-fill" class="h-4 w-4 shrink-0" />
+									<span>채우기 취소</span>
+								{:else}
+									<Icon icon="ph:magic-wand-fill" class="h-4 w-4 shrink-0" />
+									<span>자동 채우기</span>
+								{/if}
+							</button>
+							<button
+								type="button"
+								class="btn h-11 min-h-11 w-full shrink-0 justify-center gap-1.5 whitespace-nowrap rounded-xl border-2 border-slate-200 bg-white px-5 text-sm font-black text-slate-800 shadow-sm transition-all hover:bg-slate-50 sm:w-auto"
+								onclick={handleSaveDispatch}
+							>
+								<Icon icon="solar:diskette-bold" class="h-4 w-4 shrink-0" />
+								<span>저장하기</span>
+							</button>
+						{/if}
 						{#if isDMinus1}
 							{@render d1ConfirmToggle(false)}
 							{#if selectedDatePublished}

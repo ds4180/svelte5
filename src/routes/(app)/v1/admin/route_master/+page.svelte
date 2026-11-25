@@ -18,6 +18,7 @@
 	} from '$lib/api/admin';
 	import { getSiteTitle } from '$lib/config/site';
 	import { toast } from '$lib/runes/toast.svelte';
+	import { formatDate } from '$lib/utils';
 	import { formatApiError } from '$lib/utils/error';
 	import Icon from '@iconify/svelte';
 
@@ -351,17 +352,27 @@
 		}
 	}
 
-	/** @param {number} masterId */
-	async function handleDeleteRosterVersion(masterId) {
+	/** @param {any} v */
+	function isFutureVersion(v) {
+		const today = formatDate(new Date());
+		return Boolean(v?.start_date && String(v.start_date).slice(0, 10) > today);
+	}
+
+	/** @param {any} v */
+	async function handleDeleteRosterVersion(v) {
+		if (!isFutureVersion(v)) {
+			toast.warning('이미 적용되었거나 지난 로번은 과거 배차 이력 보존을 위해 삭제할 수 없습니다.');
+			return;
+		}
 		if (
 			!confirm(
-				'이 로번 버전을 삭제하시겠습니까? (연결된 배차 스냅샷이 있으면 함께 삭제될 수 있습니다)'
+				'미래 적용 예정인 이 로번 버전을 삭제하시겠습니까?'
 			)
 		)
 			return;
 		try {
-			await adminDeleteRouteMaster(masterId);
-			toast.success('로번 버전이 삭제되었습니다.');
+			await adminDeleteRouteMaster(v.id);
+			toast.success('미래 적용 로번 버전이 삭제되었습니다.');
 			await loadAll();
 		} catch (e) {
 			toast.error('삭제 실패: ' + formatApiError(e));
@@ -1006,13 +1017,22 @@
 									>
 										이 버전 복사 → 새 버전
 									</button>
-									<button
-										type="button"
-										onclick={() => handleDeleteRosterVersion(v.id)}
-										class="rounded-lg px-2.5 py-1 text-xs font-bold text-rose-500 hover:bg-rose-50"
-									>
-										삭제
-									</button>
+									{#if isFutureVersion(v)}
+										<button
+											type="button"
+											onclick={() => handleDeleteRosterVersion(v)}
+											class="rounded-lg px-2.5 py-1 text-xs font-bold text-rose-500 hover:bg-rose-50"
+										>
+											삭제
+										</button>
+									{:else}
+										<span
+											title="적용일이 시작되었거나 지난 로번은 과거 배차 이력 참조를 위해 삭제할 수 없습니다"
+											class="rounded-lg bg-slate-100 px-2.5 py-1 text-[11px] font-bold text-slate-400"
+										>
+											이력 보관
+										</span>
+									{/if}
 								</div>
 							</div>
 

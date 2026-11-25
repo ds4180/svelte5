@@ -29,6 +29,7 @@
 		driverAssignColors?: DriverAssignColorsConfig;
 		selectedDriver: DriverResource | null;
 		isHideRecommendations: boolean;
+		readOnly?: boolean;
 		onAssignToday: (row: DispatchRow) => void;
 		onAssignTomorrow: (row: DispatchRow) => void;
 	}
@@ -43,6 +44,7 @@
 		driverAssignColors = DEFAULT_DRIVER_ASSIGN_COLORS,
 		selectedDriver,
 		isHideRecommendations,
+		readOnly = false,
 		onAssignToday,
 		onAssignTomorrow
 	}: Props = $props();
@@ -159,9 +161,10 @@
 											<input
 												type="text"
 												bind:value={row.vehicle_no}
+												disabled={readOnly}
 												oninput={() => (row.is_inherited = false)}
 												placeholder="차량"
-												class="excel-input text-center font-bold {row.is_inherited
+												class="excel-input text-center font-bold disabled:cursor-default {row.is_inherited
 													? 'text-indigo-700 italic'
 													: 'text-blue-700'}"
 											/>
@@ -185,7 +188,8 @@
 											<input
 												type="text"
 												bind:value={row.start_time}
-												class="w-full rounded bg-transparent text-center text-[13px] leading-tight font-bold text-blue-700 focus:bg-white focus:outline-none"
+												disabled={readOnly}
+												class="w-full rounded bg-transparent text-center text-[13px] leading-tight font-bold text-blue-700 focus:bg-white focus:outline-none disabled:cursor-default"
 											/>
 											<div class="text-[13px] leading-tight font-semibold text-slate-500">
 												{row.end_time || '-'}
@@ -207,8 +211,14 @@
 
 										<!-- 오늘 기사 배정 -->
 										<td
-											title={todayCompliance.isViolation ? todayCompliance.reasons.join(' / ') : ''}
-											class="relative cursor-pointer border-r border-slate-200 transition-colors {selectedDriver
+											title={readOnly
+												? '과거 날짜 배차는 수정할 수 없습니다'
+												: todayCompliance.isViolation
+													? todayCompliance.reasons.join(' / ')
+													: ''}
+											class="relative border-r border-slate-200 transition-colors {readOnly
+												? 'cursor-default'
+												: 'cursor-pointer'} {!readOnly && selectedDriver
 												? 'animate-pulse bg-emerald-100'
 												: isTodayBlink
 													? 'dispatch-warning-blink'
@@ -222,7 +232,9 @@
 											style={!selectedDriver && todayColor
 												? `background-color: ${todayColor.bg};`
 												: ''}
-											onclick={() => onAssignToday(row)}
+											onclick={() => {
+												if (!readOnly) onAssignToday(row);
+											}}
 										>
 											<input
 												type="text"
@@ -254,7 +266,10 @@
 
 										<!-- 다음 날 기사 배정 -->
 										<td
-											class="relative cursor-pointer border-r border-slate-200 transition-colors {selectedDriver
+											title={readOnly ? '과거 날짜 배차는 수정할 수 없습니다' : ''}
+											class="relative border-r border-slate-200 transition-colors {readOnly
+												? 'cursor-default'
+												: 'cursor-pointer'} {!readOnly && selectedDriver
 												? 'animate-pulse bg-indigo-100'
 												: tomorrowColor
 													? ''
@@ -267,7 +282,9 @@
 											style={!selectedDriver && tomorrowColor
 												? `background-color: ${tomorrowColor.bg};`
 												: ''}
-											onclick={() => onAssignTomorrow(row)}
+											onclick={() => {
+												if (!readOnly) onAssignTomorrow(row);
+											}}
 										>
 											<input
 												type="text"
@@ -296,8 +313,9 @@
 											<input
 												type="text"
 												bind:value={row.memo}
-												class="excel-input font-semibold text-slate-600"
-												placeholder="메모"
+												disabled={readOnly}
+												class="excel-input font-semibold text-slate-600 disabled:cursor-default"
+												placeholder={readOnly ? '-' : '메모'}
 											/>
 										</td>
 									</tr>
