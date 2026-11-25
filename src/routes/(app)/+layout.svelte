@@ -753,7 +753,7 @@
                    {isMounted ? 'transition-all duration-500' : 'transition-none'}
                    {isMobile && isLeftOpen ? 'overflow-hidden pointer-events-none' : 'overflow-y-auto overflow-x-auto'}"
 		>
-			<div class="mx-auto min-h-full w-full max-w-[1700px] p-4 pb-[calc(6rem+env(safe-area-inset-bottom,0px))] sm:p-6 sm:pb-[calc(6rem+env(safe-area-inset-bottom,0px))] md:p-8 md:pb-12 lg:p-10 lg:pb-16 min-w-0 print:max-w-none print:p-0">
+			<div class="mx-auto min-h-full w-full max-w-[1700px] shrink-0 p-4 pb-[calc(6rem+env(safe-area-inset-bottom,0px))] sm:p-6 sm:pb-[calc(6rem+env(safe-area-inset-bottom,0px))] md:p-8 md:pb-12 lg:p-10 lg:pb-16 min-w-0 print:max-w-none print:p-0">
 				{@render children?.()}
 			</div>
 		</main>
@@ -761,7 +761,7 @@
 
 	<!-- 📱 모바일 세로 모드 전용 하단 퀵 내비게이션 바 (레이아웃 셸 z-[1020]: 동적 폼 z-1010 위, use:portal z-9999 아래 간섭 방지) -->
 	<nav
-		class="fixed bottom-0 left-0 right-0 z-[1020] flex h-16 w-full items-center justify-around border-t-2 border-slate-200 bg-white/95 px-2 backdrop-blur-md shadow-[0_-8px_24px_rgba(15,23,42,0.06)] pb-[env(safe-area-inset-bottom,0px)] md:hidden print:hidden"
+		class="fixed bottom-0 left-0 right-0 z-[1020] flex min-h-16 w-full items-center justify-around border-t-2 border-slate-200 bg-white/95 px-2 pt-1 pb-[calc(0.25rem+env(safe-area-inset-bottom,0px))] backdrop-blur-md shadow-[0_-8px_24px_rgba(15,23,42,0.06)] md:hidden print:hidden"
 		aria-label="모바일 하단 퀵 메뉴"
 	>
 		<!-- 1. 홈 (대시보드) -->

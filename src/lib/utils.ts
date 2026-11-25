@@ -208,4 +208,46 @@ export function formatBytes(bytes: number | null | undefined, decimals: number =
 	return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
 }
 
+const kstTimeFormatter = new Intl.DateTimeFormat('en-US', {
+	timeZone: 'Asia/Seoul',
+	hour: '2-digit',
+	minute: '2-digit',
+	hourCycle: 'h23'
+});
+
+/**
+ * 11. 한국 표준시(Asia/Seoul) 기준 시각 문자열 반환 (HH:mm)
+ * @param dateInput - 기준 일시 (기본값: 현재 시각)
+ * @returns '14:00' 형식 문자열
+ */
+export function formatTime(dateInput: DateInput = new Date()): string {
+	const date = dateInput instanceof Date ? dateInput : dateInput ? new Date(dateInput) : new Date();
+	if (isNaN(date.getTime())) return '';
+	const parts = kstTimeFormatter.formatToParts(date);
+	const hour = String(Number(parts.find((p) => p.type === 'hour')?.value ?? 0) % 24).padStart(
+		2,
+		'0'
+	);
+	const minute = String(Number(parts.find((p) => p.type === 'minute')?.value ?? 0)).padStart(
+		2,
+		'0'
+	);
+	return `${hour}:${minute}`;
+}
+
+/**
+ * 12. 한국 표준시(Asia/Seoul) 기준 현재 시각이 설정 시각(HH:mm)에 도달했는지 판별
+ * @param targetHHmm - 기준 시각 ('14:00' 등)
+ * @param nowInput - 비교 기준 일시 (기본값: 현재 시각)
+ */
+export function isTimeReached(targetHHmm: string | null | undefined, nowInput: DateInput = new Date()): boolean {
+	const match = String(targetHHmm ?? '').trim().match(/^(\d{1,2}):(\d{2})$/);
+	if (!match) return false;
+	const hh = Math.min(23, Math.max(0, Number(match[1])));
+	const mm = Math.min(59, Math.max(0, Number(match[2])));
+	const normalizedTarget = `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
+	const current = formatTime(nowInput);
+	return Boolean(current) && current >= normalizedTarget;
+}
+
 

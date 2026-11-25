@@ -9,7 +9,7 @@
 	import { onMount, untrack } from 'svelte';
 	import { fade, scale } from 'svelte/transition';
 	import Icon from '@iconify/svelte';
-	import { formatDate } from '$lib/utils';
+	import { formatDate, isTimeReached } from '$lib/utils';
 	import {
 		getKstTimeSnapshot,
 		parseDateStrAsLocalDate,
@@ -41,12 +41,12 @@
 	let previewWindow = $state<DispatchPreviewWindow>({
 		is_paused: false,
 		is_force_open: false,
-		open_time: '17:00',
-		min_offset: 3,
-		max_offset: 7,
-		offsets: [3, 4, 5, 6, 7],
+		open_time: '',
+		min_offset: null,
+		max_offset: null,
+		offsets: [],
 		allowed_dates: [],
-		reason: '조회 가능 범위: 오늘 기준 +3일 ~ +7일'
+		reason: ''
 	});
 	let showSubstituteColumns = $state(true);
 	let routeFleetRules = $state<RouteFleetRule[]>(DEFAULT_DISPATCH_SETTINGS.route_fleet_rules);
@@ -325,13 +325,35 @@
 			await syncData(selectedDateKey);
 		})();
 
+		const checkTimer = window.setInterval(async () => {
+			if (!settingsLoaded) return;
+			const now = new Date();
+			const currentDateStr = getKstTimeSnapshot(now).dateStr;
+			const dateRolledOver = currentDateStr !== todayStr;
+			const openTimeArrived =
+				!previewWindow.is_paused &&
+				!previewWindow.is_force_open &&
+				previewWindow.offsets.length === 0 &&
+				Boolean(previewWindow.open_time) &&
+				isTimeReached(previewWindow.open_time, now);
+
+			if (dateRolledOver || openTimeArrived) {
+				if (dateRolledOver) todayStr = currentDateStr;
+				await loadCustomSettings();
+				await syncData(selectedDateKey);
+			}
+		}, 30000);
+
 		return () => {
 			window.removeEventListener('hashchange', handleHashChange);
+			window.clearInterval(checkTimer);
 		};
 	});
 </script>
 
-<div class="min-h-screen bg-slate-100 pb-6 text-slate-900">
+<div
+	class="min-h-full bg-slate-100 pb-[calc(5.5rem+env(safe-area-inset-bottom,0px))] text-slate-900 md:pb-8"
+>
 	<header
 		class="sticky top-0 z-40 border-b-2 border-slate-200 bg-white/95 px-2.5 py-2 shadow-xs backdrop-blur-sm sm:px-4"
 	>
@@ -456,6 +478,15 @@
 								: 'bg-indigo-50 text-indigo-700'}"
 						>
 							+{allowedOffsets[0]}~+{allowedOffsets[allowedOffsets.length - 1]}일
+						</span>
+					{:else if previewWindow.open_time}
+						<span
+							class="hidden rounded-full px-1.5 py-0.5 text-[9px] font-black sm:inline-block {activeTab ===
+							'preview'
+								? 'bg-white/20 text-white'
+								: 'bg-amber-100 text-amber-800'}"
+						>
+							{previewWindow.open_time} 공개
 						</span>
 					{/if}
 				</button>

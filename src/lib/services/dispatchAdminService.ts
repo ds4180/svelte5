@@ -53,6 +53,9 @@ export const DEFAULT_DISPATCH_SETTINGS: DispatchSettings = {
 	auto_announce_title_template: '[명일 배차 고지] {target_date}',
 	auto_announce_body_template:
 		'{target_date} 배차가 확정 고지되었습니다. 배차표에서 차량과 로번을 확인해 주세요.',
+	reannounce_title_template: '[명일 배차 변경 재공지] {target_date}',
+	reannounce_body_template:
+		'{target_date} 배차가 수정되어 재배포되었습니다. 변경된 차량과 로번을 반드시 다시 확인해 주세요.',
 	announce_sender_min_rank: 4,
 	confirm_d_day_always_open: true,
 	confirm_d1_require_announced: true,

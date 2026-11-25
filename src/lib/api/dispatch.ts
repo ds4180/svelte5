@@ -60,6 +60,8 @@ export interface DispatchSettings {
 	warn_prev_day_work?: boolean;
 	auto_announce_title_template?: string;
 	auto_announce_body_template?: string;
+	reannounce_title_template?: string;
+	reannounce_body_template?: string;
 	announce_sender_min_rank?: number;
 	confirm_d_day_always_open?: boolean;
 	confirm_d1_require_announced?: boolean;
@@ -196,15 +198,26 @@ export const adminAnnounceDispatchNow = () =>
 		target_date: string;
 		updated_count: number;
 		push_sent: boolean;
+		is_reannounce?: boolean;
+		publish_count?: number;
 	}>('POST', '/api/v1/admin/dispatch/announce-now');
 
 export const adminGetDispatchPublishStatus = (targetDate: string) =>
 	fastApi<{
 		target_date: string;
 		published: boolean;
+		was_published?: boolean;
+		publish_count?: number;
 		confirmed?: boolean;
 		confirmed_count?: number;
-		meta?: { published_at?: string; mode?: string } | null;
+		meta?: {
+			published?: boolean;
+			published_at?: string;
+			unpublished_at?: string | null;
+			mode?: string;
+			publish_count?: number;
+			is_reannounce?: boolean;
+		} | null;
 		saved_count?: number;
 		total_count?: number;
 	}>('GET', `/api/v1/admin/dispatch/publish-status?target_date=${encodeURIComponent(targetDate)}`);
@@ -214,7 +227,16 @@ export const adminSetDispatchPublishStatus = (targetDate: string, published: boo
 		message: string;
 		target_date: string;
 		published: boolean;
-		meta?: { published_at?: string; mode?: string } | null;
+		is_reannounce?: boolean;
+		publish_count?: number;
+		meta?: {
+			published?: boolean;
+			published_at?: string;
+			unpublished_at?: string | null;
+			mode?: string;
+			publish_count?: number;
+			is_reannounce?: boolean;
+		} | null;
 	}>('POST', '/api/v1/admin/dispatch/publish-status', { target_date: targetDate, published });
 
 export const customGetDispatchSettings = () =>

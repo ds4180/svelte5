@@ -88,6 +88,11 @@
 	const assignRate = $derived(
 		dispatchRows.length > 0 ? Math.round((assignedDriversCount / dispatchRows.length) * 100) : 0
 	);
+	const isPreviewWaitingOpen = $derived(
+		dispatchSettings.preview_enabled &&
+			!dispatchSettings.preview_force_open &&
+			Boolean(previewWindow && previewWindow.offsets.length === 0)
+	);
 	const isPreviewDatePublic = $derived(
 		Boolean(
 			dispatchSettings.preview_enabled &&
@@ -292,6 +297,7 @@
 			if (tmrSource) {
 				tomorrowSummary = {
 					published: Boolean(tmrSource.published),
+					wasPublished: Boolean(tmrSource.was_published),
 					confirmed: Boolean(tmrSource.confirmed),
 					confirmedCount: Number(tmrSource.confirmed_count ?? 0),
 					savedCount: Number(tmrSource.saved_count ?? 0),
@@ -330,7 +336,7 @@
 
 	async function saveDispatch(
 		status: 'DRAFT' | 'CONFIRMED' | 'ANNOUNCED',
-		opts?: { silent?: boolean }
+		opts?: { silent?: boolean; toastMessage?: string }
 	) {
 		if (!selectedRoute) {
 			toast.warning('선택된 노선이 없습니다.');
@@ -347,7 +353,9 @@
 			await Promise.all(payloads.map((p) => dispatchApi.adminSaveDailyDispatch(p)));
 			dispatchRows = dispatchRows.map((r) => ({ ...r, status }));
 			if (!opts?.silent) {
-				if (status === 'ANNOUNCED') {
+				if (opts?.toastMessage) {
+					toast.success(opts.toastMessage);
+				} else if (status === 'ANNOUNCED') {
 					toast.success('명일 배차가 즉시 배포되었습니다.');
 				} else if (status === 'CONFIRMED') {
 					toast.success(
@@ -368,14 +376,62 @@
 	}
 
 	let selectedDatePublished = $state(false);
+	const d1ConfirmButton = $derived.by(() => {
+		if (selectedDatePublished) {
+			return {
+				disabled: true,
+				label: '공개 중',
+				icon: 'solar:lock-bold',
+				title: '공개 중일 때는 먼저 공개 취소를 눌러 주세요',
+				colorClass:
+					'cursor-not-allowed bg-slate-200 text-slate-500 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500'
+			};
+		}
+		if (isD1Confirmed) {
+			return {
+				disabled: false,
+				label: '확정 취소',
+				icon: 'solar:close-circle-bold',
+				title: '명일 배차 확정을 취소하고 저장 상태로 되돌립니다',
+				colorClass: 'bg-rose-600 text-white hover:bg-rose-700'
+			};
+		}
+		return {
+			disabled: false,
+			label: '배차 확정',
+			icon: 'solar:check-circle-bold',
+			title: '명일 배차를 확정합니다',
+			colorClass: 'bg-blue-600 text-white hover:bg-blue-700'
+		};
+	});
+
+	function resolvePreservedSaveStatus(): 'DRAFT' | 'CONFIRMED' | 'ANNOUNCED' {
+		if (!isDMinus1) return 'DRAFT';
+		if (selectedDatePublished || isD1Announced || isD1PartialAnnounced) return 'ANNOUNCED';
+		if (isD1Confirmed) return 'CONFIRMED';
+		return 'DRAFT';
+	}
+
+	function handleSaveDispatch() {
+		saveDispatch(resolvePreservedSaveStatus(), {
+			toastMessage: '배차 정보가 저장되었습니다.'
+		});
+	}
+
+	function handleToggleD1Confirm() {
+		if (!isDMinus1 || selectedDatePublished) return;
+		saveDispatch(isD1Confirmed ? 'DRAFT' : 'CONFIRMED');
+	}
 	let tomorrowSummary = $state<{
 		published: boolean;
+		wasPublished: boolean;
 		confirmed: boolean;
 		confirmedCount: number;
 		savedCount: number;
 		totalCount: number;
 	}>({
 		published: false,
+		wasPublished: false,
 		confirmed: false,
 		confirmedCount: 0,
 		savedCount: 0,
@@ -384,9 +440,10 @@
 	let announcingNow = $state(false);
 	async function handleDeployNowD1() {
 		if (announcingNow || !selectedRoute) return;
-		if (
-			!confirm('명일(D-1) 배차를 저장·확정 후 지금 즉시 공개(배포)하고 알림·푸시를 발송할까요?')
-		) {
+		const confirmMsg = tomorrowSummary.wasPublished
+			? '명일(D-1) 배차를 저장·확정 후 변경 재공지(재배포)하고 재공지 알림·푸시를 발송할까요?'
+			: '명일(D-1) 배차를 저장·확정 후 지금 즉시 공개(배포)하고 알림·푸시를 발송할까요?';
+		if (!confirm(confirmMsg)) {
 			return;
 		}
 		announcingNow = true;
@@ -395,7 +452,12 @@
 			await saveDispatch('CONFIRMED', { silent: true });
 			const res = await dispatchApi.adminAnnounceDispatchNow();
 			selectedDatePublished = true;
-			toast.success(res.message || '명일 배차가 저장·확정 및 공개(배포)되었습니다.');
+			toast.success(
+				res.message ||
+					(res.is_reannounce
+						? '명일 배차가 변경 재공지(재배포)되었습니다.'
+						: '명일 배차가 저장·확정 및 공개(배포)되었습니다.')
+			);
 			await syncData(selectedDateKey, selectedRoute.id);
 		} catch (err) {
 			toast.error('지금 공개 실패: ' + formatApiError(err, '오류'));
@@ -406,14 +468,22 @@
 
 	async function handlePublishTomorrowFromCard() {
 		if (announcingNow || !tomorrowSummary.confirmed) return;
-		if (!confirm('확정된 명일(D-1) 배차를 공개(배포)하고 알림·푸시를 발송할까요?')) {
+		const confirmMsg = tomorrowSummary.wasPublished
+			? '확정된 명일(D-1) 배차를 변경 재공지(재배포)하고 재공지 알림·푸시를 발송할까요?'
+			: '확정된 명일(D-1) 배차를 공개(배포)하고 알림·푸시를 발송할까요?';
+		if (!confirm(confirmMsg)) {
 			return;
 		}
 		announcingNow = true;
 		try {
 			const res = await dispatchApi.adminAnnounceDispatchNow();
 			selectedDatePublished = true;
-			toast.success(res.message || '명일 배차가 공개(배포)되었습니다.');
+			toast.success(
+				res.message ||
+					(res.is_reannounce
+						? '명일 배차가 변경 재공지(재배포)되었습니다.'
+						: '명일 배차가 공개(배포)되었습니다.')
+			);
 			await syncData(selectedDateKey, selectedRoute?.id ?? null);
 		} catch (err) {
 			toast.error('명일 배차 공개 실패: ' + formatApiError(err, '오류'));
@@ -458,6 +528,7 @@
 			tomorrowSummary = {
 				...tomorrowSummary,
 				published: false,
+				wasPublished: true,
 				confirmed: false,
 				confirmedCount: 0
 			};
@@ -488,6 +559,28 @@
 <svelte:head>
 	<title>{getSiteTitle('차량 배차 관리')}</title>
 </svelte:head>
+
+{#snippet d1ConfirmToggle(compact: boolean)}
+	<span
+		class={compact ? 'inline-flex shrink-0' : 'inline-flex w-full shrink-0 sm:w-auto'}
+		title={d1ConfirmButton.title}
+	>
+		<button
+			type="button"
+			disabled={d1ConfirmButton.disabled}
+			class="btn shrink-0 gap-1.5 whitespace-nowrap rounded-xl border-2 border-transparent font-black transition-all {compact
+				? 'px-3.5 btn-sm'
+				: 'h-11 min-h-11 w-full justify-center px-5 text-sm shadow-sm sm:w-auto'} {d1ConfirmButton.colorClass}"
+			onclick={handleToggleD1Confirm}
+		>
+			<Icon
+				icon={d1ConfirmButton.icon}
+				class={compact ? 'h-3.5 w-3.5 shrink-0' : 'h-4 w-4 shrink-0'}
+			/>
+			<span>{d1ConfirmButton.label}</span>
+		</button>
+	</span>
+{/snippet}
 
 <div
 	class="mx-auto w-full max-w-[1800px] space-y-4 px-1 py-4 pb-20 font-['Noto_Sans_KR','Outfit'] sm:px-2 md:space-y-6 md:px-3 md:py-6 lg:px-4"
@@ -546,39 +639,57 @@
 	<div class="grid grid-cols-2 gap-3 md:gap-4 lg:grid-cols-12">
 		<!-- 카드 1: 배차 예고 상태 & 전역 토글 -->
 		<div
-			class="col-span-2 flex min-w-0 flex-col justify-between rounded-[1.75rem] border-2 p-4 shadow-sm sm:col-span-1 sm:p-5 lg:col-span-4 {dispatchSettings.preview_enabled
-				? 'border-emerald-200 bg-emerald-50/40'
-				: 'border-rose-200 bg-rose-50/40'}"
+			class="col-span-2 flex min-w-0 flex-col justify-between rounded-[1.75rem] border-2 p-4 shadow-sm sm:col-span-1 sm:p-5 lg:col-span-4 {!dispatchSettings.preview_enabled
+				? 'border-rose-200 bg-rose-50/40'
+				: isPreviewWaitingOpen
+					? 'border-amber-200 bg-amber-50/40'
+					: 'border-emerald-200 bg-emerald-50/40'}"
 		>
 			<div class="flex items-center justify-between gap-2">
 				<span class="truncate text-xs font-black text-slate-500 uppercase">배차 예고 상태</span>
 				<span
-					class="inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-black {dispatchSettings.preview_enabled
-						? 'bg-emerald-100 text-emerald-700'
-						: 'bg-rose-100 text-rose-700'}"
+					class="inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-black {!dispatchSettings.preview_enabled
+						? 'bg-rose-100 text-rose-700'
+						: isPreviewWaitingOpen
+							? 'bg-amber-100 text-amber-800'
+							: 'bg-emerald-100 text-emerald-700'}"
 				>
 					<span
-						class="h-2 w-2 rounded-full {dispatchSettings.preview_enabled
-							? 'bg-emerald-500'
-							: 'bg-rose-500'}"
+						class="h-2 w-2 rounded-full {!dispatchSettings.preview_enabled
+							? 'bg-rose-500'
+							: isPreviewWaitingOpen
+								? 'bg-amber-500'
+								: 'bg-emerald-500'}"
 					></span>
-					{dispatchSettings.preview_enabled ? '공개 중' : '중지 중'}
+					{!dispatchSettings.preview_enabled
+						? '중지 중'
+						: isPreviewWaitingOpen
+							? '공개 대기'
+							: '공개 중'}
 				</span>
 			</div>
 			<div class="mt-3 flex flex-wrap items-end justify-between gap-3">
 				<div class="min-w-0 flex-1">
 					<div
-						class="truncate text-xl font-black sm:text-2xl {dispatchSettings.preview_enabled
-							? 'text-emerald-700'
-							: 'text-rose-700'}"
+						class="truncate text-xl font-black sm:text-2xl {!dispatchSettings.preview_enabled
+							? 'text-rose-700'
+							: isPreviewWaitingOpen
+								? 'text-amber-700'
+								: 'text-emerald-700'}"
 					>
-						{dispatchSettings.preview_enabled ? '배차 예고 중' : '배차 예고 중지 중'}
+						{!dispatchSettings.preview_enabled
+							? '배차 예고 중지 중'
+							: isPreviewWaitingOpen
+								? `${dispatchSettings.preview_open_time} 공개 예정`
+								: '배차 예고 중'}
 					</div>
 					<div class="mt-1 truncate text-xs font-bold text-slate-500">
 						노출 구간: +{dispatchSettings.preview_start_offset ??
 							3}~+{(dispatchSettings.preview_start_offset ?? 3) +
 							(dispatchSettings.preview_days ?? 5) -
-							1}일
+							1}일 · {dispatchSettings.preview_force_open
+							? '즉시 예고'
+							: `매일 ${dispatchSettings.preview_open_time} 공개`}
 					</div>
 				</div>
 				<button
@@ -666,7 +777,11 @@
 							? 'bg-emerald-600 hover:bg-emerald-700'
 							: ''}"
 					>
-						{tomorrowSummary.confirmed ? '지금 공개' : '확정 필요'}
+						{tomorrowSummary.confirmed
+							? tomorrowSummary.wasPublished
+								? '재공개'
+								: '지금 공개'
+							: '확정 필요'}
 					</button>
 				{/if}
 			</div>
@@ -762,10 +877,10 @@
 		<div
 			class="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-3.5 shadow-sm sm:p-4"
 		>
-			<div class="flex items-center gap-2">
+			<div class="flex min-w-0 flex-wrap items-center gap-2">
 				<button
 					type="button"
-					class="btn rounded-xl border-slate-200 bg-slate-50 font-black text-slate-700 btn-sm hover:bg-slate-200"
+					class="btn shrink-0 whitespace-nowrap rounded-xl border-slate-200 bg-slate-50 font-black text-slate-700 btn-sm hover:bg-slate-200"
 					onclick={() => moveDate(-1)}
 				>
 					<Icon icon="lucide:chevron-left" class="h-4 w-4" />
@@ -773,65 +888,45 @@
 				</button>
 				<button
 					type="button"
-					class="btn rounded-xl border-none bg-slate-900 px-4 font-black text-white btn-sm"
+					class="btn shrink-0 whitespace-nowrap rounded-xl border-none bg-slate-900 px-4 font-black text-white btn-sm"
 					onclick={() => setDate(today)}
 				>
 					오늘
 				</button>
 				<button
 					type="button"
-					class="btn rounded-xl border-slate-200 bg-slate-50 font-black text-slate-700 btn-sm hover:bg-slate-200"
+					class="btn shrink-0 whitespace-nowrap rounded-xl border-slate-200 bg-slate-50 font-black text-slate-700 btn-sm hover:bg-slate-200"
 					onclick={() => moveDate(1)}
 				>
 					{formatDateDisplay(nextDate)}
 					<Icon icon="lucide:chevron-right" class="h-4 w-4" />
 				</button>
-				<span class="ml-2 text-sm font-black text-slate-800">{selectedFullDate}</span>
-				<span class="rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-black text-indigo-700">
-					{getRelativeLabel(selectedDate)}
-				</span>
-				<button
-					type="button"
-					class="btn ml-1 rounded-xl border-2 border-slate-200 bg-white px-3.5 font-black text-slate-800 btn-sm hover:bg-slate-50"
-					onclick={() =>
-						saveDispatch(
-							isDMinus1 && selectedDatePublished
-								? 'ANNOUNCED'
-								: isDMinus1 && isD1Confirmed
-									? 'CONFIRMED'
-									: 'DRAFT'
-						)}
-				>
-					<Icon icon="solar:diskette-bold" class="h-3.5 w-3.5" />
-					<span>저장하기</span>
-				</button>
-				{#if isDMinus1}
-					<button
-						type="button"
-						disabled={selectedDatePublished}
-						title={selectedDatePublished
-							? '공개 중일 때는 먼저 공개 취소를 눌러 주세요'
-							: '명일 배차를 확정하거나 확정을 취소합니다'}
-						class="btn rounded-xl border-none px-3.5 font-black text-white btn-sm disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-500 {isD1Confirmed ||
-						selectedDatePublished
-							? 'bg-rose-600 hover:bg-rose-700'
-							: 'bg-blue-600 hover:bg-blue-700'}"
-						onclick={() => saveDispatch(isD1Confirmed ? 'DRAFT' : 'CONFIRMED')}
+				<div class="flex items-center gap-1.5 sm:ml-1">
+					<span class="whitespace-nowrap text-sm font-black text-slate-800">{selectedFullDate}</span>
+					<span
+						class="shrink-0 whitespace-nowrap rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-black text-indigo-700"
 					>
-						<Icon
-							icon={isD1Confirmed || selectedDatePublished
-								? 'solar:close-circle-bold'
-								: 'solar:check-circle-bold'}
-							class="h-3.5 w-3.5"
-						/>
-						<span>{isD1Confirmed || selectedDatePublished ? '확정 취소' : '배차 확정'}</span>
-					</button>
-				{/if}
+						{getRelativeLabel(selectedDate)}
+					</span>
+				</div>
 			</div>
 
-			<div class="flex items-center gap-2">
+			<div class="flex flex-wrap items-center gap-2 sm:gap-3">
+				<div class="flex flex-wrap items-center gap-2">
+					<button
+						type="button"
+						class="btn shrink-0 whitespace-nowrap rounded-xl border-2 border-slate-200 bg-white px-3.5 font-black text-slate-800 btn-sm hover:bg-slate-50"
+						onclick={handleSaveDispatch}
+					>
+						<Icon icon="solar:diskette-bold" class="h-3.5 w-3.5 shrink-0" />
+						<span>저장하기</span>
+					</button>
+					{#if isDMinus1}
+						{@render d1ConfirmToggle(true)}
+					{/if}
+				</div>
 				<label
-					class="inline-flex cursor-pointer items-center gap-1.5 text-xs font-bold text-slate-600"
+					class="inline-flex shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap text-xs font-bold text-slate-600"
 				>
 					<input
 						type="checkbox"
@@ -915,72 +1010,68 @@
 					/>
 				</div>
 
-				<div
-					class="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:flex-wrap sm:justify-end sm:gap-3"
-				>
-					<button
-						type="button"
-						class="btn w-full justify-center sm:w-auto {isAutoFilled
-							? 'border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100'
-							: 'border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100'} flex items-center gap-1.5 rounded-xl border-2 px-5 font-black shadow-sm transition-all"
-						onclick={autoFillDrivers}
+				<div class="mt-6 space-y-2">
+					<div
+						class="flex flex-col-reverse gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end sm:gap-3"
 					>
-						{#if isAutoFilled}
-							<Icon icon="ph:x-circle-fill" class="h-4.5 w-4.5" />
-							채우기 취소
-						{:else}
-							<Icon icon="ph:magic-wand-fill" class="h-4.5 w-4.5" />
-							자동 채우기
-						{/if}
-					</button>
-					<button
-						type="button"
-						class="btn w-full justify-center rounded-xl border-2 border-slate-200 bg-white px-5 font-black text-slate-800 hover:bg-slate-50 sm:w-auto"
-						onclick={() =>
-							saveDispatch(
-								isDMinus1 && selectedDatePublished
-									? 'ANNOUNCED'
-									: isDMinus1 && isD1Confirmed
-										? 'CONFIRMED'
-										: 'DRAFT'
-							)}
-					>
-						저장하기
-					</button>
-					{#if isDMinus1}
 						<button
 							type="button"
-							disabled={selectedDatePublished}
-							title={selectedDatePublished
-								? '공개 중일 때는 먼저 공개 취소를 눌러 주세요'
-								: '명일 배차를 확정하거나 확정을 취소합니다'}
-							class="btn w-full justify-center rounded-xl border-none px-5 font-black text-white shadow-sm disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-500 sm:w-auto {isD1Confirmed ||
-							selectedDatePublished
-								? 'bg-rose-600 hover:bg-rose-700'
-								: 'bg-blue-600 hover:bg-blue-700'}"
-							onclick={() => saveDispatch(isD1Confirmed ? 'DRAFT' : 'CONFIRMED')}
+							class="btn h-11 min-h-11 w-full shrink-0 justify-center gap-1.5 whitespace-nowrap rounded-xl border-2 px-5 text-sm font-black shadow-sm transition-all sm:w-auto {isAutoFilled
+								? 'border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100'
+								: 'border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100'}"
+							onclick={autoFillDrivers}
 						>
-							{isD1Confirmed || selectedDatePublished ? '확정 취소' : '배차 확정'}
+							{#if isAutoFilled}
+								<Icon icon="ph:x-circle-fill" class="h-4 w-4 shrink-0" />
+								<span>채우기 취소</span>
+							{:else}
+								<Icon icon="ph:magic-wand-fill" class="h-4 w-4 shrink-0" />
+								<span>자동 채우기</span>
+							{/if}
 						</button>
-						{#if selectedDatePublished}
-							<button
-								type="button"
-								disabled={announcingNow}
-								class="btn w-full justify-center rounded-xl border-2 border-rose-200 bg-rose-50 px-5 font-black text-rose-700 hover:bg-rose-100 disabled:opacity-50 sm:w-auto"
-								onclick={handleUnpublishD1}
-							>
-								공개 취소
-							</button>
-						{:else}
-							<button
-								type="button"
-								disabled={announcingNow}
-								class="btn w-full justify-center rounded-xl border-none bg-emerald-600 px-6 font-black text-white shadow-lg hover:bg-emerald-700 disabled:opacity-50 sm:w-auto"
-								onclick={handleDeployNowD1}
-							>
-								{announcingNow ? '공개 중...' : '지금 공개(배포)'}
-							</button>
+						<button
+							type="button"
+							class="btn h-11 min-h-11 w-full shrink-0 justify-center gap-1.5 whitespace-nowrap rounded-xl border-2 border-slate-200 bg-white px-5 text-sm font-black text-slate-800 shadow-sm transition-all hover:bg-slate-50 sm:w-auto"
+							onclick={handleSaveDispatch}
+						>
+							<Icon icon="solar:diskette-bold" class="h-4 w-4 shrink-0" />
+							<span>저장하기</span>
+						</button>
+						{#if isDMinus1}
+							{@render d1ConfirmToggle(false)}
+							{#if selectedDatePublished}
+								<button
+									type="button"
+									disabled={announcingNow}
+									class="btn h-11 min-h-11 w-full shrink-0 justify-center gap-1.5 whitespace-nowrap rounded-xl border-2 border-rose-200 bg-rose-50 px-5 text-sm font-black text-rose-700 shadow-sm transition-all hover:bg-rose-100 disabled:opacity-50 sm:w-auto"
+									onclick={handleUnpublishD1}
+								>
+									<Icon icon="lucide:eye-off" class="h-4 w-4 shrink-0" />
+									<span>공개 취소</span>
+								</button>
+							{:else}
+								<button
+									type="button"
+									disabled={announcingNow}
+									class="btn h-11 min-h-11 w-full shrink-0 justify-center gap-1.5 whitespace-nowrap rounded-xl border-2 border-transparent bg-emerald-600 px-5 text-sm font-black text-white shadow-sm transition-all hover:bg-emerald-700 disabled:opacity-50 sm:w-auto"
+									onclick={handleDeployNowD1}
+								>
+									<Icon icon="lucide:send" class="h-4 w-4 shrink-0" />
+									<span>
+										{announcingNow
+											? '공개 중...'
+											: tomorrowSummary.wasPublished
+												? '재공개(재배포)'
+												: '지금 공개(배포)'}
+									</span>
+								</button>
+							{/if}
 						{/if}
+					</div>
+					{#if isDMinus1 && selectedDatePublished}
+						<p class="text-right text-xs font-semibold text-slate-500">
+							공개 중에는 먼저 공개 취소를 눌러 주세요.
+						</p>
 					{/if}
 				</div>
 			</main>

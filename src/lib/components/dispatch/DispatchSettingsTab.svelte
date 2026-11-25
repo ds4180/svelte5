@@ -438,6 +438,29 @@
 						class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-900"
 					/>
 				</label>
+				<div class="space-y-2 border-t border-slate-200 pt-3">
+					<div class="text-[11px] font-black text-amber-700">
+						공개 취소 후 재공지(재배포) 시 발송되는 별도 알림 템플릿
+					</div>
+					<label class="block space-y-1 text-xs font-bold text-slate-700">
+						<span>재공지 알림 제목 템플릿 (`&#123;target_date&#125;` 치환)</span>
+						<input
+							type="text"
+							bind:value={draft.reannounce_title_template}
+							placeholder="[명일 배차 변경 재공지] &#123;target_date&#125;"
+							class="w-full rounded-xl border border-amber-200 bg-white px-3 py-2 text-xs font-bold text-slate-900"
+						/>
+					</label>
+					<label class="block space-y-1 text-xs font-bold text-slate-700">
+						<span>재공지 알림 본문 템플릿 (`&#123;target_date&#125;` 치환)</span>
+						<input
+							type="text"
+							bind:value={draft.reannounce_body_template}
+							placeholder="&#123;target_date&#125; 배차가 수정되어 재배포되었습니다. 변경된 차량과 로번을 반드시 다시 확인해 주세요."
+							class="w-full rounded-xl border border-amber-200 bg-white px-3 py-2 text-xs font-bold text-slate-900"
+						/>
+					</label>
+				</div>
 				<div class="space-y-2 border-t border-slate-200 pt-3 text-xs font-bold text-slate-700">
 					<label class="flex cursor-pointer items-center gap-2">
 						<input
