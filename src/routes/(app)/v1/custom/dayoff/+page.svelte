@@ -228,18 +228,8 @@
 		return result;
 	}
 
-	// 📌 달력 이벤트 / 통계 / 중복 및 정원 마감 검사 ($derived)
+	// 📌 달력 이벤트 / 중복 및 정원 마감 검사 ($derived)
 	const events = $derived(buildEvents(data.dayoff_list || [], isFcfsMode, quotaDays));
-
-	const stats = $derived.by(() => {
-		const list: DayoffEntry[] = data.dayoff_list || [];
-		return {
-			total: data.total ?? list.length,
-			requested: list.filter((d) => d.status === 'REQUESTED').length,
-			approved: list.filter((d) => d.status === 'APPROVED').length,
-			rejected: list.filter((d) => d.status === 'REJECTED').length
-		};
-	});
 
 	/** 대기·승인 상태로 이미 신청된 내 날짜 집합 */
 	const busyDates = $derived.by(() => {
@@ -426,81 +416,6 @@
 					달력에서 시작일과 종료일을 차례로 눌러 기간을 선택하고, 신청 후 관리자 승인 상태를 확인합니다.
 				{/if}
 			</p>
-		</div>
-	</div>
-
-	<!-- ===================================================================== -->
-	<!-- 2. 요약 카드 (admin Status Cards 스타일) -->
-	<!-- ===================================================================== -->
-	<div class="grid grid-cols-2 gap-4 md:grid-cols-4 md:gap-5">
-		<div
-			class="flex flex-col justify-between rounded-[1.75rem] border-2 border-slate-200 bg-white p-5 shadow-sm"
-		>
-			<div class="flex items-center justify-between">
-				<span class="text-xs font-black tracking-wider text-slate-400">승인 대기</span>
-				<div class="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
-					<Icon icon="solar:clock-circle-bold-duotone" class="text-xl" />
-				</div>
-			</div>
-			<div class="mt-4">
-				<div class="text-3xl font-black text-amber-600">
-					{stats.requested} <span class="text-xs font-normal text-slate-500">건</span>
-				</div>
-				<div class="mt-1 text-xs font-bold text-slate-400">승인 대기 중</div>
-			</div>
-		</div>
-
-		<div
-			class="flex flex-col justify-between rounded-[1.75rem] border-2 border-slate-200 bg-white p-5 shadow-sm"
-		>
-			<div class="flex items-center justify-between">
-				<span class="text-xs font-black tracking-wider text-slate-400">승인 확정</span>
-				<div
-					class="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600"
-				>
-					<Icon icon="solar:check-circle-bold-duotone" class="text-xl" />
-				</div>
-			</div>
-			<div class="mt-4">
-				<div class="text-3xl font-black text-emerald-600">
-					{stats.approved} <span class="text-xs font-normal text-slate-500">건</span>
-				</div>
-				<div class="mt-1 text-xs font-bold text-slate-400">승인 확정 휴무</div>
-			</div>
-		</div>
-
-		<div
-			class="flex flex-col justify-between rounded-[1.75rem] border-2 border-slate-200 bg-white p-5 shadow-sm"
-		>
-			<div class="flex items-center justify-between">
-				<span class="text-xs font-black tracking-wider text-slate-400">반려</span>
-				<div class="flex h-9 w-9 items-center justify-center rounded-xl bg-rose-50 text-rose-600">
-					<Icon icon="solar:close-circle-bold-duotone" class="text-xl" />
-				</div>
-			</div>
-			<div class="mt-4">
-				<div class="text-3xl font-black text-rose-600">
-					{stats.rejected} <span class="text-xs font-normal text-slate-500">건</span>
-				</div>
-				<div class="mt-1 text-xs font-bold text-slate-400">반려된 신청</div>
-			</div>
-		</div>
-
-		<div
-			class="flex flex-col justify-between rounded-[1.75rem] border-2 border-slate-200 bg-white p-5 shadow-sm"
-		>
-			<div class="flex items-center justify-between">
-				<span class="text-xs font-black tracking-wider text-slate-400">전체 누적</span>
-				<div class="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
-					<Icon icon="solar:calendar-date-bold-duotone" class="text-xl" />
-				</div>
-			</div>
-			<div class="mt-4">
-				<div class="text-3xl font-black text-blue-600">
-					{stats.total} <span class="text-xs font-normal text-slate-500">건</span>
-				</div>
-				<div class="mt-1 text-xs font-bold text-slate-400">누적 신청 기록</div>
-			</div>
 		</div>
 	</div>
 
@@ -757,20 +672,97 @@
 	</div>
 
 	<!-- ===================================================================== -->
-	<!-- 4. 신청 이력 (admin 목록 테이블 스타일) -->
+	<!-- 4. 신청 이력 (모바일 카드형 + 데스크톱 테이블) -->
 	<!-- ===================================================================== -->
 	<div
 		class="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg md:rounded-[2rem] md:shadow-2xl"
 	>
-		<div class="flex items-center justify-between border-b border-slate-100 bg-slate-50/50 p-6 md:p-8">
-			<h3 class="text-lg font-black tracking-tight text-slate-900">
+		<div
+			class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 bg-slate-50/50 p-4 sm:p-5 md:p-8"
+		>
+			<h3 class="text-base font-black tracking-tight text-slate-900 md:text-lg">
 				신청 이력
-				<span class="ml-2 text-sm font-bold text-blue-600">최근 신청 이력 현황</span>
+				<span class="ml-2 text-xs font-bold text-blue-600 md:text-sm">최근 신청 이력 현황</span>
 			</h3>
+			{#if data.dayoff_list && data.dayoff_list.length > 0}
+				<span class="rounded-full bg-slate-200/70 px-2.5 py-0.5 text-[11px] font-black text-slate-600">
+					총 {data.dayoff_list.length}건
+				</span>
+			{/if}
 		</div>
 
 		{#if data.dayoff_list && data.dayoff_list.length > 0}
-			<div class="overflow-x-auto">
+			<!-- 모바일 전용 카드형 리스트 -->
+			<div class="divide-y divide-slate-100 md:hidden">
+				{#each data.dayoff_list as d (d.id)}
+					<div class="space-y-2.5 p-4">
+						<div class="flex items-start justify-between gap-2">
+							<div class="min-w-0 flex-1 space-y-1.5">
+								<div class="flex items-center gap-1.5">
+									<Icon
+										icon="mdi:calendar-month-outline"
+										class="h-4 w-4 shrink-0 text-slate-400"
+									/>
+									<span class="text-sm font-black tracking-tight text-slate-900">{d.date}</span>
+								</div>
+								<div class="flex flex-wrap items-center gap-1.5">
+									<span
+										class="rounded-md border border-slate-200 bg-slate-100 px-2 py-0.5 text-[11px] font-black text-slate-700"
+									>
+										{getTypeLabel(d.type)}
+									</span>
+									<span
+										class="rounded-md border px-2 py-0.5 text-[11px] font-black {getBadgeClass(
+											d.status
+										)}"
+									>
+										{STATUS_LABELS[d.status] || d.status}
+									</span>
+								</div>
+							</div>
+
+							<div class="shrink-0">
+								{#if canCancelEntry(d)}
+									<form
+										method="post"
+										action="?/delete"
+										use:enhance={handleDeleteEnhance}
+										class="inline"
+									>
+										<input type="hidden" name="dayoff_id" value={d.id} />
+										<button
+											type="submit"
+											class="rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-black text-rose-600 transition active:scale-95 hover:bg-rose-100"
+											onclick={(e: MouseEvent) => {
+												if (!confirm('해당 휴무 신청을 취소하시겠습니까?')) e.preventDefault();
+											}}
+										>
+											취소
+										</button>
+									</form>
+								{:else}
+									<span
+										class="inline-block rounded-lg border border-slate-100 bg-slate-50 px-2.5 py-1.5 text-[11px] font-bold text-slate-400"
+									>
+										취소 불가
+									</span>
+								{/if}
+							</div>
+						</div>
+
+						{#if d.memo}
+							<div
+								class="rounded-xl bg-slate-50 px-3 py-2 text-xs leading-relaxed font-medium break-words text-slate-600"
+							>
+								{d.memo}
+							</div>
+						{/if}
+					</div>
+				{/each}
+			</div>
+
+			<!-- 데스크톱 전용 테이블 -->
+			<div class="hidden overflow-x-auto md:block">
 				<table class="table w-full">
 					<thead
 						class="border-b border-slate-100 bg-slate-50 text-xs font-bold tracking-wider text-slate-500"

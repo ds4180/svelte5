@@ -256,8 +256,126 @@
 		</div>
 	</div>
 
-	<!-- 게시판 리스트 테이블 -->
-	<div class="overflow-x-auto print:overflow-visible">
+	<!-- 모바일 카드 뷰 (인쇄 시 숨김) -->
+	<div class="divide-y divide-slate-100 md:hidden print:hidden">
+		{#if loading}
+			<div class="py-16 text-center">
+				<span class="loading loading-lg loading-bars text-blue-600"></span>
+			</div>
+		{:else if pagedRecordList.length === 0}
+			<div class="py-16 text-center">
+				<Icon
+					icon="solar:document-text-bold-duotone"
+					class="mx-auto mb-2 text-4xl text-slate-200"
+				/>
+				<p class="text-sm font-black text-slate-400">조건에 해당하는 결근 내역이 없습니다.</p>
+			</div>
+		{:else}
+			{#each pagedRecordList as d (d.id)}
+				<div class="space-y-2.5 p-4">
+					<div class="flex items-start justify-between gap-2">
+						<div class="min-w-0 flex-1 space-y-1">
+							<div class="flex flex-wrap items-center gap-1.5">
+								<span class="text-sm font-black text-slate-900">{d.real_name || d.username}</span>
+								<span
+									class="rounded-full border px-2 py-0.5 text-[10px] font-black {d.work_type ===
+									'FCFS'
+										? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+										: 'border-blue-200 bg-blue-50 text-blue-700'}"
+								>
+									{getDayoffWorkTypeLabel(d.work_type)}
+								</span>
+							</div>
+							<div class="text-[11px] font-bold text-slate-400">
+								{d.primary_group || '미지정'} · Lv.{d.rank_level ?? 0}
+							</div>
+						</div>
+						<span
+							class="shrink-0 rounded-md border px-2 py-0.5 text-[11px] font-black {getDayoffBadgeClass(
+								d.status
+							)}"
+						>
+							{getDayoffStatusLabel(d.status)}
+						</span>
+					</div>
+
+					<div class="flex flex-wrap items-center gap-1.5">
+						<span class="font-mono text-xs font-black text-slate-800">{d.date}</span>
+						<span
+							class="rounded-md border border-slate-200 bg-slate-100 px-2 py-0.5 text-[11px] font-black text-slate-700"
+						>
+							{getDayoffTypeLabel(d.type)}
+						</span>
+					</div>
+
+					{#if d.memo}
+						<div
+							class="rounded-xl bg-slate-50 px-3 py-2 text-xs leading-relaxed font-medium break-words text-slate-600"
+						>
+							{d.memo}
+						</div>
+					{/if}
+
+					<div class="flex flex-wrap items-center justify-between gap-2 pt-0.5">
+						<span class="font-mono text-[10px] text-slate-400">
+							{formatDateTime(d.create_date)}
+						</span>
+						<div class="flex flex-wrap items-center gap-1.5">
+							{#if d.status === 'REQUESTED'}
+								<button
+									type="button"
+									class="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-black text-white transition active:scale-95 hover:bg-emerald-700"
+									onclick={() => onUpdateStatus(d.id, 'APPROVED')}
+								>
+									승인
+								</button>
+								<button
+									type="button"
+									class="rounded-lg bg-rose-500 px-3 py-1.5 text-xs font-black text-white transition active:scale-95 hover:bg-rose-600"
+									onclick={() => onUpdateStatus(d.id, 'REJECTED')}
+								>
+									반려
+								</button>
+							{:else if d.status === 'APPROVED'}
+								<button
+									type="button"
+									class="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-black text-slate-600 hover:bg-slate-50"
+									onclick={() => onUpdateStatus(d.id, 'REQUESTED')}
+								>
+									대기전환
+								</button>
+								<button
+									type="button"
+									class="rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1 text-[11px] font-black text-rose-600 hover:bg-rose-100"
+									onclick={() => onUpdateStatus(d.id, 'REJECTED')}
+								>
+									반려
+								</button>
+							{:else}
+								<button
+									type="button"
+									class="rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-black text-emerald-700 hover:bg-emerald-100"
+									onclick={() => onUpdateStatus(d.id, 'APPROVED')}
+								>
+									승인복원
+								</button>
+								<button
+									type="button"
+									class="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-black text-slate-600 hover:bg-slate-50"
+									onclick={() => onUpdateStatus(d.id, 'REQUESTED')}
+								>
+									대기전환
+								</button>
+							{/if}
+						</div>
+					</div>
+				</div>
+			{/each}
+		{/if}
+	</div>
+
+	<!-- 게시판 리스트 테이블 (데스크톱 및 인쇄용) -->
+	<div class="hidden overflow-x-auto md:block print:block print:overflow-visible">
 		<table class="table w-full print:text-xs">
 			<!-- 화면용 반응형 헤더 (2줄 1셀 압축: 모바일 4열 / 데스크톱 5열) -->
 			<thead

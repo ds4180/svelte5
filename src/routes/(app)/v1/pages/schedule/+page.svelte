@@ -557,7 +557,42 @@
                             조회 기간 내 사무실 직원 결근계 내역이 없습니다.
                         </div>
                     {:else}
-                        <div class="overflow-x-auto">
+                        <!-- 모바일 카드 뷰 -->
+                        <div class="divide-y divide-slate-100 md:hidden">
+                            {#each officeDayoffs as od (od.id)}
+                                <div class="space-y-2 py-3.5 first:pt-1 last:pb-1">
+                                    <div class="flex items-start justify-between gap-2">
+                                        <div class="min-w-0 flex-1">
+                                            <div class="flex flex-wrap items-center gap-1.5">
+                                                <span class="text-sm font-black text-slate-900">{od.staff_name}</span>
+                                                {#if od.primary_group}
+                                                    <span class="text-[11px] font-bold text-slate-400">({od.primary_group})</span>
+                                                {/if}
+                                            </div>
+                                        </div>
+                                        <span class="badge badge-xs shrink-0 font-black {od.dayoff_status === 'APPROVED' ? 'badge-success text-white' : 'badge-warning'}">
+                                            {od.dayoff_status === 'APPROVED' ? '승인' : '대기'}
+                                        </span>
+                                    </div>
+                                    <div class="flex flex-wrap items-center gap-1.5 text-xs">
+                                        <span class="rounded-md border border-slate-200 bg-slate-100 px-2 py-0.5 text-[11px] font-black text-slate-700">
+                                            {od.dayoff_type}
+                                        </span>
+                                        <span class="font-mono text-xs font-bold text-slate-700">
+                                            {od.date}{od.endDate ? ` ~ ${od.endDate}` : ''} ({od.days_count}일)
+                                        </span>
+                                    </div>
+                                    {#if od.content}
+                                        <div class="rounded-xl bg-slate-50 px-3 py-2 text-xs leading-relaxed break-words text-slate-600">
+                                            {od.content}
+                                        </div>
+                                    {/if}
+                                </div>
+                            {/each}
+                        </div>
+
+                        <!-- 데스크톱 테이블 -->
+                        <div class="hidden overflow-x-auto md:block">
                             <table class="w-full text-left text-xs">
                                 <thead class="border-b border-slate-200 bg-slate-50 font-black text-slate-500">
                                     <tr>
@@ -618,7 +653,47 @@
                             {calYear - 1}년 {calMonth + 1}월에 등록된 중요 일정이 없습니다.
                         </div>
                     {:else}
-                        <div class="overflow-x-auto">
+                        <!-- 모바일 카드 뷰 -->
+                        <div class="divide-y divide-slate-100 md:hidden">
+                            {#each lastYearImportantSchedules as item (item.id ?? `${item.schedule_id}-${item.date}`)}
+                                <div class="space-y-2 py-3.5 first:pt-1 last:pb-1">
+                                    <div class="flex items-start justify-between gap-2">
+                                        <div class="min-w-0 flex-1 space-y-1">
+                                            <div class="flex flex-wrap items-center gap-1.5">
+                                                <span class="font-mono text-xs font-black text-slate-700">
+                                                    {item.date}{#if item.endDate && item.endDate !== item.date} ~ {item.endDate}{/if}
+                                                </span>
+                                                <span
+                                                    class="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-black text-slate-700"
+                                                >
+                                                    <span
+                                                        class="h-2 w-2 rounded-full"
+                                                        style="background-color: {item.color || '#ef4444'};"
+                                                    ></span>
+                                                    {CATEGORY_META[item.category]?.badge || item.category}
+                                                </span>
+                                            </div>
+                                            <div class="text-sm font-black text-slate-900">{item.title}</div>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onclick={() => copyLastYearScheduleToThisYear(item)}
+                                            class="btn btn-xs shrink-0 rounded-lg border-blue-200 bg-blue-50 font-black text-blue-700 hover:bg-blue-100"
+                                        >
+                                            올해로 복사
+                                        </button>
+                                    </div>
+                                    {#if item.content}
+                                        <div class="rounded-xl bg-slate-50 px-3 py-2 text-xs leading-relaxed break-words text-slate-600">
+                                            {item.content}
+                                        </div>
+                                    {/if}
+                                </div>
+                            {/each}
+                        </div>
+
+                        <!-- 데스크톱 테이블 -->
+                        <div class="hidden overflow-x-auto md:block">
                             <table class="w-full text-left text-xs">
                                 <thead class="border-b border-slate-200 bg-slate-50 font-black text-slate-500">
                                     <tr>

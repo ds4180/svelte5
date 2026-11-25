@@ -108,23 +108,143 @@
 	</td>
 {/snippet}
 
+{#snippet mobileDayoffCard(d: DayoffEntry, showCreatedAt: boolean, isPendingList: boolean)}
+	<div class="space-y-2.5 p-4">
+		<div class="flex items-start justify-between gap-2">
+			<div class="min-w-0 flex-1 space-y-1">
+				<div class="flex flex-wrap items-center gap-1.5">
+					<span class="text-sm font-black text-slate-900">{d.real_name || d.username}</span>
+					<span
+						class="rounded-full border px-2 py-0.5 text-[10px] font-black {d.work_type === 'FCFS'
+							? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+							: 'border-blue-200 bg-blue-50 text-blue-700'}"
+					>
+						{getDayoffWorkTypeLabel(d.work_type)}
+					</span>
+				</div>
+				<div class="text-[11px] font-bold text-slate-400">
+					{d.primary_group || '미지정'} · Lv.{d.rank_level ?? 0}
+				</div>
+			</div>
+			<span
+				class="shrink-0 rounded-md border px-2 py-0.5 text-[11px] font-black {getDayoffBadgeClass(
+					d.status
+				)}"
+			>
+				{getDayoffStatusLabel(d.status)}
+			</span>
+		</div>
+
+		<div class="flex flex-wrap items-center gap-1.5">
+			<span class="font-mono text-xs font-black text-slate-800">{d.date}</span>
+			<span
+				class="rounded-md border border-slate-200 bg-slate-100 px-2 py-0.5 text-[11px] font-black text-slate-700"
+			>
+				{getDayoffTypeLabel(d.type)}
+			</span>
+			{#if d.group_id}
+				<span class="text-[10px] font-bold text-blue-500">#{d.group_id}</span>
+			{/if}
+		</div>
+
+		{#if d.memo}
+			<div
+				class="rounded-xl bg-slate-50 px-3 py-2 text-xs leading-relaxed font-medium break-words text-slate-600"
+			>
+				{d.memo}
+			</div>
+		{/if}
+
+		<div class="flex flex-wrap items-center justify-between gap-2 pt-0.5">
+			<span class="font-mono text-[10px] text-slate-400">
+				{showCreatedAt && d.create_date ? formatDateTime(d.create_date) : ''}
+			</span>
+			<div class="flex flex-wrap items-center gap-1.5">
+				{#if isPendingList || d.status === 'REQUESTED'}
+					<button
+						type="button"
+						class="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-black text-white transition active:scale-95 hover:bg-emerald-700"
+						onclick={() => onUpdateStatus(d.id, 'APPROVED')}
+					>
+						승인
+					</button>
+					<button
+						type="button"
+						class="rounded-lg bg-rose-500 px-3 py-1.5 text-xs font-black text-white transition active:scale-95 hover:bg-rose-600"
+						onclick={() => onUpdateStatus(d.id, 'REJECTED')}
+					>
+						반려
+					</button>
+				{:else if d.status === 'APPROVED'}
+					<button
+						type="button"
+						class="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-black text-slate-600 hover:bg-slate-50"
+						onclick={() => onUpdateStatus(d.id, 'REQUESTED')}
+					>
+						대기전환
+					</button>
+					<button
+						type="button"
+						class="rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1 text-[11px] font-black text-rose-600 hover:bg-rose-100"
+						onclick={() => onUpdateStatus(d.id, 'REJECTED')}
+					>
+						반려
+					</button>
+				{:else}
+					<button
+						type="button"
+						class="rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-black text-emerald-700 hover:bg-emerald-100"
+						onclick={() => onUpdateStatus(d.id, 'APPROVED')}
+					>
+						승인복원
+					</button>
+					<button
+						type="button"
+						class="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-black text-slate-600 hover:bg-slate-50"
+						onclick={() => onUpdateStatus(d.id, 'REQUESTED')}
+					>
+						대기전환
+					</button>
+				{/if}
+			</div>
+		</div>
+	</div>
+{/snippet}
+
 <div class="space-y-6">
 	{#if workTypeFilter !== 'FCFS'}
 		<div
 			class="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg md:rounded-[2rem] md:shadow-2xl"
 		>
 			<div
-				class="flex items-center justify-between border-b border-slate-100 bg-slate-50/50 p-6 md:p-8"
+				class="flex items-center justify-between border-b border-slate-100 bg-slate-50/50 p-4 sm:p-5 md:p-8"
 			>
-				<h3 class="text-lg font-black tracking-tight text-slate-900">
+				<h3 class="text-base font-black tracking-tight text-slate-900 md:text-lg">
 					승인 대기 목록
-					<span class="ml-2 text-sm font-bold text-blue-600">
+					<span class="ml-2 text-xs font-bold text-blue-600 md:text-sm">
 						검토 대기 중인 신청 건 (사무직 승인제 · {pendingList.length}건)
 					</span>
 				</h3>
 			</div>
 
-			<div class="overflow-x-auto">
+			<!-- 모바일 카드 뷰 -->
+			<div class="divide-y divide-slate-100 md:hidden">
+				{#if loading}
+					<div class="py-14 text-center">
+						<span class="loading loading-lg loading-bars text-blue-600"></span>
+					</div>
+				{:else if pendingList.length === 0}
+					<div class="py-12 text-center text-sm font-black tracking-wider text-slate-300">
+						승인 대기 건 없음
+					</div>
+				{:else}
+					{#each pendingList as d (d.id)}
+						{@render mobileDayoffCard(d, true, true)}
+					{/each}
+				{/if}
+			</div>
+
+			<div class="hidden overflow-x-auto md:block">
 				<table class="table w-full">
 					<thead
 						class="border-b border-slate-100 bg-slate-50 text-xs font-bold tracking-wider text-slate-500"
@@ -189,7 +309,7 @@
 			class="flex flex-col justify-between gap-3 border-b border-slate-100 {workTypeFilter ===
 			'FCFS'
 				? 'bg-emerald-50/50'
-				: 'bg-slate-50/50'} p-6 md:flex-row md:items-center md:p-8"
+				: 'bg-slate-50/50'} p-4 sm:p-5 md:flex-row md:items-center md:p-8"
 		>
 			<div>
 				<h3 class="text-lg font-black tracking-tight text-slate-900">
@@ -228,7 +348,26 @@
 			</div>
 		</div>
 
-		<div class="overflow-x-auto">
+		<!-- 모바일 카드 뷰 -->
+		<div class="divide-y divide-slate-100 md:hidden">
+			{#if loading}
+				<div class="py-16 text-center">
+					<span class="loading loading-lg loading-bars text-emerald-600"></span>
+				</div>
+			{:else if processedOrFcfsList.length === 0}
+				<div class="px-4 py-14 text-center text-sm font-black tracking-wider text-slate-400">
+					{workTypeFilter === 'FCFS'
+						? '조건에 해당하는 운전직 선착순 신청 내역이 없습니다.'
+						: '표시할 처리 완료·선착순 내역이 없습니다.'}
+				</div>
+			{:else}
+				{#each processedOrFcfsList as d (d.id)}
+					{@render mobileDayoffCard(d, true, false)}
+				{/each}
+			{/if}
+		</div>
+
+		<div class="hidden overflow-x-auto md:block">
 			<table class="table w-full">
 				<thead
 					class="border-b border-slate-100 bg-slate-50 text-xs font-bold tracking-wider text-slate-500"
