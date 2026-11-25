@@ -2,38 +2,23 @@
 	import Icon from '@iconify/svelte';
 	import { toLocalISOString } from '$lib/utils';
 	import { notifyAlert } from '$lib/utils/sound';
+	import {
+		buildDefaultAlertForm,
+		DEFAULT_ALERT_SETTINGS
+	} from '$lib/services/alertAdminService';
 
 	let {
 		isOpen = $bindable(false),
 		groups = [],
+		settings = DEFAULT_ALERT_SETTINGS,
 		initialTargetGroup = '',
 		onCreate
 	} = $props();
 
-	// D + 3일 후 만료일 계산 헬퍼 함수
-	function getThreeDaysLater() {
-		const d = new Date();
-		d.setDate(d.getDate() + 3);
-		return d;
-	}
-
-	let newAlert = $state({
-		message: '',
-		level: '1',
-		style: 'info',
-		position: 'top',
-		category: 'NOTICE', // 'NOTICE' | 'URGENT_NOTICE' | 'INSTRUCTION'
-		target_group: '',
-		start_date: toLocalISOString(new Date()),
-		end_date: toLocalISOString(getThreeDaysLater()),
-		send_web_push: false, // 📱 전사 웹푸시 알림 발송 플래그
-		reset_sec: 0,
-		redirect_url: '',
-		route: '',
-		is_active: true
-	});
+	let newAlert = $state(buildDefaultAlertForm(DEFAULT_ALERT_SETTINGS, ''));
 
 	// 빠른 일자 프리셋 지정 (+1일, +3일, +7일)
+	/** @param {number} days */
 	function setPresetDays(days) {
 		const base = newAlert.start_date ? new Date(newAlert.start_date) : new Date();
 		const target = new Date(base);
@@ -41,27 +26,26 @@
 		newAlert.end_date = toLocalISOString(target);
 	}
 
-	// 🚨 중요 공지(URGENT_NOTICE) 선택 시 시인성 극대화를 위한 기본값 자동 보조
+	// 🚨 중요 공지(URGENT_NOTICE) 선택 시 설정된 최소 레벨/스타일 자동 보조
 	$effect(() => {
 		if (newAlert.category === 'URGENT_NOTICE') {
+			const minLvl = Number(settings?.urgent_min_level ?? 3);
 			if (newAlert.style === 'info') {
-				newAlert.style = 'error';
+				newAlert.style = settings?.urgent_default_style || 'error';
 			}
-			if (parseInt(String(newAlert.level)) < 3) {
-				newAlert.level = '3';
+			if (parseInt(String(newAlert.level)) < minLvl) {
+				newAlert.level = String(minLvl);
 			}
 		}
 	});
 
-	// 🎯 Level 변경 시 position 및 5초 정독 시간 자동 동기화 규칙
-	// - L1, L2: 상단/하단 선택 가능, 정독시간 0
-	// - L3: 중앙 고정, 정독시간 0
-	// - L4, L5: 중앙 고정, 정독시간 5초 강제 고정
+	// 🎯 Level 변경 시 position 및 설정된 정독 시간 자동 동기화
 	$effect(() => {
 		const lvl = parseInt(String(newAlert.level));
+		const readSec = Number(settings?.mandatory_read_seconds ?? 5);
 		if (lvl >= 3) {
 			newAlert.position = 'modal';
-			newAlert.reset_sec = (lvl >= 4) ? 5 : 0;
+			newAlert.reset_sec = lvl >= 4 ? readSec : 0;
 		} else {
 			if (newAlert.position === 'center' || newAlert.position === 'modal') {
 				newAlert.position = 'top';
@@ -71,21 +55,7 @@
 	});
 
 	function resetForm() {
-		newAlert = {
-			message: '',
-			level: '1',
-			style: 'info',
-			position: 'top',
-			category: 'NOTICE',
-			target_group: initialTargetGroup || '',
-			start_date: toLocalISOString(new Date()),
-			end_date: toLocalISOString(getThreeDaysLater()),
-			send_web_push: false,
-			reset_sec: 0,
-			redirect_url: '',
-			route: '',
-			is_active: true
-		};
+		newAlert = buildDefaultAlertForm(settings, initialTargetGroup);
 	}
 
 	$effect(() => {
@@ -100,7 +70,8 @@
 			start_date: new Date(newAlert.start_date),
 			end_date: new Date(newAlert.end_date),
 			level: parseInt(String(newAlert.level)),
-			send_web_push: !newAlert.target_group && Boolean(newAlert.send_web_push)
+			send_web_push: !newAlert.target_group && Boolean(newAlert.send_web_push),
+			save_to_inbox: Boolean(newAlert.save_to_inbox)
 		});
 		resetForm();
 	}
@@ -179,6 +150,24 @@
 								사원 미니앱 피드의 [알림] 탭에 일반 공지로 적재됩니다.
 							{/if}
 						</span>
+
+						<!-- 📥 알림함(미니앱 피드) 기록 남기기 옵션 -->
+						<div class="mt-2.5 flex items-center justify-between p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 transition-all">
+							<label class="flex items-center gap-2 cursor-pointer select-none">
+								<input
+									type="checkbox"
+									class="checkbox checkbox-success checkbox-xs rounded"
+									bind:checked={newAlert.save_to_inbox}
+								/>
+								<span class="text-xs font-black text-emerald-900 flex items-center gap-1">
+									<Icon icon="mdi:inbox-arrow-down-outline" class="text-emerald-600 text-sm" />
+									알림함(미니앱 피드)에도 기록 남기기
+								</span>
+							</label>
+							<span class="badge badge-xs badge-success text-white font-bold text-[9px]">
+								{newAlert.save_to_inbox ? '기록함' : '팝업만'}
+							</span>
+						</div>
 					</div>
 					<div>
 						<div class="flex items-center justify-between">

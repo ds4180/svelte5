@@ -670,6 +670,27 @@ export function playSoundSample(
 	}
 }
 
+let globalMediaPolicy = {
+	enableSound: true,
+	enableVibration: true
+};
+
+export function setAlertMediaPolicy(policy: {
+	enableSound?: boolean;
+	enableVibration?: boolean;
+}): void {
+	if (typeof policy.enableSound === 'boolean') {
+		globalMediaPolicy.enableSound = policy.enableSound;
+	}
+	if (typeof policy.enableVibration === 'boolean') {
+		globalMediaPolicy.enableVibration = policy.enableVibration;
+	}
+}
+
+export function getAlertMediaPolicy() {
+	return { ...globalMediaPolicy };
+}
+
 /**
  * 🚀 [원터치 통합 알림기] 사운드와 진동을 등급(Level)에 맞춰 한 번에 동시 실행
  */
@@ -678,8 +699,12 @@ export function notifyAlert(
 	options?: { boostOverride?: number; forceUnmute?: boolean }
 ): void {
 	if (!options?.forceUnmute && isSoundMuted()) return;
-	playAlertSound(level, options);
-	playAlertVibration(level, options);
+	if (options?.forceUnmute || globalMediaPolicy.enableSound) {
+		playAlertSound(level, options);
+	}
+	if (options?.forceUnmute || globalMediaPolicy.enableVibration) {
+		playAlertVibration(level, options);
+	}
 }
 
 export default {

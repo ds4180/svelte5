@@ -21,10 +21,17 @@
 	import AlertCreateModal from './components/AlertCreateModal.svelte';
 	import AlertEditModal from './components/AlertEditModal.svelte';
 	import AlertAckModal from './components/AlertAckModal.svelte';
+	import AlertSettingsTab from './components/AlertSettingsTab.svelte';
+	import {
+		computeAlertStats,
+		DEFAULT_ALERT_SETTINGS
+	} from '$lib/services/alertAdminService';
 
 	let alerts = $state(/** @type {any[]} */ ([]));
 	let groups = $state(/** @type {any[]} */ ([])); // Redis 타겟 그룹 목록
+	let alertSettings = $state({ ...DEFAULT_ALERT_SETTINGS });
 	let loading = $state(true);
+	let activeTab = $state(/** @type {'list' | 'instructions' | 'settings'} */ ('list'));
 	let selectedCategory = $state('ALL'); // 'ALL' | 'NOTICE' | 'URGENT_NOTICE' | 'INSTRUCTION'
 
 	let showCreateModal = $state(false);
@@ -35,11 +42,12 @@
 	let editingAlert = $state(null);
 	let initialTargetGroup = $state('');
 
-	// 📊 상단 4대 관제 지표 요약 (반응형 유도)
-	const countTotal = $derived(alerts.length);
-	const countActive = $derived(alerts.filter((a) => a.is_active).length);
-	const countInstruction = $derived(alerts.filter((a) => a.category === 'INSTRUCTION').length);
-	const countUrgent = $derived(alerts.filter((a) => a.category === 'URGENT_NOTICE' || a.level >= 4).length);
+	// 📊 상단 4대 관제 지표 요약 (서비스 레이어 계산)
+	const stats = $derived(computeAlertStats(alerts));
+	const countTotal = $derived(stats.total);
+	const countActive = $derived(stats.active);
+	const countInstruction = $derived(stats.instruction);
+	const countUrgent = $derived(stats.urgent);
 
 	/**
 	 * 🔄 알림 목록 로드
@@ -143,8 +151,19 @@
 		showAckModal = true;
 	}
 
+	async function loadSettings() {
+		try {
+			const res = await api.adminGetAlertSettings();
+			if (res?.settings) {
+				alertSettings = { ...DEFAULT_ALERT_SETTINGS, ...res.settings };
+			}
+		} catch (e) {
+			console.warn('⚠️ [Alerts] 설정 로드 실패 (기본값 사용):', e);
+		}
+	}
+
 	onMount(async () => {
-		await Promise.all([loadAlerts(), loadGroups()]);
+		await Promise.all([loadAlerts(), loadGroups(), loadSettings()]);
 
 		const queryGroup = page.url.searchParams.get('target_group');
 		if (queryGroup) {
@@ -222,7 +241,10 @@
 	<div class="grid grid-cols-1 gap-4 sm:grid-cols-2 md:gap-5 xl:grid-cols-4">
 		<!-- 카드 1: 전체 등록 공지 -->
 		<button
-			onclick={() => (selectedCategory = 'ALL')}
+			onclick={() => {
+				activeTab = 'list';
+				selectedCategory = 'ALL';
+			}}
 			class="group flex w-full flex-col justify-between rounded-2xl border-2 p-5 text-left transition {selectedCategory === 'ALL' ? 'border-slate-900 bg-slate-50 shadow-md ring-2 ring-slate-900/20' : 'border-slate-200 bg-white hover:border-slate-300'}"
 		>
 			<div class="flex w-full items-center justify-between gap-2">
@@ -264,7 +286,10 @@
 
 		<!-- 카드 3: 현장 업무 지시 -->
 		<button
-			onclick={() => (selectedCategory = 'INSTRUCTION')}
+			onclick={() => {
+				activeTab = 'instructions';
+				selectedCategory = 'INSTRUCTION';
+			}}
 			class="group flex w-full flex-col justify-between rounded-2xl border-2 p-5 text-left transition {selectedCategory === 'INSTRUCTION' ? 'border-purple-600 bg-purple-50/50 shadow-md ring-2 ring-purple-500/20' : 'border-slate-200 bg-white hover:border-slate-300'}"
 		>
 			<div class="flex w-full items-center justify-between gap-2">
@@ -286,7 +311,10 @@
 
 		<!-- 카드 4: 중요/비상 공지 (L4~L5) -->
 		<button
-			onclick={() => (selectedCategory = 'URGENT_NOTICE')}
+			onclick={() => {
+				activeTab = 'list';
+				selectedCategory = 'URGENT_NOTICE';
+			}}
 			class="group flex w-full flex-col justify-between rounded-2xl border-2 p-5 text-left transition {selectedCategory === 'URGENT_NOTICE' ? 'border-rose-600 bg-rose-50/50 shadow-md ring-2 ring-rose-500/20' : 'border-slate-200 bg-white hover:border-slate-300'}"
 		>
 			<div class="flex w-full items-center justify-between gap-2">
@@ -308,17 +336,77 @@
 	</div>
 
 	<!-- ===================================================================== -->
-	<!-- 3. 알림 목록 뷰 (데스크톱 테이블 & 모바일 카드) -->
+	<!-- 3. 관리자 표준 탭 네비게이션 (설정 탭 맨 오른쪽 고정) -->
 	<!-- ===================================================================== -->
-	<AlertList
-		{alerts}
-		{loading}
-		bind:selectedCategory
-		onToggle={handleToggleStatus}
-		onEdit={openEditModal}
-		onDelete={handleDeleteAlert}
-		onOpenAck={openAckModal}
-	/>
+	<div class="flex items-center overflow-x-auto border-b-2 border-slate-200">
+		<button
+			type="button"
+			onclick={() => {
+				activeTab = 'list';
+				if (selectedCategory === 'INSTRUCTION') selectedCategory = 'ALL';
+			}}
+			class="flex shrink-0 items-center gap-2 rounded-t-2xl border-b-4 px-5 py-3 text-xs font-black transition {activeTab ===
+			'list'
+				? 'border-blue-600 bg-blue-50/50 text-blue-600'
+				: 'border-transparent text-slate-500 hover:text-slate-900'}"
+		>
+			<Icon icon="solar:bell-bing-bold-duotone" class="text-base" />
+			<span>전체 공지·알림</span>
+			<span class="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-black text-slate-700">
+				{countTotal}
+			</span>
+		</button>
+		<button
+			type="button"
+			onclick={() => {
+				activeTab = 'instructions';
+				selectedCategory = 'INSTRUCTION';
+			}}
+			class="flex shrink-0 items-center gap-2 rounded-t-2xl border-b-4 px-5 py-3 text-xs font-black transition {activeTab ===
+			'instructions'
+				? 'border-purple-600 bg-purple-50/50 text-purple-700'
+				: 'border-transparent text-slate-500 hover:text-slate-900'}"
+		>
+			<Icon icon="solar:clipboard-check-bold-duotone" class="text-base" />
+			<span>지시사항 수신확인</span>
+			{#if countInstruction > 0}
+				<span class="rounded-full bg-purple-100 px-2 py-0.5 text-[10px] font-black text-purple-700">
+					{countInstruction}
+				</span>
+			{/if}
+		</button>
+		<button
+			type="button"
+			onclick={() => (activeTab = 'settings')}
+			class="ml-auto flex shrink-0 items-center gap-2 rounded-t-2xl border-b-4 px-5 py-3 text-xs font-black transition {activeTab ===
+			'settings'
+				? 'border-blue-600 bg-blue-50/50 text-blue-600'
+				: 'border-transparent text-slate-500 hover:text-slate-900'}"
+		>
+			<Icon icon="solar:settings-bold-duotone" class="text-base" />
+			<span>설정</span>
+		</button>
+	</div>
+
+	{#if activeTab === 'settings'}
+		<AlertSettingsTab
+			settings={alertSettings}
+			onSaved={(nextSettings) => {
+				alertSettings = nextSettings;
+			}}
+		/>
+	{:else}
+		<!-- 알림 목록 뷰 (데스크톱 테이블 & 모바일 카드) -->
+		<AlertList
+			{alerts}
+			{loading}
+			bind:selectedCategory
+			onToggle={handleToggleStatus}
+			onEdit={openEditModal}
+			onDelete={handleDeleteAlert}
+			onOpenAck={openAckModal}
+		/>
+	{/if}
 
 	<!-- ===================================================================== -->
 	<!-- 4. 모달 계층 -->
@@ -327,6 +415,7 @@
 	<AlertCreateModal
 		bind:isOpen={showCreateModal}
 		{groups}
+		settings={alertSettings}
 		{initialTargetGroup}
 		onCreate={handleCreateAlert}
 	/>
@@ -336,6 +425,7 @@
 		bind:isOpen={showEditModal}
 		alertItem={editingAlert}
 		{groups}
+		settings={alertSettings}
 		onUpdate={handleUpdateAlert}
 	/>
 

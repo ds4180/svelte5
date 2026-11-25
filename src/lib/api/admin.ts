@@ -150,6 +150,9 @@ export const adminUpdateAlert = <T = any>(alertId: number | string, data: Record
 	request<T>(`/api/alert/update/${alertId}`, 'PUT', data);
 export const adminGetAlertAcknowledgements = <T = any>(alertId: number | string) =>
 	request<T>(`/api/alert/${alertId}/acknowledgements`);
+export const adminGetAlertSettings = <T = any>() => request<T>('/api/alert/settings');
+export const adminUpdateAlertSettings = <T = any>(settings: Record<string, any>) =>
+	request<T>('/api/alert/settings', 'PUT', { settings });
 
 // 📱 푸시 알림 관리 API
 export const adminGetPushSubscriptions = <T = any>() =>

@@ -2,6 +2,13 @@
 	import Icon from '@iconify/svelte';
 	import { alertState } from '$lib/runes/alert.svelte';
 	import { formatDateTime } from '$lib/utils';
+	import {
+		computeAlertStats,
+		filterAlertsByCategory,
+		getAlertCategoryMeta,
+		getAlertLevelBadgeClass,
+		getAlertPositionLabel
+	} from '$lib/services/alertAdminService';
 
 	let {
 		alerts = [],
@@ -13,20 +20,15 @@
 		onOpenAck
 	} = $props();
 
-	// 카테고리별 카운트 계산
-	const countAll = $derived(alerts.length);
-	const countNotice = $derived(alerts.filter(a => a.category === 'NOTICE' || a.category === 'NOTIFICATION').length);
-	const countUrgent = $derived(alerts.filter(a => a.category === 'URGENT_NOTICE').length);
-	const countInstruction = $derived(alerts.filter(a => a.category === 'INSTRUCTION').length);
+	// 카테고리별 카운트 계산 (서비스 레이어)
+	const counts = $derived(computeAlertStats(alerts));
+	const countAll = $derived(counts.total);
+	const countNotice = $derived(counts.notice);
+	const countUrgent = $derived(counts.urgent);
+	const countInstruction = $derived(counts.instruction);
 
 	// 필터링된 알림 목록
-	const filteredAlerts = $derived.by(() => {
-		if (selectedCategory === 'ALL') return alerts;
-		if (selectedCategory === 'NOTICE') {
-			return alerts.filter(a => a.category === 'NOTICE' || a.category === 'NOTIFICATION');
-		}
-		return alerts.filter(a => a.category === selectedCategory);
-	});
+	const filteredAlerts = $derived(filterAlertsByCategory(alerts, selectedCategory));
 </script>
 
 <!-- 🔍 카테고리별 독립 분리 관리 탭 필터 바 -->
@@ -102,6 +104,8 @@
 				</tr>
 			{:else}
 				{#each filteredAlerts as alert (alert.id)}
+					{@const catMeta = getAlertCategoryMeta(alert.category)}
+					{@const posMeta = getAlertPositionLabel(alert.level, alert.position)}
 					<tr class="group transition-colors hover:bg-slate-50/50">
 						<td class="px-3 py-3 md:px-5 md:py-4">
 							<span
@@ -122,19 +126,9 @@
 						<!-- 🏷️ 1. 분류 & 수신대상 (2줄 묶음) -->
 						<td class="w-[120px]">
 							<div class="flex flex-col gap-1 items-start">
-								{#if alert.category === 'URGENT_NOTICE'}
-									<span class="inline-flex items-center gap-1 rounded-md bg-rose-600 px-1.5 py-0.5 text-[8px] font-black text-white shadow-xs animate-pulse md:text-[9px]">
-										🚨 중요 공지
-									</span>
-								{:else if alert.category === 'INSTRUCTION'}
-									<span class="inline-flex items-center gap-1 rounded-md bg-purple-100 border border-purple-200 px-1.5 py-0.5 text-[8px] font-black text-purple-700 md:text-[9px]">
-										📋 지시사항
-									</span>
-								{:else}
-									<span class="inline-flex items-center gap-1 rounded-md bg-blue-100 border border-blue-200 px-1.5 py-0.5 text-[8px] font-black text-blue-700 md:text-[9px]">
-										📢 공지
-									</span>
-								{/if}
+								<span class="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[8px] font-black md:text-[9px] {catMeta.badgeClass}">
+									{catMeta.label}
+								</span>
 								{#if alert.target_group}
 									<span class="inline-flex items-center gap-1 rounded-md bg-blue-50 border border-blue-200 px-1.5 py-0.5 text-[8px] font-bold text-blue-700 max-w-[110px] truncate" title={alert.target_group}>
 										<Icon icon="mdi:target" class="text-blue-500 shrink-0" />
@@ -156,20 +150,12 @@
 							<div class="flex flex-col gap-1 items-start">
 								<div class="flex items-center gap-1">
 									<span
-										class="rounded-md px-1.5 py-0.5 text-[8px] font-black tracking-tighter md:text-[9px] {alert.level === 5
-											? 'bg-red-100 text-red-700'
-											: alert.level === 4
-												? 'bg-purple-100 text-purple-700'
-												: alert.level === 3
-													? 'bg-yellow-100 text-yellow-700'
-													: alert.level === 2
-														? 'bg-green-100 text-green-700'
-														: 'bg-blue-100 text-blue-700'}"
+										class="rounded-md px-1.5 py-0.5 text-[8px] font-black tracking-tighter md:text-[9px] {getAlertLevelBadgeClass(alert.level)}"
 									>
 										L{alert.level}
 									</span>
-									<span class="rounded-md px-1 py-0.5 text-[8px] font-bold {alert.position === 'bottom' ? 'bg-amber-100 text-amber-800' : alert.level >= 3 ? 'bg-purple-100 text-purple-800' : 'bg-slate-100 text-slate-700'}">
-										{alert.level >= 3 ? '중앙' : alert.position === 'bottom' ? '하단' : '상단'}
+									<span class="rounded-md px-1 py-0.5 text-[8px] font-bold {posMeta.badgeClass}">
+										{posMeta.text}
 									</span>
 								</div>
 								<span
@@ -268,6 +254,7 @@
 		</div>
 	{:else}
 		{#each filteredAlerts as alert (alert.id)}
+			{@const mobileCatMeta = getAlertCategoryMeta(alert.category)}
 			<div class="space-y-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-lg">
 				<!-- 상단: ID, 레벨, 활성 토글 -->
 				<div class="flex items-center justify-between border-b border-slate-100 pb-2">
@@ -276,15 +263,7 @@
 							#{alert.id}
 						</span>
 						<span
-							class="rounded-md px-2 py-0.5 text-[9px] font-black tracking-tighter {alert.level === 5
-								? 'bg-red-100 text-red-700'
-								: alert.level === 4
-									? 'bg-purple-100 text-purple-700'
-									: alert.level === 3
-										? 'bg-yellow-100 text-yellow-700'
-										: alert.level === 2
-											? 'bg-green-100 text-green-700'
-											: 'bg-blue-100 text-blue-700'}"
+							class="rounded-md px-2 py-0.5 text-[9px] font-black tracking-tighter {getAlertLevelBadgeClass(alert.level)}"
 						>
 							L{alert.level} ({alert.style})
 						</span>
@@ -311,19 +290,9 @@
 				<!-- 분류 및 수신 대상 -->
 				<div class="flex items-center justify-between text-xs">
 					<div class="flex items-center gap-1.5 flex-wrap">
-						{#if alert.category === 'URGENT_NOTICE'}
-							<span class="inline-flex items-center gap-1 rounded-md bg-rose-600 px-2 py-0.5 text-[9px] font-black text-white shadow-xs animate-pulse">
-								🚨 중요 공지
-							</span>
-						{:else if alert.category === 'INSTRUCTION'}
-							<span class="inline-flex items-center gap-1 rounded-md bg-purple-100 border border-purple-200 px-2 py-0.5 text-[9px] font-black text-purple-700">
-								📋 지시사항
-							</span>
-						{:else}
-							<span class="inline-flex items-center gap-1 rounded-md bg-blue-100 border border-blue-200 px-2 py-0.5 text-[9px] font-black text-blue-700">
-								📢 공지
-							</span>
-						{/if}
+						<span class="inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[9px] font-black {mobileCatMeta.badgeClass}">
+							{mobileCatMeta.label}
+						</span>
 						{#if alert.target_group}
 							<span class="rounded-md bg-blue-50 border border-blue-200 px-1.5 py-0.5 text-[9px] font-bold text-blue-700">
 								🎯 {alert.target_group}

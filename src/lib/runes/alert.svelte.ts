@@ -17,7 +17,7 @@
 import { browser } from '$app/environment';
 import { fastApi } from '$lib/api';
 import { isExpired } from '$lib/utils';
-import { notifyAlert } from '$lib/utils/sound';
+import { notifyAlert, setAlertMediaPolicy } from '$lib/utils/sound';
 
 export interface AlertData {
 	id: string | number;
@@ -127,7 +127,16 @@ export class AlertState {
 
 		this._inFlightSync = (async () => {
 			try {
-				const serverAlerts = await fastApi('GET', '/api/alert/active', {}, { offline: false });
+				const [serverAlerts, policy] = await Promise.all([
+					fastApi('GET', '/api/alert/active', {}, { offline: false }),
+					fastApi('GET', '/api/alert/policy', {}, { offline: false }).catch(() => null)
+				]);
+				if (policy && typeof policy === 'object') {
+					setAlertMediaPolicy({
+						enableSound: policy.enable_sound,
+						enableVibration: policy.enable_vibration
+					});
+				}
 				if (Array.isArray(serverAlerts)) {
 					const existingIds = new Set(this.all.map((oldA) => oldA.id));
 

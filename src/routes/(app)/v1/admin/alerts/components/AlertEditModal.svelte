@@ -1,52 +1,60 @@
 <script>
+	import { untrack } from 'svelte';
 	import Icon from '@iconify/svelte';
 	import { toLocalISOString } from '$lib/utils';
 	import { notifyAlert } from '$lib/utils/sound';
+	import { DEFAULT_ALERT_SETTINGS } from '$lib/services/alertAdminService';
 
 	let {
 		isOpen = $bindable(false),
 		alertItem = null,
 		groups = [],
+		settings = DEFAULT_ALERT_SETTINGS,
 		onUpdate
 	} = $props();
 
-	let editingAlert = $state(null);
+	let editingAlert = $state(/** @type {any} */ (null));
 
 	$effect(() => {
 		if (isOpen && alertItem) {
-			editingAlert = { ...alertItem };
-			editingAlert.level = String(editingAlert.level);
-			editingAlert.category = editingAlert.category || 'NOTIFICATION';
-			editingAlert.target_group = editingAlert.target_group || '';
-			editingAlert.position = editingAlert.position || 'top';
-			editingAlert.start_date = toLocalISOString(editingAlert.start_date);
-			editingAlert.end_date = toLocalISOString(editingAlert.end_date);
+			untrack(() => {
+				const next = { ...alertItem };
+				next.level = String(next.level ?? settings.default_level ?? 1);
+				next.category = next.category === 'NOTIFICATION' ? 'NOTICE' : next.category || 'NOTICE';
+				next.target_group = next.target_group || '';
+				next.position = next.position || (parseInt(next.level, 10) >= 3 ? 'modal' : 'top');
+				next.start_date = next.start_date ? toLocalISOString(next.start_date) : '';
+				next.end_date = next.end_date ? toLocalISOString(next.end_date) : '';
+				editingAlert = next;
+			});
 		}
 	});
 
-	// 🎯 Level 변경 시 position 및 5초 정독 시간 자동 동기화 규칙
-	$effect(() => {
-		if (editingAlert) {
-			const lvl = parseInt(String(editingAlert.level));
-			if (lvl >= 3) {
-				editingAlert.position = 'modal';
-				editingAlert.reset_sec = (lvl >= 4) ? 5 : 0;
-			} else {
-				if (editingAlert.position === 'center' || editingAlert.position === 'modal') {
-					editingAlert.position = 'top';
-				}
-				editingAlert.reset_sec = 0;
+	function handleLevelChange() {
+		if (!editingAlert) return;
+		const lvl = parseInt(String(editingAlert.level), 10);
+		const readSec = Number(settings?.mandatory_read_seconds ?? 5);
+		if (lvl >= 3) {
+			editingAlert.position = 'modal';
+			editingAlert.reset_sec = lvl >= 4 ? readSec : 0;
+		} else {
+			if (editingAlert.position === 'center' || editingAlert.position === 'modal') {
+				editingAlert.position = 'top';
 			}
+			editingAlert.reset_sec = 0;
 		}
-	});
+	}
 
 	function handleSubmit() {
 		if (!editingAlert) return;
+		const lvl = parseInt(String(editingAlert.level), 10);
+		const startDateObj = editingAlert.start_date ? new Date(editingAlert.start_date) : null;
+		const endDateObj = editingAlert.end_date ? new Date(editingAlert.end_date) : null;
 		onUpdate?.({
 			...editingAlert,
-			start_date: new Date(editingAlert.start_date),
-			end_date: new Date(editingAlert.end_date),
-			level: parseInt(String(editingAlert.level))
+			start_date: startDateObj && !isNaN(startDateObj.getTime()) ? startDateObj : null,
+			end_date: endDateObj && !isNaN(endDateObj.getTime()) ? endDateObj : null,
+			level: isNaN(lvl) ? 1 : lvl
 		});
 	}
 
@@ -164,6 +172,7 @@
 						<select
 							class="select select-bordered select-sm w-full rounded-xl bg-white text-slate-900 font-bold"
 							bind:value={editingAlert.level}
+							onchange={handleLevelChange}
 						>
 							<option value="1">L1 (일반 알림 - Toast)</option>
 							<option value="2">L2 (상태 배너 - Banner)</option>

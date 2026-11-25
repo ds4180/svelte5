@@ -51,7 +51,7 @@
 
 <dialog class="modal modal-open backdrop-blur-md" transition:fade>
 	<div
-		class="modal-box relative max-w-lg rounded-[2rem] border-2 p-12 shadow-2xl transition-all
+		class="modal-box relative w-[calc(100%-2rem)] max-w-lg overflow-x-hidden rounded-[2rem] border-2 p-6 shadow-2xl transition-all sm:p-10
                {alert.level === 5 ? 'bg-gradient-to-br from-red-600 via-red-800 to-black text-white border-none' : 'bg-white text-slate-900'}
                {alert.style === 'success' ? 'border-emerald-500 shadow-emerald-100' : ''}
                {alert.style === 'warning' ? 'border-amber-500 shadow-amber-100' : ''}
@@ -59,13 +59,13 @@
                {alert.style === 'info' ? 'border-blue-500 shadow-blue-100' : ''}
                {alert.level === 4 ? 'animate-pulse ring-8 ring-slate-900/5' : ''}"
 	>
-		<div class="text-center">
+		<div class="min-w-0 text-center">
 			<div class="mb-4 text-[10px] font-black tracking-[0.3em] uppercase opacity-60">
 				{alert.level === 5 ? 'System Critical Lock' : `${alert.style} Notification`}
 			</div>
 
-			<div class="py-8">
-				<h3 class="text-3xl font-black leading-tight tracking-tighter whitespace-pre-wrap 
+			<div class="max-h-[45vh] overflow-y-auto overflow-x-hidden py-4 sm:py-6">
+				<h3 class="text-xl font-black leading-snug tracking-tight whitespace-pre-wrap break-words [overflow-wrap:anywhere] sm:text-2xl
                            {alert.level === 5 ? 'text-white' : 
                             alert.style === 'success' ? 'text-emerald-700' :
                             alert.style === 'warning' ? 'text-amber-700' :
