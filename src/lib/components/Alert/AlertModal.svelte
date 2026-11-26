@@ -1,46 +1,99 @@
 <script>
 	/**
 	 * @file AlertModal.svelte
-	 * @description 레벨 3, 4, 5 전역 알림 (Modal/Fullscreen) 전용 컴포넌트
-	 * - 레벨 4: 징벌적 타이머 (조기 클릭 시 초기화)
-	 * - 레벨 5: 시스템 락 스타일링
+	 * @description 레벨 3, 4, 5 전역 알림 모달 (친근하고 명확한 안내 UI)
+	 * - 레벨 4: 천천히 읽기 안내 타이머 (기본 reset_sec 또는 5초)
+	 * - 레벨 5: 중요 안내 5초 강제 확인 타이머 (기본 5초)
 	 */
 	import { onMount } from 'svelte';
 	import { alertState } from '$lib/runes/alert.svelte';
 	import { notifyAlert } from '$lib/utils/sound';
-	import { fade } from 'svelte/transition';
+	import { fade, scale } from 'svelte/transition';
 	import { goto } from '$app/navigation';
 	import Icon from '@iconify/svelte';
 
 	let { alert } = $props();
-	let penaltyMsg = $state('');
+	let guideMsg = $state('');
 
-	// 🔔 모달 팝업 시 L3~L5 사운드 및 햅틱 진동 즉시 트리거
+	// 🔔 모달 팝업 시 L3~L5 차임벨 사운드 및 진동 트리거
 	onMount(() => {
 		notifyAlert(alert.level || 3);
 	});
 
-	// 레벨 4, 5 전용 타이머 시작 (alertState 내 메서드 호출)
+	const initialSec = $derived(
+		alert.level === 5
+			? (alert.reset_sec && alert.reset_sec > 0 ? alert.reset_sec : 5)
+			: (alert.reset_sec || 5)
+	);
+
+	// 레벨 4, 5 전용 타이머 시작 (기본 5초)
 	$effect(() => {
 		if (alert.level >= 4 && alertState.countdowns[alert.id] === undefined) {
-			const startSec = alert.level === 5 ? 10 : (alert.reset_sec || 5);
-			alertState.startCountdown(alert.id, startSec);
+			alertState.startCountdown(alert.id, initialSec);
 		}
 	});
 
+	const isL5 = $derived(alert.level === 5);
 	const countdown = $derived(alertState.countdowns[alert.id] ?? 0);
+	const progressPct = $derived(
+		initialSec > 0 ? Math.min(100, Math.max(0, Math.round(((initialSec - countdown) / initialSec) * 100))) : 100
+	);
+
+	const headerMeta = $derived.by(() => {
+		if (alert.level === 5) {
+			return {
+				badge: '중요 안내 · 꼭 확인해 주세요',
+				icon: 'solar:bell-bing-bold-duotone',
+				iconWrap: 'bg-rose-100 text-rose-600 ring-4 ring-rose-50',
+				badgeClass: 'bg-rose-50 text-rose-700 border-rose-200',
+				borderClass: 'border-rose-200',
+				btnClass: 'bg-rose-500 hover:bg-rose-600 text-white border-none',
+				barClass: 'bg-rose-400'
+			};
+		}
+		if (alert.level === 4 || alert.style === 'warning') {
+			return {
+				badge: '주요 공지 · 안내 말씀',
+				icon: 'solar:megaphone-bold-duotone',
+				iconWrap: 'bg-amber-100 text-amber-600 ring-4 ring-amber-50',
+				badgeClass: 'bg-amber-50 text-amber-700 border-amber-200',
+				borderClass: 'border-amber-200',
+				btnClass: 'bg-amber-500 hover:bg-amber-600 text-white border-none',
+				barClass: 'bg-amber-400'
+			};
+		}
+		if (alert.style === 'success') {
+			return {
+				badge: '안내 알림',
+				icon: 'solar:check-circle-bold-duotone',
+				iconWrap: 'bg-emerald-100 text-emerald-600 ring-4 ring-emerald-50',
+				badgeClass: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+				borderClass: 'border-emerald-200',
+				btnClass: 'bg-emerald-600 hover:bg-emerald-700 text-white border-none',
+				barClass: 'bg-emerald-400'
+			};
+		}
+		return {
+			badge: '사내 알림 안내',
+			icon: 'solar:chat-round-dots-bold-duotone',
+			iconWrap: 'bg-blue-100 text-blue-600 ring-4 ring-blue-50',
+			badgeClass: 'bg-blue-50 text-blue-700 border-blue-200',
+			borderClass: 'border-blue-200',
+			btnClass: 'bg-blue-600 hover:bg-blue-700 text-white border-none',
+			barClass: 'bg-blue-400'
+		};
+	});
 
 	function handleConfirm() {
-		// 🚨 레벨 4 징벌적 로직: 타이머가 남았는데 클릭하면 리셋
+		// 레벨 4: 아직 읽는 중일 때 부드럽게 안내
 		if (alert.level === 4 && countdown > 0) {
-			penaltyMsg = `집중하세요! ${alert.reset_sec || 5}초 동안 다시 읽으세요.`;
-			alertState.resetTimer(alert.id, alert.reset_sec || 5);
+			guideMsg = `조금만 천천히 읽어 주세요! (${countdown}초 남음)`;
 			return;
 		}
-		
-		// 🚨 레벨 5 강제 대기: 타이머가 끝나야 확인 가능
+
+		// 레벨 5: 5초 강제 대기 후 확인 가능
 		if (alert.level === 5 && countdown > 0) {
-			penaltyMsg = `시스템 락 상태입니다. 지시를 충분히 숙지하십시오. (${countdown}초 남음)`;
+			guideMsg = `잠시만요! 중요한 안내라서 ${countdown}초 뒤에 확인 버튼이 열려요.`;
 			return;
 		}
 
@@ -49,58 +102,83 @@
 	}
 </script>
 
-<dialog class="modal modal-open backdrop-blur-md" transition:fade>
+<dialog class="modal modal-open bg-slate-900/45 backdrop-blur-sm" transition:fade={{ duration: 180 }}>
 	<div
-		class="modal-box relative w-[calc(100%-2rem)] max-w-lg overflow-x-hidden rounded-[2rem] border-2 p-6 shadow-2xl transition-all sm:p-10
-               {alert.level === 5 ? 'bg-gradient-to-br from-red-600 via-red-800 to-black text-white border-none' : 'bg-white text-slate-900'}
-               {alert.style === 'success' ? 'border-emerald-500 shadow-emerald-100' : ''}
-               {alert.style === 'warning' ? 'border-amber-500 shadow-amber-100' : ''}
-               {alert.style === 'danger' && alert.level < 5 ? 'border-rose-500 shadow-rose-100' : ''}
-               {alert.style === 'info' ? 'border-blue-500 shadow-blue-100' : ''}
-               {alert.level === 4 ? 'animate-pulse ring-8 ring-slate-900/5' : ''}"
+		in:scale={{ duration: 200, start: 0.96 }}
+		class="modal-box relative w-[calc(100%-1.5rem)] overflow-hidden rounded-3xl border-2 bg-white text-slate-900 shadow-2xl {headerMeta.borderClass}
+			{isL5 ? 'max-w-2xl p-8 sm:p-12' : 'max-w-md p-6 sm:p-8'}"
 	>
+		<!-- 상단 카운트다운 진행 바 (L4/L5 대기 중일 때 부드럽게 채워짐) -->
+		{#if alert.level >= 4 && countdown > 0}
+			<div class="absolute inset-x-0 top-0 bg-slate-100 {isL5 ? 'h-2.5' : 'h-1.5'}">
+				<div
+					class="h-full transition-all duration-1000 ease-linear {headerMeta.barClass}"
+					style="width: {progressPct}%"
+				></div>
+			</div>
+		{/if}
+
 		<div class="min-w-0 text-center">
-			<div class="mb-4 text-[10px] font-black tracking-[0.3em] uppercase opacity-60">
-				{alert.level === 5 ? 'System Critical Lock' : `${alert.style} Notification`}
+			<!-- 친근한 아이콘 & 한글 배지 -->
+			<div
+				class="mx-auto flex items-center justify-center rounded-2xl {headerMeta.iconWrap}
+					{isL5 ? 'mb-5 h-20 w-20' : 'mb-3 h-14 w-14'}"
+			>
+				<Icon icon={headerMeta.icon} class={isL5 ? 'text-5xl' : 'text-3xl'} />
 			</div>
 
-			<div class="max-h-[45vh] overflow-y-auto overflow-x-hidden py-4 sm:py-6">
-				<h3 class="text-xl font-black leading-snug tracking-tight whitespace-pre-wrap break-words [overflow-wrap:anywhere] sm:text-2xl
-                           {alert.level === 5 ? 'text-white' : 
-                            alert.style === 'success' ? 'text-emerald-700' :
-                            alert.style === 'warning' ? 'text-amber-700' :
-                            alert.style === 'danger' ? 'text-rose-700' : 'text-slate-900'}">
-					{alert.level === 5 ? '🚨 ' : ''}{alert.message}
+			<div class="flex justify-center {isL5 ? 'mb-6' : 'mb-4'}">
+				<span
+					class="inline-flex items-center gap-1.5 rounded-full border font-black {headerMeta.badgeClass}
+						{isL5 ? 'px-4 py-1.5 text-sm sm:text-base' : 'px-3 py-1 text-xs'}"
+				>
+					{headerMeta.badge}
+				</span>
+			</div>
+
+			<!-- 본문 메시지 -->
+			<div
+				class="overflow-y-auto overflow-x-hidden rounded-2xl border border-slate-100 bg-slate-50/80
+					{isL5 ? 'max-h-[55vh] px-6 py-8 sm:px-8 sm:py-10' : 'max-h-[45vh] px-4 py-5'}"
+			>
+				<h3
+					class="font-black leading-relaxed tracking-tight text-slate-800 whitespace-pre-wrap break-words [overflow-wrap:anywhere]
+						{isL5 ? 'text-2xl sm:text-3xl' : 'text-lg sm:text-xl'}"
+				>
+					{alert.message}
 				</h3>
-				{#if penaltyMsg}
-					<p class="mt-4 text-xs font-bold text-rose-500 animate-bounce">{penaltyMsg}</p>
-				{/if}
 			</div>
 
-			<div class="modal-action mt-8 flex flex-col gap-4">
-				<!-- 확인 버튼 -->
+			{#if guideMsg}
+				<p class="mt-3 font-bold text-rose-600 {isL5 ? 'text-sm sm:text-base' : 'text-xs'}">{guideMsg}</p>
+			{/if}
+
+			<div class="modal-action flex flex-col gap-2.5 {isL5 ? 'mt-8' : 'mt-6'}">
 				<button
-					class="btn h-16 rounded-2xl text-lg font-black shadow-lg transition-all btn-lg hover:scale-[1.02] active:scale-[0.98]
-                           {alert.level === 5 ? 'bg-white text-red-700 border-none hover:bg-slate-100' : 
-                            alert.style === 'success' ? 'btn-success text-white' :
-                            alert.style === 'warning' ? 'btn-warning text-white' :
-                            alert.style === 'danger' ? 'btn-error text-white' : 'btn-primary text-white'}"
+					type="button"
+					class="btn w-full rounded-2xl font-black shadow-md transition-all active:scale-[0.98]
+						{isL5 ? 'h-16 min-h-16 text-xl sm:text-2xl' : 'h-13 min-h-13 text-base'}
+						{(alert.level === 4 || alert.level === 5) && countdown > 0
+							? 'bg-slate-200 text-slate-500 border-none hover:bg-slate-200 cursor-not-allowed'
+							: headerMeta.btnClass}"
 					onclick={handleConfirm}
 				>
 					{#if (alert.level === 4 || alert.level === 5) && countdown > 0}
-						{(alert.level === 5 ? '지시 숙지 중... ' : '읽는 중... ') + `(${countdown}s)`}
+						<Icon icon="solar:clock-circle-bold-duotone" class={isL5 ? 'text-2xl' : 'text-lg'} />
+						<span>내용을 확인하고 있어요 ({countdown}초)</span>
 					{:else}
-						{alert.confirm_text || '확인하였습니다'}
+						<Icon icon="solar:check-circle-bold" class={isL5 ? 'text-2xl' : 'text-lg'} />
+						<span>{alert.confirm_text || '확인했어요'}</span>
 					{/if}
 				</button>
 
-				<!-- 하루 동안 보지 않기 (L4 카운트다운 완료 후 또는 L3 이하 표시) -->
 				{#if alert.level !== 5 && (alert.level !== 4 || countdown <= 0)}
 					<button
-						class="btn btn-ghost btn-sm text-xs font-bold opacity-40 transition-opacity hover:opacity-100"
+						type="button"
+						class="btn btn-ghost btn-sm text-xs font-bold text-slate-400 hover:text-slate-700"
 						onclick={() => alertState.neverShowAgain(alert.id)}
 					>
-						하루 동안 보지 않기
+						오늘 하루 보지 않기
 					</button>
 				{/if}
 			</div>

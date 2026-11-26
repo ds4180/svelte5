@@ -201,6 +201,28 @@
 			.map(([label, items]) => ({ label, items }));
 	});
 
+	let hiddenFixedRoutes = $state<Record<string, boolean>>({});
+
+	function toggleFixedRoute(label: string) {
+		hiddenFixedRoutes = {
+			...hiddenFixedRoutes,
+			[label]: !hiddenFixedRoutes[label]
+		};
+	}
+
+	const allFixedHidden = $derived(
+		fixedSubgroups.length > 0 && fixedSubgroups.every((sub) => Boolean(hiddenFixedRoutes[sub.label]))
+	);
+
+	function toggleAllFixedRoutes() {
+		const nextHidden = !allFixedHidden;
+		const next: Record<string, boolean> = {};
+		for (const sub of fixedSubgroups) {
+			next[sub.label] = nextHidden;
+		}
+		hiddenFixedRoutes = next;
+	}
+
 	const avgStats = $derived.by(() => {
 		const list = availableDrivers.map((drv) => driverStats[drv.name]).filter(Boolean);
 		if (list.length === 0) {
@@ -345,26 +367,60 @@
 									<span class="text-xs font-black {group.headerClass}">
 										{group.title} ({group.items.length})
 									</span>
-									{#if group.key === 'reserve' || group.key === 'fixed'}
-										<span class="text-[10px] font-bold text-slate-400">월 근무 적은 순</span>
-									{/if}
+									<div class="flex items-center gap-2">
+										{#if group.key === 'fixed' && fixedSubgroups.length > 1}
+											<button
+												type="button"
+												onclick={toggleAllFixedRoutes}
+												class="rounded-md border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-bold text-slate-600 transition hover:border-indigo-300 hover:text-indigo-700"
+											>
+												{allFixedHidden ? '노선 모두 펼치기' : '노선 모두 숨김'}
+											</button>
+										{/if}
+										{#if group.key === 'reserve' || group.key === 'fixed'}
+											<span class="text-[10px] font-bold text-slate-400">월 근무 적은 순</span>
+										{/if}
+									</div>
 								</div>
 								{#if group.key === 'fixed' && fixedSubgroups.length > 0}
-									<div class="space-y-2.5">
+									<div class="space-y-2">
 										{#each fixedSubgroups as sub (sub.label)}
+											{@const isHidden = Boolean(hiddenFixedRoutes[sub.label])}
 											<div
-												class="space-y-1.5 rounded-xl border border-slate-200/80 bg-white/70 p-2"
+												class="rounded-xl border border-slate-200/80 bg-white/80 p-2 transition {isHidden ? 'bg-slate-50/80' : 'space-y-1.5'}"
 											>
-												<div class="flex items-center justify-between">
-													<span class="text-[11px] font-black text-indigo-700">
-														{sub.label} ({sub.items.length})
+												<button
+													type="button"
+													onclick={() => toggleFixedRoute(sub.label)}
+													class="flex w-full items-center justify-between gap-2 text-left"
+													title={isHidden ? `${sub.label} 노선 기사 펼치기` : `${sub.label} 노선 기사 숨기기`}
+												>
+													<span class="flex items-center gap-1.5 text-[11px] font-black text-indigo-700">
+														<Icon
+															icon={isHidden ? 'lucide:chevron-right' : 'lucide:chevron-down'}
+															class="text-xs text-slate-400"
+														/>
+														<span>{sub.label} ({sub.items.length}명)</span>
 													</span>
-												</div>
-												<div class="flex flex-wrap content-start items-start gap-2">
-													{#each sub.items as item (item.driver.name)}
-														{@render driverButton(item, group)}
-													{/each}
-												</div>
+													<span
+														class="inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[10px] font-bold transition {isHidden
+															? 'border-indigo-200 bg-indigo-50 text-indigo-700'
+															: 'border-slate-200 bg-slate-50 text-slate-500 hover:text-slate-800'}"
+													>
+														<Icon
+															icon={isHidden ? 'lucide:eye' : 'lucide:eye-off'}
+															class="text-[11px]"
+														/>
+														<span>{isHidden ? '펼치기' : '숨김'}</span>
+													</span>
+												</button>
+												{#if !isHidden}
+													<div class="flex flex-wrap content-start items-start gap-2 pt-1">
+														{#each sub.items as item (item.driver.name)}
+															{@render driverButton(item, group)}
+														{/each}
+													</div>
+												{/if}
 											</div>
 										{/each}
 									</div>

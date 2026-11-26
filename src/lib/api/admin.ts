@@ -216,6 +216,11 @@ export const adminSaveDailyDispatch = <T = any>(payload: Record<string, any>) =>
 	request<T>(BASE_URL + '/dispatch', 'POST', payload);
 
 // 🔐 조직·권한 그룹 마스터 API (PostgreSQL DB groups 기반)
+export const adminGetAuthGroupSettings = <T = any>() =>
+	request<T>('/api/v1/admin/auth-groups/settings');
+export const adminUpdateAuthGroupSettings = <T = any>(data: Record<string, any>) =>
+	request<T>('/api/v1/admin/auth-groups/settings', 'PUT', data, { offline: false });
+
 export const adminGetAuthGroupsMaster = <T = any>(groupType?: string) =>
 	request<T>(`/api/v1/admin/auth-groups/master${groupType ? `?group_type=${groupType}` : ''}`);
 export const adminCreateAuthGroupMaster = <T = any>(data: Record<string, any>) =>
@@ -234,7 +239,7 @@ export const adminGetAuthGroupUsers = <T = any>(query?: string) =>
 	);
 export const adminUpdateUserPrimaryGroup = <T = any>(
 	userId: number | string,
-	primaryGroup: string
+	primaryGroup: string | null
 ) =>
 	request<T>(`/api/v1/admin/auth-groups/users/${userId}/primary`, 'PATCH', {
 		primary_group: primaryGroup

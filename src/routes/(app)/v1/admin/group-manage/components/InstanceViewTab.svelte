@@ -1,27 +1,32 @@
-<script>
+<script lang="ts">
   import { fade } from 'svelte/transition';
   import Icon from '@iconify/svelte';
   import { RANK_LEVELS } from '$lib/config/rank';
   import { getGroupBadges } from '$lib/runes/auth.svelte';
+  import {
+    addGroupToAction,
+    getInstanceTypeMeta,
+    removeGroupFromAction,
+    type GroupCodeOption,
+    type InstancePermissionItem
+  } from '$lib/services/groupAdminService';
+
+  interface Props {
+    instances: InstancePermissionItem[];
+    allGroupCodes: GroupCodeOption[];
+    canWrite?: boolean;
+    onSavePermissions?: (inst: InstancePermissionItem) => void;
+  }
 
   let {
     instances = [],
     allGroupCodes = [],
+    canWrite = true,
     onSavePermissions
-  } = $props();
+  }: Props = $props();
 
   let instanceFilter = $state('ALL'); // 'ALL' | 'BOARD' | 'PAGE' | 'APP'
   let instanceSearchQuery = $state('');
-
-  function getInstanceTypeMeta(type) {
-    if (type === 'BOARD') {
-      return { label: '게시판', color: 'bg-sky-100 text-sky-800 border-sky-300', icon: 'mdi:bulletin-board' };
-    }
-    if (type === 'PAGE') {
-      return { label: '페이지', color: 'bg-purple-100 text-purple-800 border-purple-300', icon: 'mdi:file-document-outline' };
-    }
-    return { label: '단일 앱', color: 'bg-amber-100 text-amber-900 border-amber-300', icon: 'mdi:application-brackets-outline' };
-  }
 
   let filteredInstances = $derived(
     instances.filter(i => {
@@ -36,70 +41,26 @@
     })
   );
 
-  function addGroupToAction(groupData, code, action = 'all') {
-    const spec = { read: [], write: [], all: [] };
-    if (Array.isArray(groupData)) {
-      spec.all = [...groupData.filter(Boolean)];
-    } else if (typeof groupData === 'object' && groupData !== null) {
-      if (Array.isArray(groupData.all)) spec.all = [...groupData.all.filter(Boolean)];
-      if (Array.isArray(groupData.read)) spec.read = [...groupData.read.filter(Boolean)];
-      if (Array.isArray(groupData.write)) spec.write = [...groupData.write.filter(Boolean)];
-    }
-
-    if (action === 'all') {
-      spec.read = spec.read.filter(c => c !== code);
-      spec.write = spec.write.filter(c => c !== code);
-      if (!spec.all.includes(code)) spec.all.push(code);
-    } else if (action === 'read') {
-      if (!spec.all.includes(code) && !spec.read.includes(code)) {
-        spec.read.push(code);
-      }
-    } else if (action === 'write') {
-      if (!spec.all.includes(code) && !spec.write.includes(code)) {
-        spec.write.push(code);
-      }
-    }
-
-    if (spec.read.length === 0 && spec.write.length === 0) {
-      return spec.all;
-    }
-    return spec;
-  }
-
-  function removeGroupFromAction(groupData, code, action = 'all') {
-    if (Array.isArray(groupData)) {
-      return groupData.filter(c => c !== code);
-    }
-    if (typeof groupData === 'object' && groupData !== null) {
-      const updated = {
-        all: (groupData.all || []).filter(c => !(c === code && (action === 'all' || !action))),
-        read: (groupData.read || []).filter(c => !(c === code && (action === 'read' || !action))),
-        write: (groupData.write || []).filter(c => !(c === code && (action === 'write' || !action))),
-      };
-      if (updated.read.length === 0 && updated.write.length === 0) {
-        return updated.all;
-      }
-      return updated;
-    }
-    return [];
-  }
-
-  function handleInstanceAddAllow(inst, code, action = 'all') {
+  function handleInstanceAddAllow(inst: InstancePermissionItem, code: string, action: 'all' | 'read' | 'write' = 'all') {
+    if (!canWrite) return;
     inst.allow_groups = addGroupToAction(inst.allow_groups, code, action);
     onSavePermissions?.(inst);
   }
 
-  function handleInstanceRemoveAllow(inst, code, action) {
+  function handleInstanceRemoveAllow(inst: InstancePermissionItem, code: string, action: string) {
+    if (!canWrite) return;
     inst.allow_groups = removeGroupFromAction(inst.allow_groups, code, action);
     onSavePermissions?.(inst);
   }
 
-  function handleInstanceAddDeny(inst, code, action = 'all') {
+  function handleInstanceAddDeny(inst: InstancePermissionItem, code: string, action: 'all' | 'read' | 'write' = 'all') {
+    if (!canWrite) return;
     inst.deny_groups = addGroupToAction(inst.deny_groups, code, action);
     onSavePermissions?.(inst);
   }
 
-  function handleInstanceRemoveDeny(inst, code, action) {
+  function handleInstanceRemoveDeny(inst: InstancePermissionItem, code: string, action: string) {
+    if (!canWrite) return;
     inst.deny_groups = removeGroupFromAction(inst.deny_groups, code, action);
     onSavePermissions?.(inst);
   }

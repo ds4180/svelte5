@@ -100,8 +100,10 @@
 		return list.find((/** @type {any} */ d) => (d.start_time || '') >= nowHHMM) || list[list.length - 1];
 	});
 
-	// 명일 근무 첫 회차 (17시 이후 표시용)
+	// 명일 근무 첫 회차 및 배차 예고 공개 상태 (admin/dispatch 설정 연동)
 	let firstTomorrowTrip = $derived((briefing?.tomorrow_dispatches || [])[0] ?? null);
+	let isTomorrowOpen = $derived(Boolean(briefing?.is_preview_open ?? briefing?.is_after_17));
+	let previewOpenTime = $derived(briefing?.preview_open_time || '17:00');
 
 	// 📌 사무실 화면(Lv.3~5) 전용: 최근 현장·직원 요청 3건 (미처리 우선 -> 최신순)
 	let officeRecentRequests = $derived.by(() => {
@@ -544,7 +546,7 @@
 						</p>
 					{/if}
 					<p class="mt-1 text-xs font-medium text-amber-700/80">
-						충분한 휴식을 취하시고, 내일 배차는 오후 5시 이후 아래 우측 카드에서 확인하세요.
+						충분한 휴식을 취하시고, 내일 배차는 {briefing?.preview_open_time || '17:00'} 이후 아래 우측 카드에서 확인하세요.
 					</p>
 				{:else if nextTodayTrip}
 					<p class="text-2xl font-black tracking-tight text-slate-900 md:text-3xl">
@@ -578,30 +580,37 @@
 				{/if}
 			</div>
 
-			<!-- 명일 근무 / 휴무 안내 (17시 이후 활성화) -->
+			<!-- 명일 근무 / 휴무 안내 (배차 예고 공개 시각 설정 연동) -->
 			<div
-				class="rounded-3xl border-2 p-6 shadow-md {briefing?.is_after_17 && (firstTomorrowTrip || briefing?.tomorrow_dayoff)
+				class="rounded-3xl border-2 p-6 shadow-md {isTomorrowOpen && (firstTomorrowTrip || briefing?.tomorrow_dayoff)
 					? 'border-amber-500 bg-amber-50/60'
 					: 'border-slate-200 bg-slate-50'}"
 			>
 				<div class="mb-4 flex items-center justify-between">
 					<span
-						class="badge font-bold {briefing?.is_after_17
+						class="badge font-bold {isTomorrowOpen
 							? 'bg-amber-500 text-white border-none'
 							: 'badge-ghost'}"
 					>
-						내일 근무 · 휴무 (17시 이후)
+						내일 근무 · 휴무 ({previewOpenTime} 이후)
 					</span>
 					<span class="font-mono text-xs font-bold text-slate-500">
 						{briefing?.tomorrow || '내일'}
 					</span>
 				</div>
 
-				{#if !briefing?.is_after_17}
-					<p class="text-lg font-black text-slate-700">명일 배차는 17:00 이후 표시됩니다.</p>
-					<p class="mt-1 text-xs font-medium text-slate-500">
-						배차 확정 후 오후 5시부터 내일 근무일/휴무일 및 첫 출발 시각을 확인할 수 있습니다.
-					</p>
+				{#if !isTomorrowOpen}
+					{#if briefing?.is_preview_paused}
+						<p class="text-lg font-black text-slate-700">배차 예고가 일시 중지되었습니다.</p>
+						<p class="mt-1 text-xs font-medium text-slate-500">
+							{briefing?.preview_reason || '관리자가 명일 배차를 준비 중입니다.'}
+						</p>
+					{:else}
+						<p class="text-lg font-black text-slate-700">명일 배차는 {previewOpenTime} 이후 표시됩니다.</p>
+						<p class="mt-1 text-xs font-medium text-slate-500">
+							배차 확정 후 {previewOpenTime}부터 내일 근무일/휴무일 및 첫 출발 시각을 확인할 수 있습니다.
+						</p>
+					{/if}
 				{:else if briefing?.tomorrow_dayoff}
 					<p class="text-2xl font-black tracking-tight text-amber-900 md:text-3xl">
 						내일은 <span class="text-amber-600">{DAYOFF_TYPE_LABELS[briefing.tomorrow_dayoff.type] || briefing.tomorrow_dayoff.type}</span> 휴무일입니다.

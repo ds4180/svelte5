@@ -21,6 +21,7 @@
 	import DispatchDriverBoard from '$lib/components/dispatch/DispatchDriverBoard.svelte';
 	import DispatchSettingsTab from '$lib/components/dispatch/DispatchSettingsTab.svelte';
 	import {
+		buildClassifiedDriverBoard,
 		buildDispatchSavePayloads,
 		computeTomorrowPredictions,
 		DEFAULT_DISPATCH_SETTINGS,
@@ -171,6 +172,34 @@
 	const availableDrivers = $derived(
 		driverPool.filter((driver) => !assignedDrivers.includes(String(driver.name || '').trim()))
 	);
+	const driverBoardSummary = $derived.by(() => {
+		const classified = buildClassifiedDriverBoard({
+			availableDrivers,
+			driverStats,
+			settings: dispatchSettings
+		});
+		const reserveCount = classified.reserve.length;
+		const fixedCount = classified.fixed.length;
+		const dayoffCount = classified.dayoff.length;
+		const sickDisciplineCount = classified.sickDiscipline.length;
+		const boardTotal = reserveCount + fixedCount + dayoffCount + sickDisciplineCount;
+		const assignedInPool = driverPool.filter((d) =>
+			assignedDrivers.includes(String(d.name || '').trim())
+		).length;
+		const missingDrivers = Math.max(0, driverPool.length - (assignedInPool + boardTotal));
+		const unassignedSlots = Math.max(0, dispatchRows.length - assignedDriversCount);
+		return {
+			totalDrivers: driverPool.length,
+			assignedInPool,
+			boardTotal,
+			reserveCount,
+			fixedCount,
+			dayoffCount,
+			sickDisciplineCount,
+			missingDrivers,
+			unassignedSlots
+		};
+	});
 
 	function selectDriver(driver: DriverResource) {
 		if (isPastDate) {
@@ -354,6 +383,10 @@
 			toast.warning('과거 날짜(어제 이전)의 배차 데이터는 수정·저장할 수 없습니다.');
 			return;
 		}
+		if ((status === 'CONFIRMED' || status === 'ANNOUNCED') && !isDMinus1) {
+			toast.warning('배차 확정 및 공개는 운행 전날(D-1, 내일 배차)에만 수행할 수 있습니다.');
+			return;
+		}
 		if (!selectedRoute) {
 			toast.warning('선택된 노선이 없습니다.');
 			return;
@@ -375,9 +408,9 @@
 					toast.success('명일 배차가 즉시 배포되었습니다.');
 				} else if (status === 'CONFIRMED') {
 					toast.success(
-						isDMinus1
+						dispatchSettings.auto_announce_enabled
 							? `명일 배차가 확정되었습니다. (${dispatchSettings.auto_announce_time || '17:00'} 자동 배포)`
-							: '배차 예고에 공개되었습니다.'
+							: '명일 배차가 확정되었습니다.'
 					);
 				} else {
 					toast.success(
@@ -454,34 +487,6 @@
 		totalCount: 0
 	});
 	let announcingNow = $state(false);
-	async function handleDeployNowD1() {
-		if (announcingNow || !selectedRoute) return;
-		const confirmMsg = tomorrowSummary.wasPublished
-			? '명일(D-1) 배차를 저장·확정 후 변경 재공지(재배포)하고 재공지 알림·푸시를 발송할까요?'
-			: '명일(D-1) 배차를 저장·확정 후 지금 즉시 공개(배포)하고 알림·푸시를 발송할까요?';
-		if (!confirm(confirmMsg)) {
-			return;
-		}
-		announcingNow = true;
-		try {
-			// 저장하기 -> 배차 확정 -> 배포(공개) 순서 실행
-			await saveDispatch('CONFIRMED', { silent: true });
-			const res = await dispatchApi.adminAnnounceDispatchNow();
-			selectedDatePublished = true;
-			toast.success(
-				res.message ||
-					(res.is_reannounce
-						? '명일 배차가 변경 재공지(재배포)되었습니다.'
-						: '명일 배차가 저장·확정 및 공개(배포)되었습니다.')
-			);
-			await syncData(selectedDateKey, selectedRoute.id);
-		} catch (err) {
-			toast.error('지금 공개 실패: ' + formatApiError(err, '오류'));
-		} finally {
-			announcingNow = false;
-		}
-	}
-
 	async function handlePublishTomorrowFromCard() {
 		if (announcingNow || !tomorrowSummary.confirmed) return;
 		const confirmMsg = tomorrowSummary.wasPublished
@@ -803,43 +808,63 @@
 			</div>
 		</div>
 
+		<!-- 카드 3: 운전원 요약 (투입기사 등록 보드 집계 · 누락 인원 확인용) -->
 		<div
-			class="col-span-1 flex min-w-0 flex-col justify-between rounded-[1.75rem] border-2 border-slate-200 bg-white p-4 shadow-sm sm:p-5 lg:col-span-2"
+			class="col-span-2 flex min-w-0 flex-col justify-between rounded-[1.75rem] border-2 p-4 shadow-sm sm:p-5 lg:col-span-4 {driverBoardSummary.missingDrivers > 0
+				? 'border-rose-300 bg-rose-50/30'
+				: driverBoardSummary.unassignedSlots > 0
+					? 'border-amber-200 bg-white'
+					: 'border-emerald-200 bg-white'}"
 		>
 			<div class="flex items-center justify-between gap-2">
-				<span class="truncate text-xs font-black text-slate-400 uppercase">Assign Rate</span>
-				<div
-					class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600"
-				>
-					<Icon icon="solar:user-check-bold-duotone" class="text-xl" />
-				</div>
+				<span class="truncate text-xs font-black text-slate-500">
+					운전원 요약 ({selectedDateKey})
+				</span>
+				{#if driverBoardSummary.missingDrivers > 0}
+					<span class="inline-flex shrink-0 items-center gap-1 rounded-full bg-rose-100 px-2.5 py-0.5 text-[11px] font-black text-rose-700">
+						<Icon icon="solar:danger-triangle-bold" class="text-xs" />
+						누락 {driverBoardSummary.missingDrivers}명
+					</span>
+				{:else if driverBoardSummary.unassignedSlots > 0}
+					<span class="inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-100 px-2.5 py-0.5 text-[11px] font-black text-amber-700">
+						미배정 {driverBoardSummary.unassignedSlots}회차
+					</span>
+				{:else}
+					<span class="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-0.5 text-[11px] font-black text-emerald-700">
+						<span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
+						누락 없음 ({assignRate}%)
+					</span>
+				{/if}
 			</div>
-			<div class="mt-3">
-				<div class="text-2xl font-black text-emerald-600 sm:text-3xl">
-					{assignRate}<span class="text-sm font-normal text-slate-500">%</span>
-				</div>
-				<div class="mt-1 text-xs font-bold text-slate-400">
-					기사 배정 ({assignedDriversCount}/{dispatchRows.length || 0})
-				</div>
-			</div>
-		</div>
 
-		<div
-			class="col-span-1 flex min-w-0 flex-col justify-between rounded-[1.75rem] border-2 border-slate-200 bg-white p-4 shadow-sm sm:p-5 lg:col-span-2"
-		>
-			<div class="flex items-center justify-between gap-2">
-				<span class="truncate text-xs font-black text-slate-400 uppercase">Standby Drivers</span>
-				<div
-					class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-amber-600"
-				>
-					<Icon icon="solar:users-group-rounded-bold-duotone" class="text-xl" />
+			<div class="mt-2.5 grid grid-cols-4 gap-1.5">
+				<div class="rounded-xl border border-sky-200 bg-sky-50/70 px-2 py-1.5 text-center">
+					<div class="text-[10px] font-black text-sky-700 truncate">휴무 예비</div>
+					<div class="text-base font-black text-sky-900">{driverBoardSummary.reserveCount}</div>
+				</div>
+				<div class="rounded-xl border border-slate-200 bg-slate-50 px-2 py-1.5 text-center">
+					<div class="text-[10px] font-black text-slate-600 truncate">휴무 고정</div>
+					<div class="text-base font-black text-slate-800">{driverBoardSummary.fixedCount}</div>
+				</div>
+				<div class="rounded-xl border border-amber-200 bg-amber-50/70 px-2 py-1.5 text-center">
+					<div class="text-[10px] font-black text-amber-700 truncate">결근계</div>
+					<div class="text-base font-black text-amber-900">{driverBoardSummary.dayoffCount}</div>
+				</div>
+				<div class="rounded-xl border border-rose-200 bg-rose-50/70 px-2 py-1.5 text-center">
+					<div class="text-[10px] font-black text-rose-700 truncate">병가·징계</div>
+					<div class="text-base font-black text-rose-900">{driverBoardSummary.sickDisciplineCount}</div>
 				</div>
 			</div>
-			<div class="mt-3">
-				<div class="text-2xl font-black text-amber-600 sm:text-3xl">
-					{availableDrivers.length} <span class="text-xs font-normal text-slate-500">명</span>
-				</div>
-				<div class="mt-1 text-xs font-bold text-slate-400">투입 가능 잔여 인원</div>
+
+			<div class="mt-2 flex flex-wrap items-center justify-between gap-1 text-[11px] font-bold text-slate-500">
+				<span>
+					전체 <strong class="text-slate-900">{driverBoardSummary.totalDrivers}</strong>명
+					= 투입 <strong class="text-emerald-700">{driverBoardSummary.assignedInPool}</strong>
+					+ 보드 <strong class="text-blue-700">{driverBoardSummary.boardTotal}</strong>
+				</span>
+				<span class="font-mono text-[10px] text-slate-400">
+					배정 {assignedDriversCount}/{dispatchRows.length || 0}
+				</span>
 			</div>
 		</div>
 	</div>
@@ -1088,17 +1113,24 @@
 							{:else}
 								<button
 									type="button"
-									disabled={announcingNow}
-									class="btn h-11 min-h-11 w-full shrink-0 justify-center gap-1.5 whitespace-nowrap rounded-xl border-2 border-transparent bg-emerald-600 px-5 text-sm font-black text-white shadow-sm transition-all hover:bg-emerald-700 disabled:opacity-50 sm:w-auto"
-									onclick={handleDeployNowD1}
+									disabled={announcingNow || !tomorrowSummary.confirmed}
+									title={tomorrowSummary.confirmed
+										? tomorrowSummary.wasPublished
+											? '확정된 명일 배차를 재배포합니다'
+											: '확정된 명일 배차를 최초 배포합니다'
+										: '모든 노선의 명일 배차를 먼저 확정해야 배포할 수 있습니다'}
+									class="btn h-11 min-h-11 w-full shrink-0 justify-center gap-1.5 whitespace-nowrap rounded-xl border-2 border-transparent bg-emerald-600 px-5 text-sm font-black text-white shadow-sm transition-all hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-500 sm:w-auto"
+									onclick={handlePublishTomorrowFromCard}
 								>
 									<Icon icon="lucide:send" class="h-4 w-4 shrink-0" />
 									<span>
 										{announcingNow
-											? '공개 중...'
-											: tomorrowSummary.wasPublished
-												? '재공개(재배포)'
-												: '지금 공개(배포)'}
+											? '배포 중...'
+											: !tomorrowSummary.confirmed
+												? '확정 필요'
+												: tomorrowSummary.wasPublished
+													? '재배포'
+													: '지금 배포'}
 									</span>
 								</button>
 							{/if}

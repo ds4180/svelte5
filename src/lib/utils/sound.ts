@@ -482,19 +482,19 @@ export function playAlertSound(
 
 		case 4:
 		case 'warning':
-			// L4 (긴급 공지): 주의를 환기하는 3단 비프음 ("삐-삐-삐-", 1100Hz)
-			playTone(1100, 0.11, 'triangle', 0.45, 0, options);
-			playTone(1100, 0.11, 'triangle', 0.45, 0.13, options);
-			playTone(1100, 0.18, 'triangle', 0.45, 0.26, options);
+			// L4 (주요 공지): 밝고 부드러운 3단 상승 차임 ("도-미-솔", 587Hz -> 784Hz -> 988Hz)
+			playTone(587.33, 0.16, 'sine', 0.36, 0, options);
+			playTone(783.99, 0.16, 'sine', 0.36, 0.14, options);
+			playTone(987.77, 0.28, 'sine', 0.38, 0.28, options);
 			break;
 
 		case 5:
 		case 'error':
-			// L5 (시스템 락): 저음 경보 사이렌 ("위잉-위잉-")
-			playTone(520, 0.22, 'sawtooth', 0.4, 0, options);
-			playTone(390, 0.26, 'sawtooth', 0.4, 0.2, options);
-			playTone(520, 0.22, 'sawtooth', 0.4, 0.44, options);
-			playTone(390, 0.32, 'sawtooth', 0.4, 0.64, options);
+			// L5 (중요 안내): 경보 사이렌 대신 친근하고 또렷한 4음 멜로디 차임벨 ("도-미-솔-도~")
+			playTone(523.25, 0.16, 'sine', 0.38, 0, options); // C5
+			playTone(659.25, 0.16, 'sine', 0.38, 0.14, options); // E5
+			playTone(783.99, 0.18, 'sine', 0.4, 0.28, options); // G5
+			playTone(1046.5, 0.38, 'sine', 0.42, 0.44, options); // C6 (맑고 따뜻한 마무리)
 			break;
 
 		case 'beep':
@@ -539,8 +539,8 @@ export function playAlertVibration(
 			break;
 		case 5:
 		case 'error':
-			// L5 (시스템 락): 묵직한 경보 연속 진동
-			triggerVibration([320, 100, 320, 100, 450], options);
+			// L5 (중요 안내): 리드미컬하고 부드러운 3단 진동
+			triggerVibration([180, 90, 180, 90, 240], options);
 			break;
 		default:
 			triggerVibration(90, options);
