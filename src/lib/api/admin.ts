@@ -364,6 +364,11 @@ export const adminClearFailedTasks = <T = any>() =>
 // ============================================================================
 // 📁 [미디어 및 파일·사진 관리 (Media & File Master) API]
 // ============================================================================
+export const adminGetMediaSettings = <T = any>() => request<T>('/api/media/admin/settings');
+
+export const adminUpdateMediaSettings = <T = any>(data: Record<string, any>) =>
+	request<T>('/api/media/admin/settings', 'PUT', data, { offline: false });
+
 export const adminGetMediaStats = <T = any>() => request<T>('/api/media/admin/stats');
 
 export const adminGetMediaRecent = <T = any>(limit = 12) =>

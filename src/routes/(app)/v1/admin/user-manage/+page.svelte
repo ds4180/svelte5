@@ -224,7 +224,7 @@
 
 		<div class="flex flex-wrap items-center gap-2.5 w-full md:w-auto">
 			<!-- 🔒 가입 정책 스위치 드롭다운 -->
-			<div class="dropdown dropdown-end">
+			<div class="dropdown dropdown-start md:dropdown-end">
 				<div tabindex="0" role="button" class="flex items-center gap-1.5 px-4 py-2.5 rounded-2xl border-2 border-slate-200 bg-white font-black text-xs uppercase tracking-wider text-slate-700 hover:border-slate-400 transition shadow-sm cursor-pointer">
 					<Icon icon="mdi:shield-lock-outline" class="text-base text-emerald-600" />
 					<span class="text-xs">
@@ -411,153 +411,260 @@
 		</div>
 	</div>
 
-	<!-- 📊 사원 리스트 테이블 -->
-	<div class="overflow-visible rounded-2xl border border-slate-200 bg-white shadow-xl min-h-[380px] pb-12">
-		<table class="table table-zebra w-full font-bold">
-			<thead class="bg-slate-50 text-[10px] font-black tracking-widest text-slate-400 uppercase rounded-t-2xl">
-				<tr>
-					<th class="w-16 text-center rounded-tl-2xl">사번/ID</th>
-					<th>사원 정보</th>
-					<th>이메일</th>
-					<th>소속 부서 (주그룹)</th>
-					<th class="text-center">현재 랭크</th>
-					<th class="text-center w-36 rounded-tr-2xl">권한 제어 / 작업</th>
-				</tr>
-			</thead>
-			<tbody>
-				{#if loading && users.length === 0}
-					<tr>
-						<td colspan="6" class="py-20 text-center">
-							<span class="loading loading-spinner loading-lg text-emerald-500"></span>
-							<p class="mt-4 text-xs font-black text-slate-400 uppercase italic">사원 데이터 조회 중...</p>
-						</td>
-					</tr>
-				{:else if filteredUsers.length === 0}
-					<tr>
-						<td colspan="6" class="py-20 text-center text-slate-400 italic">
-							{#if activeTab === 'PENDING'}현재 가입 승인 대기 중인 사원이 없습니다.
-							{:else if activeTab === 'INACTIVE'}소프트 삭제(퇴사)된 사원이 없습니다.
-							{:else}검색 결과가 없습니다.{/if}
-						</td>
-					</tr>
-				{:else}
-					{#each filteredUsers as user, idx (user.id)}
-						{@const isUserActive = user.profile?.is_active !== false}
-						{@const rank = getRankInfo(user.profile?.rank_level ?? 0, isUserActive)}
-						{@const isNearBottom = idx >= Math.max(0, filteredUsers.length - 2)}
-						<tr in:fade={{ duration: 150 }} class="hover:bg-slate-50/70 transition-colors {!isUserActive ? 'opacity-60 bg-slate-50/50' : ''}">
-							<td class="text-center text-xs font-black text-slate-400">
-								{#if user.profile?.employee_no}
-									<span class="badge badge-sm badge-ghost font-mono">{user.profile.employee_no}</span>
-								{:else}
-									#{user.id}
-								{/if}
-							</td>
-							<td>
-								<div class="flex items-center gap-3">
-									<div class="avatar placeholder">
-										<div class="w-10 rounded-xl {isUserActive ? 'bg-slate-100 text-slate-600' : 'bg-slate-200 text-slate-400'} font-black">
-											{#if user.real_name}
-												<span class="text-xs">{user.real_name.slice(0, 2)}</span>
-											{:else}
-												<Icon icon="mdi:account" class="text-xl" />
-											{/if}
-										</div>
+	<!-- 📊 사원 리스트 (모바일 카드 뷰 + 데스크톱 테이블) -->
+	<div class="rounded-2xl border border-slate-200 bg-white shadow-xl min-h-[380px]">
+		{#if loading && users.length === 0}
+			<div class="py-20 text-center">
+				<span class="loading loading-spinner loading-lg text-emerald-500"></span>
+				<p class="mt-4 text-xs font-black text-slate-400 uppercase italic">사원 데이터 조회 중...</p>
+			</div>
+		{:else if filteredUsers.length === 0}
+			<div class="py-20 text-center text-sm font-bold text-slate-400 italic px-4">
+				{#if activeTab === 'PENDING'}현재 가입 승인 대기 중인 사원이 없습니다.
+				{:else if activeTab === 'INACTIVE'}소프트 삭제(퇴사)된 사원이 없습니다.
+				{:else}검색 결과가 없습니다.{/if}
+			</div>
+		{:else}
+			<!-- 📱 모바일 카드 리스트 (< md) -->
+			<div class="md:hidden divide-y divide-slate-100">
+				{#each filteredUsers as user (user.id)}
+					{@const isUserActive = user.profile?.is_active !== false}
+					{@const currentRank = user.profile?.rank_level ?? 0}
+					{@const rank = getRankInfo(currentRank, isUserActive)}
+					<div in:fade={{ duration: 150 }} class="p-4 space-y-3 {!isUserActive ? 'opacity-65 bg-slate-50/70' : 'bg-white'}">
+						<!-- 상단: 아바타 + 이름/아이디/사번 + 현재 랭크 -->
+						<div class="flex items-start justify-between gap-2">
+							<div class="flex items-center gap-3 min-w-0">
+								<div class="avatar placeholder shrink-0">
+									<div class="w-10 rounded-xl {isUserActive ? 'bg-slate-100 text-slate-600' : 'bg-slate-200 text-slate-400'} font-black">
+										{#if user.real_name}
+											<span class="text-xs">{user.real_name.slice(0, 2)}</span>
+										{:else}
+											<Icon icon="mdi:account" class="text-xl" />
+										{/if}
 									</div>
-									<div>
-										<div class="text-sm font-black {isUserActive ? 'text-slate-900' : 'text-slate-500 line-through'}">
+								</div>
+								<div class="min-w-0">
+									<div class="flex items-center gap-1.5 flex-wrap">
+										<span class="text-sm font-black truncate {isUserActive ? 'text-slate-900' : 'text-slate-500 line-through'}">
 											{user.real_name || '미지정'}
-										</div>
-										<div class="text-[10px] text-slate-400 font-mono">@{user.username}</div>
-									</div>
-								</div>
-							</td>
-							<td class="text-xs text-slate-500 font-normal">{user.email}</td>
-							<td class="text-xs">
-								<div class="flex flex-wrap items-center gap-1">
-									{#if user.profile?.primary_group}
-										<span class="badge badge-sm badge-neutral font-black">
-											{user.profile.primary_group}
 										</span>
-									{:else}
-										<span class="text-slate-400 italic text-[11px] font-normal">소속 없음</span>
-									{/if}
-								</div>
-							</td>
-							<td class="text-center">
-								<div class="badge {rank.color} h-7 rounded-lg border-none px-3 text-[11px] font-black shadow-sm">
-									{rank.label}
-								</div>
-							</td>
-							<td class="text-center">
-								{#if !isUserActive}
-									<!-- 🔄 소프트 삭제된 사원 전용 복구 버튼 -->
-									<button 
-										onclick={() => handleRestoreUser(user)}
-										class="btn btn-xs rounded-lg bg-slate-900 text-white hover:bg-slate-800 font-bold"
-										title="사원 계정 복구(Lv.1)"
-									>
-										<Icon icon="mdi:restore" /> 계정 복구
-									</button>
-								{:else if (user.profile?.rank_level ?? 0) === 0}
-									<!-- ⚖️ 대기자 전용 승인 및 소프트 삭제(반려) -->
-									<div class="flex items-center justify-center gap-1">
-										<button 
-											onclick={() => changeRank(user.id, 1)}
-											class="btn btn-xs rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 font-bold"
-											title="정회원(Lv.1)으로 승인"
-										>
-											<Icon icon="mdi:check" /> 승인
-										</button>
-										<button 
-											onclick={() => handleDeleteUser(user)}
-											class="btn btn-xs btn-ghost text-rose-600 hover:bg-rose-50 rounded-lg"
-											title="가입 신청 반려 (소프트 삭제)"
-										>
-											<Icon icon="mdi:close" /> 반려
-										</button>
+										{#if user.profile?.employee_no}
+											<span class="badge badge-xs badge-ghost font-mono">{user.profile.employee_no}</span>
+										{:else}
+											<span class="text-[11px] font-black text-slate-400">#{user.id}</span>
+										{/if}
 									</div>
+									<div class="text-[11px] text-slate-400 font-mono truncate">@{user.username}</div>
+								</div>
+							</div>
+							<div class="badge {rank.color} h-6 shrink-0 rounded-lg border-none px-2.5 text-[11px] font-black shadow-sm">
+								{rank.label}
+							</div>
+						</div>
+
+						<!-- 중단: 소속 부서 & 이메일 -->
+						<div class="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs bg-slate-50/80 rounded-xl px-3 py-2 border border-slate-100">
+							<div class="flex items-center gap-1.5 shrink-0">
+								<Icon icon="mdi:office-building-outline" class="text-slate-400 text-sm" />
+								{#if user.profile?.primary_group}
+									<span class="badge badge-xs badge-neutral font-black">
+										{user.profile.primary_group}
+									</span>
 								{:else}
-									<!-- 🔄 일반 활동 사원 권한 조정 및 소프트 삭제 -->
-									<div class="dropdown dropdown-end {isNearBottom ? 'dropdown-top' : 'dropdown-bottom'}">
-										<div tabindex="0" role="button" class="btn btn-ghost btn-sm rounded-lg border border-slate-200 text-xs font-bold hover:bg-slate-100">
-											조정 <Icon icon="mdi:chevron-down" />
+									<span class="text-slate-400 italic text-[11px]">소속 없음</span>
+								{/if}
+							</div>
+							{#if user.email}
+								<div class="flex items-center gap-1 min-w-0 text-slate-500">
+									<Icon icon="mdi:email-outline" class="text-slate-400 text-sm shrink-0" />
+									<span class="truncate text-[11px] font-normal">{user.email}</span>
+								</div>
+							{/if}
+						</div>
+
+						<!-- 하단: 권한 제어 / 작업 영역 -->
+						<div class="flex items-center justify-end gap-2 pt-0.5">
+							{#if !isUserActive}
+								<button
+									onclick={() => handleRestoreUser(user)}
+									class="btn btn-xs h-8 w-full rounded-xl bg-slate-900 text-white hover:bg-slate-800 font-bold"
+								>
+									<Icon icon="mdi:restore" class="text-sm" /> 계정 복구 (Lv.1)
+								</button>
+							{:else if currentRank === 0}
+								<button
+									onclick={() => changeRank(user.id, 1)}
+									class="btn btn-xs h-8 flex-1 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 font-bold"
+								>
+									<Icon icon="mdi:check" class="text-sm" /> 정회원 승인
+								</button>
+								<button
+									onclick={() => handleDeleteUser(user)}
+									class="btn btn-xs h-8 rounded-xl border border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100 font-bold px-3"
+								>
+									<Icon icon="mdi:close" class="text-sm" /> 반려
+								</button>
+							{:else}
+								<select
+									aria-label="{user.real_name || user.username} 권한 랭크 변경"
+									value={currentRank}
+									onchange={(e) => changeRank(user.id, Number(e.currentTarget.value))}
+									class="select select-bordered select-xs h-8 flex-1 min-w-0 rounded-xl font-bold text-slate-700 bg-white"
+								>
+									{#if !rankLevels.some((r) => r.val === currentRank)}
+										<option value={currentRank}>{rank.label}</option>
+									{/if}
+									{#each rankLevels as r (r.val)}
+										<option value={r.val}>{r.label}</option>
+									{/each}
+								</select>
+								<button
+									onclick={() => handleDeleteUser(user)}
+									class="btn btn-xs h-8 shrink-0 rounded-xl border border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100 font-bold px-2.5"
+									title="소프트 삭제 (퇴사)"
+								>
+									<Icon icon="mdi:account-off-outline" class="text-sm" />
+									<span>퇴사</span>
+								</button>
+							{/if}
+						</div>
+					</div>
+				{/each}
+			</div>
+
+			<!-- 🖥️ 데스크톱 테이블 뷰 (md 이상) -->
+			<div class="hidden md:block overflow-x-auto lg:overflow-visible pb-12">
+				<table class="table table-zebra w-full font-bold">
+					<thead class="bg-slate-50 text-[10px] font-black tracking-widest text-slate-400 uppercase rounded-t-2xl">
+						<tr>
+							<th class="w-16 text-center rounded-tl-2xl">사번/ID</th>
+							<th>사원 정보</th>
+							<th>이메일</th>
+							<th>소속 부서 (주그룹)</th>
+							<th class="text-center">현재 랭크</th>
+							<th class="text-center w-36 rounded-tr-2xl">권한 제어 / 작업</th>
+						</tr>
+					</thead>
+					<tbody>
+						{#each filteredUsers as user, idx (user.id)}
+							{@const isUserActive = user.profile?.is_active !== false}
+							{@const rank = getRankInfo(user.profile?.rank_level ?? 0, isUserActive)}
+							{@const isNearBottom = idx >= Math.max(0, filteredUsers.length - 2)}
+							<tr in:fade={{ duration: 150 }} class="hover:bg-slate-50/70 transition-colors {!isUserActive ? 'opacity-60 bg-slate-50/50' : ''}">
+								<td class="text-center text-xs font-black text-slate-400">
+									{#if user.profile?.employee_no}
+										<span class="badge badge-sm badge-ghost font-mono">{user.profile.employee_no}</span>
+									{:else}
+										#{user.id}
+									{/if}
+								</td>
+								<td>
+									<div class="flex items-center gap-3">
+										<div class="avatar placeholder">
+											<div class="w-10 rounded-xl {isUserActive ? 'bg-slate-100 text-slate-600' : 'bg-slate-200 text-slate-400'} font-black">
+												{#if user.real_name}
+													<span class="text-xs">{user.real_name.slice(0, 2)}</span>
+												{:else}
+													<Icon icon="mdi:account" class="text-xl" />
+												{/if}
+											</div>
 										</div>
-										<ul tabindex="0" class="dropdown-content z-[50] menu w-60 rounded-xl border border-slate-200 bg-white p-2 shadow-2xl">
-											<li class="menu-title text-[10px] font-black text-slate-400 uppercase tracking-widest px-2 py-1">
-												부여할 권한 랭크
-											</li>
-											{#each rankLevels as r}
+										<div>
+											<div class="text-sm font-black {isUserActive ? 'text-slate-900' : 'text-slate-500 line-through'}">
+												{user.real_name || '미지정'}
+											</div>
+											<div class="text-[10px] text-slate-400 font-mono">@{user.username}</div>
+										</div>
+									</div>
+								</td>
+								<td class="text-xs text-slate-500 font-normal">{user.email}</td>
+								<td class="text-xs">
+									<div class="flex flex-wrap items-center gap-1">
+										{#if user.profile?.primary_group}
+											<span class="badge badge-sm badge-neutral font-black">
+												{user.profile.primary_group}
+											</span>
+										{:else}
+											<span class="text-slate-400 italic text-[11px] font-normal">소속 없음</span>
+										{/if}
+									</div>
+								</td>
+								<td class="text-center">
+									<div class="badge {rank.color} h-7 rounded-lg border-none px-3 text-[11px] font-black shadow-sm">
+										{rank.label}
+									</div>
+								</td>
+								<td class="text-center">
+									{#if !isUserActive}
+										<!-- 🔄 소프트 삭제된 사원 전용 복구 버튼 -->
+										<button
+											onclick={() => handleRestoreUser(user)}
+											class="btn btn-xs rounded-lg bg-slate-900 text-white hover:bg-slate-800 font-bold"
+											title="사원 계정 복구(Lv.1)"
+										>
+											<Icon icon="mdi:restore" /> 계정 복구
+										</button>
+									{:else if (user.profile?.rank_level ?? 0) === 0}
+										<!-- ⚖️ 대기자 전용 승인 및 소프트 삭제(반려) -->
+										<div class="flex items-center justify-center gap-1">
+											<button
+												onclick={() => changeRank(user.id, 1)}
+												class="btn btn-xs rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 font-bold"
+												title="정회원(Lv.1)으로 승인"
+											>
+												<Icon icon="mdi:check" /> 승인
+											</button>
+											<button
+												onclick={() => handleDeleteUser(user)}
+												class="btn btn-xs btn-ghost text-rose-600 hover:bg-rose-50 rounded-lg"
+												title="가입 신청 반려 (소프트 삭제)"
+											>
+												<Icon icon="mdi:close" /> 반려
+											</button>
+										</div>
+									{:else}
+										<!-- 🔄 일반 활동 사원 권한 조정 및 소프트 삭제 -->
+										<div class="dropdown dropdown-end {isNearBottom ? 'dropdown-top' : 'dropdown-bottom'}">
+											<div tabindex="0" role="button" class="btn btn-ghost btn-sm rounded-lg border border-slate-200 text-xs font-bold hover:bg-slate-100">
+												조정 <Icon icon="mdi:chevron-down" />
+											</div>
+											<ul tabindex="0" class="dropdown-content z-[50] menu w-60 rounded-xl border border-slate-200 bg-white p-2 shadow-2xl">
+												<li class="menu-title text-[10px] font-black text-slate-400 uppercase tracking-widest px-2 py-1">
+													부여할 권한 랭크
+												</li>
+												{#each rankLevels as r}
+													<li>
+														<button
+															onclick={() => changeRank(user.id, r.val)}
+															class="flex items-center justify-between text-xs font-bold py-2 {user.profile?.rank_level === r.val ? 'bg-emerald-50 text-emerald-600' : 'text-slate-700 hover:bg-slate-50'}"
+														>
+															<span>{r.label}</span>
+															{#if (user.profile?.rank_level ?? 0) === r.val}
+																<Icon icon="mdi:check" class="text-emerald-600 text-base flex-shrink-0" />
+															{/if}
+														</button>
+													</li>
+												{/each}
+												<div class="divider my-1"></div>
 												<li>
-													<button 
-														onclick={() => changeRank(user.id, r.val)}
-														class="flex items-center justify-between text-xs font-bold py-2 {user.profile?.rank_level === r.val ? 'bg-emerald-50 text-emerald-600' : 'text-slate-700 hover:bg-slate-50'}"
+													<button
+														onclick={() => handleDeleteUser(user)}
+														class="text-rose-600 hover:bg-rose-50 text-xs font-bold flex items-center gap-1.5 py-1.5"
 													>
-														<span>{r.label}</span>
-														{#if (user.profile?.rank_level ?? 0) === r.val}
-															<Icon icon="mdi:check" class="text-emerald-600 text-base flex-shrink-0" />
-														{/if}
+														<Icon icon="mdi:account-off-outline" /> 소프트 삭제 (퇴사)
 													</button>
 												</li>
-											{/each}
-											<div class="divider my-1"></div>
-											<li>
-												<button 
-													onclick={() => handleDeleteUser(user)}
-													class="text-rose-600 hover:bg-rose-50 text-xs font-bold flex items-center gap-1.5 py-1.5"
-												>
-													<Icon icon="mdi:account-off-outline" /> 소프트 삭제 (퇴사)
-												</button>
-											</li>
-										</ul>
-									</div>
-								{/if}
-							</td>
-						</tr>
-					{/each}
-				{/if}
-			</tbody>
-		</table>
+											</ul>
+										</div>
+									{/if}
+								</td>
+							</tr>
+						{/each}
+					</tbody>
+				</table>
+			</div>
+		{/if}
 	</div>
 
 	<!-- 💡 하단 헌법 표준 가이드 -->

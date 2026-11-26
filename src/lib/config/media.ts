@@ -17,6 +17,42 @@ export const MEDIA_CATEGORIES = {
 	ARCHIVE: 'archive'
 } as const;
 
+export const RESERVED_MEDIA_FOLDER_NAMES = ['THUMB', 'THUMBNAILS', 'TMP'] as const;
+export const RESERVED_MEDIA_ROOT_SUBFOLDERS = [
+	'PUBLIC',
+	'PROTECTED',
+	'PRIVATE',
+	'SYSTEM',
+	'USERS',
+	'GLOBAL'
+] as const;
+
+/**
+ * 폴더 생성 전 예약 폴더명·접두어 검증 (통과 시 null, 위반 시 사유 메시지 반환)
+ */
+export const validateMediaFolderName = (
+	rawName: string,
+	currentSubPath: string = ''
+): string | null => {
+	const name = (rawName || '').trim().replace(/^\/+|\/+$/g, '');
+	if (!name) return '폴더 이름을 입력해 주세요.';
+	if (name.includes('/') || name.includes('\\') || name === '.' || name === '..') {
+		return '폴더 이름에 특수문자(/, \\)나 상대 경로(., ..)를 사용할 수 없습니다.';
+	}
+	const upper = name.toUpperCase();
+	if (name.startsWith('.') || upper.startsWith('DEL_')) {
+		return '점(.) 또는 시스템 격리 예약어(DEL_)로 시작하는 폴더 이름은 사용할 수 없습니다.';
+	}
+	if ((RESERVED_MEDIA_FOLDER_NAMES as readonly string[]).includes(upper)) {
+		return `'${name}'은(는) 시스템 예약 폴더명(THUMB, tmp 등)이므로 사용할 수 없습니다.`;
+	}
+	const cleanSub = (currentSubPath || '').trim().replace(/^\/+|\/+$/g, '');
+	if (!cleanSub && (RESERVED_MEDIA_ROOT_SUBFOLDERS as readonly string[]).includes(upper)) {
+		return `최상위 경로에서는 시스템 구조 예약 폴더('${name}')를 수동 생성할 수 없습니다.`;
+	}
+	return null;
+};
+
 export interface MediaAssetLike {
 	id?: number | string;
 	access_level?: string;

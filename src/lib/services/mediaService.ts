@@ -53,42 +53,23 @@ export async function deleteAsset<T = any>(assetId: number | string): Promise<T>
 }
 
 /**
- * 3. 자산 목록 조회 (일반 사용자용 - 본인 자산 + 공개 자산)
+ * 3. 개인 보관함(USERS) 등 지정 경로 하위 새 폴더 보장/생성 (통합 엔드포인트 연동)
  */
-export async function listAssets<T = any>(
-	appId: string | null = null,
-	category: string | null = null
+export async function createUserFolder<T = any>(
+	subPath: string,
+	folderName: string,
+	tier: string = 'PRIVATE'
 ): Promise<T> {
-	const query = new URLSearchParams();
-	if (appId) query.append('app_id', appId);
-	if (category) query.append('category', category);
-	return await fastApi<T>('GET', `/api/media/list?${query.toString()}`);
-}
-
-/**
- * 4. 부서(STAFF) 자산 목록 조회 (Rank 2+ 전용)
- */
-export async function listStaffAssets<T = any>(subPath = ''): Promise<T> {
-	const query = new URLSearchParams({ sub_path: subPath });
-	return await fastApi<T>('GET', `/api/media/staff/list?${query.toString()}`);
-}
-
-/**
- * 5. 개인 보관함(USERS) 목록 조회 (Rank 1+ 전용)
- */
-export async function listUserAssets<T = any>(subPath = ''): Promise<T> {
-	const query = new URLSearchParams({ sub_path: subPath });
-	return await fastApi<T>('GET', `/api/media/user/list?${query.toString()}`);
-}
-
-/**
- * 6. 개인 보관함(USERS) 내 새 폴더 생성
- */
-export async function createUserFolder<T = any>(folderName: string, subPath = ''): Promise<T> {
-	return await fastApi<T>('POST', '/api/media/user/folder/create', {
-		folder_name: folderName,
-		sub_path: subPath
-	});
+	return await fastApi<T>(
+		'POST',
+		'/api/media/admin/folder/create',
+		{
+			tier,
+			sub_path: subPath,
+			folder_name: folderName
+		},
+		{ offline: false }
+	);
 }
 
 export interface PublishAssetsPayload {

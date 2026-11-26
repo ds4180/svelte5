@@ -16,31 +16,37 @@
 
 <div class="space-y-6" in:fade={{ duration: 150 }}>
   <!-- 상단 서브 탭 & 정책 안내 배너 -->
-  <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
-    <div class="flex items-center gap-2">
+  <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-3 bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200 shadow-sm">
+    <div class="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2 w-full lg:w-auto shrink-0">
       <button 
-        class="btn btn-sm rounded-xl font-black transition-all {activeGroupSubTab === 'primary' ? 'bg-cyan-600 text-white shadow' : 'btn-ghost text-slate-600'}"
+        class="btn btn-sm h-auto min-h-9 py-2 px-2.5 sm:px-3.5 rounded-xl font-black transition-all flex items-center justify-center gap-1 text-xs leading-tight whitespace-nowrap {activeGroupSubTab === 'primary' ? 'bg-cyan-600 text-white shadow hover:bg-cyan-700 border-cyan-600' : 'btn-ghost text-slate-600 bg-slate-50 sm:bg-transparent'}"
         onclick={() => activeGroupSubTab = 'primary'}
       >
-        <Icon icon="mdi:badge-account-outline" class="text-base mr-1" />
-        주그룹 관리 (소속 부서/팀) ({primaryGroups.length})
+        <Icon icon="mdi:badge-account-outline" class="text-base shrink-0" />
+        <span class="truncate">
+          주그룹<span class="hidden sm:inline"> 관리 (소속 부서/팀)</span> ({primaryGroups.length})
+        </span>
       </button>
       <button 
-        class="btn btn-sm rounded-xl font-black transition-all {activeGroupSubTab === 'secondary' ? 'bg-indigo-600 text-white shadow' : 'btn-ghost text-slate-600'}"
+        class="btn btn-sm h-auto min-h-9 py-2 px-2.5 sm:px-3.5 rounded-xl font-black transition-all flex items-center justify-center gap-1 text-xs leading-tight whitespace-nowrap {activeGroupSubTab === 'secondary' ? 'bg-indigo-600 text-white shadow hover:bg-indigo-700 border-indigo-600' : 'btn-ghost text-slate-600 bg-slate-50 sm:bg-transparent'}"
         onclick={() => activeGroupSubTab = 'secondary'}
       >
-        <Icon icon="mdi:shield-key-outline" class="text-base mr-1" />
-        부그룹 관리 (직무·특권·차단) ({secondaryGroups.length})
+        <Icon icon="mdi:shield-key-outline" class="text-base shrink-0" />
+        <span class="truncate">
+          부그룹<span class="hidden sm:inline"> 관리 (직무·특권·차단)</span> ({secondaryGroups.length})
+        </span>
       </button>
     </div>
 
-    <div class="text-xs font-bold text-slate-500 flex items-center gap-1.5">
-      <Icon icon="mdi:information-outline" class="text-cyan-600" />
-      {#if activeGroupSubTab === 'primary'}
-        <span><strong>주그룹</strong>은 회원의 공식 1순위 본소속 부서입니다 (1인당 1개만 선택 가능).</span>
-      {:else}
-        <span><strong>부그룹</strong>은 직무 특권(Allow) 및 제재(Deny)를 위한 보조 그룹입니다 (복수 부여 가능).</span>
-      {/if}
+    <div class="text-xs font-bold text-slate-500 flex items-start gap-1.5 leading-relaxed">
+      <Icon icon="mdi:information-outline" class="text-cyan-600 text-base shrink-0 mt-0.5" />
+      <span>
+        {#if activeGroupSubTab === 'primary'}
+          <strong>주그룹</strong>은 회원의 공식 1순위 본소속 부서입니다 (1인당 1개만 선택 가능).
+        {:else}
+          <strong>부그룹</strong>은 직무 특권(Allow) 및 제재(Deny)를 위한 보조 그룹입니다 (복수 부여 가능).
+        {/if}
+      </span>
     </div>
   </div>
 
@@ -130,19 +136,19 @@
             <p class="text-xs text-slate-500 line-clamp-2 min-h-[32px]">{group.description || '설명 없음'}</p>
 
             <!-- 부그룹의 인스턴스 적용 현황 배지 -->
-            <div class="mt-3 p-2 rounded-xl bg-slate-50 border border-slate-100 space-y-1.5 text-[11px]">
-              <div class="flex items-center gap-1 text-slate-600 font-bold">
-                <span class="text-[10px] text-emerald-700 font-black">ALLOW 적용:</span>
+            <div class="mt-3 p-2.5 rounded-xl bg-slate-50 border border-slate-100 space-y-1.5 text-[11px]">
+              <div class="flex items-start gap-1.5 text-slate-600 font-bold">
+                <span class="text-[10px] text-emerald-700 font-black shrink-0 mt-0.5">ALLOW 적용:</span>
                 {#if group.allow_apps && group.allow_apps.length > 0}
-                  <span class="text-slate-800 font-bold">{group.allow_apps.join(', ')}</span>
+                  <span class="text-slate-800 font-bold break-words min-w-0">{group.allow_apps.join(', ')}</span>
                 {:else}
                   <span class="text-slate-400">지정 없음</span>
                 {/if}
               </div>
-              <div class="flex items-center gap-1 text-slate-600 font-bold">
-                <span class="text-[10px] text-rose-600 font-black">DENY 적용:</span>
+              <div class="flex items-start gap-1.5 text-slate-600 font-bold">
+                <span class="text-[10px] text-rose-600 font-black shrink-0 mt-0.5">DENY 적용:</span>
                 {#if group.deny_apps && group.deny_apps.length > 0}
-                  <span class="text-rose-700 font-extrabold">{group.deny_apps.join(', ')}</span>
+                  <span class="text-rose-700 font-extrabold break-words min-w-0">{group.deny_apps.join(', ')}</span>
                 {:else}
                   <span class="text-slate-400">지정 없음</span>
                 {/if}
