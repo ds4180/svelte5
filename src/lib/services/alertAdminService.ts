@@ -106,12 +106,16 @@ export function getAlertCategoryMeta(category?: string | null) {
 	return ALERT_CATEGORY_META[category || 'NOTICE'] ?? ALERT_CATEGORY_META.NOTICE;
 }
 
+export function isUrgentAlert(alert: any): boolean {
+	return alert?.category === 'URGENT_NOTICE' || Number(alert?.level) >= 4;
+}
+
 export function computeAlertStats(alerts: any[]) {
 	return {
 		total: alerts.length,
 		active: alerts.filter((a) => a.is_active).length,
 		instruction: alerts.filter((a) => a.category === 'INSTRUCTION').length,
-		urgent: alerts.filter((a) => a.category === 'URGENT_NOTICE' || Number(a.level) >= 4).length,
+		urgent: alerts.filter((a) => isUrgentAlert(a)).length,
 		notice: alerts.filter((a) => a.category === 'NOTICE' || a.category === 'NOTIFICATION').length
 	};
 }
@@ -120,6 +124,9 @@ export function filterAlertsByCategory(alerts: any[], category: string) {
 	if (category === 'ALL') return alerts;
 	if (category === 'NOTICE') {
 		return alerts.filter((a) => a.category === 'NOTICE' || a.category === 'NOTIFICATION');
+	}
+	if (category === 'URGENT_NOTICE') {
+		return alerts.filter((a) => isUrgentAlert(a));
 	}
 	return alerts.filter((a) => a.category === category);
 }

@@ -59,8 +59,8 @@
 		},
 		{
 			key: 'alert_instruction',
-			title: '공지·지시(INSTRUCTION) 웹 푸시 동시 발송',
-			desc: '/v1/admin/alerts에서 공지·지시 발송 시 웹소켓과 함께 Web Push를 자동으로 동시 발송합니다.'
+			title: '지시·긴급공지(L3 이상) 웹 푸시 기본값',
+			desc: '전역 기본값입니다. /v1/admin/alerts에서 별도 지정이 없는 L3 이상 지시(INSTRUCTION)·중요공지(URGENT_NOTICE)에 적용되며, /v1/admin/alerts의 알림별 체크 설정이 항상 우선합니다.'
 		},
 		{
 			key: 'survey_request',

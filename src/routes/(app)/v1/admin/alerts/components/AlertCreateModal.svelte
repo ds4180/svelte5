@@ -70,7 +70,7 @@
 			start_date: new Date(newAlert.start_date),
 			end_date: new Date(newAlert.end_date),
 			level: parseInt(String(newAlert.level)),
-			send_web_push: !newAlert.target_group && Boolean(newAlert.send_web_push),
+			send_web_push: Boolean(newAlert.send_web_push),
 			save_to_inbox: Boolean(newAlert.save_to_inbox)
 		});
 		resetForm();
@@ -191,23 +191,25 @@
 							{/each}
 						</select>
 
-						{#if !newAlert.target_group}
-							<!-- 🔔 전사 전체 공지 시 브라우저 웹 푸시(Web Push) 알림 동시 발송 체크박스 -->
-							<div class="mt-2.5 flex items-center justify-between p-2.5 rounded-xl bg-blue-50 border border-blue-200 transition-all">
-								<label class="flex items-center gap-2 cursor-pointer select-none">
-									<input
-										type="checkbox"
-										class="checkbox checkbox-primary checkbox-xs rounded"
-										bind:checked={newAlert.send_web_push}
-									/>
-									<span class="text-xs font-black text-blue-900 flex items-center gap-1">
-										<Icon icon="mdi:bell-ring-outline" class="text-blue-600 text-sm" />
-										전사 브라우저 웹 푸시(Web Push) 알림 동시 발송
-									</span>
-								</label>
-								<span class="badge badge-xs badge-info font-bold text-[9px]">Web Push</span>
-							</div>
-						{/if}
+						<!-- 🔔 브라우저 웹 푸시(Web Push) 알림 동시 발송 체크박스 (전사/타겟그룹 공용, 개별 설정 최우선) -->
+						<div class="mt-2.5 flex items-center justify-between p-2.5 rounded-xl bg-blue-50 border border-blue-200 transition-all">
+							<label class="flex items-center gap-2 cursor-pointer select-none">
+								<input
+									type="checkbox"
+									class="checkbox checkbox-primary checkbox-xs rounded"
+									bind:checked={newAlert.send_web_push}
+								/>
+								<span class="text-xs font-black text-blue-900 flex items-center gap-1">
+									<Icon icon="mdi:bell-ring-outline" class="text-blue-600 text-sm" />
+									{newAlert.target_group
+										? '선택 그룹 브라우저 웹 푸시(Web Push) 알림 동시 발송'
+										: '전사 브라우저 웹 푸시(Web Push) 알림 동시 발송'}
+								</span>
+							</label>
+							<span class="badge badge-xs badge-info font-bold text-[9px]">
+								{newAlert.send_web_push ? '발송함' : '미발송'}
+							</span>
+						</div>
 
 						<span class="text-[10px] text-slate-400 mt-1 block">
 							{#if newAlert.target_group}

@@ -204,7 +204,7 @@
 					bind:checked={draft.default_send_web_push}
 					class="checkbox checkbox-primary checkbox-xs rounded"
 				/>
-				<span>전사 전체 공지 시 브라우저 웹 푸시(Web Push) 기본 체크</span>
+				<span>새 알림 생성 시 브라우저 웹 푸시(Web Push) 기본 체크 (pushs/config 기본값보다 우선)</span>
 			</label>
 			<div class="grid grid-cols-1 gap-2 border-t border-slate-200 pt-2.5 sm:grid-cols-2">
 				<label class="flex cursor-pointer items-center gap-2.5">
