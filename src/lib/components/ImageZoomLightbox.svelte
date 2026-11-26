@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
+	import { fly } from 'svelte/transition';
 	import Icon from '@iconify/svelte';
 	import { portal } from '$lib/actions/portal';
 
@@ -30,6 +31,10 @@
 	let dragStart = { x: 0, y: 0 };
 	let initialPinchDistance = 0;
 	let initialPinchScale = 1;
+	let isSwiping = $state(false);
+	let swipeStart = { x: 0, y: 0 };
+	let swipeOffset = $state(0);
+	let swipeDirection = $state(0); // 1: 다음(오른쪽에서 진입), -1: 이전(왼쪽에서 진입), 0: 즉시
 
 	function clampZoom(v: number) {
 		return Math.min(Math.max(Number(v.toFixed(2)), MIN_ZOOM), MAX_ZOOM);
@@ -39,6 +44,8 @@
 		zoomScale = 1;
 		panPosition = { x: 0, y: 0 };
 		isDragging = false;
+		isSwiping = false;
+		swipeOffset = 0;
 	}
 
 	function zoomIn() {
@@ -87,9 +94,19 @@
 				initialPinchDistance = getTouchDistance(e);
 				initialPinchScale = zoomScale;
 				isDragging = false;
+				isSwiping = false;
+				swipeOffset = 0;
 				return;
 			}
-			if (zoomScale <= 1 || e.touches.length === 0) return;
+			if (e.touches.length === 0) return;
+			if (zoomScale <= 1) {
+				if (images.length > 1) {
+					isSwiping = true;
+					swipeStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+					swipeOffset = 0;
+				}
+				return;
+			}
 			isDragging = true;
 			dragStart = {
 				x: e.touches[0].clientX - panPosition.x,
@@ -116,7 +133,16 @@
 				}
 				return;
 			}
-			if (!isDragging || zoomScale <= 1 || e.touches.length === 0) return;
+			if (e.touches.length === 0) return;
+			if (isSwiping && zoomScale <= 1) {
+				const dx = e.touches[0].clientX - swipeStart.x;
+				const dy = e.touches[0].clientY - swipeStart.y;
+				if (Math.abs(dx) > Math.abs(dy)) {
+					swipeOffset = dx * 0.45;
+				}
+				return;
+			}
+			if (!isDragging || zoomScale <= 1) return;
 			panPosition = {
 				x: e.touches[0].clientX - dragStart.x,
 				y: e.touches[0].clientY - dragStart.y
@@ -130,7 +156,23 @@
 		};
 	}
 
-	function endPan() {
+	function endPan(e?: MouseEvent | TouchEvent) {
+		if (e && 'changedTouches' in e && isSwiping && zoomScale <= 1 && e.changedTouches.length > 0) {
+			const dx = e.changedTouches[0].clientX - swipeStart.x;
+			const dy = e.changedTouches[0].clientY - swipeStart.y;
+			isSwiping = false;
+			if (Math.abs(dx) >= 50 && Math.abs(dx) > Math.abs(dy) * 1.2) {
+				swipeDirection = dx < 0 ? 1 : -1;
+				swipeOffset = 0;
+				if (dx < 0) next();
+				else prev();
+			} else {
+				swipeOffset = 0;
+			}
+		} else {
+			isSwiping = false;
+			swipeOffset = 0;
+		}
 		isDragging = false;
 		initialPinchDistance = 0;
 		if (zoomScale <= 1) panPosition = { x: 0, y: 0 };
@@ -143,12 +185,14 @@
 
 	function prev() {
 		if (images.length <= 1) return;
+		swipeDirection = -1;
 		resetZoom();
 		index = (index - 1 + images.length) % images.length;
 	}
 
 	function next() {
 		if (images.length <= 1) return;
+		swipeDirection = 1;
 		resetZoom();
 		index = (index + 1) % images.length;
 	}
@@ -291,15 +335,18 @@
 				</button>
 			{/if}
 
-			<img
-				src={active.src}
-				alt={active.alt || '이미지'}
-				draggable="false"
-				class="pointer-events-none max-h-[82dvh] max-w-full rounded-xl object-contain shadow-2xl transition-transform select-none"
-				style="transform: translate({panPosition.x}px, {panPosition.y}px) scale({zoomScale}); transform-origin: center center; transition-duration: {isDragging
-					? '0ms'
-					: '120ms'};"
-			/>
+			{#key active.src}
+				<img
+					in:fly={{ x: swipeDirection * 70, duration: swipeDirection ? 180 : 0 }}
+					src={active.src}
+					alt={active.alt || '이미지'}
+					draggable="false"
+					class="pointer-events-none max-h-[82dvh] max-w-full rounded-xl object-contain shadow-2xl transition-transform select-none"
+					style="transform: translate({panPosition.x + swipeOffset}px, {panPosition.y}px) scale({zoomScale}); transform-origin: center center; transition-duration: {isDragging || isSwiping
+						? '0ms'
+						: '140ms'};"
+				/>
+			{/key}
 
 			{#if images.length > 1}
 				<button
@@ -321,7 +368,7 @@
 			class:opacity-0={zoomScale !== 1}
 			aria-hidden={zoomScale !== 1}
 		>
-			휠/핀치로 확대 · 더블클릭 2.5x · 드래그로 이동
+			{images.length > 1 ? '좌우 스와이프 전환 · ' : ''}휠/핀치로 확대 · 더블클릭 2.5x · 드래그로 이동
 		</p>
 	</div>
 {/if}

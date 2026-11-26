@@ -48,10 +48,33 @@
 	let dragStart = $state({ x: 0, y: 0 });
 	let initialPinchDistance = 0;
 	let initialPinchScale = 1;
+	let isSwiping = $state(false);
+	let swipeStart = { x: 0, y: 0 };
+	let swipeOffset = $state(0);
+	let swipeDirection = $state(0);
+	let previewTouchStart = { x: 0, y: 0 };
 
 	function resetZoomState() {
 		zoomScale = 1;
 		panPosition = { x: 0, y: 0 };
+		isDragging = false;
+		isSwiping = false;
+		swipeOffset = 0;
+	}
+
+	function handlePreviewTouchStart(e: TouchEvent) {
+		if (e.touches.length !== 1 || imageAssets.length <= 1) return;
+		previewTouchStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+	}
+
+	function handlePreviewTouchEnd(e: TouchEvent) {
+		if (e.changedTouches.length === 0 || imageAssets.length <= 1) return;
+		const dx = e.changedTouches[0].clientX - previewTouchStart.x;
+		const dy = e.changedTouches[0].clientY - previewTouchStart.y;
+		if (Math.abs(dx) >= 50 && Math.abs(dx) > Math.abs(dy) * 1.2) {
+			if (dx < 0) goToNext();
+			else goToPrev();
+		}
 	}
 
 	function openZoom() {
@@ -99,6 +122,16 @@
 			initialPinchDistance = getTouchDistance(e);
 			initialPinchScale = zoomScale;
 			isDragging = false;
+			isSwiping = false;
+			swipeOffset = 0;
+			return;
+		}
+		if ('touches' in e && zoomScale <= 1) {
+			if (e.touches.length === 1 && imageAssets.length > 1) {
+				isSwiping = true;
+				swipeStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+				swipeOffset = 0;
+			}
 			return;
 		}
 		if (zoomScale <= 1) return;
@@ -117,6 +150,14 @@
 			}
 			return;
 		}
+		if ('touches' in e && isSwiping && zoomScale <= 1 && e.touches.length > 0) {
+			const dx = e.touches[0].clientX - swipeStart.x;
+			const dy = e.touches[0].clientY - swipeStart.y;
+			if (Math.abs(dx) > Math.abs(dy)) {
+				swipeOffset = dx * 0.45;
+			}
+			return;
+		}
 		if (!isDragging || zoomScale <= 1) return;
 		const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
 		const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
@@ -126,13 +167,27 @@
 		};
 	}
 
-	function endPan() {
+	function endPan(e?: MouseEvent | TouchEvent) {
+		if (e && 'changedTouches' in e && isSwiping && zoomScale <= 1 && e.changedTouches.length > 0) {
+			const dx = e.changedTouches[0].clientX - swipeStart.x;
+			const dy = e.changedTouches[0].clientY - swipeStart.y;
+			isSwiping = false;
+			swipeOffset = 0;
+			if (Math.abs(dx) >= 50 && Math.abs(dx) > Math.abs(dy) * 1.2) {
+				if (dx < 0) goToNext();
+				else goToPrev();
+			}
+		} else {
+			isSwiping = false;
+			swipeOffset = 0;
+		}
 		isDragging = false;
 		initialPinchDistance = 0;
 	}
 
 	function goToPrev() {
 		if (currentImageIndex > 0) {
+			swipeDirection = -1;
 			resetZoomState();
 			onSelectAsset?.(imageAssets[currentImageIndex - 1]);
 		}
@@ -140,6 +195,7 @@
 
 	function goToNext() {
 		if (currentImageIndex >= 0 && currentImageIndex < imageAssets.length - 1) {
+			swipeDirection = 1;
 			resetZoomState();
 			onSelectAsset?.(imageAssets[currentImageIndex + 1]);
 		}
@@ -191,7 +247,11 @@
 			</button>
 
 			<!-- 🖼️ 좌측(상단) 이미지/미디어 뷰어 영역 (사진 비율에 맞춰 자동 확장, 최소 크기만 보장) -->
-			<div class="relative bg-slate-950 flex items-center justify-center p-2 sm:p-3 md:p-4 min-h-[44dvh] max-h-[64dvh] md:min-w-[360px] md:min-h-[380px] md:max-h-none overflow-hidden select-none">
+			<div
+				class="relative bg-slate-950 flex items-center justify-center p-2 sm:p-3 md:p-4 min-h-[44dvh] max-h-[64dvh] md:min-w-[360px] md:min-h-[380px] md:max-h-none overflow-hidden select-none"
+				ontouchstart={handlePreviewTouchStart}
+				ontouchend={handlePreviewTouchEnd}
+			>
 				{#if asset.category === 'image'}
 					<button
 						type="button"
@@ -199,7 +259,9 @@
 						onclick={openZoom}
 						title="클릭하여 원본 전체화면 확대"
 					>
+					{#key asset.id}
 						<img
+							in:fly={{ x: swipeDirection * 50, duration: swipeDirection ? 160 : 0 }}
 							src={getSecureMediaUrl(serverUrl, asset, 'lg')}
 							alt={asset.original_name || ''}
 							class="block w-auto h-auto max-w-full max-h-[60dvh] md:max-w-[calc(92vw-21rem)] md:max-h-[86dvh] rounded-xl object-contain shadow-2xl transition-transform duration-300 group-hover/preview:scale-[1.01]"
@@ -213,6 +275,7 @@
 								}
 							}}
 						/>
+					{/key}
 						<div class="absolute bottom-2.5 right-2.5 rounded-full bg-black/70 px-2.5 py-1 text-white/90 backdrop-blur-md flex items-center gap-1 text-[11px] font-bold shadow-lg opacity-80 group-hover/preview:opacity-100 transition-opacity">
 							<Icon icon="ph:magnifying-glass-plus-bold" class="text-sm text-rose-400" />
 							<span class="hidden sm:inline">확대</span>
@@ -461,24 +524,27 @@
 			ontouchend={endPan}
 			ondblclick={handleZoomToggle}
 		>
-			<img
-				src={asset.meta_info?.has_original === false
-					? getSecureMediaUrl(serverUrl, asset, 'lg')
-					: getSecureMediaUrl(serverUrl, asset)}
-				alt={asset.original_name || ''}
-				draggable="false"
-				class="select-none pointer-events-none rounded transition-transform"
-				style="transform: translate({panPosition.x}px, {panPosition.y}px) scale({zoomScale}); transform-origin: center center; max-width: 92vw; max-height: 84vh; object-fit: contain; transition-duration: {isDragging ? '0ms' : '120ms'};"
-				onerror={(e) => {
-					const target = e.currentTarget as HTMLImageElement;
-					const lgUrl = getSecureMediaUrl(serverUrl, asset, 'lg');
-					if (target.src !== lgUrl) {
-						target.src = lgUrl;
-					} else {
-						target.src = '/default-thumbnail.png';
-					}
-				}}
-			/>
+			{#key asset.id}
+				<img
+					in:fly={{ x: swipeDirection * 70, duration: swipeDirection ? 180 : 0 }}
+					src={asset.meta_info?.has_original === false
+						? getSecureMediaUrl(serverUrl, asset, 'lg')
+						: getSecureMediaUrl(serverUrl, asset)}
+					alt={asset.original_name || ''}
+					draggable="false"
+					class="select-none pointer-events-none rounded transition-transform"
+					style="transform: translate({panPosition.x + swipeOffset}px, {panPosition.y}px) scale({zoomScale}); transform-origin: center center; max-width: 92vw; max-height: 84vh; object-fit: contain; transition-duration: {isDragging || isSwiping ? '0ms' : '140ms'};"
+					onerror={(e) => {
+						const target = e.currentTarget as HTMLImageElement;
+						const lgUrl = getSecureMediaUrl(serverUrl, asset, 'lg');
+						if (target.src !== lgUrl) {
+							target.src = lgUrl;
+						} else {
+							target.src = '/default-thumbnail.png';
+						}
+					}}
+				/>
+			{/key}
 
 			{#if currentImageIndex > 0}
 				<button
@@ -488,6 +554,7 @@
 						e.stopPropagation();
 						goToPrev();
 					}}
+					ontouchstart={(e) => e.stopPropagation()}
 					title="이전 사진 (←)"
 				>
 					<Icon icon="ph:caret-left-bold" class="text-2xl" />
@@ -502,6 +569,7 @@
 						e.stopPropagation();
 						goToNext();
 					}}
+					ontouchstart={(e) => e.stopPropagation()}
 					title="다음 사진 (→)"
 				>
 					<Icon icon="ph:caret-right-bold" class="text-2xl" />
