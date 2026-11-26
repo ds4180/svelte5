@@ -333,6 +333,11 @@ export const adminRunSystemGc = <T = any>() => request<T>(`${BASE_URL}/system/gc
 // ============================================================================
 export const adminGetTasksSummary = <T = any>() => request<T>(`${BASE_URL}/tasks/summary`);
 
+export const adminGetTaskSettings = <T = any>() => request<T>(`${BASE_URL}/tasks/settings`);
+
+export const adminUpdateTaskSettings = <T = any>(data: Record<string, any>) =>
+	request<T>(`${BASE_URL}/tasks/settings`, 'PUT', data, { offline: false });
+
 export const adminGetTaskTypes = <T = any>() => request<T>(`${BASE_URL}/tasks/types`);
 
 export const adminGetTasks = <T = any>(params: Record<string, any> = {}) => {
@@ -358,8 +363,8 @@ export const adminUpdateTask = <T = any>(taskId: number | string, data: Record<s
 export const adminCancelTask = <T = any>(taskId: number | string, hardDelete = false) =>
 	request<T>(`${BASE_URL}/tasks/${taskId}${hardDelete ? '?hard_delete=true' : ''}`, 'DELETE');
 
-export const adminClearFailedTasks = <T = any>() =>
-	request<T>(`${BASE_URL}/tasks/failed/clear`, 'DELETE');
+export const adminClearFailedTasks = <T = any>(targetStatus: string = 'FAILED') =>
+	request<T>(`${BASE_URL}/tasks/failed/clear?target_status=${encodeURIComponent(targetStatus)}`, 'DELETE');
 
 // ============================================================================
 // 📁 [미디어 및 파일·사진 관리 (Media & File Master) API]
