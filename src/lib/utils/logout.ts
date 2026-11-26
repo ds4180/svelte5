@@ -2,6 +2,7 @@ import { applyAction } from '$app/forms';
 import { goto } from '$app/navigation';
 import type { SubmitFunction } from '@sveltejs/kit';
 import { clearSwUserCache, unsubscribePushOnLogout } from '$lib/pwa/serviceWorker';
+import { offlineSync } from '$lib/runes/offlineSync.svelte';
 import type { AuthState } from '$lib/runes/auth.svelte';
 
 export interface LogoutSubmitOptions {
@@ -42,6 +43,7 @@ export function createLogoutSubmitHandler(options: LogoutSubmitOptions): SubmitF
 			}
 
 			options.auth.clear();
+			await offlineSync.clearUserData({ includeOutbox: true });
 			await clearSwUserCache();
 			options.onSuccess?.();
 

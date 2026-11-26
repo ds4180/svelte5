@@ -57,7 +57,7 @@ export const actions: Actions = {
 			});
 		}
 
-		syncSessionCookieFromResponse(cookies, response);
+		syncSessionCookieFromResponse(cookies, response, request);
 
 		throw redirect(302, resolveSafeRedirect(url.searchParams.get('redirect')));
 	}

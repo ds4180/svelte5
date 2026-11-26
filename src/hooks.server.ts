@@ -1,11 +1,14 @@
 import type { Handle, HandleFetch } from '@sveltejs/kit';
 import { PUBLIC_API_ENDPOINT } from '$env/static/public';
 import {
-	SESSION_COOKIE_OPTIONS,
+	resolveCookieOptions,
 	syncSessionCookieFromResponse,
 	buildBackendForwardHeaders
 } from '$lib/server/sessionCookie';
 import { applyDynamicNoStoreHeaders } from '$lib/server/cacheHeaders';
+
+const STATIC_EXT_RE =
+	/\.(?:js|mjs|cjs|css|map|png|jpe?g|gif|webp|avif|svg|ico|woff2?|ttf|otf|eot|webmanifest|wasm|txt|xml|pdf|mp4|webm|mp3|wav)$/i;
 
 /**
  * @file hooks.server.ts (Performance Optimized v3.1)
@@ -15,10 +18,10 @@ export const handle: Handle = async ({ event, resolve }) => {
 	const sessionId = event.cookies.get('session_id');
 	const pathname = event.url.pathname;
 
-	// 📌 1. 정적 파일 및 Vite 내부 모듈 경로는 세션 체크 제외 (초기 로딩 병목 방지)
+	// 📌 1. 정적 파일 확장자 및 Vite 내부 모듈 경로만 세션 체크 제외 (점(.) 포함 페이지 슬러그 오판 방지)
 	const isStaticAsset =
-		pathname.includes('.') ||
-		pathname.startsWith('/_app') ||
+		STATIC_EXT_RE.test(pathname) ||
+		pathname.startsWith('/_app/') ||
 		pathname.startsWith('/@vite') ||
 		pathname.startsWith('/@id') ||
 		pathname.startsWith('/@fs') ||
@@ -33,7 +36,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 				if (response.ok) {
 					event.locals.user = await response.json();
 				} else if (response.status === 401) {
-					event.cookies.delete('session_id', SESSION_COOKIE_OPTIONS);
+					event.cookies.delete('session_id', resolveCookieOptions(event.request));
 				}
 			}
 		} catch (e) {
@@ -87,8 +90,8 @@ export const handleFetch: HandleFetch = async ({ request, fetch, event }) => {
 
 	const res = await fetch(newRequest);
 
-	// [Sliding Window] 백엔드 Set-Cookie(session_id + Max-Age) 또는 삭제 지시를 브라우저 응답에 동기화
-	syncSessionCookieFromResponse(event.cookies, res);
+	// [Sliding Window] 백엔드 Set-Cookie(session_id + Max-Age + Secure) 또는 삭제 지시를 브라우저 응답에 동기화
+	syncSessionCookieFromResponse(event.cookies, res, event.request);
 
 	return res;
 };

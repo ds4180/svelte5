@@ -13,13 +13,19 @@
 
 import { redirect, type Cookies } from '@sveltejs/kit';
 
-export const DEFAULT_SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 3;
+const parsedExpireDays =
+	typeof process !== 'undefined' && process.env?.REFRESH_TOKEN_EXPIRE_DAYS
+		? Number(process.env.REFRESH_TOKEN_EXPIRE_DAYS)
+		: 3;
+
+export const DEFAULT_SESSION_MAX_AGE_SECONDS =
+	60 * 60 * 24 * (Number.isFinite(parsedExpireDays) && parsedExpireDays > 0 ? parsedExpireDays : 3);
 
 /**
  * 🛡️ 쿠키 보안 옵션:
  * - httpOnly: true (XSS 스크립트를 통한 session_id 탈취 원천 차단)
  * - sameSite: 'lax' (외부 사이트 POST CSRF 공격 차단 및 일반 링크 진입 허용)
- * - secure: 환경변수 COOKIE_SECURE가 'true'일 때 활성화 (로컬/HTTP 프록시 환경 호환을 위해 기본값 false)
+ * - secure: COOKIE_SECURE='true' 이거나 접속 요청이 HTTPS(X-Forwarded-Proto: https / https://)일 때 자동 활성화
  */
 const isSecureCookieEnabled =
 	typeof process !== 'undefined' &&
@@ -32,6 +38,22 @@ export const SESSION_COOKIE_OPTIONS = {
 	sameSite: 'lax',
 	secure: isSecureCookieEnabled
 } as const;
+
+export function resolveCookieOptions(request?: Request | null, forceSecure?: boolean) {
+	let secure: boolean = isSecureCookieEnabled;
+	if (typeof forceSecure === 'boolean') {
+		secure = secure || forceSecure;
+	} else if (!secure && request) {
+		const proto = request.headers.get('x-forwarded-proto')?.split(',')[0]?.trim().toLowerCase();
+		if (proto === 'https' || request.url?.startsWith('https://')) {
+			secure = true;
+		}
+	}
+	return {
+		...SESSION_COOKIE_OPTIONS,
+		secure
+	};
+}
 
 /**
  * 🌐 [보안 강화 2] SvelteKit SSR -> FastAPI 백엔드 프록시 요청 시
@@ -56,10 +78,24 @@ export function buildBackendForwardHeaders(
 	const cookie = request.headers.get('cookie');
 	if (cookie) headers['cookie'] = cookie;
 
+	const forwardedProto = request.headers.get('x-forwarded-proto');
+	if (forwardedProto) {
+		headers['x-forwarded-proto'] = forwardedProto;
+	} else if (request.url?.startsWith('https://')) {
+		headers['x-forwarded-proto'] = 'https';
+	}
+
+	const cfIp = request.headers.get('cf-connecting-ip')?.trim();
 	const xff = request.headers.get('x-forwarded-for');
 	const xRealIp = request.headers.get('x-real-ip');
 
-	if (xff) {
+	if (cfIp) {
+		headers['cf-connecting-ip'] = cfIp;
+	}
+
+	if (cfIp) {
+		headers['x-forwarded-for'] = cfIp;
+	} else if (xff) {
 		headers['x-forwarded-for'] = xff;
 	} else if (xRealIp) {
 		headers['x-forwarded-for'] = xRealIp;
@@ -67,7 +103,9 @@ export function buildBackendForwardHeaders(
 		headers['x-forwarded-for'] = fallbackClientIp;
 	}
 
-	if (xRealIp) {
+	if (cfIp) {
+		headers['x-real-ip'] = cfIp;
+	} else if (xRealIp) {
 		headers['x-real-ip'] = xRealIp;
 	} else if (xff) {
 		headers['x-real-ip'] = xff.split(',')[0].trim();
@@ -79,8 +117,8 @@ export function buildBackendForwardHeaders(
 }
 
 export type SessionCookieInstruction =
-	| { action: 'set'; value: string; maxAge: number }
-	| { action: 'delete' };
+	| { action: 'set'; value: string; maxAge: number; secure?: boolean }
+	| { action: 'delete'; secure?: boolean };
 
 /**
  * Response 헤더(단일 또는 다중 Set-Cookie)에서 session_id 지시문을 파싱합니다.
@@ -108,12 +146,13 @@ export function extractSessionCookieInstruction(
 		const rawValue = valueMatch ? valueMatch[1].replace(/^"(.*)"$/, '$1') : '';
 		const maxAgeMatch = sessionSegment.match(/\bMax-Age=(\d+)/i);
 		const parsedMaxAge = maxAgeMatch ? Number(maxAgeMatch[1]) : DEFAULT_SESSION_MAX_AGE_SECONDS;
+		const hasSecureAttr = /(?:^|;\s*)Secure\b/i.test(sessionSegment);
 
 		if (!rawValue || (maxAgeMatch && parsedMaxAge === 0)) {
-			return { action: 'delete' };
+			return hasSecureAttr ? { action: 'delete', secure: true } : { action: 'delete' };
 		}
 
-		return {
+		const result: SessionCookieInstruction = {
 			action: 'set',
 			value: rawValue,
 			maxAge:
@@ -121,6 +160,10 @@ export function extractSessionCookieInstruction(
 					? parsedMaxAge
 					: DEFAULT_SESSION_MAX_AGE_SECONDS
 		};
+		if (hasSecureAttr) {
+			result.secure = true;
+		}
+		return result;
 	}
 
 	return null;
@@ -131,18 +174,21 @@ export function extractSessionCookieInstruction(
  */
 export function syncSessionCookieFromResponse(
 	cookies: Cookies,
-	response: Response | null | undefined
+	response: Response | null | undefined,
+	request?: Request | null
 ): void {
 	const instruction = extractSessionCookieInstruction(response);
 	if (!instruction) return;
 
+	const cookieOpts = resolveCookieOptions(request, instruction.secure);
+
 	if (instruction.action === 'delete') {
-		cookies.delete('session_id', SESSION_COOKIE_OPTIONS);
+		cookies.delete('session_id', cookieOpts);
 		return;
 	}
 
 	cookies.set('session_id', instruction.value, {
-		...SESSION_COOKIE_OPTIONS,
+		...cookieOpts,
 		maxAge: instruction.maxAge
 	});
 }

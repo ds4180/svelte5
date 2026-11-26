@@ -1,4 +1,5 @@
 import { browser } from '$app/environment';
+import { auth } from '$lib/runes/auth.svelte';
 import { toast } from '$lib/runes/toast.svelte';
 import { websocket } from '$lib/runes/websocket.svelte';
 
@@ -45,6 +46,7 @@ interface SerializedFormEntry {
 
 interface OutboxRecord {
 	id?: number;
+	ownerUserId: number | string | null;
 	method: string;
 	url: string;
 	isFormData: boolean;
@@ -198,10 +200,17 @@ class OfflineSyncManager {
 	 * 3. 우체통 대기 목록 및 건수 새로고침
 	 */
 	async refreshPendingList(): Promise<OutboxPendingItem[]> {
+		const currentUid = auth.user?.id ?? null;
+		const filterOwned = (rows: any[]) =>
+			currentUid == null
+				? []
+				: rows.filter((r) => r && r.ownerUserId != null && String(r.ownerUserId) === String(currentUid));
+
 		const db = await this.#openDB();
 		if (!db) {
-			this.pendingCount = this.#memoryOutbox.length;
-			this.pendingItems = this.#memoryOutbox.map((r) => ({
+			const owned = filterOwned(this.#memoryOutbox);
+			this.pendingCount = owned.length;
+			this.pendingItems = owned.map((r) => ({
 				id: r.id || 0,
 				method: r.method,
 				url: r.url,
@@ -219,7 +228,7 @@ class OfflineSyncManager {
 				const req = store.getAll();
 
 				req.onsuccess = () => {
-					const rows = [...(req.result || []), ...this.#memoryOutbox];
+					const rows = filterOwned([...(req.result || []), ...this.#memoryOutbox]);
 					this.pendingCount = rows.length;
 					this.pendingItems = rows.map((r: any) => ({
 						id: r.id,
@@ -245,6 +254,10 @@ class OfflineSyncManager {
 	 * 4. 📮 [핵심] 오프라인 쓰기 작업을 임시 우체통(IndexedDB)에 안전하게 보관
 	 */
 	async enqueue(method: string, url: string, params: any, label?: string): Promise<boolean> {
+		const ownerUserId = auth.user?.id ?? null;
+		if (ownerUserId == null) {
+			return false;
+		}
 		this.isOnline = false;
 		const isFormData = typeof FormData !== 'undefined' && params instanceof FormData;
 		const serializedEntries: SerializedFormEntry[] = [];
@@ -270,6 +283,7 @@ class OfflineSyncManager {
 		}
 
 		const record: OutboxRecord = {
+			ownerUserId,
 			method: method.toUpperCase(),
 			url,
 			isFormData,
@@ -332,6 +346,8 @@ class OfflineSyncManager {
 	 */
 	async syncAll(): Promise<void> {
 		if (!browser || this.isSyncing || !navigator.onLine) return;
+		const currentUserId = auth.user?.id ?? null;
+		if (currentUserId == null) return;
 
 		const db = await this.#openDB();
 
@@ -365,6 +381,16 @@ class OfflineSyncManager {
 			if (!navigator.onLine) {
 				this.isOnline = false;
 				break;
+			}
+
+			// 🔒 [공용 단말 보안 격리]: 작성자(ownerUserId)가 현재 로그인 사용자와 다르면 대리 실행을 즉시 차단하고 폐기
+			if (task.ownerUserId == null || String(task.ownerUserId) !== String(currentUserId)) {
+				console.warn(
+					`🔒 [OfflineSync] 타 계정(uid=${task.ownerUserId}) 우체통 항목 대리 전송 차단 및 격리 삭제:`,
+					task.label
+				);
+				await this.removeItem(task.id);
+				continue;
 			}
 
 			try {
@@ -494,8 +520,13 @@ class OfflineSyncManager {
 		});
 	}
 
+	#buildCacheKey(url: string): string {
+		const uid = auth.user?.id ?? 'guest';
+		return `u:${uid}:${url}`;
+	}
+
 	/**
-	 * 8. 💾 [읽기 기억 장치] 온라인 GET 조회 성공 시 결과 캐싱
+	 * 8. 💾 [읽기 기억 장치] 온라인 GET 조회 성공 시 결과 캐싱 (사용자 ID 네임스페이스 격리)
 	 */
 	async saveGetCache(url: string, data: any): Promise<void> {
 		if (!browser) return;
@@ -506,7 +537,7 @@ class OfflineSyncManager {
 			const clonedData = JSON.parse(JSON.stringify(data));
 			const tx = db.transaction(STORE_CACHE, 'readwrite');
 			tx.objectStore(STORE_CACHE).put({
-				url,
+				url: this.#buildCacheKey(url),
 				data: clonedData,
 				updatedAt: Date.now()
 			});
@@ -516,16 +547,17 @@ class OfflineSyncManager {
 	}
 
 	/**
-	 * 9. 📂 [읽기 기억 장치] 오프라인 시 마지막으로 기억된 GET 결과 꺼내기
+	 * 9. 📂 [읽기 기억 장치] 오프라인 시 마지막으로 기억된 본인 GET 결과 꺼내기
 	 */
 	async loadGetCache(url: string): Promise<any | null> {
 		if (!browser) return null;
 		const db = await this.#openDB();
 		if (!db) return null;
 
+		const scopedKey = this.#buildCacheKey(url);
 		return new Promise((resolve) => {
 			const tx = db.transaction(STORE_CACHE, 'readonly');
-			const req = tx.objectStore(STORE_CACHE).get(url);
+			const req = tx.objectStore(STORE_CACHE).get(scopedKey);
 			req.onsuccess = () => {
 				resolve(req.result ? req.result.data : null);
 			};

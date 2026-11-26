@@ -1,5 +1,5 @@
 import { redirect } from '@sveltejs/kit';
-import { SESSION_COOKIE_OPTIONS } from '$lib/server/sessionCookie';
+import { resolveCookieOptions } from '$lib/server/sessionCookie';
 import type { Actions, PageServerLoad } from './$types';
 
 /**
@@ -14,16 +14,17 @@ export const load: PageServerLoad = async ({ locals }) => {
 };
 
 export const actions: Actions = {
-	default: async ({ cookies, fetch }) => {
+	default: async ({ cookies, fetch, request }) => {
 		try {
 			await fetch('/api/users/logout', { method: 'POST' });
 		} catch (e) {
 			console.warn('⚠️ [Logout] Backend notify failed:', e instanceof Error ? e.message : String(e));
 		}
 
-		cookies.delete('session_id', SESSION_COOKIE_OPTIONS);
-		cookies.delete('accessToken', SESSION_COOKIE_OPTIONS);
-		cookies.delete('refreshToken', SESSION_COOKIE_OPTIONS);
+		const cookieOpts = resolveCookieOptions(request);
+		cookies.delete('session_id', cookieOpts);
+		cookies.delete('accessToken', cookieOpts);
+		cookies.delete('refreshToken', cookieOpts);
 
 		throw redirect(303, '/');
 	}

@@ -37,6 +37,7 @@ interface OutboxFormEntry {
 
 interface OutboxTask {
 	id: string | number;
+	ownerUserId?: number | string | null;
 	method: string;
 	url: string;
 	isFormData?: boolean;
@@ -307,6 +308,20 @@ async function processBackgroundOutbox(): Promise<void> {
 		return;
 	}
 
+	// 🔒 백그라운드 동기화 전 현재 유효한 세션의 소유자(user_id)를 먼저 확인 (타인 계정 대리 전송 차단)
+	let currentUserId: number | null = null;
+	try {
+		const meRes = await fetch('/api/users/me', { credentials: 'include', cache: 'no-store' });
+		if (!meRes.ok) return;
+		const me = await meRes.json();
+		if (me && me.id != null) {
+			currentUserId = Number(me.id);
+		}
+	} catch {
+		return;
+	}
+	if (currentUserId == null) return;
+
 	return new Promise((resolve) => {
 		const req = indexedDB.open(DB_NAME, DB_VERSION);
 		req.onerror = () => resolve(undefined);
@@ -332,6 +347,16 @@ async function processBackgroundOutbox(): Promise<void> {
 			let sentCount = 0;
 			for (const task of tasks) {
 				try {
+					if (task.ownerUserId == null || String(task.ownerUserId) !== String(currentUserId)) {
+						await new Promise((delRes) => {
+							const delTx = db.transaction(STORE_OUTBOX, 'readwrite');
+							const delReq = delTx.objectStore(STORE_OUTBOX).delete(task.id);
+							delReq.onsuccess = () => delRes(undefined);
+							delReq.onerror = () => delRes(undefined);
+						});
+						continue;
+					}
+
 					const fetchOptions: RequestInit = {
 						method: task.method,
 						credentials: 'include',

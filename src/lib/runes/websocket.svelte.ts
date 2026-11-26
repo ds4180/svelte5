@@ -1,4 +1,6 @@
 import { browser } from '$app/environment';
+import { auth } from '$lib/runes/auth.svelte';
+import { toast } from '$lib/runes/toast.svelte';
 
 /**
  * ============================================================================
@@ -166,10 +168,11 @@ class WebSocketService {
 
 			if (event.code === 1008) {
 				console.warn(
-					'🔒 [WS] 비로그인 또는 만료된 세션으로 백엔드에서 소켓 접근을 거부했습니다. (1008)'
+					'🔒 [WS] 비로그인 또는 만료·추방된 세션으로 백엔드에서 소켓 접근을 거부했습니다. (1008)'
 				);
 				this.status = 'unauthorized';
 				this.#sendQueue = [];
+				void this.#verifySessionAfterUnauthorizedClose();
 				return;
 			}
 
@@ -181,6 +184,38 @@ class WebSocketService {
 			console.error('🌐 [WS] 웹소켓 에러 발생:', error);
 			this.status = 'error';
 		};
+	}
+
+	/**
+	 * 🔒 1008(인증 거부/강제 추방) 수신 시 실제 세션 생존 여부를 재검증하여
+	 *    만료·추방 상태이면 유령 로그인 화면을 즉시 정리하고 로그인 페이지로 안내합니다.
+	 */
+	async #verifySessionAfterUnauthorizedClose(): Promise<void> {
+		if (!browser || !auth.user || this.#isIntentionalClose) return;
+		try {
+			const res = await fetch('/api/users/me', {
+				credentials: 'include',
+				cache: 'no-store'
+			});
+			if (res.ok) {
+				// 일시적 소켓 불일치였고 실제 HTTP 세션은 유효한 경우 재연결 복구
+				this.status = 'disconnected';
+				this.#reconnect();
+				return;
+			}
+			if (res.status === 401 || res.status === 403) {
+				auth.clear();
+				toast.warning('세션이 만료되었거나 다른 기기에서 로그인하여 접속이 종료되었습니다.');
+				if (!window.location.pathname.startsWith('/login')) {
+					const returnTo = encodeURIComponent(window.location.pathname + window.location.search);
+					setTimeout(() => {
+						window.location.href = `/login?redirect=${returnTo}`;
+					}, 700);
+				}
+			}
+		} catch {
+			// 오프라인/네트워크 순단 시에는 online 복귀 이벤트에 맡김
+		}
 	}
 
 	/**

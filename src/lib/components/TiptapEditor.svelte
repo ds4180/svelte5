@@ -109,6 +109,8 @@
 	let activeBlockModal = $state(/** @type {'chart' | 'action' | 'embed' | null} */ (null));
 	let editingChartPos = $state(/** @type {number | null} */ (null));
 	let isDirectUploading = $state(false);
+	let showHtmlSource = $state(false);
+	let htmlSourceDraft = $state('');
 	let lastEmittedHtml = content || '';
 	const userSubPath = $derived(auth.user?.id ? `USERS/${auth.user.id}` : '');
 
@@ -444,6 +446,71 @@
 		}
 	}
 
+	function formatHtmlForSource(raw) {
+		if (!raw) return '';
+		return String(raw)
+			.replace(/(<\/(?:p|h[1-6]|div|ul|ol|li|blockquote|pre|table|thead|tbody|tr|details|hr)>)/gi, '$1\n')
+			.replace(/\n{3,}/g, '\n\n')
+			.trim();
+	}
+
+	function toggleHtmlSource() {
+		if (!editor) return;
+		if (!showHtmlSource) {
+			htmlSourceDraft = formatHtmlForSource(editor.getHTML());
+			showHtmlSource = true;
+		} else {
+			applyHtmlSource();
+		}
+	}
+
+	function applyHtmlSource() {
+		if (!editor) {
+			showHtmlSource = false;
+			return;
+		}
+		const nextHtml = htmlSourceDraft || '';
+		editor.commands.setContent(nextHtml, true);
+		const normalized = editor.getHTML();
+		lastEmittedHtml = normalized;
+		content = normalized;
+		content_json = editor.getJSON();
+		showHtmlSource = false;
+		toast.success('HTML 소스가 에디터에 반영되었습니다.');
+	}
+
+	function cancelHtmlSource() {
+		showHtmlSource = false;
+	}
+
+	async function copyHtmlSource() {
+		const rawHtml = showHtmlSource
+			? htmlSourceDraft
+			: (editor ? editor.getHTML() : (content || ''));
+		if (!rawHtml || !rawHtml.trim()) {
+			toast.info('복사할 HTML 내용이 없습니다.');
+			return;
+		}
+		try {
+			if (navigator?.clipboard?.writeText) {
+				await navigator.clipboard.writeText(rawHtml);
+			} else {
+				const ta = document.createElement('textarea');
+				ta.value = rawHtml;
+				ta.style.position = 'fixed';
+				ta.style.opacity = '0';
+				document.body.appendChild(ta);
+				ta.select();
+				document.execCommand('copy');
+				document.body.removeChild(ta);
+			}
+			toast.success('본문 HTML이 클립보드에 복사되었습니다.');
+		} catch (err) {
+			console.error('[Tiptap] HTML 복사 실패:', err);
+			toast.error('클립보드 복사에 실패했습니다.');
+		}
+	}
+
 	async function uploadAndInsertDirect(fileList) {
 		const files = Array.from(fileList || []);
 		if (files.length === 0 || isDirectUploading) return;
@@ -623,8 +690,27 @@
 				<button type="button" title="구분선" onclick={() => editor.chain().focus().setHorizontalRule().run()} class="tool-btn"><Icon icon="ph:minus-bold" /></button>
 			</div>
 
-			<!-- 8. History -->
+			<!-- 8. HTML 소스 / 복사 & History -->
 			<div class="ml-auto flex items-center gap-0.5">
+				<button
+					type="button"
+					title="본문 HTML 복사"
+					onclick={copyHtmlSource}
+					class="tool-btn gap-1 px-2 text-xs text-slate-600 hover:text-blue-700"
+				>
+					<Icon icon="ph:copy-bold" class="h-3.5 w-3.5" />
+					<span class="hidden sm:inline font-bold">HTML 복사</span>
+				</button>
+				<button
+					type="button"
+					title="HTML 소스 보기 / 직접 편집"
+					onclick={toggleHtmlSource}
+					class="tool-btn gap-1 px-2 text-xs {showHtmlSource ? 'active' : 'text-slate-600 hover:text-blue-700'}"
+				>
+					<Icon icon="ph:code-bold" class="h-3.5 w-3.5" />
+					<span class="hidden sm:inline font-bold">HTML</span>
+				</button>
+				<div class="mx-1 h-5 w-px bg-slate-200"></div>
 				<button type="button" title="실행 취소" onclick={undo} class="tool-btn text-slate-400 hover:text-slate-700"><Icon icon="ph:arrow-counter-clockwise-bold" /></button>
 				<button type="button" title="다시 실행" onclick={redo} class="tool-btn text-slate-400 hover:text-slate-700"><Icon icon="ph:arrow-clockwise-bold" /></button>
 			</div>
@@ -666,9 +752,52 @@
 
 	<!-- 🖋️ Editor Body -->
 	<div
-		class="editor-body prose prose-slate max-w-none flex-1 min-h-[420px] px-6 py-5 outline-none transition-colors {isMounted ? '' : 'invisible'}"
+		class="editor-body prose prose-slate max-w-none flex-1 min-h-[420px] px-6 py-5 outline-none transition-colors {isMounted ? '' : 'invisible'} {showHtmlSource ? 'hidden' : ''}"
 		bind:this={element}>
 	</div>
+
+	{#if showHtmlSource}
+		<div class="flex flex-1 flex-col bg-slate-950 rounded-b-2xl overflow-hidden">
+			<div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 bg-slate-900 px-4 py-2 text-xs text-slate-300">
+				<div class="flex items-center gap-2">
+					<span class="inline-flex items-center gap-1 rounded-md bg-blue-600/20 px-2 py-0.5 font-mono text-[11px] font-bold text-blue-300">
+						&lt;/&gt; HTML 소스
+					</span>
+					<span class="text-[11px] text-slate-400">{htmlSourceDraft.length.toLocaleString()}자</span>
+				</div>
+				<div class="flex items-center gap-1.5">
+					<button
+						type="button"
+						onclick={copyHtmlSource}
+						class="inline-flex items-center gap-1 rounded-lg bg-slate-800 px-2.5 py-1 text-[11px] font-bold text-slate-200 transition hover:bg-slate-700"
+					>
+						<Icon icon="ph:copy-bold" class="h-3.5 w-3.5" />
+						<span>HTML 복사</span>
+					</button>
+					<button
+						type="button"
+						onclick={cancelHtmlSource}
+						class="rounded-lg bg-slate-800 px-2.5 py-1 text-[11px] font-bold text-slate-300 transition hover:bg-slate-700"
+					>
+						취소
+					</button>
+					<button
+						type="button"
+						onclick={applyHtmlSource}
+						class="rounded-lg bg-blue-600 px-3 py-1 text-[11px] font-black text-white transition hover:bg-blue-500"
+					>
+						에디터에 적용
+					</button>
+				</div>
+			</div>
+			<textarea
+				bind:value={htmlSourceDraft}
+				spellcheck="false"
+				class="min-h-[420px] w-full flex-1 resize-y bg-slate-950 p-4 font-mono text-xs leading-relaxed text-emerald-300 outline-none selection:bg-blue-600/40"
+				placeholder="<p>HTML 소스를 확인하거나 직접 수정할 수 있습니다.</p>"
+			></textarea>
+		</div>
+	{/if}
 
 	{#if !isMounted}
 		<div class="absolute inset-0 z-30 flex flex-col items-center justify-center gap-3 bg-white/95">
