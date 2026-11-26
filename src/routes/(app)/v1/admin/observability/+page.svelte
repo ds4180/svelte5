@@ -1,312 +1,233 @@
-<script>
+<script lang="ts">
 	/**
 	 * ============================================================================
-	 * [전사 통합 감사로그 및 시스템 관제 센터 (+page.svelte)]
+	 * [전사 통합 감사로그 및 시스템 관제 센터 오케스트레이터 (+page.svelte)]
 	 * ============================================================================
-	 * 
-	 * 💡 이 페이지의 역할:
-	 * 1. 실시간 세션 관제 (기존 /v1/admin/sessions 기능 완벽 흡수 및 실시간 강제 추방)
-	 * 2. 4대 감사로그 (ACCESS, CHANGE, ERROR, SECURITY) 탭별 정밀 조회 및 검색
-	 * 3. 앱별 필터링 (?app_id=dispatch&tab=CHANGE) 딥링크 완벽 지원
-	 * 4. Git 스타일 Diff-Patch 변경 전(from)/후(to) 시각 비교 모달 제공
-	 * 5. 10초 주기 실시간 자동 갱신 (Auto-Refresh) 토글
+	 * - 관리자 표준 템플릿(통합 헤더 + 4대 핵심 지표 카드 + 탭 바 + 우측 끝 '설정' 탭) 구조로 정비
+	 * - 하드코딩된 갱신주기·페이지크기·세션한도·CSV상한·window.confirm을 전면 제거하고
+	 *   observabilityAdminService 및 전용 탭·모달·정책 설정 컴포넌트로 책임을 분리합니다.
 	 */
-
-	import { onMount, onDestroy } from 'svelte';
+	import { onMount } from 'svelte';
 	import { page } from '$app/state';
-	import * as api from '$lib/api/admin';
-	import { toast } from '$lib/runes/toast.svelte';
-	import { getSiteTitle } from '$lib/config/site';
-	import { formatDateTime, timeAgo } from '$lib/utils';
 	import Icon from '@iconify/svelte';
+	import * as api from '$lib/api/admin';
+	import { getSiteTitle } from '$lib/config/site';
+	import { getAuthContext } from '$lib/runes/auth.svelte';
+	import { toast } from '$lib/runes/toast.svelte';
+	import {
+		buildAppFilterOptions,
+		DEFAULT_OBSERVABILITY_SETTINGS,
+		normalizeObservabilitySettings,
+		OBSERVABILITY_LOG_TABS,
+		type AuditLogItem,
+		type LiveSessionItem,
+		type ObservabilitySettings,
+		type ObservabilitySummary,
+		type ObservabilityTabId
+	} from '$lib/services/observabilityAdminService';
+	import { formatApiError } from '$lib/utils/error';
 
-	// 📊 상단 4대 핵심 지표 요약 상태
-	let summary = $state({
+	import ObservabilityLogsTab from './components/ObservabilityLogsTab.svelte';
+	import ObservabilityModals from './components/ObservabilityModals.svelte';
+	import ObservabilitySessionsTab from './components/ObservabilitySessionsTab.svelte';
+	import ObservabilitySettingsTab from './components/ObservabilitySettingsTab.svelte';
+
+	const auth = getAuthContext();
+	const userRank = $derived(Number(auth.user?.rank_level ?? 0));
+
+	// --- 동적 정책 및 권한 상태 ---
+	let obsSettings = $state<ObservabilitySettings>(
+		normalizeObservabilitySettings(DEFAULT_OBSERVABILITY_SETTINGS)
+	);
+	let builtinMaskFields = $state<string[]>([
+		'password',
+		'resident_no',
+		'account_no',
+		'secret',
+		'token',
+		'session_key',
+		'credit_card'
+	]);
+	let serverCanWrite = $state<boolean | null>(null);
+	const canWrite = $derived(serverCanWrite !== null ? serverCanWrite : userRank >= 4);
+
+	// --- 상단 4대 핵심 지표 요약 ---
+	let summary = $state<ObservabilitySummary>({
 		active_sessions: 0,
 		today_access_count: 0,
 		today_change_count: 0,
 		today_error_alert_count: 0,
 		today_security_count: 0,
 		today_errors_count: 0,
-		app_options: /** @type {Array<{ id: string, name?: string }>} */ ([])
+		app_options: []
 	});
 
-	// 📑 5대 관제 탭: 'SESSIONS' | 'ACCESS' | 'CHANGE' | 'ERROR' | 'SECURITY'
-	let currentTab = $state('SESSIONS');
-
-	// 🔍 필터 및 검색 상태
+	// --- 탭 및 필터 상태 ---
+	let currentTab = $state<ObservabilityTabId>('SESSIONS');
 	let appFilter = $state('');
 	let severityFilter = $state('');
 	let searchKeyword = $state('');
 	let currentPage = $state(1);
-	let pageSize = 20;
 	let totalCount = $state(0);
+	let includeSessionHistory = $state(false);
 
-	// 📋 데이터 목록
-	let liveSessions = $state(/** @type {any[]} */ ([]));
-	let auditLogs = $state(/** @type {any[]} */ ([]));
+	// --- 데이터 및 UI 상태 ---
+	let liveSessions = $state<LiveSessionItem[]>([]);
+	let auditLogs = $state<AuditLogItem[]>([]);
 	let loading = $state(true);
 	let autoRefresh = $state(true);
-	let refreshTimer = /** @type {any} */ (null);
-	let includeSessionHistory = $state(false); // 세션 접속 기록(과거 만료/추방) 포함 여부
 
-	// 🔍 모달 상태 (Diff-Patch / Error Stack)
-	let activeDiffLog = $state(/** @type {any} */ (null));
-	let activeErrorLog = $state(/** @type {any} */ (null));
+	// --- 모달 상태 ---
+	let activeDiffLog = $state<AuditLogItem | null>(null);
+	let activeDetailLog = $state<AuditLogItem | null>(null);
+	let kickTargetSession = $state<LiveSessionItem | null>(null);
+	let isKicking = $state(false);
 
-	// 🏷️ 앱 ID별 아이콘/한글명 꾸미기 매핑 (목록 자체는 100% 백엔드 summary.app_options 기준)
-	/** @type {Record<string, string>} */
-	const APP_LABEL_MAP = {
-		system: '⚙️ 시스템 코어 (system)',
-		auth: '🔐 사용자 인증 (auth)',
-		dashboard: '📊 매니져 대시보드 (dashboard)',
-		apps: '🧩 앱 관리 (apps)',
-		app: '📦 커스텀·미니앱 (app)',
-		config: '🛠️ 환경설정 (config)',
-		services: '🔌 서비스 마스터 (services)',
-		menu: '🌐 메뉴 설정 (menu)',
-		user_manage: '👤 사용자 랭크 관리 (user_manage)',
-		group_manage: '🏛️ 그룹·권한 관리 (group_manage)',
-		observability: '👁️ 접속 기록·감사 로그 (observability)',
-		tasks: '⏱️ 예약 작업 관리 (tasks)',
-		dispatch: '🚐 차량 배차 관리 (dispatch)',
-		route_master: '🗺️ 노선 마스터 관리 (route_master)',
-		dayoff: '🏖️ 휴무(결근계) 관리 (dayoff)',
-		boards: '📝 게시판 인스턴스 관리 (boards)',
-		page: '📄 페이지 엔진 관리 (page)',
-		pushs: '🚀 푸시·구독 관리 (pushs)',
-		alerts: '🔔 알림·지시 관리 (alerts)',
-		target_groups: '🎯 임시 그룹 관리 (target_groups)',
-		media: '🖼️ 파일·사진 관리 (media)'
-	};
+	const appOptions = $derived(buildAppFilterOptions(summary?.app_options || [], appFilter));
 
-	let appOptions = $derived.by(() => {
-		/** @type {Map<string, { id: string, label: string }>} */
-		const map = new Map([['', { id: '', label: '전체 앱 (All Apps)' }]]);
-		const serverApps = summary?.app_options || [];
-		for (const item of serverApps) {
-			if (!item?.id || map.has(item.id)) continue;
-			const label =
-				APP_LABEL_MAP[item.id] ||
-				(item.name && item.name !== item.id ? `${item.name} (${item.id})` : item.id);
-			map.set(item.id, { id: item.id, label });
+	async function loadSettings() {
+		try {
+			const res = await api.adminGetObservabilitySettings<{
+				settings: ObservabilitySettings;
+				builtin_mask_fields?: string[];
+				permissions?: { can_write?: boolean };
+			}>();
+			if (res?.settings) {
+				obsSettings = normalizeObservabilitySettings(res.settings);
+				autoRefresh = obsSettings.ui_auto_refresh_default;
+			}
+			if (Array.isArray(res?.builtin_mask_fields) && res.builtin_mask_fields.length > 0) {
+				builtinMaskFields = res.builtin_mask_fields;
+			}
+			if (typeof res?.permissions?.can_write === 'boolean') {
+				serverCanWrite = res.permissions.can_write;
+			}
+		} catch (err) {
+			console.error('관제 정책 설정 로드 실패:', err);
 		}
-		if (appFilter && !map.has(appFilter)) {
-			map.set(appFilter, { id: appFilter, label: APP_LABEL_MAP[appFilter] || appFilter });
-		}
-		return Array.from(map.values());
-	});
+	}
 
-	// 🏷️ 탭 메타데이터 정의
-	const TABS = [
-		{ id: 'SESSIONS', label: '실시간 세션', icon: 'solar:users-group-rounded-bold-duotone', badgeColor: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
-		{ id: 'ACCESS', label: '접근 및 인증', icon: 'solar:shield-keyhole-bold-duotone', badgeColor: 'bg-blue-50 text-blue-700 border-blue-200' },
-		{ id: 'CHANGE', label: '앱 데이터 변경', icon: 'solar:document-add-bold-duotone', badgeColor: 'bg-amber-50 text-amber-700 border-amber-200' },
-		{ id: 'ERROR', label: '서버 장애 및 오류', icon: 'solar:danger-triangle-bold-duotone', badgeColor: 'bg-rose-50 text-rose-700 border-rose-200' },
-		{ id: 'SECURITY', label: '보안 및 위협', icon: 'solar:shield-warning-bold-duotone', badgeColor: 'bg-purple-50 text-purple-700 border-purple-200' }
-	];
-
-	/**
-	 * 🔄 관제 데이터 통합 조회 함수
-	 * @param {boolean} [silent=false]
-	 */
 	async function refreshData(silent = false) {
 		if (!silent) loading = true;
 		try {
-			// 1. 상단 4대 핵심 지표 요약 갱신
-			const sumRes = await api.adminGetObservabilitySummary().catch(() => null);
+			const sumRes = await api.adminGetObservabilitySummary<ObservabilitySummary>().catch(() => null);
 			if (sumRes) summary = sumRes;
 
-			// 2. 현재 선택된 탭에 맞춰 데이터 조회
+			if (currentTab === 'SETTINGS') {
+				return;
+			}
+
 			if (currentTab === 'SESSIONS') {
-				liveSessions = await api.adminGetLiveSessions(includeSessionHistory);
+				liveSessions = await api.adminGetLiveSessions<LiveSessionItem[]>(
+					includeSessionHistory,
+					obsSettings.ui_session_history_limit
+				);
 				totalCount = liveSessions.length;
 			} else {
-				const params = {
+				const pageSize = obsSettings.ui_log_page_size || 20;
+				const logRes = await api.adminGetAuditLogs<{ items: AuditLogItem[]; total: number }>({
 					log_type: currentTab,
 					app_id: appFilter || undefined,
 					severity: severityFilter || undefined,
 					query: searchKeyword.trim() || undefined,
 					page: currentPage,
-					page_size: pageSize,
-					skip: (currentPage - 1) * pageSize,
-					limit: pageSize
-				};
-				const logRes = await api.adminGetAuditLogs(params);
-				auditLogs = logRes.items || [];
-				totalCount = logRes.total || 0;
+					page_size: pageSize
+				});
+				auditLogs = logRes?.items || [];
+				totalCount = logRes?.total || 0;
 			}
-		} catch (e) {
-			console.error('❌ [Observability] 데이터 로딩 실패:', e);
+		} catch (err) {
+			if (!silent) toast.error(formatApiError(err, '관제 데이터를 불러오지 못했습니다.'));
 		} finally {
 			if (!silent) loading = false;
 		}
 	}
 
-	/**
-	 * 🔍 검색 실행
-	 */
-	function handleSearch() {
+	function switchTab(tabId: ObservabilityTabId) {
+		currentTab = tabId;
 		currentPage = 1;
-		refreshData();
+		if (tabId !== 'SETTINGS') {
+			refreshData();
+		}
 	}
 
-	/**
-	 * 🧹 검색어 초기화
-	 */
-	function handleClearSearch() {
-		searchKeyword = '';
-		currentPage = 1;
-		refreshData();
-	}
-
-	/**
-	 * 📥 감사로그 CSV 다운로드
-	 */
 	function handleExportAuditCsv() {
-		const params = {
-			log_type: currentTab !== 'SESSIONS' ? currentTab : undefined,
+		if (!obsSettings.allow_csv_export) {
+			toast.warning('현재 관제 정책에 의해 CSV 내보내기가 비활성화되어 있습니다.');
+			return;
+		}
+		const url = api.adminGetAuditLogsExportUrl({
+			log_type: currentTab !== 'SESSIONS' && currentTab !== 'SETTINGS' ? currentTab : undefined,
 			app_id: appFilter || undefined,
 			severity: severityFilter || undefined,
 			query: searchKeyword.trim() || undefined,
-			limit: 5000
-		};
-		const url = api.adminGetAuditLogsExportUrl(params);
-		toast.info('감사로그 CSV 파일 다운로드를 시작합니다...');
+			limit: obsSettings.csv_export_max_rows
+		});
+		toast.info(`감사로그 CSV 다운로드(최대 ${obsSettings.csv_export_max_rows.toLocaleString()}건)를 시작합니다...`);
 		window.location.href = url;
 	}
 
-	/**
-	 * 🖥️ 서버 시스템 원시 콘솔 로그(.log) 다운로드
-	 */
 	function handleDownloadSystemLog() {
-		const url = api.adminGetSystemLogDownloadUrl();
-		toast.info('서버 시스템 콘솔 로그(system.log) 다운로드를 시작합니다...');
-		window.location.href = url;
-	}
-
-	/**
-	 * 🚫 세션 강제 추방 (Kick)
-	 * @param {any} session
-	 */
-	async function handleKickSession(session) {
-		const targetLabel = session.username || session.user_name || `세션 #${session.id}`;
-		if (!confirm(`[주의] ${targetLabel} 님의 접속 세션을 즉시 강제 종료(Kicked-out)하시겠습니까?\n종료 즉시 해당 기기에서 로그아웃 처리됩니다.`)) {
+		if (!obsSettings.allow_system_log_download) {
+			toast.warning('현재 관제 정책에 의해 원시 콘솔 로그 다운로드가 비활성화되어 있습니다.');
 			return;
 		}
+		const url = api.adminGetSystemLogDownloadUrl();
+		toast.info(`서버 콘솔 로그(최대 ${obsSettings.system_log_max_download_mb}MB) 다운로드를 시작합니다...`);
+		window.location.href = url;
+	}
+
+	async function handleConfirmKick(session: LiveSessionItem) {
+		isKicking = true;
 		try {
 			await api.adminKickLiveSession(session.id);
-			toast.success(`${targetLabel} 세션이 성공적으로 강제 종료되었습니다.`);
+			const label = session.real_name || session.username || `세션 #${session.id}`;
+			toast.success(`${label} 세션이 성공적으로 강제 종료되었습니다.`);
+			kickTargetSession = null;
 			await refreshData(false);
-		} catch (/** @type {any} */ e) {
-			toast.error('세션 강제 종료 실패: ' + e.message);
+		} catch (err) {
+			toast.error(formatApiError(err, '세션 강제 종료에 실패했습니다.'));
+		} finally {
+			isKicking = false;
 		}
 	}
 
-	/**
-	 * 탭 변경 처리
-	 * @param {string} tabId
-	 */
-	function switchTab(tabId) {
-		currentTab = tabId;
+	async function handleSettingsSaved(updated: ObservabilitySettings) {
+		obsSettings = updated;
 		currentPage = 1;
-		refreshData();
+		await refreshData(true);
 	}
 
-	/**
-	 * 앱 필터 변경 처리
-	 * @param {any} event
-	 */
-	function handleAppFilterChange(event) {
-		appFilter = event.target.value;
-		currentPage = 1;
-		refreshData();
-	}
-
-	/**
-	 * 심각도 필터 변경 처리
-	 * @param {any} event
-	 */
-	function handleSeverityFilterChange(event) {
-		severityFilter = event.target.value;
-		currentPage = 1;
-		refreshData();
-	}
-
-	/**
-	 * 심각도 뱃지 스타일
-	 * @param {any} sev
-	 */
-	function getSeverityBadge(sev) {
-		switch (sev) {
-			case 'CRITICAL':
-				return 'bg-rose-600 text-white border-rose-700 animate-pulse';
-			case 'ERROR':
-				return 'bg-red-100 text-red-800 border-red-300 font-bold';
-			case 'WARN':
-				return 'bg-amber-100 text-amber-800 border-amber-300';
-			default:
-				return 'bg-slate-100 text-slate-700 border-slate-300';
-		}
-	}
-
-	/**
-	 * 기기 카테고리 뱃지
-	 * @param {any} dev
-	 */
-	function getDeviceBadge(dev) {
-		switch (dev) {
-			case 'MOBILE':
-				return { icon: 'solar:smartphone-bold', text: '모바일', color: 'bg-emerald-50 text-emerald-700 border-emerald-200' };
-			case 'TABLET':
-				return { icon: 'solar:tablet-bold', text: '태블릿', color: 'bg-indigo-50 text-indigo-700 border-indigo-200' };
-			default:
-				return { icon: 'solar:laptop-minimalistic-bold', text: '데스크톱', color: 'bg-blue-50 text-blue-700 border-blue-200' };
-		}
-	}
-
-	/**
-	 * 세션 상태 뱃지 및 인디케이터 스타일 반환
-	 * @param {string} status
-	 */
-	function getSessionStatusBadge(status) {
-		switch (status) {
-			case 'ACTIVE':
-				return { text: '활동 중', color: 'bg-emerald-50 text-emerald-700 border-emerald-300', dot: 'bg-emerald-500' };
-			case 'EXPIRED':
-				return { text: '정상 종료', color: 'bg-slate-100 text-slate-500 border-slate-300', dot: 'bg-slate-400' };
-			case 'KICKED_OUT':
-				return { text: '강제 추방', color: 'bg-rose-50 text-rose-700 border-rose-300 font-bold', dot: 'bg-rose-500' };
-			default:
-				return { text: status, color: 'bg-slate-100 text-slate-600 border-slate-200', dot: 'bg-slate-400' };
-		}
-	}
-
-	onMount(() => {
-		// URL 쿼리 파라미터에서 초기 탭 및 앱 ID 추출 (Svelte 5 $app/state 표준)
+	onMount(async () => {
 		const urlParams = page.url.searchParams;
-		const queryTab = urlParams.get('tab');
+		const queryTab = urlParams.get('tab')?.toUpperCase() as ObservabilityTabId | undefined;
 		const queryApp = urlParams.get('app_id');
 
-		if (queryTab && TABS.some(t => t.id === queryTab.toUpperCase())) {
-			currentTab = queryTab.toUpperCase();
+		if (
+			queryTab &&
+			(OBSERVABILITY_LOG_TABS.some((t) => t.id === queryTab) || queryTab === 'SETTINGS')
+		) {
+			currentTab = queryTab;
 		}
 		if (queryApp) {
 			appFilter = queryApp;
 		}
 
-		refreshData();
-
-		// 10초 주기 자동 갱신 타이머 가동
-		refreshTimer = setInterval(() => {
-			if (autoRefresh) {
-				refreshData(true);
-			}
-		}, 10000);
+		await loadSettings();
+		await refreshData();
 	});
 
-	onDestroy(() => {
-		if (refreshTimer) clearInterval(refreshTimer);
+	// 동적 주기 자동 갱신 타이머 (설정된 ui_auto_refresh_sec 즉시 반영)
+	$effect(() => {
+		const enabled = autoRefresh && currentTab !== 'SETTINGS';
+		const intervalMs = Math.max(3, Number(obsSettings.ui_auto_refresh_sec) || 10) * 1000;
+		if (!enabled) return;
+
+		const timer = setInterval(() => {
+			refreshData(true);
+		}, intervalMs);
+
+		return () => clearInterval(timer);
 	});
 </script>
 
@@ -314,690 +235,266 @@
 	<title>{getSiteTitle('접속 기록·감사 로그')}</title>
 </svelte:head>
 
-<div class="mx-auto max-w-7xl space-y-6 px-4 py-8 pb-24 font-['Noto_Sans_KR','Outfit'] md:space-y-8 md:px-6 lg:px-8">
-	<!-- ===================================================================== -->
-	<!-- 1. 페이지 헤더 & 실시간 컨트롤 바 (기본값: 새로고침 + 관리자 홈) -->
-	<!-- ===================================================================== -->
-	<div class="flex flex-col gap-4 border-b-2 border-slate-900 pb-6 md:flex-row md:items-end md:justify-between md:border-b-4 md:pb-8">
+<div class="mx-auto max-w-7xl space-y-6 p-4 sm:p-6 md:p-8 pb-20">
+	<!-- 1. 통합 관리자 헤더 & 실시간 컨트롤 바 -->
+	<header class="flex flex-col gap-4 border-b border-slate-200 pb-5 lg:flex-row lg:items-end lg:justify-between">
 		<div>
-			<div class="flex items-center gap-2">
-				<span class="inline-flex items-center gap-1.5 rounded-full bg-slate-900 px-3 py-1 text-[11px] font-black tracking-widest text-emerald-400 uppercase">
-					<span class="h-2 w-2 rounded-full bg-emerald-400 animate-ping"></span>
-					Enterprise Observability
+			<div class="flex flex-wrap items-center gap-2">
+				<span class="inline-flex items-center gap-1.5 rounded-md bg-slate-900 px-2.5 py-0.5 text-[11px] font-black tracking-wider text-emerald-400 uppercase">
+					<span class="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-ping"></span>
+					ENTERPRISE OBSERVABILITY
 				</span>
-				<span class="text-xs font-bold text-slate-400">v1/admin/observability</span>
+				<span class="text-xs font-bold text-slate-400">
+					Watchdog {obsSettings.watchdog_enabled ? 'ON' : 'PAUSED'} · 감사로그 {obsSettings.audit_log_retention_days}일 보존
+				</span>
 			</div>
-			<h1 class="mt-2 text-3xl font-black tracking-tight text-slate-900 uppercase italic md:text-4xl">
-				접속 기록·<span class="not-italic text-blue-600">감사 로그</span>
+			<h1 class="mt-1.5 text-xl sm:text-2xl font-black tracking-tight text-slate-900">
+				접속 기록 · <span class="text-blue-600">전사 감사 로그 관제</span>
 			</h1>
-			<p class="mt-1 text-sm font-medium text-slate-500">
-				실시간 접속 세션 추적, 도메인 데이터 변경 Diff-Patch 감사, 시스템 장애 및 403 보안 위협 전사 관제
+			<p class="mt-1 text-xs sm:text-sm font-medium text-slate-500">
+				실시간 접속 세션 추적, 데이터 변경 Diff-Patch 감사, 장애·보안 위협 및 자율 감시 정책을 통합 관리합니다.
 			</p>
 		</div>
 
-		<!-- 새로고침 및 관리자 홈 기본값, 다운로드 / 자동갱신 토글 -->
-		<div class="flex flex-wrap items-center gap-3">
-			<label class="flex cursor-pointer items-center gap-2 rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-slate-50">
-				<input type="checkbox" bind:checked={autoRefresh} class="h-4 w-4 rounded text-blue-600 focus:ring-blue-500" />
-				<span class="flex items-center gap-1.5">
-					<Icon icon="solar:refresh-circle-bold-duotone" class="text-base text-blue-600 {autoRefresh ? 'animate-spin' : ''}" />
-					10초 자동 갱신
-				</span>
+		<div class="flex flex-wrap items-center gap-2.5">
+			<label class="flex cursor-pointer items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 shadow-2xs hover:bg-slate-50">
+				<input
+					type="checkbox"
+					bind:checked={autoRefresh}
+					class="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+				/>
+				<span>{obsSettings.ui_auto_refresh_sec}초 자동 갱신</span>
 			</label>
 
-			<!-- 🖥️ 시스템 콘솔 원시 로그 파일 다운로드 버튼 -->
-			<button
-				onclick={handleDownloadSystemLog}
-				class="flex items-center gap-1.5 rounded-xl border border-slate-700 bg-slate-800 px-3.5 py-2 text-xs font-black text-slate-100 shadow-sm transition hover:bg-slate-700 hover:text-white active:scale-95"
-				title="서버 런타임 콘솔 표준 출력 원시 로그 파일(system.log) 다운로드"
-			>
-				<Icon icon="solar:server-square-bold-duotone" class="text-base text-emerald-400" />
-				<span>시스템 콘솔 로그 (.log)</span>
-			</button>
+			{#if obsSettings.allow_system_log_download}
+				<button
+					type="button"
+					onclick={handleDownloadSystemLog}
+					class="inline-flex items-center gap-1.5 rounded-xl border border-slate-700 bg-slate-800 px-3.5 py-2 text-xs font-black text-slate-100 shadow-2xs transition hover:bg-slate-700 active:scale-95"
+					title="서버 런타임 원시 콘솔 로그(최대 {obsSettings.system_log_max_download_mb}MB) 다운로드"
+				>
+					<Icon icon="solar:server-square-bold-duotone" class="text-base text-emerald-400" />
+					<span>콘솔 로그 (.log)</span>
+				</button>
+			{/if}
 
 			<button
+				type="button"
 				onclick={() => refreshData(false)}
-				class="flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2 text-xs font-black text-white shadow-md transition hover:bg-blue-600 active:scale-95"
+				class="inline-flex items-center gap-1.5 rounded-xl border border-slate-300 bg-white px-3.5 py-2 text-xs font-bold text-slate-700 shadow-2xs transition hover:bg-slate-50 active:scale-95"
 			>
-				<Icon icon="solar:restart-bold" class="text-base {loading ? 'animate-spin' : ''}" />
+				<Icon icon="solar:refresh-bold" class="text-base {loading ? 'animate-spin text-blue-600' : ''}" />
 				<span>새로고침</span>
 			</button>
 
 			<a
 				href="/v1/admin"
-				class="flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 active:scale-95"
+				class="inline-flex items-center gap-1.5 rounded-xl bg-slate-900 px-4 py-2 text-xs font-bold text-white shadow-xs transition hover:bg-slate-800"
 			>
-				<Icon icon="solar:home-smile-angle-bold-duotone" class="text-base text-slate-500" />
+				<Icon icon="solar:home-2-bold" class="text-base" />
 				<span>관리자 홈</span>
 			</a>
 		</div>
-	</div>
+	</header>
 
-	<!-- ===================================================================== -->
-	<!-- 2. 상단 4대 핵심 지표 요약 카드 (Summary Cards) -->
-	<!-- ===================================================================== -->
-	<div class="grid grid-cols-1 gap-4 sm:grid-cols-2 md:gap-5 xl:grid-cols-4">
-		<!-- 카드 1: 실시간 활성 세션 -->
+	<!-- 2. 상단 4대 핵심 지표 요약 카드 -->
+	<div class="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
 		<button
+			type="button"
 			onclick={() => switchTab('SESSIONS')}
-			class="group flex w-full flex-col justify-between rounded-2xl border-2 p-5 text-left transition duration-200 {currentTab === 'SESSIONS' ? 'border-emerald-600 bg-emerald-50/50 shadow-md ring-2 ring-emerald-500/30' : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-sm'}"
+			class="group flex flex-col justify-between rounded-2xl border-2 p-4 sm:p-5 text-left transition {currentTab === 'SESSIONS' ? 'border-emerald-600 bg-emerald-50/40 shadow-sm' : 'border-slate-200 bg-white hover:border-slate-300'}"
 		>
-			<div class="flex w-full items-center justify-between gap-2">
-				<span class="min-w-0 truncate text-xs font-black tracking-wider text-slate-400 uppercase">Live Sessions</span>
-				<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-emerald-600">
-					<Icon icon="solar:users-group-rounded-bold-duotone" class="text-xl" />
+			<div class="flex items-center justify-between gap-2">
+				<span class="text-[11px] font-black tracking-wider text-slate-400 uppercase truncate">Live Sessions</span>
+				<div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-emerald-600">
+					<Icon icon="solar:users-group-rounded-bold-duotone" class="text-lg" />
 				</div>
 			</div>
-			<div class="mt-4">
-				<div class="text-3xl font-black text-slate-900 group-hover:text-emerald-600 transition">
+			<div class="mt-3">
+				<div class="text-2xl sm:text-3xl font-black text-slate-900 group-hover:text-emerald-600 transition">
 					{summary.active_sessions.toLocaleString()}
-					<span class="text-xs font-bold text-slate-500 font-normal">명 접속 중</span>
+					<span class="text-xs font-bold text-slate-500">명 접속</span>
 				</div>
-				<div class="mt-1 flex items-center gap-1.5 text-xs font-semibold text-emerald-600">
-					<span class="h-2 w-2 shrink-0 rounded-full bg-emerald-500 animate-pulse"></span>
+				<div class="mt-1 flex items-center gap-1.5 text-[11px] font-semibold text-emerald-600">
+					<span class="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
 					Redis 자기치유 활성
 				</div>
 			</div>
 		</button>
 
-		<!-- 카드 2: 오늘 접근/인증 -->
 		<button
+			type="button"
 			onclick={() => switchTab('ACCESS')}
-			class="group flex w-full flex-col justify-between rounded-2xl border-2 p-5 text-left transition duration-200 {currentTab === 'ACCESS' ? 'border-blue-600 bg-blue-50/50 shadow-md ring-2 ring-blue-500/30' : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-sm'}"
+			class="group flex flex-col justify-between rounded-2xl border-2 p-4 sm:p-5 text-left transition {currentTab === 'ACCESS' ? 'border-blue-600 bg-blue-50/40 shadow-sm' : 'border-slate-200 bg-white hover:border-slate-300'}"
 		>
-			<div class="flex w-full items-center justify-between gap-2">
-				<span class="min-w-0 truncate text-xs font-black tracking-wider text-slate-400 uppercase">Today Access</span>
-				<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-100 text-blue-600">
-					<Icon icon="solar:shield-keyhole-bold-duotone" class="text-xl" />
+			<div class="flex items-center justify-between gap-2">
+				<span class="text-[11px] font-black tracking-wider text-slate-400 uppercase truncate">Today Access</span>
+				<div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-blue-100 text-blue-600">
+					<Icon icon="solar:shield-keyhole-bold-duotone" class="text-lg" />
 				</div>
 			</div>
-			<div class="mt-4">
-				<div class="text-3xl font-black text-slate-900 group-hover:text-blue-600 transition">
+			<div class="mt-3">
+				<div class="text-2xl sm:text-3xl font-black text-slate-900 group-hover:text-blue-600 transition">
 					{summary.today_access_count.toLocaleString()}
-					<span class="text-xs font-bold text-slate-500 font-normal">건</span>
+					<span class="text-xs font-bold text-slate-500">건</span>
 				</div>
-				<div class="mt-1 text-xs font-semibold text-slate-400">
-					로그인·로그아웃 이력
-				</div>
+				<div class="mt-1 text-[11px] font-semibold text-slate-400">오늘 로그인·인증 이력</div>
 			</div>
 		</button>
 
-		<!-- 카드 3: 데이터 변경 (Diff) -->
 		<button
+			type="button"
 			onclick={() => switchTab('CHANGE')}
-			class="group flex w-full flex-col justify-between rounded-2xl border-2 p-5 text-left transition duration-200 {currentTab === 'CHANGE' ? 'border-amber-600 bg-amber-50/50 shadow-md ring-2 ring-amber-500/30' : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-sm'}"
+			class="group flex flex-col justify-between rounded-2xl border-2 p-4 sm:p-5 text-left transition {currentTab === 'CHANGE' ? 'border-amber-600 bg-amber-50/40 shadow-sm' : 'border-slate-200 bg-white hover:border-slate-300'}"
 		>
-			<div class="flex w-full items-center justify-between gap-2">
-				<span class="min-w-0 truncate text-xs font-black tracking-wider text-slate-400 uppercase">Today Changes</span>
-				<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-600">
-					<Icon icon="solar:document-add-bold-duotone" class="text-xl" />
+			<div class="flex items-center justify-between gap-2">
+				<span class="text-[11px] font-black tracking-wider text-slate-400 uppercase truncate">Today Changes</span>
+				<div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-600">
+					<Icon icon="solar:document-add-bold-duotone" class="text-lg" />
 				</div>
 			</div>
-			<div class="mt-4">
-				<div class="text-3xl font-black text-slate-900 group-hover:text-amber-600 transition">
+			<div class="mt-3">
+				<div class="text-2xl sm:text-3xl font-black text-slate-900 group-hover:text-amber-600 transition">
 					{summary.today_change_count.toLocaleString()}
-					<span class="text-xs font-bold text-slate-500 font-normal">건 수정</span>
+					<span class="text-xs font-bold text-slate-500">건 수정</span>
 				</div>
-				<div class="mt-1 text-xs font-semibold text-amber-600">
-					AuditMixin 자동 Diff 캡처
+				<div class="mt-1 text-[11px] font-semibold text-amber-600">
+					Diff 마스킹 {obsSettings.audit_mask_sensitive_fields ? '보호 중' : '해제됨'}
 				</div>
 			</div>
 		</button>
 
-		<!-- 카드 4: 장애 및 보안 경보 -->
 		<button
+			type="button"
 			onclick={() => switchTab(summary.today_security_count > 0 ? 'SECURITY' : 'ERROR')}
-			class="group flex w-full flex-col justify-between rounded-2xl border-2 p-5 text-left transition duration-200 {currentTab === 'ERROR' || currentTab === 'SECURITY' ? 'border-rose-600 bg-rose-50/50 shadow-md ring-2 ring-rose-500/30' : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-sm'}"
+			class="group flex flex-col justify-between rounded-2xl border-2 p-4 sm:p-5 text-left transition {currentTab === 'ERROR' || currentTab === 'SECURITY' ? 'border-rose-600 bg-rose-50/40 shadow-sm' : 'border-slate-200 bg-white hover:border-slate-300'}"
 		>
-			<div class="flex w-full items-center justify-between gap-2">
-				<span class="min-w-0 truncate text-xs font-black tracking-wider text-slate-400 uppercase">Errors & Alerts</span>
-				<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-rose-100 text-rose-600">
-					<Icon icon="solar:danger-triangle-bold-duotone" class="text-xl" />
+			<div class="flex items-center justify-between gap-2">
+				<span class="text-[11px] font-black tracking-wider text-slate-400 uppercase truncate">Errors & Alerts</span>
+				<div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-rose-100 text-rose-600">
+					<Icon icon="solar:danger-triangle-bold-duotone" class="text-lg" />
 				</div>
 			</div>
-			<div class="mt-4">
-				<div class="text-3xl font-black text-slate-900 group-hover:text-rose-600 transition">
+			<div class="mt-3">
+				<div class="text-2xl sm:text-3xl font-black text-slate-900 group-hover:text-rose-600 transition">
 					{summary.today_error_alert_count.toLocaleString()}
-					<span class="text-xs font-bold text-slate-500 font-normal">건 감지</span>
+					<span class="text-xs font-bold text-slate-500">건 감지</span>
 				</div>
-				<div class="mt-1 text-xs font-semibold {summary.today_error_alert_count > 0 ? 'text-rose-600' : 'text-slate-400'}">
-					{summary.today_error_alert_count > 0 ? '확인 필요한 장애/경보' : '이상 무 (정상 가동)'}
+				<div class="mt-1 text-[11px] font-semibold {summary.today_error_alert_count > 0 ? 'text-rose-600' : 'text-slate-400'}">
+					{summary.today_error_alert_count > 0 ? '확인 필요한 장애·보안 경보' : '이상 무 (정상 가동)'}
 				</div>
 			</div>
 		</button>
 	</div>
 
-	<!-- ===================================================================== -->
-	<!-- 3. 관제 탭 & 필터 툴바 -->
-	<!-- ===================================================================== -->
-	<div class="rounded-2xl border-2 border-slate-200 bg-white shadow-sm overflow-hidden">
-		<!-- 탭 헤더 네비게이션 -->
-		<div class="flex border-b border-slate-200 bg-slate-50/60 overflow-x-auto scrollbar-none">
-			{#each TABS as tab}
+	<!-- 3. 메인 워크스페이스 패널 (표준 탭 바 + 우측 끝 '설정' 탭) -->
+	<div class="rounded-2xl border border-slate-200 bg-white shadow-xs overflow-hidden">
+		<div class="flex items-center border-b border-slate-200 bg-slate-50/70 overflow-x-auto scrollbar-none">
+			{#each OBSERVABILITY_LOG_TABS as tab (tab.id)}
 				<button
+					type="button"
 					onclick={() => switchTab(tab.id)}
-					class="flex items-center gap-2 border-b-2 px-5 py-4 text-xs font-black tracking-wide transition whitespace-nowrap {currentTab === tab.id ? 'border-blue-600 bg-white text-blue-600 shadow-sm' : 'border-transparent text-slate-600 hover:bg-slate-100 hover:text-slate-900'}"
+					class="flex items-center gap-1.5 border-b-2 px-4 sm:px-5 py-3.5 text-xs font-black tracking-wide transition whitespace-nowrap {currentTab === tab.id ? 'border-blue-600 bg-white text-blue-600' : 'border-transparent text-slate-600 hover:bg-slate-100 hover:text-slate-900'}"
 				>
-					<Icon icon={tab.icon} class="text-lg" />
+					<Icon icon={tab.icon} class="text-base" />
 					<span>{tab.label}</span>
 					{#if tab.id === 'SESSIONS'}
-						<span class="ml-1 rounded-full px-2 py-0.5 text-[10px] font-black {tab.badgeColor}">
-							{liveSessions.length}
+						<span class="ml-0.5 rounded-full border px-1.5 py-0.5 text-[10px] font-black {tab.badgeColor}">
+							{summary.active_sessions}
 						</span>
 					{:else if tab.id === 'SECURITY' && (summary.today_security_count || 0) > 0}
-						<span class="ml-1 rounded-full px-2 py-0.5 text-[10px] font-black bg-rose-50 text-rose-700 border-rose-200 border animate-pulse">
+						<span class="ml-0.5 rounded-full border border-rose-200 bg-rose-50 px-1.5 py-0.5 text-[10px] font-black text-rose-700 animate-pulse">
 							{summary.today_security_count}
 						</span>
 					{:else if tab.id === 'ERROR' && (summary.today_errors_count || 0) > 0}
-						<span class="ml-1 rounded-full px-2 py-0.5 text-[10px] font-black bg-rose-50 text-rose-700 border-rose-200 border">
+						<span class="ml-0.5 rounded-full border border-rose-200 bg-rose-50 px-1.5 py-0.5 text-[10px] font-black text-rose-700">
 							{summary.today_errors_count}
 						</span>
 					{/if}
 				</button>
 			{/each}
+
+			{#if canWrite}
+				<button
+					type="button"
+					onclick={() => switchTab('SETTINGS')}
+					class="ml-auto flex items-center gap-1.5 border-b-2 px-4 sm:px-5 py-3.5 text-xs font-black tracking-wide transition whitespace-nowrap {currentTab === 'SETTINGS' ? 'border-indigo-600 bg-white text-indigo-600' : 'border-transparent text-slate-600 hover:bg-slate-100 hover:text-indigo-700'}"
+				>
+					<Icon icon="solar:settings-bold-duotone" class="text-base" />
+					<span>설정</span>
+				</button>
+			{/if}
 		</div>
 
-		<!-- 세션 관제 모드 컨트롤 바 (SESSIONS 탭일 때) -->
+		<!-- 탭별 컨텐츠 -->
 		{#if currentTab === 'SESSIONS'}
-			<div class="flex flex-col gap-3 border-b border-slate-100 bg-white p-4 md:flex-row md:items-center md:justify-between">
-				<div class="flex flex-wrap items-center gap-3">
-					<span class="text-xs font-bold text-slate-500">세션 관제 모드:</span>
-					<div class="inline-flex rounded-xl bg-slate-100 p-1 border border-slate-200">
-						<button
-							onclick={() => { includeSessionHistory = false; refreshData(); }}
-							class="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-black transition { !includeSessionHistory ? 'bg-white text-emerald-700 shadow-sm border border-emerald-200' : 'text-slate-500 hover:text-slate-800' }"
-						>
-							<span class="h-2 w-2 rounded-full bg-emerald-500 { !includeSessionHistory ? 'animate-pulse' : '' }"></span>
-							실시간 활성 세션 ({summary.active_sessions})
-						</button>
-						<button
-							onclick={() => { includeSessionHistory = true; refreshData(); }}
-							class="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-black transition { includeSessionHistory ? 'bg-white text-blue-700 shadow-sm border border-blue-200' : 'text-slate-500 hover:text-slate-800' }"
-						>
-							<Icon icon="solar:history-bold-duotone" class="text-sm text-blue-600" />
-							과거 접속 기록 포함 (최근 100건)
-						</button>
-					</div>
-				</div>
-
-				<div class="flex items-center gap-3">
-					<div class="text-xs font-bold text-slate-400">
-						{#if includeSessionHistory}
-							과거 만료·추방 세션 포함 <span class="font-black text-blue-600">{liveSessions.length}</span>건 표시 중
-						{:else}
-							현재 실시간 접속 중인 <span class="font-black text-emerald-600">{liveSessions.length}</span>개 세션 관제 중
-						{/if}
-					</div>
-				</div>
-			</div>
-		{/if}
-
-		<!-- 필터 & 검색 컨트롤 바 (감사로그 탭일 때만 활성화) -->
-		{#if currentTab !== 'SESSIONS'}
-			<div class="flex flex-col gap-3 border-b border-slate-100 bg-white p-4 md:flex-row md:items-center md:justify-between">
-				<div class="flex flex-wrap items-center gap-3">
-					<!-- 앱별 필터 -->
-					<div class="flex items-center gap-2">
-						<span class="text-xs font-bold text-slate-500">앱 선택:</span>
-						<select
-							value={appFilter}
-							onchange={handleAppFilterChange}
-							class="rounded-xl border border-slate-300 bg-slate-50 px-3 py-1.5 text-xs font-bold text-slate-800 focus:border-blue-500 focus:bg-white focus:outline-none"
-						>
-							{#each appOptions as opt (opt.id)}
-								<option value={opt.id}>{opt.label}</option>
-							{/each}
-						</select>
-					</div>
-
-					<!-- 심각도 필터 -->
-					<div class="flex items-center gap-2">
-						<span class="text-xs font-bold text-slate-500">심각도:</span>
-						<select
-							value={severityFilter}
-							onchange={handleSeverityFilterChange}
-							class="rounded-xl border border-slate-300 bg-slate-50 px-3 py-1.5 text-xs font-bold text-slate-800 focus:border-blue-500 focus:bg-white focus:outline-none"
-						>
-							<option value="">전체 등급</option>
-							<option value="INFO">INFO (일반)</option>
-							<option value="WARN">WARN (주의)</option>
-							<option value="ERROR">ERROR (오류)</option>
-							<option value="CRITICAL">CRITICAL (치명)</option>
-						</select>
-					</div>
-
-					<!-- 🔍 검색창 (키워드/사용자/메시지 검색 및 엔터키 바인딩) -->
-					<div class="flex items-center gap-1.5">
-						<div class="relative flex items-center">
-							<Icon icon="solar:magnifer-linear" class="pointer-events-none absolute left-3 text-sm text-slate-400" />
-							<input
-								type="text"
-								bind:value={searchKeyword}
-								onkeydown={(e) => e.key === 'Enter' && handleSearch()}
-								placeholder="제목, 내용, 사용자 검색..."
-								class="w-44 rounded-xl border border-slate-300 bg-slate-50 py-1.5 pr-8 pl-8 text-xs font-medium text-slate-800 placeholder-slate-400 transition focus:border-blue-500 focus:bg-white focus:outline-none md:w-60"
-							/>
-							{#if searchKeyword}
-								<button
-									onclick={handleClearSearch}
-									class="absolute right-2 rounded-full p-0.5 text-slate-400 hover:text-slate-600"
-									title="검색어 지우기"
-								>
-									<Icon icon="solar:close-circle-bold" class="text-sm" />
-								</button>
-							{/if}
-						</div>
-						<button
-							onclick={handleSearch}
-							class="rounded-xl bg-slate-900 px-3 py-1.5 text-xs font-bold text-white shadow-sm transition hover:bg-blue-600 active:scale-95"
-						>
-							검색
-						</button>
-					</div>
-				</div>
-
-				<!-- 우측 건수 표시 및 CSV 다운로드 버튼 -->
-				<div class="flex flex-wrap items-center gap-3">
-					<div class="text-xs font-bold text-slate-400">
-						총 <span class="font-black text-blue-600">{totalCount.toLocaleString()}</span>건의 기록 보존 중
-					</div>
-
-					<!-- 📥 감사로그 CSV 다운로드 버튼 -->
-					<button
-						onclick={handleExportAuditCsv}
-						class="inline-flex items-center gap-1.5 rounded-xl border border-emerald-300 bg-emerald-50 px-3.5 py-1.5 text-xs font-black text-emerald-800 shadow-sm transition hover:bg-emerald-600 hover:text-white active:scale-95"
-						title="현재 필터 조건에 부합하는 감사로그를 엑셀 호환 CSV 파일로 내보냅니다"
-					>
-						<Icon icon="solar:file-download-bold-duotone" class="text-base text-emerald-600 group-hover:text-white" />
-						<span>CSV 내보내기</span>
-					</button>
-				</div>
-			</div>
-		{/if}
-
-		<!-- ================================================================= -->
-		<!-- 4. 탭별 데이터 뷰 -->
-		<!-- ================================================================= -->
-		{#if loading}
-			<div class="flex flex-col items-center justify-center py-20 text-slate-400">
-				<Icon icon="solar:refresh-circle-bold-duotone" class="h-10 w-10 animate-spin text-blue-600" />
-				<span class="mt-3 text-xs font-bold">실시간 관제 데이터를 동기화하는 중입니다...</span>
-			</div>
+			<ObservabilitySessionsTab
+				sessions={liveSessions}
+				activeSessionsCount={summary.active_sessions}
+				includeHistory={includeSessionHistory}
+				historyLimit={obsSettings.ui_session_history_limit}
+				isLoading={loading}
+				{canWrite}
+				onToggleHistory={(next) => {
+					includeSessionHistory = next;
+					refreshData();
+				}}
+				onRequestKick={(session) => (kickTargetSession = session)}
+			/>
+		{:else if currentTab === 'SETTINGS'}
+			<ObservabilitySettingsTab
+				settings={obsSettings}
+				{builtinMaskFields}
+				{canWrite}
+				onSaved={handleSettingsSaved}
+			/>
 		{:else}
-			<!-- ------------------------------------------------------------- -->
-			<!-- TAB 1: SESSIONS (실시간 접속 현황 및 과거 접속 이력) -->
-			<!-- ------------------------------------------------------------- -->
-			{#if currentTab === 'SESSIONS'}
-				{#if liveSessions.length === 0}
-					<div class="py-20 text-center text-slate-400">
-						<Icon icon="solar:ghost-bold" class="mx-auto h-12 w-12 text-slate-300" />
-						<p class="mt-2 text-sm font-bold">
-							{includeSessionHistory ? '보존된 접속 기록이 없습니다.' : '현재 활성화된 접속 세션이 없습니다.'}
-						</p>
-					</div>
-				{:else}
-					<div class="overflow-x-auto">
-						<table class="w-full text-left text-xs">
-							<thead class="border-b border-slate-200 bg-slate-50/80 font-black text-slate-500 uppercase tracking-wider">
-								<tr>
-									<th class="px-5 py-3.5">사용자 / 소속</th>
-									<th class="px-4 py-3.5">세션 상태</th>
-									<th class="px-4 py-3.5">접속 기기 / 브라우저</th>
-									<th class="px-4 py-3.5">접속 IP</th>
-									<th class="px-4 py-3.5">최근 활동 / 종료</th>
-									<th class="px-4 py-3.5">로그인 시각</th>
-									<th class="px-5 py-3.5 text-right">세션 제어</th>
-								</tr>
-							</thead>
-							<tbody class="divide-y divide-slate-100 font-medium text-slate-700">
-								{#each liveSessions as s}
-									{@const devBadge = getDeviceBadge(s.device_category)}
-									{@const statusBadge = getSessionStatusBadge(s.status)}
-									<tr class="hover:bg-slate-50/80 transition">
-										<td class="px-5 py-4">
-											<div class="flex items-center gap-3">
-												<div class="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-100 font-black text-slate-700">
-													{(s.real_name || s.user_name || s.username || '?')[0]}
-												</div>
-												<div>
-													<div class="flex items-center gap-1.5 font-black text-slate-900 text-sm">
-														{s.real_name || s.user_name || '이름 없음'}
-														<span class="text-xs font-normal text-slate-400">(@{s.username})</span>
-														{#if s.status === 'ACTIVE'}
-															<span class="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
-														{/if}
-													</div>
-													<div class="text-[11px] text-slate-500 font-normal mt-0.5">
-														{s.primary_group || s.department || '소속 미정'}
-													</div>
-												</div>
-											</div>
-										</td>
-										<td class="px-4 py-4 whitespace-nowrap">
-											<span class="inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-[10px] font-black {statusBadge.color}">
-												<span class="h-1.5 w-1.5 rounded-full {statusBadge.dot}"></span>
-												{statusBadge.text}
-											</span>
-										</td>
-										<td class="px-4 py-4">
-											<div class="flex items-center gap-2">
-												<span class="inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[11px] font-bold {devBadge.color}">
-													<Icon icon={devBadge.icon} class="text-xs" />
-													{devBadge.text}
-												</span>
-												{#if s.device_name}
-													<span class="text-[10px] font-semibold text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded">
-														{s.device_name}
-													</span>
-												{/if}
-											</div>
-											<div class="text-[10px] text-slate-400 truncate max-w-[200px] mt-1" title={s.user_agent}>
-												{s.user_agent || '-'}
-											</div>
-										</td>
-										<td class="px-4 py-4 font-mono font-bold text-slate-600">
-											{s.ip_address || '-'}
-										</td>
-										<td class="px-4 py-4">
-											{#if s.status === 'ACTIVE'}
-												<span class="font-bold text-slate-900">{timeAgo(s.last_activity)}</span>
-												<div class="text-[10px] text-slate-400">{formatDateTime(s.last_activity)}</div>
-											{:else}
-												<div class="font-bold text-slate-500">종료: {timeAgo(s.logout_at || s.last_activity)}</div>
-												<div class="text-[10px] text-slate-400">{formatDateTime(s.logout_at || s.last_activity)}</div>
-											{/if}
-										</td>
-										<td class="px-4 py-4 text-slate-500 whitespace-nowrap">
-											{formatDateTime(s.login_at)}
-										</td>
-										<td class="px-5 py-4 text-right whitespace-nowrap">
-											{#if s.status === 'ACTIVE'}
-												<button
-													onclick={() => handleKickSession(s)}
-													class="inline-flex items-center gap-1.5 rounded-xl border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-black text-rose-700 shadow-sm transition hover:bg-rose-600 hover:text-white active:scale-95"
-												>
-													<Icon icon="solar:shield-cross-bold" class="text-sm" />
-													강제 추방
-												</button>
-											{:else}
-												<span class="text-xs font-medium text-slate-400 px-2 py-1">종료됨</span>
-											{/if}
-										</td>
-									</tr>
-								{/each}
-							</tbody>
-						</table>
-					</div>
-				{/if}
-
-			<!-- ------------------------------------------------------------- -->
-			<!-- TAB 2, 3, 4, 5: 전사 감사로그 뷰 (ACCESS, CHANGE, ERROR, SECURITY) -->
-			<!-- ------------------------------------------------------------- -->
-			{:else}
-				{#if auditLogs.length === 0}
-					<div class="py-20 text-center text-slate-400">
-						<Icon icon="solar:clipboard-list-broken" class="mx-auto h-12 w-12 text-slate-300" />
-						<p class="mt-2 text-sm font-bold">조건에 해당하는 감사로그 기록이 없습니다.</p>
-					</div>
-				{:else}
-					<div class="overflow-x-auto">
-						<table class="w-full text-left text-xs">
-							<thead class="border-b border-slate-200 bg-slate-50/80 font-black text-slate-500 uppercase tracking-wider">
-								<tr>
-									<th class="px-5 py-3.5">발생 일시</th>
-									<th class="px-4 py-3.5">앱 / 분류</th>
-									<th class="px-4 py-3.5">심각도</th>
-									<th class="px-4 py-3.5">행위 (Action)</th>
-									<th class="px-4 py-3.5">작업 수행자</th>
-									<th class="px-4 py-3.5">상세 내용</th>
-									<th class="px-5 py-3.5 text-right">상세 보기</th>
-								</tr>
-							</thead>
-							<tbody class="divide-y divide-slate-100 font-medium text-slate-700">
-								{#each auditLogs as log}
-									<tr class="hover:bg-slate-50/80 transition">
-										<td class="px-5 py-4 whitespace-nowrap">
-											<div class="font-bold text-slate-900">{timeAgo(log.created_at)}</div>
-											<div class="text-[10px] text-slate-400">{formatDateTime(log.created_at)}</div>
-										</td>
-										<td class="px-4 py-4 whitespace-nowrap">
-											<div class="flex items-center gap-1.5">
-												<span class="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] font-black text-slate-700 uppercase">
-													{log.app_id || 'system'}
-												</span>
-											</div>
-										</td>
-										<td class="px-4 py-4 whitespace-nowrap">
-											<span class="inline-block rounded-md border px-2 py-0.5 text-[10px] font-black {getSeverityBadge(log.severity)}">
-												{log.severity}
-											</span>
-										</td>
-										<td class="px-4 py-4 whitespace-nowrap">
-											<span class="font-mono font-bold text-blue-700">{log.action}</span>
-										</td>
-										<td class="px-4 py-4">
-											{#if log.user_summary}
-												<div class="font-bold text-slate-900">{log.user_summary}</div>
-											{:else if log.user_id}
-												<div class="font-bold text-slate-700">사용자 #{log.user_id}</div>
-											{:else}
-												<div class="text-slate-400 font-normal">시스템 (익명)</div>
-											{/if}
-											{#if log.ip_address}
-												<div class="text-[10px] font-mono text-slate-400">{log.ip_address}</div>
-											{/if}
-										</td>
-										<td class="px-4 py-4 max-w-md">
-											<div class="font-bold text-slate-900 truncate" title={log.title}>
-												{log.title}
-											</div>
-											{#if log.message}
-												<div class="text-[11px] text-slate-500 line-clamp-1 mt-0.5 font-normal" title={log.message}>
-													{log.message}
-												</div>
-											{/if}
-										</td>
-										<td class="px-5 py-4 text-right whitespace-nowrap">
-											{#if log.diff_payload && log.diff_payload.length > 0}
-												<button
-													onclick={() => (activeDiffLog = log)}
-													class="inline-flex items-center gap-1 rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-1 text-xs font-bold text-amber-800 transition hover:bg-amber-500 hover:text-white"
-												>
-													<Icon icon="solar:git-commit-bold" class="text-sm" />
-													Diff ({log.diff_payload.length})
-												</button>
-											{:else if log.log_type === 'ERROR' || log.severity === 'ERROR' || log.severity === 'CRITICAL'}
-												<button
-													onclick={() => (activeErrorLog = log)}
-													class="inline-flex items-center gap-1 rounded-lg border border-rose-300 bg-rose-50 px-2.5 py-1 text-xs font-bold text-rose-800 transition hover:bg-rose-600 hover:text-white"
-												>
-													<Icon icon="solar:danger-bold" class="text-sm" />
-													오류 상세
-												</button>
-											{:else}
-												<span class="text-slate-300 text-xs">-</span>
-											{/if}
-										</td>
-									</tr>
-								{/each}
-							</tbody>
-						</table>
-					</div>
-
-					<!-- 페이지네이션 -->
-					{#if totalCount > pageSize}
-						<div class="flex items-center justify-between border-t border-slate-200 bg-slate-50 px-5 py-3">
-							<div class="text-xs text-slate-500">
-								총 {totalCount}개 중 {(currentPage - 1) * pageSize + 1} - {Math.min(currentPage * pageSize, totalCount)}건 표시
-							</div>
-							<div class="flex items-center gap-2">
-								<button
-									disabled={currentPage <= 1}
-									onclick={() => { currentPage--; refreshData(); }}
-									class="rounded-lg border border-slate-300 bg-white px-3 py-1 text-xs font-bold text-slate-700 disabled:opacity-40"
-								>
-									이전
-								</button>
-								<span class="text-xs font-bold text-slate-700">{currentPage}</span>
-								<button
-									disabled={currentPage * pageSize >= totalCount}
-									onclick={() => { currentPage++; refreshData(); }}
-									class="rounded-lg border border-slate-300 bg-white px-3 py-1 text-xs font-bold text-slate-700 disabled:opacity-40"
-								>
-									다음
-								</button>
-							</div>
-						</div>
-					{/if}
-				{/if}
-			{/if}
+			<ObservabilityLogsTab
+				logs={auditLogs}
+				{totalCount}
+				{currentPage}
+				pageSize={obsSettings.ui_log_page_size}
+				isLoading={loading}
+				{appOptions}
+				{appFilter}
+				{severityFilter}
+				{searchKeyword}
+				settings={obsSettings}
+				onAppFilterChange={(nextApp) => {
+					appFilter = nextApp;
+					currentPage = 1;
+					refreshData();
+				}}
+				onSeverityFilterChange={(nextSev) => {
+					severityFilter = nextSev;
+					currentPage = 1;
+					refreshData();
+				}}
+				onSearchSubmit={(kw) => {
+					searchKeyword = kw;
+					currentPage = 1;
+					refreshData();
+				}}
+				onPageChange={(nextPage) => {
+					currentPage = nextPage;
+					refreshData();
+				}}
+				onExportCsv={handleExportAuditCsv}
+				onOpenDiff={(log) => (activeDiffLog = log)}
+				onOpenDetail={(log) => (activeDetailLog = log)}
+			/>
 		{/if}
 	</div>
 </div>
 
-<!-- ========================================================================= -->
-<!-- 5. Diff-Patch Git 스타일 시각 비교 모달 -->
-<!-- ========================================================================= -->
-{#if activeDiffLog}
-	<div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm animate-fade-in">
-		<div class="w-full max-w-3xl rounded-2xl border-2 border-slate-900 bg-white shadow-2xl overflow-hidden font-['Noto_Sans_KR']">
-			<div class="flex items-center justify-between border-b-2 border-slate-900 bg-slate-50 px-6 py-4">
-				<div class="flex items-center gap-2.5">
-					<div class="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-500 text-white">
-						<Icon icon="solar:git-commit-bold" class="text-lg" />
-					</div>
-					<div>
-						<h3 class="text-base font-black text-slate-900">
-							데이터 변경 내역 (Diff-Patch)
-						</h3>
-						<p class="text-xs text-slate-500">
-							{activeDiffLog.title} · {formatDateTime(activeDiffLog.created_at)}
-						</p>
-					</div>
-				</div>
-				<button
-					onclick={() => (activeDiffLog = null)}
-					class="rounded-lg p-1.5 text-slate-400 hover:bg-slate-200 hover:text-slate-700 transition"
-				>
-					<Icon icon="solar:close-circle-bold" class="text-2xl" />
-				</button>
-			</div>
-
-			<div class="max-h-[60vh] overflow-y-auto p-6 space-y-4">
-				<div class="grid grid-cols-2 gap-3 text-xs bg-slate-50 p-3.5 rounded-xl border border-slate-200">
-					<div><span class="text-slate-400 font-bold">수정자:</span> <span class="text-slate-900 font-black">{activeDiffLog.user_summary || '시스템'}</span></div>
-					<div><span class="text-slate-400 font-bold">대상 앱:</span> <span class="font-mono text-blue-600 font-bold">{activeDiffLog.app_id}</span></div>
-					<div><span class="text-slate-400 font-bold">리소스 타입:</span> <span class="font-mono text-slate-700 font-bold">{activeDiffLog.resource_type || '-'}</span></div>
-					<div><span class="text-slate-400 font-bold">리소스 ID:</span> <span class="font-mono text-slate-700 font-bold">#{activeDiffLog.resource_id || '-'}</span></div>
-				</div>
-
-				<div class="overflow-x-auto rounded-xl border border-slate-200">
-					<table class="w-full text-left text-xs">
-						<thead class="bg-slate-100 font-black text-slate-600 border-b border-slate-200">
-							<tr>
-								<th class="px-4 py-2.5 w-1/4">수정된 필드 (Field)</th>
-								<th class="px-4 py-2.5 w-3/8 text-rose-700 bg-rose-50/50">수정 전 (Before)</th>
-								<th class="px-4 py-2.5 w-3/8 text-emerald-700 bg-emerald-50/50">수정 후 (After)</th>
-							</tr>
-						</thead>
-						<tbody class="divide-y divide-slate-100 font-mono">
-							{#each activeDiffLog.diff_payload as diff}
-								<tr class="hover:bg-slate-50">
-									<td class="px-4 py-3 font-bold text-slate-900 break-all">
-										{diff.field}
-									</td>
-									<td class="px-4 py-3 bg-rose-50/30 text-rose-700 break-all">
-										{#if diff.from === null || diff.from === undefined}
-											<span class="italic text-slate-400">null</span>
-										{:else}
-											<span class="line-through bg-rose-100 px-1.5 py-0.5 rounded text-rose-900">{diff.from}</span>
-										{/if}
-									</td>
-									<td class="px-4 py-3 bg-emerald-50/30 text-emerald-700 break-all font-bold">
-										{#if diff.to === null || diff.to === undefined}
-											<span class="italic text-slate-400">null</span>
-										{:else}
-											<span class="bg-emerald-100 px-1.5 py-0.5 rounded text-emerald-900">{diff.to}</span>
-										{/if}
-									</td>
-								</tr>
-							{/each}
-						</tbody>
-					</table>
-				</div>
-			</div>
-
-			<div class="border-t border-slate-200 bg-slate-50 px-6 py-3.5 text-right">
-				<button
-					onclick={() => (activeDiffLog = null)}
-					class="rounded-xl bg-slate-900 px-5 py-2 text-xs font-black text-white hover:bg-blue-600 transition"
-				>
-					닫기
-				</button>
-			</div>
-		</div>
-	</div>
-{/if}
-
-<!-- ========================================================================= -->
-<!-- 6. 에러 스택 트레이스 상세 모달 -->
-<!-- ========================================================================= -->
-{#if activeErrorLog}
-	<div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm animate-fade-in">
-		<div class="w-full max-w-3xl rounded-2xl border-2 border-slate-900 bg-white shadow-2xl overflow-hidden font-['Noto_Sans_KR']">
-			<div class="flex items-center justify-between border-b-2 border-slate-900 bg-rose-50 px-6 py-4">
-				<div class="flex items-center gap-2.5">
-					<div class="flex h-8 w-8 items-center justify-center rounded-lg bg-rose-600 text-white">
-						<Icon icon="solar:danger-triangle-bold" class="text-lg" />
-					</div>
-					<div>
-						<h3 class="text-base font-black text-rose-900">
-							서버 장애 및 오류 세부 내역
-						</h3>
-						<p class="text-xs text-rose-700 font-mono">
-							Request-ID: {activeErrorLog.metadata?.request_id || '-'} · {formatDateTime(activeErrorLog.created_at)}
-						</p>
-					</div>
-				</div>
-				<button
-					onclick={() => (activeErrorLog = null)}
-					class="rounded-lg p-1.5 text-slate-400 hover:bg-slate-200 hover:text-slate-700 transition"
-				>
-					<Icon icon="solar:close-circle-bold" class="text-2xl" />
-				</button>
-			</div>
-
-			<div class="max-h-[60vh] overflow-y-auto p-6 space-y-4">
-				<div>
-					<span class="text-xs font-bold text-slate-400">오류 제목:</span>
-					<div class="mt-1 font-bold text-slate-900 text-sm bg-slate-50 p-3 rounded-xl border border-slate-200">
-						{activeErrorLog.title}
-					</div>
-				</div>
-
-				{#if activeErrorLog.message}
-					<div>
-						<span class="text-xs font-bold text-slate-400">오류 메시지 / 스택 트레이스:</span>
-						<pre class="mt-1 font-mono text-xs bg-slate-900 text-rose-300 p-4 rounded-xl overflow-x-auto whitespace-pre-wrap max-h-80 leading-relaxed border border-slate-800">{activeErrorLog.message}</pre>
-					</div>
-				{/if}
-
-				{#if activeErrorLog.metadata && Object.keys(activeErrorLog.metadata).length > 0}
-					<div>
-						<span class="text-xs font-bold text-slate-400">요청 컨텍스트 메타데이터:</span>
-						<pre class="mt-1 font-mono text-xs bg-slate-100 text-slate-800 p-3.5 rounded-xl overflow-x-auto">{JSON.stringify(activeErrorLog.metadata, null, 2)}</pre>
-					</div>
-				{/if}
-			</div>
-
-			<div class="border-t border-slate-200 bg-slate-50 px-6 py-3.5 text-right">
-				<button
-					onclick={() => (activeErrorLog = null)}
-					class="rounded-xl bg-slate-900 px-5 py-2 text-xs font-black text-white hover:bg-rose-600 transition"
-				>
-					닫기
-				</button>
-			</div>
-		</div>
-	</div>
-{/if}
+<!-- 모달 묶음 (Diff-Patch · 로그/오류 상세 · 세션 추방 확인) -->
+<ObservabilityModals
+	{activeDiffLog}
+	onCloseDiff={() => (activeDiffLog = null)}
+	{activeDetailLog}
+	onCloseDetail={() => (activeDetailLog = null)}
+	{kickTargetSession}
+	{isKicking}
+	onCloseKick={() => (kickTargetSession = null)}
+	onConfirmKick={handleConfirmKick}
+/>

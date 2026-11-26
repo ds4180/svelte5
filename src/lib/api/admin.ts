@@ -276,6 +276,12 @@ export const adminUpdateInstancePermissions = <T = any>(
 // ============================================================================
 // 🏛️ [통합 감사로그 및 시스템 관제 (Observability & Audit) API]
 // ============================================================================
+export const adminGetObservabilitySettings = <T = any>() =>
+	request<T>('/api/v1/admin/observability/settings');
+
+export const adminUpdateObservabilitySettings = <T = any>(data: Record<string, any>) =>
+	request<T>('/api/v1/admin/observability/settings', 'PUT', data, { offline: false });
+
 export const adminGetObservabilitySummary = <T = any>() =>
 	request<T>('/api/v1/admin/observability/summary');
 
@@ -290,10 +296,13 @@ export const adminGetAuditLogs = <T = any>(params: Record<string, any> = {}) => 
 	return request<T>(`/api/v1/admin/observability/logs${qs ? `?${qs}` : ''}`);
 };
 
-export const adminGetLiveSessions = <T = any>(includeHistory = false) =>
-	request<T>(
-		`/api/v1/admin/observability/sessions${includeHistory ? '?include_history=true' : ''}`
-	);
+export const adminGetLiveSessions = <T = any>(includeHistory = false, limit?: number) => {
+	const query = new URLSearchParams();
+	if (includeHistory) query.append('include_history', 'true');
+	if (limit !== undefined && limit > 0) query.append('limit', String(limit));
+	const qs = query.toString();
+	return request<T>(`/api/v1/admin/observability/sessions${qs ? `?${qs}` : ''}`);
+};
 
 export const adminKickLiveSession = <T = any>(sessionId: number | string) =>
 	request<T>(
