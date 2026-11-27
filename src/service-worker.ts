@@ -265,23 +265,38 @@ sw.addEventListener('push', (event: PushEvent) => {
 	event.waitUntil(sw.registration.showNotification(title, options));
 });
 
-// 5. 푸시 알림 클릭 시 해당 페이지로 포커스/이동
+// 5. 푸시 알림 클릭 시 해당 페이지로 포커스/이동 (기존 열린 앱 창 재사용)
 sw.addEventListener('notificationclick', (event: NotificationEvent) => {
 	const clickedNotification = event.notification;
 	clickedNotification.close();
 
-	const targetUrl =
+	const rawUrl =
 		clickedNotification.data && clickedNotification.data.url ? clickedNotification.data.url : '/';
+	const targetAbsUrl = new URL(rawUrl, sw.location.origin).href;
 
 	event.waitUntil(
-		sw.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+		sw.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(async (clientList) => {
+			// 1순위: 정확히 같은 URL이 이미 열려 있으면 즉시 포커스
 			for (const client of clientList) {
-				if (client.url === targetUrl && 'focus' in client) {
+				if (client.url === targetAbsUrl && 'focus' in client) {
+					return client.focus();
+				}
+			}
+			// 2순위: 같은 도메인 앱 창이 열려 있으면 해당 창에서 목적지로 이동 후 포커스 (새 탭 무한 증식 방지)
+			for (const client of clientList) {
+				if (client.url.startsWith(sw.location.origin) && 'focus' in client) {
+					if ('navigate' in client) {
+						try {
+							await client.navigate(targetAbsUrl);
+						} catch {
+							// navigate 불가 시 포커스만 수행
+						}
+					}
 					return client.focus();
 				}
 			}
 			if (sw.clients.openWindow) {
-				return sw.clients.openWindow(targetUrl);
+				return sw.clients.openWindow(targetAbsUrl);
 			}
 		})
 	);
@@ -387,14 +402,25 @@ async function processBackgroundOutbox(): Promise<void> {
 					}
 
 					const response = await fetch(task.url, fetchOptions);
-					if (response.ok) {
+					if (response.status === 401) {
+						// 세션 만료: 이후 요청도 동일하게 실패하므로 즉시 중단
+						break;
+					}
+					const isPermanentClientError =
+						response.status >= 400 &&
+						response.status < 500 &&
+						response.status !== 408 &&
+						response.status !== 429;
+					if (response.ok || isPermanentClientError) {
 						await new Promise((delRes) => {
 							const delTx = db.transaction(STORE_OUTBOX, 'readwrite');
 							const delReq = delTx.objectStore(STORE_OUTBOX).delete(task.id);
 							delReq.onsuccess = () => delRes(undefined);
 							delReq.onerror = () => delRes(undefined);
 						});
-						sentCount++;
+						if (response.ok) {
+							sentCount++;
+						}
 					}
 				} catch {
 					break;

@@ -94,6 +94,7 @@ export async function hardReset(): Promise<void> {
 
 const PUSH_SYNC_SESSION_KEY = 'jeju_push_synced_fingerprint';
 const PUSH_UNSUB_SESSION_KEY = 'jeju_push_unsubscribed_endpoint';
+let pushPromptBound = false;
 
 export interface SyncPushOptions {
 	forcePrompt?: boolean;
@@ -165,18 +166,22 @@ export async function syncPushSubscription(options: SyncPushOptions = {}): Promi
 			return false;
 		}
 
-		const askOnFirstClick = async () => {
-			window.removeEventListener('pointerdown', askOnFirstClick, true);
-			try {
-				const perm = await Notification.requestPermission();
-				if (perm === 'granted') {
-					await performSubscribe();
+		if (!pushPromptBound) {
+			pushPromptBound = true;
+			const askOnFirstClick = async () => {
+				pushPromptBound = false;
+				window.removeEventListener('pointerdown', askOnFirstClick, true);
+				try {
+					const perm = await Notification.requestPermission();
+					if (perm === 'granted') {
+						await performSubscribe();
+					}
+				} catch {
+					// ignore
 				}
-			} catch {
-				// ignore
-			}
-		};
-		window.addEventListener('pointerdown', askOnFirstClick, { capture: true, once: true });
+			};
+			window.addEventListener('pointerdown', askOnFirstClick, { capture: true, once: true });
+		}
 	}
 
 	return false;

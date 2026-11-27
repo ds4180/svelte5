@@ -64,6 +64,7 @@ export class AlertState {
 	countdowns = $state<Record<string | number, number>>({});
 
 	private _initialized = false;
+	private _activeUserKey: string | null = null;
 	private _initializedFirstLoad = false;
 	private _inFlightSync: Promise<void> | null = null;
 	private _lastSyncedAt = 0;
@@ -73,19 +74,32 @@ export class AlertState {
 
 	constructor() {}
 
+	private _dismissedStorageKey(): string {
+		return this._activeUserKey ? `dismissed_alerts:u:${this._activeUserKey}` : 'dismissed_alerts';
+	}
+
+	private _quietStorageKey(): string {
+		return this._activeUserKey ? `is_quiet_mode:u:${this._activeUserKey}` : 'is_quiet_mode';
+	}
+
 	/**
-	 * 브라우저 런타임 초기화 (LocalStorage 복구, 1회 보장)
+	 * 브라우저 런타임 초기화 (사용자별 LocalStorage 격리 복구 — 공용 PC 타 사원 오염 방지)
 	 */
-	init() {
-		if (!browser || this._initialized) return;
+	init(userId?: number | string | null) {
+		if (!browser) return;
+		const nextUserKey = userId != null ? String(userId) : this._activeUserKey;
+		if (this._initialized && nextUserKey === this._activeUserKey) return;
+
+		this._activeUserKey = nextUserKey;
 		this._initialized = true;
 		try {
-			const stored = localStorage.getItem('dismissed_alerts');
+			const stored = localStorage.getItem(this._dismissedStorageKey());
 			this.dismissedIds = stored ? JSON.parse(stored) : {};
-			this.isQuietMode = localStorage.getItem('is_quiet_mode') === 'true';
+			this.isQuietMode = localStorage.getItem(this._quietStorageKey()) === 'true';
 			console.log('🔔 [AlertState] 사내 알림 엔진 초기화 완료');
 		} catch (e) {
 			this.dismissedIds = {};
+			this.isQuietMode = false;
 		}
 	}
 
@@ -98,8 +112,12 @@ export class AlertState {
 			this._syncTimer = null;
 		}
 		this.all = [];
+		this.dismissedIds = {};
+		this.isQuietMode = false;
 		this.sessionHiddenIds = new Set();
 		this.countdowns = {};
+		this._initialized = false;
+		this._activeUserKey = null;
 		this._initializedFirstLoad = false;
 		this._lastSyncedAt = 0;
 		this._isDirty = false;
@@ -265,7 +283,7 @@ export class AlertState {
 		expiresAt.setDate(expiresAt.getDate() + 1);
 		this.dismissedIds[String(id)] = expiresAt.toISOString();
 		if (browser) {
-			localStorage.setItem('dismissed_alerts', JSON.stringify(this.dismissedIds));
+			localStorage.setItem(this._dismissedStorageKey(), JSON.stringify(this.dismissedIds));
 		}
 		this.dismiss(id);
 	}
@@ -279,7 +297,7 @@ export class AlertState {
 		if (isExpired(expiresAt)) {
 			delete this.dismissedIds[String(id)];
 			if (browser) {
-				localStorage.setItem('dismissed_alerts', JSON.stringify(this.dismissedIds));
+				localStorage.setItem(this._dismissedStorageKey(), JSON.stringify(this.dismissedIds));
 			}
 			return false;
 		}
@@ -292,7 +310,7 @@ export class AlertState {
 	toggleQuietMode() {
 		this.isQuietMode = !this.isQuietMode;
 		if (browser) {
-			localStorage.setItem('is_quiet_mode', String(this.isQuietMode));
+			localStorage.setItem(this._quietStorageKey(), String(this.isQuietMode));
 		}
 	}
 

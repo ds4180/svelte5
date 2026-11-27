@@ -62,7 +62,7 @@
 				console.log('🌐 [Root Layout] 유저 세션 확인 -> 실시간 웹소켓 채널 연결 (/ws) 및 푸시 구독 1회 동기화');
 				websocket.init();
 				syncPushSubscription({ userId: auth.user?.id });
-				alertState.init();
+				alertState.init(auth.user?.id);
 				alertState.sync();
 			} else {
 				websocket.disconnect();
