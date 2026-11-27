@@ -6,7 +6,7 @@
  * 동적/정적 페이지(PageEngine) 조회 및 관리자 CRUD를 위한 Type-Safe 통신 함수를 제공합니다.
  */
 
-import { fastApi } from './index';
+import { fastApi, type FastApiOptions } from './index';
 
 export interface PageItem {
 	id: number;
@@ -56,8 +56,8 @@ export const getPublicPages = <T = PageItem[]>() =>
 /**
  * 3. [Admin] 전체 페이지 목록 조회 (비활성/예약 포함)
  */
-export const adminGetPages = <T = PageItem[]>() =>
-	fastApi<T>('GET', '/api/v1/page/admin/list');
+export const adminGetPages = <T = PageItem[]>(options?: FastApiOptions) =>
+	fastApi<T>('GET', '/api/v1/page/admin/list', {}, options);
 
 /**
  * 4. [Admin] 새 페이지 생성

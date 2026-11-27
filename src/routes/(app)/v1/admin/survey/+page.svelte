@@ -98,8 +98,8 @@
 					keyword: filterKeyword.trim() || undefined
 				}),
 				surveyApi.adminListSurveyTemplates().catch(() => ({ templates: [] })),
-				api.adminGetGroups().catch(() => []),
-				api.adminGetUsers().catch(() => []),
+				api.adminGetGroups({ silent: true }).catch(() => []),
+				api.adminGetUsers({ silent: true }).catch(() => []),
 				surveyApi.adminGetSurveySettings().catch(() => null),
 				surveyApi
 					.getSurveyVehicles()

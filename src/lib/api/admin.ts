@@ -36,7 +36,8 @@ export const adminDeleteMenu = <T = any>(id: number | string) =>
 	request<T>(`${BASE_URL}/menu/${id}`, 'DELETE');
 
 // 📦 앱 레지스트리 API
-export const adminGetApps = <T = any>() => request<T>(`${BASE_URL}/apps`);
+export const adminGetApps = <T = any>(options?: FastApiOptions) =>
+	request<T>(`${BASE_URL}/apps`, 'GET', null, options);
 export const adminGetAppDetail = <T = any>(id: number | string) =>
 	request<T>(`${BASE_URL}/apps/${id}`);
 export const adminCreateApp = <T = any>(data: Record<string, any>) =>
@@ -47,7 +48,8 @@ export const adminDeleteApp = <T = any>(id: number | string) =>
 	request<T>(`${BASE_URL}/apps/${id}`, 'DELETE');
 
 // 📑 게시판 관리 API
-export const adminGetBoards = <T = any>() => request<T>(`${BASE_URL}/boards`);
+export const adminGetBoards = <T = any>(options?: FastApiOptions) =>
+	request<T>(`${BASE_URL}/boards`, 'GET', null, options);
 export const adminCreateBoard = <T = any>(data: Record<string, any>) =>
 	request<T>(`${BASE_URL}/boards`, 'POST', data);
 export const adminUpdateBoard = <T = any>(id: number | string, data: Record<string, any>) =>
@@ -123,7 +125,8 @@ export {
 } from './dayoff';
 
 // 👤 유저 관리 API
-export const adminGetUsers = <T = any>() => request<T>(`${BASE_URL}/users`);
+export const adminGetUsers = <T = any>(options?: FastApiOptions) =>
+	request<T>(`${BASE_URL}/users`, 'GET', null, options);
 export const adminGetUserDetail = <T = any>(userId: number | string) =>
 	request<T>(`${BASE_URL}/users/${userId}`);
 export const adminCreateUser = <T = any>(data: Record<string, any>) =>
@@ -169,7 +172,8 @@ export const adminDeleteAllPushSubscriptions = <T = any>() =>
 	request<T>(`${BASE_URL}/push/subscriptions`, 'DELETE');
 
 // 👥 그룹 관리 API (Redis 기반)
-export const adminGetGroups = <T = any>() => request<T>('/api/v1/admin/groups');
+export const adminGetGroups = <T = any>(options?: FastApiOptions) =>
+	request<T>('/api/v1/admin/groups', 'GET', null, options);
 export const adminGetTargetGroupUsers = <T = any>() =>
 	request<T>('/api/v1/admin/groups/candidates');
 export const adminGetGroupMembers = <T = any>(name: string) =>

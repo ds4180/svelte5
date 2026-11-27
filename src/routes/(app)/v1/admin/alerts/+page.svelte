@@ -68,7 +68,7 @@
 	 */
 	async function loadGroups() {
 		try {
-			groups = await api.adminGetGroups();
+			groups = await api.adminGetGroups({ silent: true });
 		} catch (e) {
 			console.error('❌ [Alerts] 타겟 그룹 로드 오류:', e);
 		}

@@ -100,14 +100,14 @@
 		try {
 			const [m, a, b, p] = await Promise.all([
 				api.adminGetMenus(),
-				api.adminGetApps(),
-				api.adminGetBoards(),
-				adminGetPages()
+				api.adminGetApps({ silent: true }).catch(() => []),
+				api.adminGetBoards({ silent: true }).catch(() => []),
+				adminGetPages({ silent: true }).catch(() => [])
 			]);
-			menus = m;
-			apps = a;
-			boards = b;
-			pages = p;
+			menus = Array.isArray(m) ? m : [];
+			apps = Array.isArray(a) ? a : [];
+			boards = Array.isArray(b) ? b : [];
+			pages = Array.isArray(p) ? p : [];
 		} catch (e) {
 			toast.error('데이터 로드 실패: ' + (e.message || '오류 발생'));
 		} finally {
