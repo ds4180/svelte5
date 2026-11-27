@@ -4,6 +4,7 @@
 	import { buildChartProps } from '$lib/components/tiptap/extensions';
 	import '$lib/components/tiptap/tiptap-blocks.css';
 	import ImageZoomLightbox from '$lib/components/ImageZoomLightbox.svelte';
+	import { sanitizeHtml } from '$lib/utils/sanitizeHtml';
 
 	/**
 	 * Renders raw HTML only after client mount so malformed CMS/board HTML cannot
@@ -21,7 +22,7 @@
 
 	let mounted = $state(false);
 	let container: HTMLDivElement | undefined = $state();
-	const safeHtml = $derived(typeof html === 'string' ? html : '');
+	const safeHtml = $derived(mounted ? sanitizeHtml(html) : '');
 
 	type PreviewImage = { src: string; alt: string };
 	let previewImages = $state<PreviewImage[]>([]);
