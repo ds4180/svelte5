@@ -174,8 +174,8 @@ export const adminDeleteAllPushSubscriptions = <T = any>() =>
 // 👥 그룹 관리 API (Redis 기반)
 export const adminGetGroups = <T = any>(options?: FastApiOptions) =>
 	request<T>('/api/v1/admin/groups', 'GET', null, options);
-export const adminGetTargetGroupUsers = <T = any>() =>
-	request<T>('/api/v1/admin/groups/candidates');
+export const adminGetTargetGroupUsers = <T = any>(options?: FastApiOptions) =>
+	request<T>('/api/v1/admin/groups/candidates', 'GET', null, options);
 export const adminGetGroupMembers = <T = any>(name: string) =>
 	request<T>(`/api/v1/admin/groups/${encodeURIComponent(name)}/members`);
 export const adminCreateManualGroup = <T = any>(data: Record<string, any>) =>

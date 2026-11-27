@@ -99,7 +99,7 @@
 				}),
 				surveyApi.adminListSurveyTemplates().catch(() => ({ templates: [] })),
 				api.adminGetGroups({ silent: true }).catch(() => []),
-				api.adminGetUsers({ silent: true }).catch(() => []),
+				api.adminGetTargetGroupUsers({ silent: true }).catch(() => []),
 				surveyApi.adminGetSurveySettings().catch(() => null),
 				surveyApi
 					.getSurveyVehicles()
