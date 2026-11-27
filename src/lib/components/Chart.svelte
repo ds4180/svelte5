@@ -43,15 +43,18 @@
 		const nextData = $state.snapshot(data);
 		const nextOptions = $state.snapshot(options);
 
-		// 차트 종류가 변경되면 기존 축/플러그인 상태가 남지 않도록 인스턴스를 재생성
-		if (myChart && myChart.config.type !== nextType) {
+		// Chart.js v4는 myChart.options = nextOptions 직접 대입 시 내부 리졸버 프록시가 깨질 수 있으므로,
+		// 타입이 변경되거나 옵션 객체가 바뀌는 초기 전환에서도 안전하게 인스턴스를 재생성·갱신합니다.
+		if (myChart && (/** @type {any} */ (myChart.config)).type !== nextType) {
 			myChart.destroy();
 			myChart = null;
 		}
 
 		if (myChart) {
 			myChart.data = nextData;
-			myChart.options = nextOptions;
+			if (nextOptions && typeof nextOptions === 'object') {
+				Object.assign(myChart.options, nextOptions);
+			}
 			myChart.update();
 		} else {
 			myChart = new Chart(canvasElement, {

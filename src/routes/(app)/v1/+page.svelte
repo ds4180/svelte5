@@ -19,7 +19,7 @@
 	let briefingLoading = $state(false);
 	let briefingError = $state(false);
 
-	$effect(() => {
+	$effect.pre(() => {
 		if (data?.dispatchBriefing) {
 			briefing = data.dispatchBriefing;
 			briefingLoaded = true;
@@ -27,7 +27,7 @@
 		}
 	});
 
-	$effect(() => {
+	$effect.pre(() => {
 		if (data?.initialMiniappSummary) {
 			untrack(() => miniappStore.hydrateSummary(data.initialMiniappSummary));
 		}
@@ -37,7 +37,7 @@
 	let dispatchWorkRatesLoading = $state(false);
 	let dispatchWorkRatesError = $state(false);
 
-	$effect(() => {
+	$effect.pre(() => {
 		if (Array.isArray(data?.initialDispatchWorkRates)) {
 			dispatchWorkRates = data.initialDispatchWorkRates;
 			dispatchWorkRatesError = false;
@@ -281,7 +281,7 @@
 	});
 
 	$effect(() => {
-		if (user && (userRole === 'OFFICE' || userRole === 'ADMIN')) {
+		if (user && (userRole === 'OFFICE' || userRole === 'ADMIN') && !miniappStore.itemsLoaded && !miniappStore.loading) {
 			untrack(() => miniappStore.ensureSummaryLoaded(true));
 		}
 	});

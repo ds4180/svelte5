@@ -50,7 +50,7 @@
 	});
 
 	$effect(() => {
-		if (auth.isAuthenticated) {
+		if (auth.isAuthenticated || Boolean(data?.user)) {
 			miniappStore.ensureCountsLoaded(true);
 		} else {
 			miniappStore.reset();

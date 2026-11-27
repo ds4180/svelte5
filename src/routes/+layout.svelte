@@ -42,8 +42,9 @@
 	// 이렇게 하면 서버 렌더링 시점과 브라우저 하이드레이션 시점 간의 화면 깜빡임(Mismatch)이 100% 사라집니다.
 	const auth = setAuthContext(untrack(() => data.user));
 
-	// $effect 로 이후 클라이언트 페이지 이동 시 유저 정보 변경사항을 자동 동기화합니다.
-	$effect(() => {
+	// $effect.pre 로 하위 레이아웃/페이지 마운트 및 $effect 실행보다 먼저 auth 상태를 동기화합니다.
+	// (로그인 직후 /login -> /v1 클라이언트 전환 시 하위 레이아웃이 auth.isAuthenticated=false로 오판해 miniappStore.reset() 하는 레이스 차단)
+	$effect.pre(() => {
 		auth.setUser(data.user);
 	});
 
