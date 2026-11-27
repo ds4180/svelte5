@@ -346,26 +346,26 @@
 	<title>{getSiteTitle('파일·사진 관리')}</title>
 </svelte:head>
 
-<div class="mx-auto max-w-7xl space-y-8 px-4 pb-24 font-['Outfit','Noto_Sans_KR'] md:px-8">
+<div class="mx-auto max-w-7xl space-y-5 sm:space-y-8 px-3 sm:px-4 pb-24 font-['Outfit','Noto_Sans_KR'] md:px-8 overflow-x-hidden">
 	<!-- 🏛️ 모던 엔터프라이즈 통합 헤더 -->
-	<header class="flex flex-col items-start justify-between gap-6 border-b-4 border-slate-900 pb-8 md:flex-row md:items-end">
-		<div>
-			<div class="flex items-center gap-2 mb-2">
-				<span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-black uppercase tracking-widest bg-rose-50 text-rose-600 border border-rose-200">
-					<Icon icon="ph:database-duotone" class="text-sm" />
-					SYSTEM GOVERNANCE • FILE & MEDIA MASTER
+	<header class="flex flex-col items-start justify-between gap-4 sm:gap-6 border-b-2 sm:border-b-4 border-slate-900 pb-5 sm:pb-8 md:flex-row md:items-end">
+		<div class="min-w-0 w-full md:w-auto">
+			<div class="flex flex-wrap items-center gap-2 mb-2">
+				<span class="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-full text-[10px] sm:text-[11px] font-black uppercase tracking-wider sm:tracking-widest bg-rose-50 text-rose-600 border border-rose-200 max-w-full truncate">
+					<Icon icon="ph:database-duotone" class="text-sm shrink-0" />
+					<span class="truncate">SYSTEM GOVERNANCE • FILE & MEDIA MASTER</span>
 				</span>
-				<span class="text-xs font-bold text-slate-400 font-mono">Rank {userRank}</span>
+				<span class="text-xs font-bold text-slate-400 font-mono shrink-0">Rank {userRank}</span>
 			</div>
-			<h1 class="text-3xl sm:text-4xl font-black tracking-tighter text-slate-900 uppercase italic md:text-5xl">
+			<h1 class="text-2xl sm:text-4xl font-black tracking-tighter text-slate-900 uppercase italic md:text-5xl">
 				파일·<span class="text-rose-600 not-italic">사진 관리</span>
 			</h1>
-			<p class="mt-2 text-xs sm:text-sm font-bold text-slate-500">
+			<p class="mt-1.5 sm:mt-2 text-xs sm:text-sm font-bold text-slate-500">
 				4단계 저장 계층(Tier) 미디어를 탐색하고 수명주기·용량·변환 정책을 동적으로 관제합니다.
 			</p>
 		</div>
 
-		<div class="flex flex-wrap items-center gap-2.5 w-full md:w-auto">
+		<div class="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2 sm:gap-2.5 w-full md:w-auto">
 			{#if canAdminRead && !currentTab?.isSettings}
 				<button
 					type="button"
@@ -373,10 +373,10 @@
 						showHidden = !showHidden;
 						loadMedia();
 					}}
-					class="flex items-center gap-2 px-4 py-2.5 rounded-2xl border-2 font-black text-xs uppercase tracking-wider transition-all shadow-xs {showHidden ? 'bg-amber-500 border-amber-500 text-white' : 'bg-white border-slate-200 text-slate-600 hover:border-slate-400'}"
+					class="flex items-center justify-center gap-1.5 sm:gap-2 px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl sm:rounded-2xl border-2 font-black text-[11px] sm:text-xs uppercase tracking-wider transition-all shadow-xs whitespace-nowrap {showHidden ? 'bg-amber-500 border-amber-500 text-white' : 'bg-white border-slate-200 text-slate-600 hover:border-slate-400'}"
 					title="닷(.) 및 DEL_ 격리 파일과 폴더를 목록에 표시합니다."
 				>
-					<Icon icon={showHidden ? 'ph:eye-bold' : 'ph:eye-slash-bold'} class="text-base" />
+					<Icon icon={showHidden ? 'ph:eye-bold' : 'ph:eye-slash-bold'} class="text-sm sm:text-base shrink-0" />
 					<span>숨김·격리 {showHidden ? 'ON' : 'OFF'}</span>
 				</button>
 			{/if}
@@ -385,9 +385,9 @@
 				<button
 					type="button"
 					onclick={() => (gcModalOpen = true)}
-					class="flex items-center gap-2 px-4 py-2.5 rounded-2xl border-2 border-indigo-600 bg-indigo-50 text-indigo-700 font-black text-xs uppercase tracking-wider hover:bg-indigo-600 hover:text-white transition-all shadow-xs"
+					class="flex items-center justify-center gap-1.5 sm:gap-2 px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl sm:rounded-2xl border-2 border-indigo-600 bg-indigo-50 text-indigo-700 font-black text-[11px] sm:text-xs uppercase tracking-wider hover:bg-indigo-600 hover:text-white transition-all shadow-xs whitespace-nowrap"
 				>
-					<Icon icon="mdi:broom" class="text-base" />
+					<Icon icon="mdi:broom" class="text-sm sm:text-base shrink-0" />
 					<span>시스템 정리 (GC)</span>
 				</button>
 			{/if}
@@ -400,17 +400,17 @@
 					loadMedia();
 					toast.info('미디어 자산 및 정책 현황을 새로고침했습니다.');
 				}}
-				class="flex items-center gap-2 px-4 py-2.5 rounded-2xl border-2 border-slate-200 bg-white font-black text-xs uppercase tracking-wider text-slate-700 hover:border-rose-500 hover:text-rose-600 transition-all shadow-xs"
+				class="flex items-center justify-center gap-1.5 sm:gap-2 px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl sm:rounded-2xl border-2 border-slate-200 bg-white font-black text-[11px] sm:text-xs uppercase tracking-wider text-slate-700 hover:border-rose-500 hover:text-rose-600 transition-all shadow-xs whitespace-nowrap"
 			>
-				<Icon icon="ph:arrows-clockwise-bold" class="text-base {isLoadingMedia ? 'animate-spin' : ''}" />
+				<Icon icon="ph:arrows-clockwise-bold" class="text-sm sm:text-base shrink-0 {isLoadingMedia ? 'animate-spin' : ''}" />
 				<span>새로고침</span>
 			</button>
 
 			<a
 				href="/v1/admin"
-				class="flex items-center gap-2 px-4 py-2.5 rounded-2xl border-2 border-slate-200 bg-white font-black text-xs uppercase tracking-wider text-slate-700 hover:border-slate-400 hover:bg-slate-50 transition-all shadow-xs"
+				class="flex items-center justify-center gap-1.5 sm:gap-2 px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl sm:rounded-2xl border-2 border-slate-200 bg-white font-black text-[11px] sm:text-xs uppercase tracking-wider text-slate-700 hover:border-slate-400 hover:bg-slate-50 transition-all shadow-xs whitespace-nowrap"
 			>
-				<Icon icon="solar:home-smile-angle-bold-duotone" class="text-base text-slate-500" />
+				<Icon icon="solar:home-smile-angle-bold-duotone" class="text-sm sm:text-base text-slate-500 shrink-0" />
 				<span>관리자 홈</span>
 			</a>
 		</div>
@@ -418,21 +418,21 @@
 
 	<!-- 📊 전사 표준 4대 핵심 관제 지표 요약 카드 -->
 	{#if canAdminRead}
-		<section class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5">
-			<div class="relative overflow-hidden rounded-[2rem] border-2 border-slate-100 bg-white p-6 shadow-xs hover:border-indigo-200 transition-all">
-				<div class="flex w-full items-center justify-between gap-2 mb-4">
-					<span class="min-w-0 truncate text-[11px] font-black tracking-widest uppercase text-slate-400">Total Assets</span>
-					<div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600">
-						<Icon icon="ph:files-bold" class="text-2xl" />
+		<section class="grid grid-cols-2 xl:grid-cols-4 gap-2.5 sm:gap-5">
+			<div class="relative overflow-hidden rounded-2xl sm:rounded-[2rem] border-2 border-slate-100 bg-white p-3.5 sm:p-6 shadow-xs hover:border-indigo-200 transition-all min-w-0">
+				<div class="flex w-full items-center justify-between gap-1.5 sm:gap-2 mb-2.5 sm:mb-4">
+					<span class="min-w-0 truncate text-[10px] sm:text-[11px] font-black tracking-wider sm:tracking-widest uppercase text-slate-400">Total Assets</span>
+					<div class="flex h-8 w-8 sm:h-11 sm:w-11 shrink-0 items-center justify-center rounded-xl sm:rounded-2xl bg-indigo-50 text-indigo-600">
+						<Icon icon="ph:files-bold" class="text-lg sm:text-2xl" />
 					</div>
 				</div>
-				<div class="text-3xl font-black text-slate-900 tracking-tight">
+				<div class="text-xl sm:text-3xl font-black text-slate-900 tracking-tight">
 					{isLoadingStats ? '...' : stats.total_count.toLocaleString()}
-					<span class="text-sm font-bold text-slate-400 ml-1">건</span>
+					<span class="text-xs sm:text-sm font-bold text-slate-400 ml-0.5 sm:ml-1">건</span>
 				</div>
-				<div class="mt-3 flex items-center gap-2 text-xs font-bold text-indigo-600">
-					<span class="rounded-lg bg-indigo-50 px-2 py-0.5 font-mono">{formatBytes(stats.total_size_bytes)}</span>
-					<span class="text-slate-400">누적 스토리지</span>
+				<div class="mt-2 sm:mt-3 flex flex-wrap items-center gap-1 sm:gap-2 text-[11px] sm:text-xs font-bold text-indigo-600">
+					<span class="rounded-lg bg-indigo-50 px-1.5 sm:px-2 py-0.5 font-mono">{formatBytes(stats.total_size_bytes)}</span>
+					<span class="text-slate-400 hidden sm:inline">누적 스토리지</span>
 				</div>
 			</div>
 
@@ -442,21 +442,21 @@
 					const tab = tabConfigs.find((t) => t.id === 'PUBLIC');
 					if (tab) selectTab(tab);
 				}}
-				class="w-full text-left relative overflow-hidden rounded-[2rem] border-2 border-slate-100 bg-white p-6 shadow-xs hover:border-emerald-300 transition-all group"
+				class="w-full text-left relative overflow-hidden rounded-2xl sm:rounded-[2rem] border-2 border-slate-100 bg-white p-3.5 sm:p-6 shadow-xs hover:border-emerald-300 transition-all group min-w-0"
 			>
-				<div class="flex w-full items-center justify-between gap-2 mb-4">
-					<span class="min-w-0 truncate text-[11px] font-black tracking-widest uppercase text-slate-400 group-hover:text-emerald-600">Public Tier</span>
-					<div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600 group-hover:scale-110 transition-transform">
-						<Icon icon="ph:globe-hemisphere-west-bold" class="text-2xl" />
+				<div class="flex w-full items-center justify-between gap-1.5 sm:gap-2 mb-2.5 sm:mb-4">
+					<span class="min-w-0 truncate text-[10px] sm:text-[11px] font-black tracking-wider sm:tracking-widest uppercase text-slate-400 group-hover:text-emerald-600">Public Tier</span>
+					<div class="flex h-8 w-8 sm:h-11 sm:w-11 shrink-0 items-center justify-center rounded-xl sm:rounded-2xl bg-emerald-50 text-emerald-600 group-hover:scale-110 transition-transform">
+						<Icon icon="ph:globe-hemisphere-west-bold" class="text-lg sm:text-2xl" />
 					</div>
 				</div>
-				<div class="text-3xl font-black text-slate-900 tracking-tight">
+				<div class="text-xl sm:text-3xl font-black text-slate-900 tracking-tight">
 					{isLoadingStats ? '...' : (stats.tier_summary['PUBLIC']?.count || 0).toLocaleString()}
-					<span class="text-sm font-bold text-slate-400 ml-1">건</span>
+					<span class="text-xs sm:text-sm font-bold text-slate-400 ml-0.5 sm:ml-1">건</span>
 				</div>
-				<div class="mt-3 flex items-center gap-2 text-xs font-bold text-emerald-600">
-					<span class="rounded-lg bg-emerald-50 px-2 py-0.5 font-mono">{formatBytes(stats.tier_summary['PUBLIC']?.size || 0)}</span>
-					<span class="text-slate-400">서비스 노출 자산</span>
+				<div class="mt-2 sm:mt-3 flex flex-wrap items-center gap-1 sm:gap-2 text-[11px] sm:text-xs font-bold text-emerald-600">
+					<span class="rounded-lg bg-emerald-50 px-1.5 sm:px-2 py-0.5 font-mono">{formatBytes(stats.tier_summary['PUBLIC']?.size || 0)}</span>
+					<span class="text-slate-400 hidden sm:inline">서비스 노출 자산</span>
 				</div>
 			</button>
 
@@ -466,21 +466,21 @@
 					const tab = tabConfigs.find((t) => t.id === 'PROTECTED');
 					if (tab) selectTab(tab);
 				}}
-				class="w-full text-left relative overflow-hidden rounded-[2rem] border-2 border-slate-100 bg-white p-6 shadow-xs hover:border-amber-300 transition-all group"
+				class="w-full text-left relative overflow-hidden rounded-2xl sm:rounded-[2rem] border-2 border-slate-100 bg-white p-3.5 sm:p-6 shadow-xs hover:border-amber-300 transition-all group min-w-0"
 			>
-				<div class="flex w-full items-center justify-between gap-2 mb-4">
-					<span class="min-w-0 truncate text-[11px] font-black tracking-widest uppercase text-slate-400 group-hover:text-amber-600">Protected Tier</span>
-					<div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-amber-50 text-amber-600 group-hover:scale-110 transition-transform">
-						<Icon icon="ph:shield-check-bold" class="text-2xl" />
+				<div class="flex w-full items-center justify-between gap-1.5 sm:gap-2 mb-2.5 sm:mb-4">
+					<span class="min-w-0 truncate text-[10px] sm:text-[11px] font-black tracking-wider sm:tracking-widest uppercase text-slate-400 group-hover:text-amber-600">Protected Tier</span>
+					<div class="flex h-8 w-8 sm:h-11 sm:w-11 shrink-0 items-center justify-center rounded-xl sm:rounded-2xl bg-amber-50 text-amber-600 group-hover:scale-110 transition-transform">
+						<Icon icon="ph:shield-check-bold" class="text-lg sm:text-2xl" />
 					</div>
 				</div>
-				<div class="text-3xl font-black text-slate-900 tracking-tight">
+				<div class="text-xl sm:text-3xl font-black text-slate-900 tracking-tight">
 					{isLoadingStats ? '...' : (stats.tier_summary['PROTECTED']?.count || 0).toLocaleString()}
-					<span class="text-sm font-bold text-slate-400 ml-1">건</span>
+					<span class="text-xs sm:text-sm font-bold text-slate-400 ml-0.5 sm:ml-1">건</span>
 				</div>
-				<div class="mt-3 flex items-center gap-2 text-xs font-bold text-amber-600">
-					<span class="rounded-lg bg-amber-50 px-2 py-0.5 font-mono">{formatBytes(stats.tier_summary['PROTECTED']?.size || 0)}</span>
-					<span class="text-slate-400">임직원 전용 업무</span>
+				<div class="mt-2 sm:mt-3 flex flex-wrap items-center gap-1 sm:gap-2 text-[11px] sm:text-xs font-bold text-amber-600">
+					<span class="rounded-lg bg-amber-50 px-1.5 sm:px-2 py-0.5 font-mono">{formatBytes(stats.tier_summary['PROTECTED']?.size || 0)}</span>
+					<span class="text-slate-400 hidden sm:inline">임직원 전용 업무</span>
 				</div>
 			</button>
 
@@ -490,22 +490,22 @@
 					const tab = tabConfigs.find((t) => t.id === 'PERSONAL' || t.id === 'SHARED');
 					if (tab) selectTab(tab);
 				}}
-				class="w-full text-left relative overflow-hidden rounded-[2rem] border-2 border-slate-100 bg-white p-6 shadow-xs hover:border-rose-300 transition-all group"
+				class="w-full text-left relative overflow-hidden rounded-2xl sm:rounded-[2rem] border-2 border-slate-100 bg-white p-3.5 sm:p-6 shadow-xs hover:border-rose-300 transition-all group min-w-0"
 			>
-				<div class="flex w-full items-center justify-between gap-2 mb-4">
-					<span class="min-w-0 truncate text-[11px] font-black tracking-widest uppercase text-slate-400 group-hover:text-rose-600">Private & Core</span>
-					<div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-rose-50 text-rose-600 group-hover:scale-110 transition-transform">
-						<Icon icon="ph:lock-key-bold" class="text-2xl" />
+				<div class="flex w-full items-center justify-between gap-1.5 sm:gap-2 mb-2.5 sm:mb-4">
+					<span class="min-w-0 truncate text-[10px] sm:text-[11px] font-black tracking-wider sm:tracking-widest uppercase text-slate-400 group-hover:text-rose-600">Private & Core</span>
+					<div class="flex h-8 w-8 sm:h-11 sm:w-11 shrink-0 items-center justify-center rounded-xl sm:rounded-2xl bg-rose-50 text-rose-600 group-hover:scale-110 transition-transform">
+						<Icon icon="ph:lock-key-bold" class="text-lg sm:text-2xl" />
 					</div>
 				</div>
-				<div class="text-3xl font-black text-slate-900 tracking-tight">
+				<div class="text-xl sm:text-3xl font-black text-slate-900 tracking-tight">
 					{isLoadingStats
 						? '...'
 						: ((stats.tier_summary['PRIVATE']?.count || 0) + (stats.tier_summary['SYSTEM']?.count || 0)).toLocaleString()}
-					<span class="text-sm font-bold text-slate-400 ml-1">건</span>
+					<span class="text-xs sm:text-sm font-bold text-slate-400 ml-0.5 sm:ml-1">건</span>
 				</div>
-				<div class="mt-3 flex items-center gap-2 text-xs font-bold text-rose-600">
-					<span class="rounded-lg bg-rose-50 px-2 py-0.5 font-mono">
+				<div class="mt-2 sm:mt-3 flex flex-wrap items-center gap-1 sm:gap-2 text-[11px] sm:text-xs font-bold text-rose-600">
+					<span class="rounded-lg bg-rose-50 px-1.5 sm:px-2 py-0.5 font-mono truncate max-w-full">
 						개인 {stats.tier_summary['PRIVATE']?.count || 0} / 시스템 {stats.tier_summary['SYSTEM']?.count || 0}
 					</span>
 				</div>
@@ -514,15 +514,15 @@
 	{/if}
 
 	<!-- 🗂️ 탭 내비게이션 (가장 오른쪽에 '설정' 탭 배치) -->
-	<nav class="flex items-center gap-2 border-b-2 border-slate-200 overflow-x-auto no-scrollbar">
+	<nav class="flex items-center gap-1 sm:gap-2 border-b-2 border-slate-200 overflow-x-auto no-scrollbar">
 		{#each tabConfigs as tab (tab.id)}
 			<button
 				type="button"
 				onclick={() => selectTab(tab)}
-				class="px-5 py-3.5 text-xs font-black uppercase tracking-widest transition-all whitespace-nowrap flex items-center gap-1.5 {tab.isSettings ? 'ml-auto' : ''} {activeTabId === tab.id
+				class="px-3.5 py-2.5 sm:px-5 sm:py-3.5 text-[11px] sm:text-xs font-black uppercase tracking-wider sm:tracking-widest transition-all whitespace-nowrap shrink-0 flex items-center gap-1.5 {tab.isSettings ? 'ml-auto' : ''} {activeTabId === tab.id
 					? tab.isSettings
-						? 'border-b-4 border-slate-900 text-slate-900 bg-slate-100 rounded-t-2xl'
-						: 'border-b-4 border-rose-600 text-rose-600 bg-rose-50/50 rounded-t-2xl'
+						? 'border-b-4 border-slate-900 text-slate-900 bg-slate-100 rounded-t-xl sm:rounded-t-2xl'
+						: 'border-b-4 border-rose-600 text-rose-600 bg-rose-50/50 rounded-t-xl sm:rounded-t-2xl'
 					: 'text-slate-400 hover:text-slate-700'}"
 			>
 				{#if tab.isSettings}

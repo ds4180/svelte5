@@ -85,6 +85,7 @@
 
 	let searchQuery = $state('');
 	let uploadedInSession = $state<any[]>([]);
+	let mobileUploadOpen = $state(false);
 
 	const filtered = $derived(filterMediaExplorerItems(folders, files, searchQuery));
 	const visibleFolders = $derived(filtered.filteredFolders);
@@ -107,52 +108,64 @@
 	}
 </script>
 
-<div class="flex flex-col lg:flex-row gap-8">
-	<!-- 좌측 사이드바: 빠른 업로더 및 적용 정책 안내 -->
-	<aside class="lg:w-80 shrink-0 space-y-6">
-		<div class="bg-white rounded-[2.5rem] border-2 border-slate-100 p-6 sm:p-7 shadow-sm sticky top-8 transition-all hover:border-rose-200">
-			<div class="mb-4 flex items-center justify-between">
-				<h3 class="text-xs font-black uppercase tracking-widest text-rose-600 flex items-center gap-2">
-					<Icon icon="ph:cloud-arrow-up-bold" class="text-lg" /> 빠른 파일 업로드
-				</h3>
-				<span class="rounded-full bg-slate-100 px-2.5 py-0.5 font-mono text-[10px] font-black text-slate-600">
+<div class="flex flex-col lg:flex-row gap-4 sm:gap-8">
+	<!-- 좌측 사이드바: 빠른 업로더 및 적용 정책 안내 (모바일에서는 접기/펼치기 지원) -->
+	<aside class="lg:w-80 shrink-0 space-y-4 sm:space-y-6">
+		<div class="bg-white rounded-2xl sm:rounded-[2.5rem] border-2 border-slate-100 p-4 sm:p-6 lg:p-7 shadow-sm lg:sticky lg:top-8 transition-all hover:border-rose-200">
+			<div class="flex items-center justify-between gap-2 {mobileUploadOpen ? 'mb-4' : 'lg:mb-4'}">
+				<button
+					type="button"
+					onclick={() => (mobileUploadOpen = !mobileUploadOpen)}
+					class="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-rose-600 lg:pointer-events-none"
+					aria-expanded={mobileUploadOpen}
+				>
+					<Icon icon="ph:cloud-arrow-up-bold" class="text-lg shrink-0" />
+					<span>빠른 파일 업로드</span>
+					<Icon
+						icon="ph:caret-down-bold"
+						class="text-sm text-slate-400 transition-transform lg:hidden {mobileUploadOpen ? 'rotate-180' : ''}"
+					/>
+				</button>
+				<span class="rounded-full bg-slate-100 px-2.5 py-0.5 font-mono text-[10px] font-black text-slate-600 shrink-0">
 					Max {settings.max_file_size_mb}MB
 				</span>
 			</div>
 
-			<div class="p-3.5 bg-slate-50 rounded-2xl mb-4 border border-slate-200 space-y-1">
-				<p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Target Directory</p>
-				<p class="text-xs font-bold text-slate-900 font-mono truncate leading-none uppercase">
-					/{currentTab?.tier}{currentSubPath ? `/${currentSubPath}` : ''}
-				</p>
-			</div>
+			<div class="{mobileUploadOpen ? 'block' : 'hidden'} lg:block">
+				<div class="p-3 sm:p-3.5 bg-slate-50 rounded-xl sm:rounded-2xl mb-3 sm:mb-4 border border-slate-200 space-y-1">
+					<p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Target Directory</p>
+					<p class="text-xs font-bold text-slate-900 font-mono truncate leading-none uppercase">
+						/{currentTab?.tier}{currentSubPath ? `/${currentSubPath}` : ''}
+					</p>
+				</div>
 
-			<div class="mb-5 flex flex-wrap gap-1.5 text-[10px] font-bold text-slate-500">
-				<span class="rounded-lg bg-indigo-50 text-indigo-700 px-2 py-0.5">
-					WebP {settings.webp_quality}%
-				</span>
-				<span class="rounded-lg bg-amber-50 text-amber-700 px-2 py-0.5">
-					{settings.enable_original_auto_expiry
-						? `원본 ${settings.original_keep_days}일 보관`
-						: '원본 영구 보존'}
-				</span>
-			</div>
+				<div class="mb-4 sm:mb-5 flex flex-wrap gap-1.5 text-[10px] font-bold text-slate-500">
+					<span class="rounded-lg bg-indigo-50 text-indigo-700 px-2 py-0.5">
+						WebP {settings.webp_quality}%
+					</span>
+					<span class="rounded-lg bg-amber-50 text-amber-700 px-2 py-0.5">
+						{settings.enable_original_auto_expiry
+							? `원본 ${settings.original_keep_days}일 보관`
+							: '원본 영구 보존'}
+					</span>
+				</div>
 
-			<ImageUploader
-				app_id="admin"
-				access_level={currentTab?.tier}
-				sub_path={currentSubPath}
-				allowPersonalPicker={false}
-				bind:uploadedAssets={uploadedInSession}
-				onUpload={handleUploadDone}
-			/>
+				<ImageUploader
+					app_id="admin"
+					access_level={currentTab?.tier}
+					sub_path={currentSubPath}
+					allowPersonalPicker={false}
+					bind:uploadedAssets={uploadedInSession}
+					onUpload={handleUploadDone}
+				/>
+			</div>
 		</div>
 	</aside>
 
 	<!-- 우측 메인 영역: 파일 및 폴더 탐색기 -->
-	<main class="flex-1 space-y-6 min-w-0">
+	<main class="flex-1 space-y-5 sm:space-y-6 min-w-0">
 		<!-- 탐색기 툴바 -->
-		<div class="space-y-3 bg-slate-50 p-4 sm:p-5 rounded-[2rem] border-2 border-slate-100">
+		<div class="space-y-3 bg-slate-50 p-3.5 sm:p-5 rounded-2xl sm:rounded-[2rem] border-2 border-slate-100">
 			<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
 				<!-- 브레드크럼 -->
 				<div class="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex flex-wrap items-center gap-1.5 min-w-0">
@@ -205,11 +218,11 @@
 			</div>
 
 			<!-- 액션 버튼 바 -->
-			<div class="flex flex-wrap items-center justify-between gap-2.5 pt-2 border-t border-slate-200/70">
-				<div class="flex flex-wrap items-center gap-2">
+			<div class="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-200/70">
+				<div class="flex flex-wrap items-center gap-1.5 sm:gap-2">
 					<button
 						type="button"
-						class="flex items-center gap-2 px-3.5 py-2 bg-white border-2 border-slate-200 rounded-full hover:border-rose-300 transition-all shadow-xs group"
+						class="flex items-center gap-1.5 sm:gap-2 px-2.5 py-1.5 sm:px-3.5 sm:py-2 bg-white border-2 border-slate-200 rounded-full hover:border-rose-300 transition-all shadow-xs group whitespace-nowrap"
 						onclick={() =>
 							onToggleSelectAll(
 								visibleFolders.map((f) => f.path),
@@ -228,34 +241,34 @@
 
 					<button
 						type="button"
-						class="flex items-center gap-1.5 px-3.5 py-2 bg-white border-2 border-slate-200 rounded-full transition-all shadow-xs hover:border-indigo-300"
+						class="flex items-center gap-1.5 px-2.5 py-1.5 sm:px-3.5 sm:py-2 bg-white border-2 border-slate-200 rounded-full transition-all shadow-xs hover:border-indigo-300 whitespace-nowrap"
 						onclick={onToggleRecursive}
 					>
 						<Icon icon={isRecursive ? 'mdi:file-tree' : 'mdi:file-document'} class="text-sm {isRecursive ? 'text-indigo-600' : 'text-slate-400'}" />
 						<span class="text-[11px] font-black uppercase tracking-wider {isRecursive ? 'text-indigo-600' : 'text-slate-600'}">
-							{isRecursive ? '하위 전체 보기' : '폴더 내 파일만'}
+							{isRecursive ? '하위 전체' : '현재 폴더'}
 						</span>
 					</button>
 
 					<button
 						type="button"
-						class="flex items-center gap-1.5 px-3.5 py-2 bg-white border-2 border-slate-200 rounded-full font-black text-[11px] uppercase tracking-wider text-slate-700 hover:border-slate-800 transition-all shadow-xs"
+						class="flex items-center gap-1.5 px-2.5 py-1.5 sm:px-3.5 sm:py-2 bg-white border-2 border-slate-200 rounded-full font-black text-[11px] uppercase tracking-wider text-slate-700 hover:border-slate-800 transition-all shadow-xs whitespace-nowrap"
 						onclick={onOpenCreateFolder}
 					>
 						<Icon icon="ph:folder-plus-bold" class="text-rose-600 text-sm" /> 새 폴더
 					</button>
 				</div>
 
-				<div class="flex flex-wrap items-center gap-2">
+				<div class="flex flex-wrap items-center gap-2 ml-auto">
 					{#if totalSelectedCount > 0}
-						<div class="flex items-center gap-2 bg-rose-600 text-white px-3.5 py-1.5 rounded-full shadow-md" in:fly={{ x: 16 }}>
-							<span class="text-[11px] font-black uppercase tracking-tight">{totalSelectedCount}건</span>
+						<div class="flex flex-wrap items-center gap-2 bg-rose-600 text-white px-3 py-1.5 rounded-2xl sm:rounded-full shadow-md max-w-full" in:fly={{ x: 16 }}>
+							<span class="text-[11px] font-black uppercase tracking-tight whitespace-nowrap">{totalSelectedCount}건</span>
 							<div class="w-px h-3.5 bg-white/25"></div>
-							<button type="button" class="text-[11px] font-black uppercase hover:underline" onclick={onZipDownload}>Zip 다운</button>
+							<button type="button" class="text-[11px] font-black uppercase hover:underline whitespace-nowrap" onclick={onZipDownload}>Zip 다운</button>
 							{#if canAdminWrite}
-								<button type="button" class="text-[11px] font-black uppercase hover:underline" onclick={onBackupSelected}>백업</button>
+								<button type="button" class="text-[11px] font-black uppercase hover:underline whitespace-nowrap" onclick={onBackupSelected}>백업</button>
 							{/if}
-							<button type="button" class="text-[11px] font-black uppercase hover:underline text-rose-100 hover:text-white" onclick={onOpenBulkDelete}>삭제(격리)</button>
+							<button type="button" class="text-[11px] font-black uppercase hover:underline text-rose-100 hover:text-white whitespace-nowrap" onclick={onOpenBulkDelete}>삭제(격리)</button>
 						</div>
 					{/if}
 
@@ -300,14 +313,14 @@
 					<div class="h-px flex-1 bg-slate-200"></div>
 				</div>
 
-				<div class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-4">
+				<div class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-2.5 sm:gap-4">
 					{#if currentSubPath !== currentTab.basePath}
 						<button
 							type="button"
-							class="flex flex-col items-center p-5 rounded-[2rem] border-2 border-slate-100 bg-white hover:border-rose-400 transition-all group shadow-xs"
+							class="flex flex-col items-center p-3.5 sm:p-5 rounded-2xl sm:rounded-[2rem] border-2 border-slate-100 bg-white hover:border-rose-400 transition-all group shadow-xs"
 							onclick={onGoToParent}
 						>
-							<Icon icon="ph:arrow-u-up-left-bold" class="text-3xl text-slate-300 group-hover:text-rose-600 mb-2 transition-colors" />
+							<Icon icon="ph:arrow-u-up-left-bold" class="text-2xl sm:text-3xl text-slate-300 group-hover:text-rose-600 mb-1.5 sm:mb-2 transition-colors" />
 							<span class="text-[11px] font-black uppercase tracking-wider text-slate-500 group-hover:text-rose-600">상위 폴더</span>
 						</button>
 					{/if}
@@ -316,12 +329,12 @@
 						<div class="relative group">
 							<button
 								type="button"
-								class="flex flex-col items-center w-full p-5 rounded-[2rem] border-2 {folder.is_hidden ? 'border-amber-200 bg-amber-50/30' : 'border-slate-100 bg-white'} hover:border-rose-400 hover:shadow-xl transition-all group"
+								class="flex flex-col items-center w-full p-3.5 sm:p-5 rounded-2xl sm:rounded-[2rem] border-2 {folder.is_hidden ? 'border-amber-200 bg-amber-50/30' : 'border-slate-100 bg-white'} hover:border-rose-400 hover:shadow-xl transition-all group"
 								onclick={() => onNavigateSubPath(folder.path)}
 							>
 								<Icon
 									icon={folder.is_hidden ? 'ph:folder-dotted-duotone' : 'ph:folder-duotone'}
-									class="text-5xl {folder.is_hidden ? 'text-amber-500/60' : 'text-rose-600/30'} group-hover:text-rose-600 transition-colors mb-2"
+									class="text-4xl sm:text-5xl {folder.is_hidden ? 'text-amber-500/60' : 'text-rose-600/30'} group-hover:text-rose-600 transition-colors mb-1.5 sm:mb-2"
 								/>
 								<span class="block text-xs font-black truncate w-full text-center tracking-tight text-slate-700 group-hover:text-rose-600">
 									{#if folder.is_hidden}
@@ -332,7 +345,7 @@
 							</button>
 							<button
 								type="button"
-								class="absolute right-4 top-4 h-6 w-6 z-10 rounded-full border-2 border-slate-200 flex items-center justify-center transition-all {selectedFolders.has(folder.path) ? 'bg-rose-600 border-rose-600 scale-110 shadow-lg' : 'bg-white opacity-0 group-hover:opacity-100'}"
+								class="absolute right-3 top-3 sm:right-4 sm:top-4 h-6 w-6 z-10 rounded-full border-2 border-slate-200 flex items-center justify-center transition-all {selectedFolders.has(folder.path) ? 'bg-rose-600 border-rose-600 scale-110 shadow-lg' : 'bg-white/90 opacity-100 sm:opacity-0 sm:group-hover:opacity-100'}"
 								onclick={() => onToggleSelectFolder(folder.path)}
 								aria-label="{folder.name} 선택"
 							>
@@ -364,11 +377,11 @@
 						<p class="text-[11px] font-bold text-slate-400 mt-1">좌측 '빠른 파일 업로드' 패널에서 새 파일을 업로드해 보세요.</p>
 					</div>
 				{:else if viewMode === 'grid'}
-					<div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-5">
+					<div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-5">
 						{#each visibleFiles as asset (asset.id)}
 							<div in:fade class="group relative flex flex-col items-center">
 								<div
-									class="relative aspect-square w-full overflow-hidden rounded-[2rem] border-2 {asset.is_deleted ? 'border-rose-300 bg-rose-50/40' : 'border-slate-100 bg-white'} p-2 transition-all hover:border-rose-600 hover:shadow-xl hover:-translate-y-1 cursor-pointer"
+									class="relative aspect-square w-full overflow-hidden rounded-2xl sm:rounded-[2rem] border-2 {asset.is_deleted ? 'border-rose-300 bg-rose-50/40' : 'border-slate-100 bg-white'} p-1.5 sm:p-2 transition-all hover:border-rose-600 hover:shadow-xl hover:-translate-y-1 cursor-pointer"
 									onclick={() => onSelectAssetDetail(asset)}
 									onkeydown={(e) => e.key === 'Enter' && onSelectAssetDetail(asset)}
 									role="button"
@@ -378,11 +391,11 @@
 										<img
 											src={getSecureMediaUrl(serverUrl, asset, 'sm')}
 											alt={asset.original_name || ''}
-											class="h-full w-full rounded-[1.5rem] object-cover transition-transform duration-500 group-hover:scale-105"
+											class="h-full w-full rounded-xl sm:rounded-[1.5rem] object-cover transition-transform duration-500 group-hover:scale-105"
 										/>
 									{:else}
-										<div class="flex h-full w-full flex-col items-center justify-center rounded-[1.5rem] bg-slate-50 text-slate-400">
-											<Icon icon="ph:file-bold" class="text-4xl text-slate-300 group-hover:text-rose-500 transition-colors" />
+										<div class="flex h-full w-full flex-col items-center justify-center rounded-xl sm:rounded-[1.5rem] bg-slate-50 text-slate-400">
+											<Icon icon="ph:file-bold" class="text-3xl sm:text-4xl text-slate-300 group-hover:text-rose-500 transition-colors" />
 											<span class="mt-1 text-[9px] font-black uppercase font-mono">
 												{(asset.file_path || '').split('.').pop()}
 											</span>
@@ -398,7 +411,7 @@
 
 								<button
 									type="button"
-									class="absolute right-4 top-4 h-6 w-6 z-10 rounded-full border-2 border-white flex items-center justify-center transition-all {selectedIds.has(Number(asset.id)) ? 'bg-rose-600 scale-110 shadow-lg' : 'bg-black/30 opacity-0 group-hover:opacity-100 hover:bg-black/50'}"
+									class="absolute right-3 top-3 sm:right-4 sm:top-4 h-6 w-6 z-10 rounded-full border-2 border-white flex items-center justify-center transition-all {selectedIds.has(Number(asset.id)) ? 'bg-rose-600 scale-110 shadow-lg' : 'bg-black/35 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 hover:bg-black/50'}"
 									onclick={(e) => {
 										e.stopPropagation();
 										onToggleSelectFile(Number(asset.id));

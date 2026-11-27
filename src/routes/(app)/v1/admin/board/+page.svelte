@@ -123,10 +123,10 @@
 		try {
 			const [boardList, instanceList, appList, engineList, regList] = await Promise.all([
 				api.adminGetBoards(),
-				api.adminGetServiceInstances().catch(() => []),
-				api.adminGetServiceApps().catch(() => []),
-				api.adminGetServiceEngines().catch(() => []),
-				api.adminGetServiceRegistries().catch(() => [])
+				api.adminGetServiceInstances({ silent: true }).catch(() => []),
+				api.adminGetServiceApps({ silent: true }).catch(() => []),
+				api.adminGetServiceEngines({ silent: true }).catch(() => []),
+				api.adminGetServiceRegistries({ silent: true }).catch(() => [])
 			]);
 			boards = boardList;
 			serviceInstances = Array.isArray(instanceList) ? instanceList : [];

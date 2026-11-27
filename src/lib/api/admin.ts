@@ -56,8 +56,8 @@ export const adminDeleteBoard = <T = any>(id: number | string) =>
 	request<T>(`${BASE_URL}/boards/${id}`, 'DELETE');
 
 // 🔧 서비스 레지스트리 API (서비스 종류 등록)
-export const adminGetServiceRegistries = <T = any>() =>
-	request<T>(`${BASE_URL}/service-registries`);
+export const adminGetServiceRegistries = <T = any>(options?: FastApiOptions) =>
+	request<T>(`${BASE_URL}/service-registries`, 'GET', null, options);
 export const adminCreateServiceRegistry = <T = any>(data: Record<string, any>) =>
 	request<T>(`${BASE_URL}/service-registries`, 'POST', data);
 export const adminUpdateServiceRegistry = <T = any>(id: number | string, data: Record<string, any>) =>
@@ -66,8 +66,8 @@ export const adminDeleteServiceRegistry = <T = any>(id: number | string) =>
 	request<T>(`${BASE_URL}/service-registries/${id}`, 'DELETE');
 
 // ⚙️ 서비스 엔진 API (실제 엔진 인스턴스)
-export const adminGetServiceEngines = <T = any>() =>
-	request<T>(`${BASE_URL}/service-engines`);
+export const adminGetServiceEngines = <T = any>(options?: FastApiOptions) =>
+	request<T>(`${BASE_URL}/service-engines`, 'GET', null, options);
 export const adminCreateServiceEngine = <T = any>(data: Record<string, any>) =>
 	request<T>(`${BASE_URL}/service-engines`, 'POST', data);
 export const adminUpdateServiceEngine = <T = any>(id: number | string, data: Record<string, any>) =>
@@ -76,15 +76,16 @@ export const adminDeleteServiceEngine = <T = any>(id: number | string) =>
 	request<T>(`${BASE_URL}/service-engines/${id}`, 'DELETE');
 
 // 🧩 서비스 앱 API (원자적 기능 단위 인스턴스)
-export const adminGetServiceApps = <T = any>() => request<T>(`${BASE_URL}/service-apps`);
+export const adminGetServiceApps = <T = any>(options?: FastApiOptions) =>
+	request<T>(`${BASE_URL}/service-apps`, 'GET', null, options);
 export const adminCreateServiceApp = <T = any>(data: Record<string, any>) =>
 	request<T>(`${BASE_URL}/service-apps`, 'POST', data);
 export const adminUpdateServiceApp = <T = any>(id: number | string, data: Record<string, any>) =>
 	request<T>(`${BASE_URL}/service-apps/${id}`, 'PUT', data);
 
 // 🔗 서비스 인스턴스 API (서비스 덩어리/번들)
-export const adminGetServiceInstances = <T = any>() =>
-	request<T>(`${BASE_URL}/service-instances`);
+export const adminGetServiceInstances = <T = any>(options?: FastApiOptions) =>
+	request<T>(`${BASE_URL}/service-instances`, 'GET', null, options);
 export const adminCreateServiceInstance = <T = any>(data: Record<string, any>) =>
 	request<T>(`${BASE_URL}/service-instances`, 'POST', data);
 export const adminUpdateServiceInstance = <T = any>(

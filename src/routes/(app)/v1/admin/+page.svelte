@@ -564,29 +564,33 @@
 	</div>
 
 	<!-- 🔍 모듈 검색 및 카테고리 필터 바 -->
-	<div class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+	<div class="flex flex-col lg:flex-row lg:items-center justify-between gap-3 bg-white p-4 rounded-2xl border border-slate-200 shadow-sm min-w-0">
 		<!-- 카테고리 탭 -->
-		<div class="join border border-slate-200 bg-slate-100 p-1 rounded-xl shadow-xs">
-			<button 
-				class="btn btn-xs join-item font-bold border-none {moduleCategory === 'ALL' ? 'bg-purple-700 text-white shadow' : 'bg-transparent text-slate-600'}"
+		<div class="flex flex-wrap items-center gap-1 border border-slate-200 bg-slate-100 p-1 rounded-xl shadow-xs max-w-full">
+			<button
+				type="button"
+				class="btn btn-xs rounded-lg font-bold border-none whitespace-nowrap {moduleCategory === 'ALL' ? 'bg-purple-700 text-white shadow' : 'bg-transparent text-slate-600 hover:bg-white/70'}"
 				onclick={() => moduleCategory = 'ALL'}
 			>
 				전체 모듈 ({systemModules.length + dynamicAppModules.length})
 			</button>
-			<button 
-				class="btn btn-xs join-item font-bold border-none {moduleCategory === 'CORE' ? 'bg-purple-700 text-white shadow' : 'bg-transparent text-slate-600'}"
+			<button
+				type="button"
+				class="btn btn-xs rounded-lg font-bold border-none whitespace-nowrap {moduleCategory === 'CORE' ? 'bg-purple-700 text-white shadow' : 'bg-transparent text-slate-600 hover:bg-white/70'}"
 				onclick={() => moduleCategory = 'CORE'}
 			>
 				🛡️ 코어 인프라 ({systemModules.filter(m => m.category === 'CORE').length})
 			</button>
-			<button 
-				class="btn btn-xs join-item font-bold border-none {moduleCategory === 'OPERATIONS' ? 'bg-purple-700 text-white shadow' : 'bg-transparent text-slate-600'}"
+			<button
+				type="button"
+				class="btn btn-xs rounded-lg font-bold border-none whitespace-nowrap {moduleCategory === 'OPERATIONS' ? 'bg-purple-700 text-white shadow' : 'bg-transparent text-slate-600 hover:bg-white/70'}"
 				onclick={() => moduleCategory = 'OPERATIONS'}
 			>
 				📢 운영 관제 ({systemModules.filter(m => m.category === 'OPERATIONS').length})
 			</button>
-			<button 
-				class="btn btn-xs join-item font-bold border-none {moduleCategory === 'BUSINESS' ? 'bg-blue-600 text-white shadow' : 'bg-transparent text-slate-600'}"
+			<button
+				type="button"
+				class="btn btn-xs rounded-lg font-bold border-none whitespace-nowrap {moduleCategory === 'BUSINESS' ? 'bg-blue-600 text-white shadow' : 'bg-transparent text-slate-600 hover:bg-white/70'}"
 				onclick={() => moduleCategory = 'BUSINESS'}
 			>
 				🚐 현장 업무 ({dynamicAppModules.length})
@@ -594,7 +598,7 @@
 		</div>
 
 		<!-- 검색창 -->
-		<div class="w-full md:w-72 relative">
+		<div class="w-full lg:w-72 shrink-0 relative">
 			<Icon icon="mdi:magnify" class="absolute top-1/2 left-3 -translate-y-1/2 text-slate-400" />
 			<input 
 				type="text" 

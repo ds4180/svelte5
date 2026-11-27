@@ -10,6 +10,7 @@ export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH' | 'get' | '
 export interface FastApiOptions {
 	offline?: boolean;
 	offlineLabel?: string;
+	silent?: boolean;
 }
 
 export interface OfflineFallbackContext {
@@ -94,7 +95,7 @@ export async function fastApi<TResponse = any, TBody = unknown>(
 		apiOptions = success_callback as FastApiOptions;
 		success_callback = undefined;
 	}
-	const { offline: offlineEnabled = true, offlineLabel } = apiOptions;
+	const { offline: offlineEnabled = true, offlineLabel, silent = false } = apiOptions;
 	const onSuccess = success_callback as ((data: TResponse) => void) | undefined;
 
 	const PUBLIC_SERVER_URL = env.PUBLIC_SERVER_URL || '';
@@ -211,7 +212,7 @@ export async function fastApi<TResponse = any, TBody = unknown>(
 			// [403 권한 거부]: 모든 시스템 앱에서 "접근 권한이 없습니다."로 통일
 			if (response.status === 403) {
 				const simpleMsg = '접근 권한이 없습니다.';
-				if (browser && !failure_callback) {
+				if (browser && !failure_callback && !silent) {
 					toast.warning(simpleMsg);
 				}
 
@@ -231,7 +232,7 @@ export async function fastApi<TResponse = any, TBody = unknown>(
 			const errMsg = formatApiError(data, `API 요청 실패 (${response.status})`);
 
 			// [500 서버 장애]: 별도 콜백이 없으면 시스템 에러 토스트 표시
-			if (browser && response.status >= 500 && !failure_callback) {
+			if (browser && response.status >= 500 && !failure_callback && !silent) {
 				toast.error(errMsg || '서버 내부 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.');
 			}
 
@@ -263,7 +264,7 @@ export async function fastApi<TResponse = any, TBody = unknown>(
 			errorObj.message = errorMessage;
 		}
 
-		if (browser && !failure_callback) {
+		if (browser && !failure_callback && !silent) {
 			toast.error(errorMessage);
 		}
 		if (failure_callback) failure_callback(errorObj);

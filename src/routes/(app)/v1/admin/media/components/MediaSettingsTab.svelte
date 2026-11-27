@@ -273,7 +273,7 @@
 				</div>
 			</div>
 
-			<div class="grid grid-cols-3 gap-3">
+			<div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
 				<div>
 					<label for="md-sm-px" class="mb-1 block text-[11px] font-black text-slate-700">
 						SM 목록용 (px)

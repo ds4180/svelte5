@@ -444,29 +444,29 @@
 	<title>{getSiteTitle('블랙박스 비디오 관리')}</title>
 </svelte:head>
 
-<div class="mx-auto max-w-7xl space-y-6 px-4 py-8 pb-24 font-['Noto_Sans_KR','Outfit'] md:space-y-8 md:px-6 lg:px-8">
+<div class="mx-auto max-w-7xl space-y-5 px-3 py-6 pb-24 font-['Noto_Sans_KR','Outfit'] sm:px-4 sm:py-8 md:space-y-8 md:px-6 lg:px-8 overflow-x-hidden">
 	<!-- 1. 표준 페이지 헤더 & 액션 바 -->
-	<div class="flex flex-col gap-4 border-b-2 border-slate-900 pb-6 md:flex-row md:items-end md:justify-between md:border-b-4 md:pb-8">
-		<div>
-			<div class="flex items-center gap-2">
-				<span class="inline-flex items-center gap-1.5 rounded-full bg-slate-900 px-3 py-1 text-[11px] font-black tracking-widest text-emerald-400 uppercase">
+	<div class="flex flex-col gap-4 border-b-2 border-slate-900 pb-5 sm:pb-6 md:flex-row md:items-end md:justify-between md:border-b-4 md:pb-8">
+		<div class="min-w-0">
+			<div class="flex flex-wrap items-center gap-2">
+				<span class="inline-flex items-center gap-1.5 rounded-full bg-slate-900 px-3 py-1 text-[10px] sm:text-[11px] font-black tracking-widest text-emerald-400 uppercase">
 					<span class="h-2 w-2 rounded-full bg-emerald-400 animate-ping"></span>
 					Enterprise Blackbox Governance
 				</span>
 				<span class="text-xs font-bold text-slate-400">v1/admin/blackbox</span>
 			</div>
-			<h1 class="mt-2 text-3xl font-black tracking-tight text-slate-900 uppercase italic md:text-4xl">
+			<h1 class="mt-2 text-2xl sm:text-3xl font-black tracking-tight text-slate-900 uppercase italic md:text-4xl">
 				블랙박스 <span class="not-italic text-blue-600">비디오 관리</span>
 			</h1>
-			<p class="mt-1 text-sm font-medium text-slate-500">
+			<p class="mt-1 text-xs sm:text-sm font-medium text-slate-500">
 				비디오 장부(고유·0~999 육안번호), 현재 위치(차량/사무실) 추적, 기사 교체 요청 처리, 사용이력 역조회 및 본체 스펙 관리
 			</p>
 		</div>
 
-		<div class="flex flex-wrap items-center gap-3">
+		<div class="flex flex-wrap items-center gap-2 sm:gap-3">
 			<a
 				href="/v1/custom/blackbox"
-				class="inline-flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-2 text-xs font-black text-blue-700 shadow-sm transition hover:bg-blue-100"
+				class="inline-flex items-center gap-1.5 sm:gap-2 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 sm:px-4 text-xs font-black text-blue-700 shadow-sm transition hover:bg-blue-100"
 			>
 				<Icon icon="solar:user-hand-up-bold-duotone" class="text-base" />
 				<span>기사 요청 화면</span>
@@ -475,14 +475,14 @@
 				type="button"
 				onclick={loadAll}
 				disabled={loading}
-				class="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 active:scale-95 disabled:opacity-50"
+				class="inline-flex items-center gap-1.5 sm:gap-2 rounded-xl border border-slate-300 bg-white px-3 py-2 sm:px-4 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 active:scale-95 disabled:opacity-50"
 			>
 				<Icon icon="solar:restart-bold" class="text-base {loading ? 'animate-spin' : ''}" />
 				<span>새로고침</span>
 			</button>
 			<a
 				href="/v1/admin"
-				class="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 active:scale-95"
+				class="inline-flex items-center gap-1.5 sm:gap-2 rounded-xl border border-slate-300 bg-white px-3 py-2 sm:px-4 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 active:scale-95"
 			>
 				<Icon icon="solar:home-smile-angle-bold-duotone" class="text-base text-slate-500" />
 				<span>관리자 홈</span>
@@ -491,66 +491,66 @@
 	</div>
 
 	<!-- 2. 상단 4대 요약 카드 -->
-	<div class="grid grid-cols-1 gap-4 sm:grid-cols-2 md:gap-5 xl:grid-cols-4">
-		<div class="flex flex-col justify-between rounded-[1.75rem] border-2 border-slate-200 bg-white p-5 shadow-sm">
-			<div class="flex w-full items-center justify-between gap-2">
-				<span class="min-w-0 truncate text-xs font-black tracking-wider text-slate-400 uppercase">Total Videos</span>
-				<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
-					<Icon icon="mdi:sd" class="text-xl" />
+	<div class="grid grid-cols-2 gap-2.5 sm:gap-4 md:gap-5 xl:grid-cols-4">
+		<div class="flex flex-col justify-between rounded-2xl sm:rounded-[1.75rem] border-2 border-slate-200 bg-white p-3.5 sm:p-5 shadow-sm min-w-0">
+			<div class="flex w-full items-center justify-between gap-1.5 sm:gap-2">
+				<span class="min-w-0 truncate text-[10px] sm:text-xs font-black tracking-wider text-slate-400 uppercase">Total Videos</span>
+				<div class="flex h-8 w-8 sm:h-9 sm:w-9 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
+					<Icon icon="mdi:sd" class="text-lg sm:text-xl" />
 				</div>
 			</div>
-			<div class="mt-4">
-				<div class="text-3xl font-black text-slate-900">
-					{summary.active_videos}<span class="ml-1 text-xs font-normal text-slate-500">개 운용</span>
+			<div class="mt-2.5 sm:mt-4">
+				<div class="text-xl sm:text-3xl font-black text-slate-900">
+					{summary.active_videos}<span class="ml-1 text-[11px] sm:text-xs font-normal text-slate-500">개 운용</span>
 				</div>
-				<div class="mt-1 text-xs font-semibold text-slate-400">폐기 {summary.disposed_count}개 포함 총 {summary.total_videos}개</div>
-			</div>
-		</div>
-
-		<div class="flex flex-col justify-between rounded-[1.75rem] border-2 border-slate-200 bg-white p-5 shadow-sm">
-			<div class="flex w-full items-center justify-between gap-2">
-				<span class="min-w-0 truncate text-xs font-black tracking-wider text-slate-400 uppercase">Location Split</span>
-				<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
-					<Icon icon="mdi:bus-marker" class="text-xl" />
-				</div>
-			</div>
-			<div class="mt-4">
-				<div class="text-3xl font-black text-slate-900">
-					{summary.vehicle_count}<span class="ml-1 text-xs font-normal text-slate-500">차량</span>
-					<span class="mx-1 text-slate-300">/</span>
-					{summary.office_count}<span class="ml-1 text-xs font-normal text-slate-500">사무실</span>
-				</div>
-				<div class="mt-1 text-xs font-semibold text-emerald-600">차량 · 사무실 실시간 추적</div>
+				<div class="mt-1 text-[11px] sm:text-xs font-semibold text-slate-400 truncate">폐기 {summary.disposed_count}개 포함 총 {summary.total_videos}개</div>
 			</div>
 		</div>
 
-		<div class="flex flex-col justify-between rounded-[1.75rem] border-2 border-slate-200 bg-white p-5 shadow-sm">
-			<div class="flex w-full items-center justify-between gap-2">
-				<span class="min-w-0 truncate text-xs font-black tracking-wider text-slate-400 uppercase">Swap Requests</span>
-				<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
-					<Icon icon="solar:bell-bing-bold-duotone" class="text-xl" />
+		<div class="flex flex-col justify-between rounded-2xl sm:rounded-[1.75rem] border-2 border-slate-200 bg-white p-3.5 sm:p-5 shadow-sm min-w-0">
+			<div class="flex w-full items-center justify-between gap-1.5 sm:gap-2">
+				<span class="min-w-0 truncate text-[10px] sm:text-xs font-black tracking-wider text-slate-400 uppercase">Location Split</span>
+				<div class="flex h-8 w-8 sm:h-9 sm:w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
+					<Icon icon="mdi:bus-marker" class="text-lg sm:text-xl" />
 				</div>
 			</div>
-			<div class="mt-4">
-				<div class="text-3xl font-black {summary.pending_requests > 0 ? 'text-amber-600' : 'text-slate-900'}">
-					{summary.pending_requests}<span class="ml-1 text-xs font-normal text-slate-500">건 대기</span>
+			<div class="mt-2.5 sm:mt-4">
+				<div class="text-xl sm:text-3xl font-black text-slate-900">
+					{summary.vehicle_count}<span class="ml-0.5 sm:ml-1 text-[11px] sm:text-xs font-normal text-slate-500">차량</span>
+					<span class="mx-0.5 sm:mx-1 text-slate-300">/</span>
+					{summary.office_count}<span class="ml-0.5 sm:ml-1 text-[11px] sm:text-xs font-normal text-slate-500">사무실</span>
 				</div>
-				<div class="mt-1 text-xs font-semibold text-slate-400">기사 교체 요청</div>
+				<div class="mt-1 text-[11px] sm:text-xs font-semibold text-emerald-600 truncate">차량 · 사무실 실시간 추적</div>
 			</div>
 		</div>
 
-		<div class="flex flex-col justify-between rounded-[1.75rem] border-2 border-slate-200 bg-white p-5 shadow-sm">
-			<div class="flex w-full items-center justify-between gap-2">
-				<span class="min-w-0 truncate text-xs font-black tracking-wider text-slate-400 uppercase">Devices</span>
-				<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
-					<Icon icon="mdi:cctv" class="text-xl" />
+		<div class="flex flex-col justify-between rounded-2xl sm:rounded-[1.75rem] border-2 border-slate-200 bg-white p-3.5 sm:p-5 shadow-sm min-w-0">
+			<div class="flex w-full items-center justify-between gap-1.5 sm:gap-2">
+				<span class="min-w-0 truncate text-[10px] sm:text-xs font-black tracking-wider text-slate-400 uppercase">Swap Requests</span>
+				<div class="flex h-8 w-8 sm:h-9 sm:w-9 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
+					<Icon icon="solar:bell-bing-bold-duotone" class="text-lg sm:text-xl" />
 				</div>
 			</div>
-			<div class="mt-4">
-				<div class="text-3xl font-black text-slate-900">
-					{summary.device_count}<span class="ml-1 text-xs font-normal text-slate-500">대</span>
+			<div class="mt-2.5 sm:mt-4">
+				<div class="text-xl sm:text-3xl font-black {summary.pending_requests > 0 ? 'text-amber-600' : 'text-slate-900'}">
+					{summary.pending_requests}<span class="ml-1 text-[11px] sm:text-xs font-normal text-slate-500">건 대기</span>
 				</div>
-				<div class="mt-1 text-xs font-semibold text-slate-400">차량 블랙박스 본체 등록</div>
+				<div class="mt-1 text-[11px] sm:text-xs font-semibold text-slate-400 truncate">기사 교체 요청</div>
+			</div>
+		</div>
+
+		<div class="flex flex-col justify-between rounded-2xl sm:rounded-[1.75rem] border-2 border-slate-200 bg-white p-3.5 sm:p-5 shadow-sm min-w-0">
+			<div class="flex w-full items-center justify-between gap-1.5 sm:gap-2">
+				<span class="min-w-0 truncate text-[10px] sm:text-xs font-black tracking-wider text-slate-400 uppercase">Devices</span>
+				<div class="flex h-8 w-8 sm:h-9 sm:w-9 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
+					<Icon icon="mdi:cctv" class="text-lg sm:text-xl" />
+				</div>
+			</div>
+			<div class="mt-2.5 sm:mt-4">
+				<div class="text-xl sm:text-3xl font-black text-slate-900">
+					{summary.device_count}<span class="ml-1 text-[11px] sm:text-xs font-normal text-slate-500">대</span>
+				</div>
+				<div class="mt-1 text-[11px] sm:text-xs font-semibold text-slate-400 truncate">차량 블랙박스 본체 등록</div>
 			</div>
 		</div>
 	</div>
@@ -595,10 +595,10 @@
 	<!-- TAB 1: 비디오 장부 & 현재 위치 -->
 	<!-- =================================================================== -->
 	{#if activeTab === 'videos'}
-		<section class="space-y-4 rounded-3xl border-2 border-slate-200 bg-white p-5 shadow-xs">
+		<section class="space-y-4 rounded-2xl sm:rounded-3xl border-2 border-slate-200 bg-white p-3.5 sm:p-5 shadow-xs">
 			<div class="flex flex-col justify-between gap-3 md:flex-row md:items-center">
 				<div class="flex flex-wrap items-center gap-2">
-					<select bind:value={videoLocationFilter} onchange={loadAll} class="select select-bordered select-sm rounded-xl font-bold">
+					<select bind:value={videoLocationFilter} onchange={loadAll} class="select select-bordered select-sm w-full sm:w-auto rounded-xl font-bold">
 						<option value="">전체 위치 (차량+사무실)</option>
 						<option value="VEHICLE">차량 장착 (VEHICLE)</option>
 						<option value="OFFICE">사무실 보관 (OFFICE)</option>
@@ -608,7 +608,7 @@
 						bind:value={videoSearch}
 						onkeydown={(e) => e.key === 'Enter' && loadAll()}
 						placeholder="관리번호, 육안번호(0~999), 차량번호 검색..."
-						class="input input-bordered input-sm w-64 rounded-xl font-medium"
+						class="input input-bordered input-sm w-full sm:w-64 rounded-xl font-medium"
 					/>
 					<select
 						value={`${sortKey}:${sortDir}`}
@@ -617,7 +617,7 @@
 							sortKey = k;
 							sortDir = d;
 						}}
-						class="select select-bordered select-sm rounded-xl font-bold"
+						class="select select-bordered select-sm w-full sm:w-auto rounded-xl font-bold"
 					>
 						<option value="days_elapsed:desc">정렬: 장착 경과일 긴 순</option>
 						<option value="days_elapsed:asc">정렬: 장착 경과일 짧은 순</option>
@@ -632,13 +632,84 @@
 					</label>
 					<button type="button" onclick={loadAll} class="btn btn-sm btn-outline rounded-xl font-bold">검색</button>
 				</div>
-				<button type="button" onclick={openVideoCreate} class="btn btn-sm rounded-xl border-none bg-blue-600 font-black text-white hover:bg-blue-700">
+				<button type="button" onclick={openVideoCreate} class="btn btn-sm w-full sm:w-auto rounded-xl border-none bg-blue-600 font-black text-white hover:bg-blue-700">
 					<Icon icon="solar:add-circle-bold" class="text-base" />
 					비디오 등록
 				</button>
 			</div>
 
-			<div class="overflow-x-auto">
+			<!-- 모바일 카드 리스트 (< md) -->
+			<div class="space-y-2.5 md:hidden">
+				{#if sortedVideos.length === 0}
+					<div class="rounded-2xl border border-dashed border-slate-200 py-10 text-center text-xs font-bold text-slate-400">
+						등록된 비디오가 없습니다.
+					</div>
+				{:else}
+					{#each sortedVideos as v (v.id)}
+						<div class="rounded-2xl border border-slate-200 bg-slate-50/50 p-3.5 space-y-2.5 {v.is_disposed ? 'opacity-60' : ''}">
+							<div class="flex items-start justify-between gap-2">
+								<div class="flex items-center gap-2.5 min-w-0">
+									<button
+										type="button"
+										onclick={() => (detailTargetVideo = v)}
+										class="inline-flex h-9 min-w-10 shrink-0 items-center justify-center rounded-xl bg-slate-900 px-2 font-mono text-sm font-black text-amber-400"
+									>
+										{v.display_num}
+									</button>
+									<div class="min-w-0">
+										<button type="button" onclick={() => (detailTargetVideo = v)} class="block truncate font-mono text-sm font-black text-slate-900 hover:text-blue-600">
+											{v.video_no}
+										</button>
+										{#if v.is_disposed}
+											<span class="badge badge-xs badge-error font-bold text-white">폐기됨 ({v.disposal_date})</span>
+										{:else if v.location_type === 'VEHICLE'}
+											<div class="text-xs font-black text-blue-700">{v.current_vehicle_no}호 차량</div>
+										{:else}
+											<span class="badge badge-xs badge-ghost font-bold">사무실 보관</span>
+										{/if}
+									</div>
+								</div>
+								{#if !v.is_disposed && v.location_type === 'VEHICLE' && v.days_elapsed !== null && v.days_elapsed !== undefined}
+									<span class="shrink-0 rounded-lg px-2 py-0.5 font-mono text-[11px] font-black {v.days_elapsed >= 14 ? 'bg-rose-50 text-rose-700' : v.days_elapsed >= 7 ? 'bg-amber-50 text-amber-700' : 'bg-blue-50 text-blue-700'}">
+										{v.days_elapsed}일째
+									</span>
+								{/if}
+							</div>
+
+							{#if !v.is_disposed && v.location_type === 'VEHICLE' && v.mounted_at}
+								<div class="font-mono text-[11px] text-slate-400">장착: {v.mounted_at}</div>
+							{/if}
+
+							<div class="flex flex-wrap items-center gap-1.5 border-t border-slate-200/80 pt-2">
+								<button type="button" onclick={() => (detailTargetVideo = v)} class="rounded-lg bg-white border border-slate-200 px-2.5 py-1 text-[11px] font-bold text-slate-700">
+									상세
+								</button>
+								{#if !v.is_disposed}
+									<button type="button" onclick={() => openMountModal(v)} class="rounded-lg bg-blue-50 border border-blue-200 px-2.5 py-1 text-[11px] font-black text-blue-700">
+										{v.location_type === 'VEHICLE' ? '차량이동' : '차량장착'}
+									</button>
+									{#if v.location_type === 'VEHICLE'}
+										<button type="button" onclick={() => handleUnmount(v)} class="rounded-lg bg-emerald-50 border border-emerald-200 px-2.5 py-1 text-[11px] font-black text-emerald-700">
+											사무실회수
+										</button>
+									{/if}
+								{/if}
+								<button type="button" onclick={() => openReverseLookupForVideo(v)} class="rounded-lg bg-indigo-50 border border-indigo-200 px-2.5 py-1 text-[11px] font-bold text-indigo-700">
+									이력
+								</button>
+								<button type="button" onclick={() => openVideoEdit(v)} class="rounded-lg bg-white border border-slate-200 px-2.5 py-1 text-[11px] font-bold text-slate-600">
+									수정
+								</button>
+								<button type="button" onclick={() => removeVideo(v)} class="ml-auto rounded-lg bg-rose-50 border border-rose-200 px-2.5 py-1 text-[11px] font-bold text-rose-600">
+									삭제
+								</button>
+							</div>
+						</div>
+					{/each}
+				{/if}
+			</div>
+
+			<div class="hidden md:block overflow-x-auto">
 				<table class="w-full text-left text-xs">
 					<thead class="border-b border-slate-200 bg-slate-50 font-black text-slate-500">
 						<tr>
@@ -745,8 +816,8 @@
 	<!-- TAB 2: 기사 교체 요청 관제 -->
 	<!-- =================================================================== -->
 	{:else if activeTab === 'requests'}
-		<section class="space-y-4 rounded-3xl border-2 border-slate-200 bg-white p-5 shadow-xs">
-			<div class="flex items-center justify-between">
+		<section class="space-y-4 rounded-2xl sm:rounded-3xl border-2 border-slate-200 bg-white p-3.5 sm:p-5 shadow-xs">
+			<div class="flex flex-wrap items-center justify-between gap-2">
 				<select bind:value={requestStatusFilter} onchange={loadAll} class="select select-bordered select-sm rounded-xl font-bold">
 					<option value="">전체 상태</option>
 					<option value="PENDING">대기 중 (PENDING)</option>
@@ -757,7 +828,75 @@
 				<span class="text-xs font-bold text-slate-400">총 {requests.length}건</span>
 			</div>
 
-			<div class="overflow-x-auto">
+			<!-- 모바일 카드 리스트 (< md) -->
+			<div class="space-y-2.5 md:hidden">
+				{#if requests.length === 0}
+					<div class="rounded-2xl border border-dashed border-slate-200 py-10 text-center text-xs font-bold text-slate-400">
+						교체 요청 내역이 없습니다.
+					</div>
+				{:else}
+					{#each requests as r (r.id)}
+						<div class="rounded-2xl border border-slate-200 bg-slate-50/50 p-3.5 space-y-2">
+							<div class="flex items-start justify-between gap-2">
+								<div>
+									<div class="text-sm font-black text-slate-900">{r.vehicle_no}호 · {r.requester_name}</div>
+									<div class="font-mono text-[11px] text-slate-400">{r.created_at}</div>
+								</div>
+								<span class="badge badge-sm shrink-0 font-black {r.status === 'COMPLETED' ? 'badge-success text-white' : r.status === 'REJECTED' ? 'badge-error text-white' : r.status === 'PREPARING' ? 'badge-info text-white' : 'badge-warning'}">
+									{r.status === 'COMPLETED' ? '교체완료' : r.status === 'REJECTED' ? '반려' : r.status === 'PREPARING' ? '준비중' : '대기'}
+								</span>
+							</div>
+
+							<div class="space-y-1 text-xs">
+								<div class="font-mono text-slate-600">
+									장착 비디오: <span class="font-bold text-slate-900">{r.current_video_no ? `${r.current_video_no} (#${r.current_display_num})` : '-'}</span>
+								</div>
+								<div class="font-bold text-slate-800">
+									{REASON_LABELS[r.reason_type] || r.reason_type}
+									{#if r.incident_date}
+										<span class="ml-1 font-mono text-[11px] text-blue-600">({r.incident_date})</span>
+									{/if}
+								</div>
+								{#if r.reason_detail}
+									<div class="text-[11px] text-slate-500">{r.reason_detail}</div>
+								{/if}
+								{#if r.replacement_video_no}
+									<div class="font-bold text-emerald-700">투입: {r.replacement_video_no} (#{r.replacement_display_num})</div>
+								{/if}
+								{#if r.admin_note}
+									<div class="text-[11px] text-slate-500">{r.admin_note}</div>
+								{/if}
+								{#if r.processed_by}
+									<div class="text-[11px] text-slate-400">{r.processed_by} · {r.processed_at}</div>
+								{/if}
+							</div>
+
+							{#if r.status === 'PENDING' || r.status === 'PREPARING'}
+								<div class="flex items-center justify-end gap-2 border-t border-slate-200/80 pt-2">
+									{#if r.status === 'PENDING'}
+										<button
+											type="button"
+											onclick={() => markRequestPreparing(r)}
+											class="btn btn-xs rounded-lg border border-sky-200 bg-sky-50 font-black text-sky-700 hover:bg-sky-100"
+										>
+											준비중
+										</button>
+									{/if}
+									<button
+										type="button"
+										onclick={() => openProcessModal(r)}
+										class="btn btn-xs rounded-lg border-none bg-blue-600 font-black text-white hover:bg-blue-700"
+									>
+										교체 처리
+									</button>
+								</div>
+							{/if}
+						</div>
+					{/each}
+				{/if}
+			</div>
+
+			<div class="hidden md:block overflow-x-auto">
 				<table class="w-full text-left text-xs">
 					<thead class="border-b border-slate-200 bg-slate-50 font-black text-slate-500">
 						<tr>
@@ -845,8 +984,8 @@
 	<!-- TAB 3: 사용이력 양방향 역조회 -->
 	<!-- =================================================================== -->
 	{:else if activeTab === 'usages'}
-		<section class="space-y-4 rounded-3xl border-2 border-slate-200 bg-white p-5 shadow-xs">
-			<div class="grid grid-cols-1 gap-3 md:grid-cols-5">
+		<section class="space-y-4 rounded-2xl sm:rounded-3xl border-2 border-slate-200 bg-white p-3.5 sm:p-5 shadow-xs">
+			<div class="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-5">
 				<div>
 					<label for="usage-vq" class="mb-1 block text-xs font-black text-slate-600">비디오번호 / 육안번호(0~999)</label>
 					<input id="usage-vq" type="text" bind:value={usageVideoQuery} placeholder="예: BB-0001 또는 125" class="input input-bordered input-sm w-full rounded-xl font-bold" />
@@ -863,7 +1002,7 @@
 					<label for="usage-ed" class="mb-1 block text-xs font-black text-slate-600">종료일</label>
 					<input id="usage-ed" type="date" bind:value={usageEndDate} class="input input-bordered input-sm w-full rounded-xl font-bold" />
 				</div>
-				<div class="flex items-end gap-2">
+				<div class="flex items-end gap-2 sm:col-span-2 md:col-span-1">
 					<button type="button" onclick={searchUsages} class="btn btn-sm flex-1 rounded-xl border-none bg-slate-900 font-black text-white">
 						역조회
 					</button>
@@ -883,7 +1022,42 @@
 				</div>
 			</div>
 
-			<div class="overflow-x-auto">
+			<!-- 모바일 카드 리스트 (< md) -->
+			<div class="space-y-2.5 md:hidden">
+				{#if usages.length === 0}
+					<div class="rounded-2xl border border-dashed border-slate-200 py-10 text-center text-xs font-bold text-slate-400">
+						조건에 해당하는 사용이력이 없습니다.
+					</div>
+				{:else}
+					{#each usages as u (u.id)}
+						<div class="rounded-2xl border border-slate-200 bg-slate-50/50 p-3.5 space-y-1.5">
+							<div class="flex items-center justify-between gap-2">
+								<div class="flex items-center gap-2 min-w-0">
+									<span class="inline-flex h-7 min-w-8 shrink-0 items-center justify-center rounded-lg bg-slate-900 px-1.5 font-mono text-xs font-black text-amber-400">
+										{u.display_num}
+									</span>
+									<span class="truncate font-mono text-xs font-bold text-slate-900">{u.video_no}</span>
+									<span class="shrink-0 text-xs font-black text-blue-700">{u.vehicle_no}호</span>
+								</div>
+								{#if u.is_active}
+									<span class="badge badge-xs badge-success shrink-0 font-bold text-white">현재 장착중</span>
+								{/if}
+							</div>
+							<div class="font-mono text-[11px] text-slate-600">
+								장착: {u.started_at}
+								{#if !u.is_active && u.ended_at}
+									<br />종료: {u.ended_at}
+								{/if}
+							</div>
+							{#if u.notes}
+								<div class="text-[11px] text-slate-500">{u.notes}</div>
+							{/if}
+						</div>
+					{/each}
+				{/if}
+			</div>
+
+			<div class="hidden md:block overflow-x-auto">
 				<table class="w-full text-left text-xs">
 					<thead class="border-b border-slate-200 bg-slate-50 font-black text-slate-500">
 						<tr>
@@ -931,25 +1105,61 @@
 	<!-- TAB 4: 차량 블랙박스 본체 스펙 -->
 	<!-- =================================================================== -->
 	{:else}
-		<section class="space-y-4 rounded-3xl border-2 border-slate-200 bg-white p-5 shadow-xs">
+		<section class="space-y-4 rounded-2xl sm:rounded-3xl border-2 border-slate-200 bg-white p-3.5 sm:p-5 shadow-xs">
 			<div class="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
-				<div class="flex items-center gap-2">
+				<div class="flex items-center gap-2 w-full sm:w-auto">
 					<input
 						type="text"
 						bind:value={deviceSearch}
 						onkeydown={(e) => e.key === 'Enter' && loadAll()}
 						placeholder="차량번호, 제조사, 모델명 검색..."
-						class="input input-bordered input-sm w-64 rounded-xl font-medium"
+						class="input input-bordered input-sm flex-1 sm:w-64 sm:flex-none rounded-xl font-medium"
 					/>
-					<button type="button" onclick={loadAll} class="btn btn-sm btn-outline rounded-xl font-bold">검색</button>
+					<button type="button" onclick={loadAll} class="btn btn-sm btn-outline shrink-0 rounded-xl font-bold">검색</button>
 				</div>
-				<button type="button" onclick={openDeviceCreate} class="btn btn-sm rounded-xl border-none bg-blue-600 font-black text-white hover:bg-blue-700">
+				<button type="button" onclick={openDeviceCreate} class="btn btn-sm w-full sm:w-auto rounded-xl border-none bg-blue-600 font-black text-white hover:bg-blue-700">
 					<Icon icon="solar:add-circle-bold" class="text-base" />
 					차량 본체 등록
 				</button>
 			</div>
 
-			<div class="overflow-x-auto">
+			<!-- 모바일 카드 리스트 (< md) -->
+			<div class="space-y-2.5 md:hidden">
+				{#if devices.length === 0}
+					<div class="rounded-2xl border border-dashed border-slate-200 py-10 text-center text-xs font-bold text-slate-400">
+						등록된 블랙박스 본체가 없습니다.
+					</div>
+				{:else}
+					{#each devices as d (d.id)}
+						<div class="rounded-2xl border border-slate-200 bg-slate-50/50 p-3.5 space-y-2">
+							<div class="flex items-start justify-between gap-2">
+								<div class="min-w-0">
+									<div class="text-sm font-black text-slate-900">{d.vehicle_no}호</div>
+									<div class="text-xs font-bold text-slate-700 truncate">{d.manufacturer || '-'} {d.model_name || ''}</div>
+								</div>
+								<span class="badge badge-xs shrink-0 font-bold {d.status === 'NORMAL' ? 'badge-success text-white' : 'badge-warning'}">{d.status}</span>
+							</div>
+							<div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-600">
+								<span>채널: <strong class="text-slate-800">{d.channels || '-'}</strong></span>
+								<span>LED: <strong class="font-mono text-blue-700">{d.led_count}개</strong></span>
+								<span class="font-mono text-slate-400">설치: {d.installed_date || '-'}</span>
+							</div>
+							{#if d.serial_no}
+								<div class="font-mono text-[11px] text-slate-400">S/N: {d.serial_no}</div>
+							{/if}
+							{#if d.notes}
+								<div class="text-[11px] text-slate-500">{d.notes}</div>
+							{/if}
+							<div class="flex items-center justify-end gap-2 border-t border-slate-200/80 pt-2">
+								<button type="button" onclick={() => openDeviceEdit(d)} class="rounded-lg bg-blue-50 border border-blue-200 px-2.5 py-1 text-[11px] font-bold text-blue-700">수정</button>
+								<button type="button" onclick={() => removeDevice(d)} class="rounded-lg bg-rose-50 border border-rose-200 px-2.5 py-1 text-[11px] font-bold text-rose-600">삭제</button>
+							</div>
+						</div>
+					{/each}
+				{/if}
+			</div>
+
+			<div class="hidden md:block overflow-x-auto">
 				<table class="w-full text-left text-xs">
 					<thead class="border-b border-slate-200 bg-slate-50 font-black text-slate-500">
 						<tr>
