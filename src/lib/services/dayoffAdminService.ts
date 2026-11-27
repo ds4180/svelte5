@@ -35,10 +35,14 @@ export interface DayoffRecordFilterState {
 
 export interface DayoffDisplaySettings {
 	show_quota_bg_alarm: boolean;
+	notify_on_request: boolean;
+	notify_on_result: boolean;
 }
 
 export const DEFAULT_DAYOFF_DISPLAY_SETTINGS: DayoffDisplaySettings = {
-	show_quota_bg_alarm: true
+	show_quota_bg_alarm: true,
+	notify_on_request: true,
+	notify_on_result: true
 };
 
 export function createDefaultDayoffPolicy(effectiveDate: string): DayoffPolicy {
@@ -59,7 +63,9 @@ export function createDefaultDayoffPolicy(effectiveDate: string): DayoffPolicy {
 export function extractDisplaySettings(policy?: DayoffPolicy | null): DayoffDisplaySettings {
 	const etc = policy?.etc && typeof policy.etc === 'object' ? policy.etc : {};
 	return {
-		show_quota_bg_alarm: etc.show_quota_bg_alarm !== false
+		show_quota_bg_alarm: etc.show_quota_bg_alarm !== false,
+		notify_on_request: etc.notify_on_request !== false,
+		notify_on_result: etc.notify_on_result !== false
 	};
 }
 

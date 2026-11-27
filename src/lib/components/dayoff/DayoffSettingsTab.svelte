@@ -56,7 +56,11 @@
 		min_advance_days: 0,
 		max_advance_days: 0
 	});
-	let displaySettings = $state<DayoffDisplaySettings>({ show_quota_bg_alarm: true });
+	let displaySettings = $state<DayoffDisplaySettings>({
+		show_quota_bg_alarm: true,
+		notify_on_request: true,
+		notify_on_result: true
+	});
 
 	// 특정일 예외 정원 상태
 	let ovStartDate = $state('');
@@ -171,7 +175,9 @@
 		try {
 			const mergedEtc = {
 				...(todayPolicy?.etc || {}),
-				show_quota_bg_alarm: displaySettings.show_quota_bg_alarm
+				show_quota_bg_alarm: displaySettings.show_quota_bg_alarm,
+				notify_on_request: displaySettings.notify_on_request,
+				notify_on_result: displaySettings.notify_on_result
 			};
 			await dayoffApi.adminUpdateDayoffPolicy({
 				effective_date: draft.effective_date || todayStr,
@@ -449,10 +455,13 @@
 				</div>
 			</div>
 
-			<!-- 4. 캘린더 표시 정책 -->
-			<div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+			<!-- 4. 캘린더 표시 & 알림 발송 정책 -->
+			<div class="space-y-2.5 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3.5">
+				<div class="text-[11px] font-black tracking-wide text-slate-500 uppercase">
+					표시 · 알림 발송 정책
+				</div>
 				<label
-					class="inline-flex cursor-pointer items-center gap-2 text-xs font-bold text-slate-700"
+					class="flex cursor-pointer items-center gap-2.5 text-xs font-bold text-slate-700"
 				>
 					<input
 						type="checkbox"
@@ -461,6 +470,28 @@
 						class="rounded text-blue-600"
 					/>
 					<span>월간 캘린더에서 예외 정원·마감일 셀 배경 강조 알람 표시</span>
+				</label>
+				<label
+					class="flex cursor-pointer items-center gap-2.5 text-xs font-bold text-slate-700"
+				>
+					<input
+						type="checkbox"
+						disabled={isLocked}
+						bind:checked={displaySettings.notify_on_request}
+						class="rounded text-blue-600"
+					/>
+					<span>허가제(승인 대기) 휴무 신청 시 담당 관리자에게 알림함·웹푸시 발송</span>
+				</label>
+				<label
+					class="flex cursor-pointer items-center gap-2.5 text-xs font-bold text-slate-700"
+				>
+					<input
+						type="checkbox"
+						disabled={isLocked}
+						bind:checked={displaySettings.notify_on_result}
+						class="rounded text-blue-600"
+					/>
+					<span>휴무 승인·반려 처리 시 신청 사원에게 결과 알림함·웹푸시 발송</span>
 				</label>
 			</div>
 
