@@ -123,7 +123,10 @@
 		statusCounts.announced > 0 && statusCounts.announced < statusCounts.total
 	);
 	const isD1Confirmed = $derived(
-		!isD1Announced && !isD1PartialAnnounced && statusCounts.confirmed > 0
+		!isD1Announced &&
+			!isD1PartialAnnounced &&
+			statusCounts.total > 0 &&
+			statusCounts.confirmed === statusCounts.total
 	);
 
 	function setDate(date: Date) {
@@ -399,11 +402,23 @@
 				dateKey: selectedDateKey,
 				status
 			});
-			await Promise.all(payloads.map((p) => dispatchApi.adminSaveDailyDispatch(p)));
-			dispatchRows = dispatchRows.map((r) => ({ ...r, status }));
+			const saveResults = await Promise.all(
+				payloads.map((p) => dispatchApi.adminSaveDailyDispatch(p))
+			);
+			const autoAnnouncedRes = saveResults.find((r: any) => r?.auto_announced);
+			dispatchRows = dispatchRows.map((r) => ({
+				...r,
+				status: autoAnnouncedRes ? 'ANNOUNCED' : status
+			}));
 			if (!opts?.silent) {
 				if (opts?.toastMessage) {
 					toast.success(opts.toastMessage);
+				} else if (autoAnnouncedRes) {
+					toast.success(
+						autoAnnouncedRes.is_reannounce
+							? '명일 배차가 확정되어 자동 재공개(재공지 알림 발송)되었습니다.'
+							: '명일 배차가 확정되어 즉시 자동 공개되었습니다.'
+					);
 				} else if (status === 'ANNOUNCED') {
 					toast.success('명일 배차가 즉시 배포되었습니다.');
 				} else if (status === 'CONFIRMED') {
@@ -498,7 +513,7 @@
 		announcingNow = true;
 		try {
 			const res = await dispatchApi.adminAnnounceDispatchNow();
-			selectedDatePublished = true;
+			if (isDMinus1) selectedDatePublished = true;
 			toast.success(
 				res.message ||
 					(res.is_reannounce
