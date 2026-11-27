@@ -248,4 +248,6 @@ export const customGetDispatchSettings = () =>
 		confirm_d_day_always_open?: boolean;
 		confirm_d1_require_announced?: boolean;
 		preview_allow_draft?: boolean;
+		driver_assign_colors?: DriverAssignColorsConfig;
+		driver_vehicle_map?: Record<string, string>;
 	}>('GET', '/api/v1/custom/dispatch/settings');

@@ -402,30 +402,20 @@
 				dateKey: selectedDateKey,
 				status
 			});
-			const saveResults = await Promise.all(
-				payloads.map((p) => dispatchApi.adminSaveDailyDispatch(p))
-			);
-			const autoAnnouncedRes = saveResults.find((r: any) => r?.auto_announced);
-			dispatchRows = dispatchRows.map((r) => ({
-				...r,
-				status: autoAnnouncedRes ? 'ANNOUNCED' : status
-			}));
+			await Promise.all(payloads.map((p) => dispatchApi.adminSaveDailyDispatch(p)));
+			dispatchRows = dispatchRows.map((r) => ({ ...r, status }));
 			if (!opts?.silent) {
 				if (opts?.toastMessage) {
 					toast.success(opts.toastMessage);
-				} else if (autoAnnouncedRes) {
-					toast.success(
-						autoAnnouncedRes.is_reannounce
-							? '명일 배차가 확정되어 자동 재공개(재공지 알림 발송)되었습니다.'
-							: '명일 배차가 확정되어 즉시 자동 공개되었습니다.'
-					);
 				} else if (status === 'ANNOUNCED') {
 					toast.success('명일 배차가 즉시 배포되었습니다.');
 				} else if (status === 'CONFIRMED') {
 					toast.success(
-						dispatchSettings.auto_announce_enabled
-							? `명일 배차가 확정되었습니다. (${dispatchSettings.auto_announce_time || '17:00'} 자동 배포)`
-							: '명일 배차가 확정되었습니다.'
+						tomorrowSummary.wasPublished
+							? "명일 배차가 확정되었습니다. '재공개' 버튼을 눌러 수동으로 재공개해 주세요."
+							: dispatchSettings.auto_announce_enabled
+								? `명일 배차가 확정되었습니다. (${dispatchSettings.auto_announce_time || '17:00'} 최초 1회 자동 공개 또는 수동 공개)`
+								: '명일 배차가 확정되었습니다.'
 					);
 				} else {
 					toast.success(
@@ -788,7 +778,9 @@
 						{tomorrowSummary.published
 							? '공개됨 (기사 열람 가능)'
 							: tomorrowSummary.confirmed
-								? `공개 대기 (${dispatchSettings.auto_announce_enabled ? `${dispatchSettings.auto_announce_time || '17:00'} 자동 배포` : '지금 공개 가능'})`
+								? tomorrowSummary.wasPublished
+									? "재공개 대기 (수동 '재공개' 버튼으로만 처리)"
+									: `공개 대기 (${dispatchSettings.auto_announce_enabled ? `${dispatchSettings.auto_announce_time || '17:00'} 자동 공개` : '지금 공개 가능'})`
 								: '명일 배차 확정 후 공개 가능'}
 					</div>
 				</div>

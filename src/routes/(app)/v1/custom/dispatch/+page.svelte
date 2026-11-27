@@ -21,11 +21,13 @@
 	import type {
 		DispatchPreviewWindow,
 		DispatchRow,
+		DriverAssignColorsConfig,
 		RouteFleetRule,
 		RouteMasterItem
 	} from '$lib/api/dispatch';
 	import {
 		DEFAULT_DISPATCH_SETTINGS,
+		DEFAULT_DRIVER_ASSIGN_COLORS,
 		fetchDispatchForRoutes
 	} from '$lib/services/dispatchAdminService';
 
@@ -54,7 +56,33 @@
 	let confirmDDayAlwaysOpen = $state(true);
 	let confirmD1RequireAnnounced = $state(true);
 	let previewAllowDraft = $state(true);
+	let driverAssignColors = $state<DriverAssignColorsConfig>(DEFAULT_DRIVER_ASSIGN_COLORS);
+	let driverVehicleMap = $state<Record<string, string>>({});
 	let settingsLoaded = $state(false);
+
+	/** 배정 기사의 유형 판별: RESERVE(예비기사/고정차량 없음) | CROSS(타차 배정) | NORMAL */
+	function getDriverAssignKind(
+		driverName?: string | null,
+		rowVehicleNo?: string | null
+	): 'RESERVE' | 'CROSS' | 'NORMAL' {
+		const dName = String(driverName || '').trim();
+		if (!dName || !(dName in driverVehicleMap)) return 'NORMAL';
+		const dVeh = String(driverVehicleMap[dName] || '').trim();
+		if (!dVeh) return 'RESERVE';
+		const rVeh = String(rowVehicleNo || '').trim();
+		if (rVeh && dVeh !== rVeh) return 'CROSS';
+		return 'NORMAL';
+	}
+
+	function getAssignColorStyle(
+		kind: 'RESERVE' | 'CROSS' | 'NORMAL',
+		hasDriver: boolean
+	): { bg: string; text: string } | null {
+		if (!hasDriver || kind === 'NORMAL') return null;
+		const cfg = kind === 'RESERVE' ? driverAssignColors?.reserve : driverAssignColors?.cross;
+		if (!cfg?.enabled) return null;
+		return { bg: cfg.bg_color, text: cfg.text_color };
+	}
 
 	let activeTab = $state<'confirm' | 'preview'>('confirm');
 	const initialDateStr = untrack(() => data?.serverTime?.dateStr ?? getKstTimeSnapshot().dateStr);
@@ -192,6 +220,8 @@
 			confirmDDayAlwaysOpen = res.confirm_d_day_always_open ?? true;
 			confirmD1RequireAnnounced = res.confirm_d1_require_announced ?? true;
 			previewAllowDraft = res.preview_allow_draft ?? true;
+			if (res.driver_assign_colors) driverAssignColors = res.driver_assign_colors;
+			driverVehicleMap = res.driver_vehicle_map || {};
 			if (
 				activeTab === 'preview' &&
 				previewWindow.offsets?.length &&
@@ -695,6 +725,8 @@
 									</thead>
 									<tbody class="divide-y divide-slate-200">
 										{#each item.rows as row (`${item.route.id}-${row.timetable_id}`)}
+											{@const driverKind = getDriverAssignKind(row.driver_name, row.vehicle_no)}
+											{@const driverColor = getAssignColorStyle(driverKind, Boolean(row.driver_name))}
 											<tr
 												class="transition-all hover:bg-indigo-50/20 {row.is_regular_duty
 													? 'bg-indigo-50/10'
@@ -738,11 +770,16 @@
 													</div>
 												</td>
 												<td
-													class="important-cell relative font-black {row.driver_name
-														? row.is_inherited
-															? 'bg-indigo-50/80 text-indigo-700 italic'
-															: 'bg-emerald-50 text-emerald-700'
-														: 'bg-emerald-50/20 text-slate-300 italic'}"
+													class="important-cell relative font-black {driverColor
+														? ''
+														: row.driver_name
+															? row.is_inherited
+																? 'bg-indigo-50/80 text-indigo-700 italic'
+																: 'bg-emerald-50 text-emerald-700'
+															: 'bg-emerald-50/20 text-slate-300 italic'}"
+													style={driverColor
+														? `background-color: ${driverColor.bg}; color: ${driverColor.text};`
+														: ''}
 												>
 													<span class="block truncate">{row.driver_name || '미지정'}</span>
 													{#if row.is_inherited && row.driver_name}
